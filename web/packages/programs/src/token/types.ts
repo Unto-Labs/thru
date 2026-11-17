@@ -52,3 +52,20 @@ export interface TransferArgs {
   destinationAccountBytes: Uint8Array;
   amount: bigint;
 }
+
+export interface TransferCheckedArgs {
+  sourceAccountBytes: Uint8Array;
+  destinationAccountBytes: Uint8Array;
+  /** The mint of both token accounts. The program only reads it. */
+  mintAccountBytes: Uint8Array;
+  amount: bigint;
+  /** Decimals stored in the mint account. */
+  decimals: number;
+  /**
+   * Ticker stored in the mint account: the first `ticker_len` stored bytes,
+   * without the unused padding. A string is encoded as UTF-8 without trimming
+   * or changing case. `parseMintAccountData` returns display text with
+   * trailing zero bytes removed, which does not reproduce every stored ticker.
+   */
+  ticker: string | Uint8Array;
+}

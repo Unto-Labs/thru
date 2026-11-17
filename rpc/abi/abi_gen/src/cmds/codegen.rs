@@ -10,6 +10,14 @@ pub enum Language {
     C,
     Rust,
     TypeScript,
+    Go,
+}
+
+/* Language-specific codegen options. */
+#[derive(Clone, Debug, Default)]
+pub struct CodegenOptions {
+    /* Go module path of the output root (`go.mod`); `None` uses the default. */
+    pub go_module: Option<String>,
 }
 
 /* Execute the codegen command */
@@ -19,6 +27,25 @@ pub fn run(
     language: Language,
     output_dir: PathBuf,
     verbose: bool,
+) -> anyhow::Result<()> {
+    run_with_options(
+        files,
+        include_dirs,
+        language,
+        output_dir,
+        verbose,
+        &CodegenOptions::default(),
+    )
+}
+
+/* Execute the codegen command with language-specific options */
+pub fn run_with_options(
+    files: Vec<PathBuf>,
+    include_dirs: Vec<PathBuf>,
+    language: Language,
+    output_dir: PathBuf,
+    verbose: bool,
+    options: &CodegenOptions,
 ) -> anyhow::Result<()> {
     if verbose {
         println!("ABI Generator - Code Generation Tool");
@@ -70,7 +97,7 @@ pub fn run(
 
     /* Get all types and normalize FQDN references */
     let mut all_typedefs = resolver.get_all_types().to_vec();
-    normalize_type_refs(&mut all_typedefs, &resolver);
+    normalize_type_refs(&mut all_typedefs, &resolver)?;
 
     let all_typedefs = all_typedefs;
 
@@ -78,7 +105,14 @@ pub fn run(
     let type_resolver = analyze_and_resolve_types(&all_typedefs, verbose)?;
 
     /* Generate code */
-    generate_code(&type_resolver, &resolver, language, &output_dir, verbose)?;
+    generate_code(
+        &type_resolver,
+        &resolver,
+        language,
+        &output_dir,
+        verbose,
+        options,
+    )?;
 
     Ok(())
 }
@@ -89,6 +123,7 @@ fn generate_code(
     language: Language,
     output_dir: &PathBuf,
     verbose: bool,
+    options: &CodegenOptions,
 ) -> anyhow::Result<()> {
     use crate::codegen::c;
     use std::collections::HashMap;
@@ -119,12 +154,27 @@ fn generate_code(
         }
     }
 
+    /* Package names are written into generated paths, imports and
+    comments in every language; like type names, only plain text is
+    accepted so none can end up as generated code. */
+    for package in types_by_package.keys() {
+        if !is_valid_package_name(package) {
+            anyhow::bail!(
+                "package name '{}' is not dot-separated [A-Za-z0-9_-] segments",
+                package.escape_debug()
+            );
+        }
+    }
+
     match language {
         Language::C => {
+            /* Every package gets its own directory. */
+            let paths = c::c_package_paths(types_by_package.keys());
+
             /* Generate code for each package in its own directory */
             for (package, package_types) in &types_by_package {
-                /* Convert package name to directory path (e.g., "thru.common.primitives" -> "thru/common/primitives") */
-                let package_dir = package.replace('.', "/");
+                /* e.g. "thru.common.primitives" -> "thru/common/primitives" */
+                let package_dir = paths[package].join("/");
                 let full_output_dir = output_dir.join(&package_dir);
 
                 std::fs::create_dir_all(&full_output_dir)?;
@@ -152,7 +202,7 @@ fn generate_code(
             if verbose {
                 println!("[✓] Generated C code in package directories:");
                 for package in types_by_package.keys() {
-                    let package_dir = package.replace('.', "/");
+                    let package_dir = paths[package].join("/");
                     println!(
                         "    - {}/{}/{{types.h, functions.c}}",
                         output_dir.display(),
@@ -164,10 +214,14 @@ fn generate_code(
         Language::Rust => {
             use crate::codegen::rust;
 
+            /* Every package gets its own directory / module path. */
+            let paths =
+                crate::codegen::rust_gen::names::rust_package_paths(types_by_package.keys());
+
             /* Generate code for each package in its own directory */
             for (package, package_types) in &types_by_package {
-                /* Convert package name to directory path (e.g., "thru.common.primitives" -> "thru/common/primitives") */
-                let package_dir = package.replace('.', "/");
+                /* e.g. "thru.common.primitives" -> "thru/common/primitives" */
+                let package_dir = paths[package].join("/");
                 let full_output_dir = output_dir.join(&package_dir);
 
                 std::fs::create_dir_all(&full_output_dir)?;
@@ -193,13 +247,56 @@ fn generate_code(
             }
 
             /* Generate mod.rs files for each package directory */
-            generate_rust_mod_files(output_dir, &types_by_package)?;
+            generate_rust_mod_files(output_dir, &types_by_package, &paths)?;
 
             if verbose {
                 println!("[✓] Generated Rust code in package directories:");
                 for package in types_by_package.keys() {
-                    let package_dir = package.replace('.', "/");
+                    let package_dir = paths[package].join("/");
                     println!("    - {}/{}/types.rs", output_dir.display(), package_dir);
+                }
+            }
+        }
+        Language::Go => {
+            use crate::codegen::go;
+
+            let module = options
+                .go_module
+                .clone()
+                .unwrap_or_else(|| go::DEFAULT_MODULE.to_string());
+            let mut pkg_of = HashMap::new();
+            for (package, package_types) in &types_by_package {
+                for ty in package_types {
+                    pkg_of.insert(ty.name.clone(), package.clone());
+                }
+            }
+            go::write_root(output_dir, &module)?;
+            let dirs = go::package_dirs(types_by_package.keys());
+            let mut packages: Vec<&String> = types_by_package.keys().collect();
+            packages.sort();
+            for package in packages {
+                let full_output_dir = output_dir.join(&dirs[package]);
+                std::fs::create_dir_all(&full_output_dir)?;
+                if verbose {
+                    println!(
+                        "[~] Generating code for package '{}' in {}",
+                        package,
+                        full_output_dir.display()
+                    );
+                }
+                let code = go::emit_package(
+                    type_resolver,
+                    package,
+                    &types_by_package[package],
+                    &pkg_of,
+                    &module,
+                );
+                std::fs::write(full_output_dir.join("types.go"), code)?;
+            }
+            if verbose {
+                println!("[✓] Generated Go code (module {}):", module);
+                for package in types_by_package.keys() {
+                    println!("    - {}/{}/types.go", output_dir.display(), dirs[package]);
                 }
             }
         }
@@ -208,10 +305,12 @@ fn generate_code(
             use crate::codegen::ts;
             use std::sync::Arc;
 
+            /* Every package gets its own directory. */
+            let paths = ts::ts_package_paths(types_by_package.keys());
             let mut type_package_map = HashMap::new();
             let mut package_path_map = HashMap::new();
             for (package, package_types) in &types_by_package {
-                let package_dir = package.replace('.', "/");
+                let package_dir = paths[package].join("/");
                 package_path_map.insert(package.clone(), package_dir);
                 for ty in package_types {
                     type_package_map.insert((*ty).name.clone(), package.clone());
@@ -220,27 +319,26 @@ fn generate_code(
             let type_package_map = Arc::new(type_package_map);
             let package_path_map = Arc::new(package_path_map);
 
-            let ts_ir_builder = IrBuilder::new(type_resolver);
+            let ts_ir_builder = IrBuilder::for_typescript(type_resolver);
             let mut ts_ir_cache: HashMap<String, Option<TypeIr>> = HashMap::new();
             for ty in &resolved_types {
                 let ty = *ty;
-                let type_ir = match ts_ir_builder.build_type(ty) {
-                    Ok(ir) => Some(ir),
-                    Err(err) => {
-                        eprintln!(
-                            "Warning: failed to build IR for {} (TypeScript codegen): {}",
-                            ty.name, err
-                        );
-                        None
-                    }
-                };
-                ts_ir_cache.insert(ty.name.clone(), type_ir);
+                /* Every TypeScript class sizes and validates through its IR:
+                a type without one cannot be generated. */
+                let type_ir = ts_ir_builder.build_type(ty).map_err(|err| {
+                    anyhow::anyhow!(
+                        "TypeScript codegen cannot represent type '{}': {}",
+                        ty.name,
+                        err
+                    )
+                })?;
+                ts_ir_cache.insert(ty.name.clone(), Some(type_ir));
             }
 
             /* Generate code for each package in its own directory */
             for (package, package_types) in &types_by_package {
-                /* Convert package name to directory path (e.g., "thru.common.primitives" -> "thru/common/primitives") */
-                let package_dir = package.replace('.', "/");
+                /* e.g. "thru.common.primitives" -> "thru/common/primitives" */
+                let package_dir = paths[package].join("/");
                 let full_output_dir = output_dir.join(&package_dir);
 
                 std::fs::create_dir_all(&full_output_dir)?;
@@ -256,18 +354,16 @@ fn generate_code(
                 let mut package_types_with_ir = Vec::with_capacity(package_types.len());
                 for resolved_type in package_types {
                     let resolved_type = *resolved_type;
-                    let type_ir = ts_ir_cache
-                        .remove(resolved_type.name.as_str())
-                        .unwrap_or_else(|| match ts_ir_builder.build_type(resolved_type) {
-                            Ok(ir) => Some(ir),
-                            Err(err) => {
-                                eprintln!(
-                                    "Warning: failed to build IR for {} (TypeScript codegen): {}",
-                                    resolved_type.name, err
-                                );
-                                None
-                            }
-                        });
+                    let type_ir = match ts_ir_cache.remove(resolved_type.name.as_str()) {
+                        Some(ir) => ir,
+                        None => Some(ts_ir_builder.build_type(resolved_type).map_err(|err| {
+                            anyhow::anyhow!(
+                                "TypeScript codegen cannot represent type '{}': {}",
+                                resolved_type.name,
+                                err
+                            )
+                        })?),
+                    };
                     package_types_with_ir.push((resolved_type, type_ir));
                 }
 
@@ -282,8 +378,26 @@ fn generate_code(
                     package_path_map: Some(package_path_map.clone()),
                 };
                 let generator = ts::TypeScriptCodeGenerator::new(options);
-                let generated_code =
-                    generator.emit_code(&package_types_with_ir, Some(&resolved_types));
+                /* A shape the emitter does not handle is reported as an
+                error naming the package, not a panic. */
+                let previous_hook = std::panic::take_hook();
+                std::panic::set_hook(Box::new(|_| {}));
+                let emitted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    generator.emit_code(&package_types_with_ir, Some(&resolved_types))
+                }));
+                std::panic::set_hook(previous_hook);
+                let generated_code = emitted.map_err(|panic| {
+                    let message = panic
+                        .downcast_ref::<String>()
+                        .cloned()
+                        .or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string()))
+                        .unwrap_or_else(|| "unsupported layout".to_string());
+                    anyhow::anyhow!(
+                        "TypeScript codegen failed for package '{}': {}",
+                        package,
+                        message
+                    )
+                })?;
 
                 /* Write the generated TypeScript code to types.ts */
                 let types_file = full_output_dir.join("types.ts");
@@ -293,7 +407,7 @@ fn generate_code(
             if verbose {
                 println!("[✓] Generated TypeScript code in package directories:");
                 for package in types_by_package.keys() {
-                    let package_dir = package.replace('.', "/");
+                    let package_dir = paths[package].join("/");
                     println!("    - {}/{}/types.ts", output_dir.display(), package_dir);
                 }
             }
@@ -308,8 +422,15 @@ fn generate_code(
 fn generate_rust_mod_files(
     output_dir: &PathBuf,
     types_by_package: &std::collections::HashMap<String, Vec<&crate::abi::resolved::ResolvedType>>,
+    paths: &std::collections::BTreeMap<String, Vec<String>>,
 ) -> anyhow::Result<()> {
     use std::collections::{HashMap, HashSet};
+
+    /* Packages by their allocated module path (`a.b.c`, segments joined by '.'). */
+    let types_by_package: HashMap<String, ()> = types_by_package
+        .keys()
+        .map(|p| (paths[p].join("."), ()))
+        .collect();
 
     /* Build a tree of package components */
     let mut package_tree: HashMap<String, HashSet<String>> = HashMap::new();
@@ -340,9 +461,23 @@ fn generate_rust_mod_files(
         let root_modules = package_tree.get("").unwrap_or(&empty_set);
         if !root_modules.is_empty() {
             let mut mod_content = String::new();
-            for module in root_modules.iter().collect::<Vec<_>>() {
-                mod_content.push_str(&format!("pub mod {};\n", module));
+            let mut root_sorted: Vec<_> = root_modules.iter().collect();
+            root_sorted.sort();
+            for module in root_sorted {
+                mod_content.push_str(&format!("pub mod {};\n", rust_mod_ident(module)));
             }
+            /* One runtime shared by every package (re-exported as `<pkg>::runtime`). */
+            mod_content.push_str(&format!(
+                "pub mod {};\n",
+                crate::codegen::rust::SHARED_RUNTIME_MODULE
+            ));
+            std::fs::write(
+                output_dir.join(format!(
+                    "{}.rs",
+                    crate::codegen::rust::SHARED_RUNTIME_MODULE
+                )),
+                crate::codegen::rust::RUNTIME_MODULE_CONTENT,
+            )?;
 
             let mod_path = output_dir.join("mod.rs");
             std::fs::write(&mod_path, mod_content)?;
@@ -354,13 +489,19 @@ fn generate_rust_mod_files(
         if parent_pkg.is_empty() {
             continue; // Skip root, already handled
         }
+        /* A package that is also a parent gets one mod.rs, written below. */
+        if types_by_package.contains_key(parent_pkg) {
+            continue;
+        }
 
         let parent_dir = output_dir.join(parent_pkg.replace('.', "/"));
         let mut mod_content = String::new();
 
         /* Add submodules */
-        for child in children.iter().collect::<Vec<_>>() {
-            mod_content.push_str(&format!("pub mod {};\n", child));
+        let mut children_sorted: Vec<_> = children.iter().collect();
+        children_sorted.sort();
+        for child in children_sorted {
+            mod_content.push_str(&format!("pub mod {};\n", rust_mod_ident(child)));
         }
 
         /* If this is a leaf package with types, re-export them */
@@ -392,8 +533,49 @@ fn generate_rust_mod_files(
         mod_content.push_str("pub use types::*;\n");
         mod_content.push_str("pub use functions::*;\n");
 
+        /* The package's child packages (`a` and `a.b`). */
+        if let Some(children) = package_tree.get(package) {
+            let mut children_sorted: Vec<_> = children.iter().collect();
+            children_sorted.sort();
+            mod_content.push('\n');
+            for child in children_sorted {
+                mod_content.push_str(&format!("pub mod {};\n", rust_mod_ident(child)));
+            }
+        }
+
         std::fs::write(&mod_path, mod_content)?;
     }
 
     Ok(())
+}
+
+/* Package components become module names; escape Rust keywords. */
+fn rust_mod_ident(name: &str) -> String {
+    crate::codegen::rust_gen::model::escape_ident(name)
+}
+
+/* A package name is one or more non-empty [A-Za-z0-9_-] segments joined
+by dots (`thru.program.token`). */
+pub fn is_valid_package_name(package: &str) -> bool {
+    package.split('.').all(|segment| {
+        !segment.is_empty()
+            && segment
+                .chars()
+                .all(|c| c == '_' || c == '-' || c.is_ascii_alphanumeric())
+    })
+}
+
+#[cfg(test)]
+mod package_name_tests {
+    use super::is_valid_package_name;
+
+    #[test]
+    fn package_names_cannot_inject_source() {
+        assert!(is_valid_package_name("thru.program.token"));
+        assert!(is_valid_package_name("a_b.c-d.E9"));
+        assert!(!is_valid_package_name("a\npackage evil\nfunc init(){}"));
+        assert!(!is_valid_package_name("a.b /*"));
+        assert!(!is_valid_package_name("a..b"));
+        assert!(!is_valid_package_name(""));
+    }
 }

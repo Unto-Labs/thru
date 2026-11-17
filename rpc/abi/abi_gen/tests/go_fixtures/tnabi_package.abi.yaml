@@ -1,0 +1,15 @@
+abi:
+  package: "tnabi"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "An ABI package named like the shared Go runtime package"
+
+types:
+  - name: "RuntimeNamed"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "v"
+            field-type:
+              primitive: u16

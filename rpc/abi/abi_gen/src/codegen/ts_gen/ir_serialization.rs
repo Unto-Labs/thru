@@ -99,7 +99,7 @@ fn emit_ir_node(node: &IrNode, indent: usize) -> String {
                 }
                 cases.push_str(&format!(
                     "{{ value: {}, node: {} }}",
-                    case.tag_value,
+                    crate::codegen::ts_gen::helpers::ts_tag_literal(case.tag_value),
                     emit_ir_node(&case.node, indent + 2)
                 ));
             }
@@ -137,10 +137,13 @@ fn emit_ir_node(node: &IrNode, indent: usize) -> String {
                 args
             )
         }
+        /* `payloadParam` is the `<field>.payload_size` parameter
+        `IrBuilder::for_typescript` registers for the array's byte total. */
         IrNode::SumOverArray(node) => format!(
-            "{{ op: \"sumOverArray\", count: {}, elementTypeName: \"{}\", fieldName: \"{}\" }}",
+            "{{ op: \"sumOverArray\", count: {}, elementTypeName: \"{}\", fieldName: \"{}\", payloadParam: \"{}.payload_size\" }}",
             emit_ir_node(&node.count, indent),
             node.element_type_name.replace('\"', "\\\""),
+            node.field_name.replace('\"', "\\\""),
             node.field_name.replace('\"', "\\\"")
         ),
     }

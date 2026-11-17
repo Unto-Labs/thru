@@ -1,0 +1,33 @@
+abi:
+  package: "compliance.buffer_sized"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Arrays sized from the remaining buffer (__buffer_size), as in the CLOB arenas"
+
+types:
+  - name: "BufferSizedEntries"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "version"
+            field-type:
+              primitive: u32
+          - name: "entries"
+            field-type:
+              array:
+                size:
+                  div:
+                    left:
+                      sub:
+                        left:
+                          field-ref:
+                            path: ["__buffer_size"]
+                        right:
+                          literal:
+                            u64: 4
+                    right:
+                      literal:
+                        u64: 8
+                element-type:
+                  primitive: u64

@@ -1,5 +1,5 @@
-/* `TokenMark` draws ThruUSD's logo only when the caller says the token is the
-   wallet's own dollars, never from the label: anyone can name a token THRUSD. */
+/* `TokenMark` draws UUSD's logo only when the caller says the token is the
+   wallet's own dollars, never from the label: anyone can name a token UUSD. */
 import { Animated, Pressable, Text, View } from "react-native";
 import { font, space, text, touch } from "./tokens";
 import { makeStyles, useThemeColors } from "./theme";
@@ -7,19 +7,19 @@ import { Button } from "./Button";
 import { IconCheck, IconChevronDown } from "./Icons";
 import { CollapseBody, useCollapse } from "./Collapse";
 import { Spinner } from "./loading/MarkDrawOn";
-import { ThruUsdLogo } from "./ThruUsdLogo";
+import { UusdLogo } from "./UusdLogo";
 
 export function TokenMark({
   label,
   size = 28,
-  thrusd = false,
+  uusd = false,
 }: {
   label: string;
   size?: number;
-  thrusd?: boolean;
+  uusd?: boolean;
 }) {
   const styles = useStyles();
-  if (thrusd) return <ThruUsdLogo size={size} />;
+  if (uusd) return <UusdLogo size={size} />;
   const glyph = label.length <= 1 ? label : label.slice(0, 2);
   return (
     <View
@@ -45,8 +45,8 @@ export interface TickerOption {
   key: string;
   /** What the mark shows: the sign, or the ticker. */
   mark: string;
-  /** The wallet's own dollars: drawn with ThruUSD's logo. */
-  thrusd?: boolean;
+  /** The wallet's own dollars: drawn with UUSD's logo. */
+  uusd?: boolean;
   /** The token's name ("Dollars"). */
   name: string;
   /** "$56 available". */
@@ -113,7 +113,7 @@ export function TickerPicker({
           onPress={onToggle}
           style={styles.rowToggle}
         >
-          <TokenMark label={selected.mark} thrusd={selected.thrusd} />
+          <TokenMark label={selected.mark} uusd={selected.uusd} />
           <Text
             numberOfLines={1}
             style={[styles.availability, overBalance ? { color: colors.error } : null]}
@@ -150,7 +150,7 @@ export function TickerPicker({
                 onPress={() => onSelect(option.key)}
                 style={({ pressed }) => [styles.option, pressed ? styles.pressed : null]}
               >
-                <TokenMark label={option.mark} thrusd={option.thrusd} />
+                <TokenMark label={option.mark} uusd={option.uusd} />
                 <View style={styles.optionCopy}>
                   <Text numberOfLines={1} style={styles.optionName}>
                     {option.name}

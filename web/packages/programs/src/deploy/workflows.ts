@@ -17,6 +17,7 @@ import {
   type ManagedProgramAddresses,
 } from "../manager";
 import { buildMulticallInstruction } from "../multicall";
+import { resolveManagerSelection } from "../manager/selection";
 import { bytesEqual } from "../helpers/bytes";
 import { temporarySeed } from "./seeds";
 import {
@@ -41,7 +42,6 @@ import {
 import {
   ABI_MANAGER_PROGRAM_ADDRESS,
   DEPLOYMENT_MULTICALL_PROGRAM_ADDRESS,
-  MANAGER_PROGRAM_ADDRESS,
 } from "./constants";
 import { DeployError, asDeployError } from "./errors";
 import type {
@@ -107,6 +107,7 @@ function createProgramInstruction(
     sourceBufferAccount: upload.addresses.bufferAccountBytes,
     authorityAccount: context.signer.publicKey,
     sourceSize,
+    sourceSha256: upload.hash,
     seed: context.seed,
   };
   return context.ephemeral
@@ -148,6 +149,7 @@ function createABIInstruction(
     sourceBufferAccount: upload.addresses.bufferAccountBytes,
     authorityAccount: context.signer.publicKey,
     sourceSize,
+    sourceSha256: upload.hash,
   };
   return context.ephemeral
     ? createOfficialABIInstruction({ ...common, ephemeral: true })
@@ -167,6 +169,7 @@ function upgradeProgramInstruction(
     programAccount: context.program.programAccountBytes,
     sourceBufferAccount: upload.addresses.bufferAccountBytes,
     sourceSize,
+    sourceSha256: upload.hash,
   });
 }
 
@@ -182,6 +185,7 @@ function upgradeABIInstruction(
     sourceBufferAccount: upload.addresses.bufferAccountBytes,
     authorityAccount: context.signer.publicKey,
     sourceSize,
+    sourceSha256: upload.hash,
   });
 }
 
@@ -206,11 +210,13 @@ async function createContext(
 ): Promise<Context> {
   let managerProgramAddress: string;
   try {
-    const manager = Pubkey.from(request.managerProgramAddress ?? MANAGER_PROGRAM_ADDRESS);
-    if (manager.toBytes().every((byte) => byte === 0)) throw new Error("zero parent");
-    managerProgramAddress = manager.toThruFmt();
+    const selection = resolveManagerSelection(request, request.seed);
+    if (selection.manager === "core") {
+      throw new DeployError("INVALID_INPUT", "Core deployment requires prepareGovernedProgramDeployment and an approved Core operation; Public instruction encoding is not valid for Core");
+    }
+    managerProgramAddress = selection.programAddress;
   } catch (error) {
-    throw asDeployError(error, "INVALID_INPUT", "managerProgramAddress must be a nonzero Thru address");
+    throw asDeployError(error, "INVALID_INPUT", "Invalid manager policy selection");
   }
   const client = request.client ?? createThruClient();
   const chunkSize = validateSeedAndChunkSize(request.seed, request.chunkSize);
@@ -257,14 +263,6 @@ async function createContext(
     abi,
     onProgress: request.onProgress,
   };
-}
-
-function assertOfficialABIParent(context: Context): void {
-  // The on-chain ABI Manager authenticates canonical main-Manager metadata.
-  // Root-owned main-Manager upgrades must remain binary-only.
-  if (context.managerProgramAddress !== MANAGER_PROGRAM_ADDRESS) {
-    throw new DeployError("INVALID_INPUT", "official ABI publication requires the canonical main Manager parent");
-  }
 }
 
 function addressDetails(context: Context): Record<string, string> {
@@ -653,7 +651,6 @@ export async function deployProgram(
   validateProgramImage(programBytes);
   const context = await createContext(operation, request);
   if (abiBytes) {
-    assertOfficialABIParent(context);
     await validateABI(abiBytes, context.client);
   }
   progress(context, "validation", "succeeded");
@@ -823,7 +820,6 @@ export async function deployProgramABI(
     request,
     request.programAddress,
   );
-  assertOfficialABIParent(context);
   await validateABI(abiBytes, context.client);
   progress(context, "validation", "succeeded");
   progress(context, "preflight", "started");
@@ -928,7 +924,6 @@ export async function upgradeProgram(
     request.programAddress,
   );
   if (abiBytes) {
-    assertOfficialABIParent(context);
     await validateABI(abiBytes, context.client);
   }
   progress(context, "validation", "succeeded");
@@ -1062,7 +1057,6 @@ export async function upgradeProgramABI(
     request,
     request.programAddress,
   );
-  assertOfficialABIParent(context);
   await validateABI(abiBytes, context.client);
   progress(context, "validation", "succeeded");
   progress(context, "preflight", "started");

@@ -263,7 +263,7 @@ fn create_feed(feed_type: u8, proof: &[u8]) -> Vec<u8> {
 
 fn feed_account(feed_type: u8) -> Vec<u8> {
     let mut buffer = Vec::new();
-    buffer.push(feed_type);
+    buffer.push(feed_type); /* account_type: price_feed_v1 = 1, bool_feed_v1 = 2 */
     push_u64(&mut buffer, 30_000_000_000);
     push_u64(&mut buffer, 1_234_567_890);
     buffer.extend_from_slice(&[0x11; 32]);
@@ -410,9 +410,9 @@ fn oracle_feed_accounts_match_program_layouts() {
     let price = feed_account(1);
     assert_eq!(price.len(), 161);
     let reflected = parse(&resolver, "OracleFeedAccount", &price).expect("reflect price account");
-    let price_data = enum_variant(struct_field(&reflected, "data"), "price");
+    let price_data = enum_variant(struct_field(&reflected, "payload"), "price_feed_v1");
     assert_eq!(price_data.type_info.name, "OraclePriceFeedData");
-    assert_eq!(u8_value(struct_field(&reflected, "feed_type")), 1);
+    assert_eq!(u8_value(struct_field(&reflected, "account_type")), 1);
     assert_common_feed_fields(struct_field(price_data, "common"));
     assert_eq!(u64_value(struct_field(price_data, "price")), 42_000);
     assert_eq!(u32_value(struct_field(price_data, "max_variance_bps")), 500);
@@ -422,9 +422,9 @@ fn oracle_feed_accounts_match_program_layouts() {
     assert_eq!(boolean.len(), 146);
     let reflected =
         parse(&resolver, "OracleFeedAccount", &boolean).expect("reflect boolean account");
-    let boolean_data = enum_variant(struct_field(&reflected, "data"), "boolean");
+    let boolean_data = enum_variant(struct_field(&reflected, "payload"), "bool_feed_v1");
     assert_eq!(boolean_data.type_info.name, "OracleBooleanFeedData");
-    assert_eq!(u8_value(struct_field(&reflected, "feed_type")), 2);
+    assert_eq!(u8_value(struct_field(&reflected, "account_type")), 2);
     assert_common_feed_fields(struct_field(boolean_data, "common"));
     assert_eq!(u8_value(struct_field(boolean_data, "value")), 1);
 }

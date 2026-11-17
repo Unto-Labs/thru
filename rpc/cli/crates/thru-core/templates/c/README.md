@@ -38,6 +38,16 @@ build/thruvm/bin/{{PROGRAM_NAME}}_c.bin
     └── {{PROGRAM_NAME}}.c  # Program source code
 ```
 
+## Accounts
+
+The template owns no accounts. If you add one, byte 0 of its data is a
+one-byte `account_type` discriminator: one value per account layout,
+starting at 1 (0 is invalid). A changed layout takes the next unused value;
+values are never reused. Write the byte on create and check the owner and
+the byte on every load. Your ABI's account root is `account_type: u8`
+followed by a payload enum keyed on it. See
+https://thru.org/docs/abi/authoring-guide/#program-accounts
+
 ## Deploying
 
 To deploy your program to the Thru blockchain, use the `thru` tools:
@@ -46,8 +56,8 @@ To deploy your program to the Thru blockchain, use the `thru` tools:
 # Upload the program
 thru uploader upload <seed> build/thruvm/bin/{{PROGRAM_NAME}}_c.bin
 
-# Create a managed program
-thru program create <seed> build/thruvm/bin/{{PROGRAM_NAME}}_c.bin
+# Create a managed program with its ABI (or pass --dangerously-exclude-abi)
+thru program create <seed> build/thruvm/bin/{{PROGRAM_NAME}}_c.bin --abi <program>.abi.yaml
 ```
 
 ## Development

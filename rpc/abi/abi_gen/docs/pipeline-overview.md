@@ -22,7 +22,7 @@ This note gives new contributors a single view of the ABI generator’s end‑to
    - `LayoutGraph` deterministically topologically sorts types to guarantee a stable emission order and detect recursive cycles.
    - `IrBuilder` converts each `ResolvedType` into a shared `TypeIr` tree (const/field-ref/switch/call-nested nodes with per-node metadata).
 6. **Language backends**
-   - **C** (`codegen/c`), **Rust** (`codegen/rust`), **TypeScript** (`codegen/ts`). Each backend receives `ResolvedType`s and (when supported) the shared `TypeIr`.
+   - **C** (`codegen/c`), **Rust** (`codegen/rust`), **TypeScript** (`codegen/ts`), **Go** (`codegen/go`, built on the Rust backend's layout model; see `go-codegen.md`). Each backend receives `ResolvedType`s and (when supported) the shared `TypeIr`.
    - `abi codegen` buckets types by package using `ImportResolver::get_package_for_type` and writes per-package directories.
    - `abi analyze` can dump IR (`--print-ir`) or view backend previews (`--print-footprint`, `--print-validate`) without writing files.
 

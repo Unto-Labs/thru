@@ -15,6 +15,7 @@ import {
   type PreparedUpload,
 } from "./uploader";
 import type { ResolvedSigner } from "./validation";
+import { cleanupGovernedUpload } from "./governance";
 
 const mocks = vi.hoisted(() => ({ submitTransaction: vi.fn() }));
 
@@ -43,10 +44,11 @@ function uploaderMeta(
   signer: ResolvedSigner,
   state: number,
 ): Uint8Array {
-  const data = new Uint8Array(65);
-  data.set(signer.publicKey);
-  data.set(upload.hash, 32);
-  data[64] = state;
+  const data = new Uint8Array(66);
+  data[0] = 1;
+  data.set(signer.publicKey, 1);
+  data.set(upload.hash, 33);
+  data[65] = state;
   return data;
 }
 
@@ -162,7 +164,7 @@ describe("resumable uploader", () => {
             });
           }
         } else if (opcode === 3) {
-          accounts.get(metaAddress)!.data!.data![64] = UPLOADER_STATE_FINALIZED;
+          accounts.get(metaAddress)!.data!.data![65] = UPLOADER_STATE_FINALIZED;
           if (failFinalizeAfterApply) {
             failFinalizeAfterApply = false;
             throw new DeployError("OUTCOME_UNKNOWN", "lost response", {
@@ -214,7 +216,7 @@ describe("resumable uploader", () => {
     expect(accounts.get(result.bufferAccountAddress)?.data?.data).toEqual(
       upload.bytes,
     );
-    expect(accounts.get(result.metaAccountAddress)?.data?.data?.[64]).toBe(
+    expect(accounts.get(result.metaAccountAddress)?.data?.data?.[65]).toBe(
       UPLOADER_STATE_FINALIZED,
     );
     expect(events).toContain("write:progress");
@@ -270,7 +272,7 @@ describe("resumable uploader", () => {
     failCreateAfterApply = true;
     const result = await uploadArtifact(client, signer, upload, 1_024);
     expect(result.transactionSignatures).toEqual(["sig-1", "sig-2", "sig-3"]);
-    expect(accounts.get(result.metaAccountAddress)?.data?.data?.[64]).toBe(
+    expect(accounts.get(result.metaAccountAddress)?.data?.data?.[65]).toBe(
       UPLOADER_STATE_FINALIZED,
     );
   });
@@ -280,7 +282,7 @@ describe("resumable uploader", () => {
     failFinalizeAfterApply = true;
     const result = await uploadArtifact(client, signer, upload, 1_024);
     expect(result.transactionSignatures).toEqual(["sig-1", "sig-2", "sig-3"]);
-    expect(accounts.get(result.metaAccountAddress)?.data?.data?.[64]).toBe(
+    expect(accounts.get(result.metaAccountAddress)?.data?.data?.[65]).toBe(
       UPLOADER_STATE_FINALIZED,
     );
   });
@@ -301,6 +303,30 @@ describe("resumable uploader", () => {
     const result = await uploadArtifact(client, signer, upload, 1_024);
     expect(result.reused).toBe(true);
     expect(result.transactionSignatures).toEqual([]);
+    expect(mocks.submitTransaction).not.toHaveBeenCalled();
+  });
+
+  it("cleans a governed upload re-derived from its seed only for its own authority", async () => {
+    const other = { address: Pubkey.from(new Uint8Array(32).fill(4)).toThruFmt(), privateKey: new Uint8Array(32).fill(3) };
+    const keyed = { ...client, keys: { fromPrivateKey: vi.fn(async (key: Uint8Array) =>
+      key[0] === 1 ? signer.publicKey : new Uint8Array(32).fill(4)) } } as unknown as Thru;
+    const cleanup = (who: { address: string; privateKey: Uint8Array }) =>
+      cleanupGovernedUpload({ client: keyed, signer: who, uploadSeed: "upload-test", artifact: "program" });
+    await expect(cleanup(signer)).resolves.toEqual({ status: "absent" });
+    const upload = await makeUpload();
+    await uploadArtifact(client, signer, upload, 1_024);
+    mocks.submitTransaction.mockClear();
+    const pair = [upload.result.metaAccountAddress, upload.result.bufferAccountAddress];
+    // Another key never destroys a pair it does not own.
+    await expect(cleanup(other)).resolves.toMatchObject({ status: "not-owned", accounts: pair });
+    expect(mocks.submitTransaction).not.toHaveBeenCalled();
+    expect(accounts.size).toBe(2);
+    await expect(cleanup(signer)).resolves.toMatchObject({ status: "succeeded", accounts: pair });
+    expect(accounts.size).toBe(0);
+    // A buffer without metadata cannot prove its authority and is left alone.
+    accounts.set(upload.result.bufferAccountAddress, storedAccount(upload.result.bufferAccountAddress, new Uint8Array(8)));
+    mocks.submitTransaction.mockClear();
+    await expect(cleanup(signer)).resolves.toMatchObject({ status: "not-owned" });
     expect(mocks.submitTransaction).not.toHaveBeenCalled();
   });
 

@@ -5,10 +5,12 @@ pub mod from_array;
 pub mod helpers;
 pub mod ir_helpers;
 pub mod ir_serialization;
+pub mod measure;
 pub mod new_method;
 pub mod param_cache;
 pub mod runtime;
 pub mod types;
+pub mod union;
 
 /* Re-export main public functions */
 pub use builder::emit_builder;

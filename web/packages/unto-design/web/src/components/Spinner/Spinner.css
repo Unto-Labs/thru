@@ -1,0 +1,45 @@
+.uds-spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--color-border-secondary);
+  border-top-color: var(--color-surface-lower-inverse);
+  border-radius: var(--radius-pill);
+  animation: uds-spin 0.7s linear infinite;
+}
+
+.uds-spinner--neutral {
+  border-color: var(--color-border-secondary);
+  border-top-color: var(--color-surface-lower-inverse);
+}
+
+.uds-spinner--brick {
+  border-color: var(--brick-200);
+  border-top-color: var(--brick-400);
+}
+
+@keyframes uds-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes uds-spin-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .uds-spinner {
+    animation: uds-spin-pulse 1.6s ease-in-out infinite;
+  }
+}
+
+.uds-spinner--inherit {
+  border-color: color-mix(in srgb, currentColor 28%, transparent);
+  border-top-color: currentColor;
+}

@@ -5,6 +5,7 @@
 #include "tn_sdk_txn.h"
 #include "tn_sdk_types.h"
 #include "tn_sdk_programs.h"
+#include "tn_sdk_account.h"
 
 /* TODO: macro for syscall code */
 
@@ -142,6 +143,13 @@ int tsdk_is_account_authorized_by_idx( ushort account_idx );
 
 int tsdk_is_account_authorized_by_pubkey( tn_pubkey_t const * pubkey );
 
+/* Requires a valid account index. Accepts only an explicit CPI authorization
+   issued by the account's current owner. Nearest matching frame wins, with
+   deauthorization before authorization within that frame. Unlike the generic
+   helpers, payer/current-program/ancestor identities grant nothing implicitly.
+   An explicit authorization by a non-owner reverts, as in the generic helper. */
+int tsdk_is_account_explicitly_authorized( ushort account_idx );
+
 ushort tsdk_get_current_program_acc_idx( void );
 
 /* Sentinel returned by tsdk_get_caller_program_acc_idx when there is no
@@ -253,3 +261,4 @@ tsdk_is_name_service_program_idx( ushort account_idx ) {
 TSDK_PROTOTYPES_END
 
 #endif /* HEADER_tn_src_thru_programs_sdk_tn_sdk_h */
+

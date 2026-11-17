@@ -2,7 +2,7 @@ abi:
   package: thru.program.name_service
   name: "Name Service"
   abi-version: 1
-  package-version: "0.1.0"
+  package-version: "0.2.0"
   description: ABI for the Thru name service program instruction envelopes and account state
   imports: []
   options:
@@ -118,28 +118,32 @@ types:
             element-type:
               type-ref:
                 name: KvRecord
+# Account root: byte 0 is the account discriminator (account_type), one value
+# per (account kind, layout). Values are never reused; a new layout or a new
+# kind takes the next unused value.
 - name: NameServiceAccount
   kind:
     struct:
       packed: true
       fields:
-      - name: discriminator
+      - name: account_type
         field-type:
           primitive: u8
-      - name: data
+      - name: payload
         field-type:
           enum:
             packed: true
             tag-ref:
               field-ref:
-                path: [discriminator]
+                path:
+                - account_type
             variants:
-            - name: root_registrar
+            - name: root_registrar_v1
               tag-value: 1
               variant-type:
                 type-ref:
                   name: RootRegistrar
-            - name: domain
+            - name: domain_v1
               tag-value: 2
               variant-type:
                 type-ref:

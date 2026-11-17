@@ -28,7 +28,7 @@ a:hover{text-decoration:underline;text-underline-offset:3px;}
     </span>
   </sc-if>
   <sc-if value="{{ notSkeleton }}" hint-placeholder-val="{{ true }}">
-    <sc-if value="{{ isThrusd }}" hint-placeholder-val="{{ true }}"><img src="assets/thrusd/00-current.svg" alt="" aria-hidden="true" style="width:28px;height:28px;display:block;flex:none;border-radius:50%"></sc-if>
+    <sc-if value="{{ isUusd }}" hint-placeholder-val="{{ true }}"><span aria-hidden="true" style="width:28px;height:28px;display:block;flex:none;border-radius:50%;background:#6b7280;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center">$</span></sc-if>
     <sc-if value="{{ isMark }}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="width:28px;height:28px;border-radius:50%;background:var(--m-fg);color:var(--m-bg);display:grid;place-items:center;flex:none;font-family:{{ glyphFont }};font-size:{{ glyphSize }};font-weight:600;letter-spacing:0">{{ glyph }}</span></sc-if>
     <span aria-hidden="true" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
       <span style="display:flex;align-items:center;gap:8px;min-width:0"><span style="font-size:15px;font-weight:500;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ticker }}</span><sc-if value="{{ hasBadge }}" hint-placeholder-val="{{ false }}"><span style="flex:none;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;font-weight:500;letter-spacing:0.5px;text-transform:uppercase;line-height:1;padding:4px 8px;background:var(--m-bg-muted);color:var(--m-fg-muted)">{{ badge }}</span></sc-if></span>
@@ -39,7 +39,7 @@ a:hover{text-decoration:underline;text-underline-offset:3px;}
   <span aria-hidden="true" style="position:absolute;left:16px;right:16px;bottom:0;height:1px;background:var(--m-hair)"></span>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:64},&quot;kind&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;token&quot;,&quot;options&quot;:[&quot;thrusd&quot;,&quot;token&quot;,&quot;skeleton&quot;],&quot;tsType&quot;:&quot;'thrusd' | 'token' | 'skeleton'&quot;},&quot;ticker&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;COOL&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;mint&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;taZt…9Kq2&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;amount&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;1,250.5&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;units&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;badge&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;&quot;,&quot;options&quot;:[&quot;&quot;,&quot;Frozen&quot;,&quot;Unsupported&quot;],&quot;tsType&quot;:&quot;'' | 'Frozen' | 'Unsupported'&quot;},&quot;dup&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;selected&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:64},&quot;kind&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;token&quot;,&quot;options&quot;:[&quot;uusd&quot;,&quot;token&quot;,&quot;skeleton&quot;],&quot;tsType&quot;:&quot;'uusd' | 'token' | 'skeleton'&quot;},&quot;ticker&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;COOL&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;mint&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;taZt…9Kq2&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;amount&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;1,250.5&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;units&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;badge&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;&quot;,&quot;options&quot;:[&quot;&quot;,&quot;Frozen&quot;,&quot;Unsupported&quot;],&quot;tsType&quot;:&quot;'' | 'Frozen' | 'Unsupported'&quot;},&quot;dup&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;selected&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
 class Component extends DCLogic {
   renderVals() {
     const p = this.props;
@@ -49,10 +49,10 @@ class Component extends DCLogic {
     const glyph = unknown ? '?' : ticker.slice(0, 2).toUpperCase();
     const badge = p.badge || '';
     const units = p.units ?? '';
-    const sub = kind === 'thrusd' ? (units || amount.replace(/^\$/, '')) + ' THRUSD' : mint;
-    const aria = kind === 'skeleton' ? 'Loading token' : [ticker, amount, kind !== 'thrusd' && (p.dup || unknown) ? mint : null, badge ? badge.toLowerCase() : null, 'open'].filter(Boolean).join(', ');
+    const sub = kind === 'uusd' ? (units || amount.replace(/^\$/, '')) + ' UUSD' : mint;
+    const aria = kind === 'skeleton' ? 'Loading token' : [ticker, amount, kind !== 'uusd' && (p.dup || unknown) ? mint : null, badge ? badge.toLowerCase() : null, 'open'].filter(Boolean).join(', ');
     return {
-      isSkeleton: kind === 'skeleton', notSkeleton: kind !== 'skeleton', isThrusd: kind === 'thrusd', isMark: kind === 'token',
+      isSkeleton: kind === 'skeleton', notSkeleton: kind !== 'skeleton', isUusd: kind === 'uusd', isMark: kind === 'token',
       glyph, glyphSize: glyph.length === 1 ? '14px' : '10px', glyphFont: glyph.length === 1 ? "'Inter Tight',system-ui,sans-serif" : "'JetBrains Mono',ui-monospace,monospace",
       ticker, sub, amount, hasBadge: !!badge, badge, aria,
       selected: !!p.selected, rowBg: p.selected ? 'var(--m-bg-muted)' : 'transparent',

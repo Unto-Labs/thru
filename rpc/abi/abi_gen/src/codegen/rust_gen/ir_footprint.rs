@@ -1,4 +1,5 @@
 use super::ir_helpers::sanitize_param_name;
+use super::names::{IrNameFn, IrNames, plain_ir_names};
 use crate::codegen::shared::ir::{
     AlignNode, BinaryOpNode, CallNestedNode, IrNode, SwitchNode, TypeIr,
 };
@@ -13,44 +14,69 @@ pub enum IrFootprintError {
 
 pub struct IrFootprintEmitter<'a> {
     type_ir: &'a TypeIr,
+    names: Option<IrNameFn<'a>>,
 }
 
 impl<'a> IrFootprintEmitter<'a> {
     pub fn new(type_ir: &'a TypeIr) -> Self {
-        Self { type_ir }
+        Self {
+            type_ir,
+            names: None,
+        }
+    }
+
+    /* Take helper names (this type's and its callees') from `names`. */
+    pub fn with_names(mut self, names: IrNameFn<'a>) -> Self {
+        self.names = Some(names);
+        self
+    }
+
+    fn fn_names(&self, type_name: &str) -> IrNames {
+        match self.names {
+            Some(f) => f(type_name),
+            None => plain_ir_names(type_name),
+        }
     }
 
     pub fn emit(&self) -> Result<String, IrFootprintError> {
         let mut params = format_ir_parameter_list(self.type_ir);
+        let mut args = format_ir_argument_list(self.type_ir);
         if contains_buffer_size_ref(&self.type_ir.root) {
-            if params.is_empty() {
-                params = "buf_sz: u64".to_string();
+            params = if params.is_empty() {
+                "buf_sz: u64".to_string()
             } else {
-                params = format!("buf_sz: u64, {}", params);
-            }
+                format!("buf_sz: u64, {}", params)
+            };
+            args = if args.is_empty() {
+                "buf_sz".to_string()
+            } else {
+                format!("buf_sz, {}", args)
+            };
         }
         let body = self.node_to_expr(&self.type_ir.root)?;
-        let fn_name = format!(
-            "{}_footprint_ir",
-            sanitize_param_name(&self.type_ir.type_name)
-        );
-        if params.is_empty() {
-            Ok(format!(
-                "pub fn {}() -> u64 {{
-    {}
+        let names = self.fn_names(&self.type_ir.type_name);
+        Ok(format!(
+            "/// IR footprint of `{ty}` with checked arithmetic.
+#[allow(unused_variables, clippy::all)]
+pub fn {checked}({params}) -> ::core::result::Result<u64, AbiError> {{
+    Ok({body})
+}}
+/// IR footprint of `{ty}`; `u64::MAX` when the parameters overflow or select no variant.
+#[allow(clippy::all)]
+pub fn {plain}({params}) -> u64 {{
+    match {checked}({args}) {{
+        Ok(size) => size,
+        Err(_) => u64::MAX,
+    }}
 }}
 ",
-                fn_name, body
-            ))
-        } else {
-            Ok(format!(
-                "pub fn {}({}) -> u64 {{
-    {}
-}}
-",
-                fn_name, params, body
-            ))
-        }
+            ty = self.type_ir.type_name,
+            checked = names.footprint_checked,
+            plain = names.footprint,
+            params = params,
+            args = args,
+            body = body
+        ))
     }
 
     fn node_to_expr(&self, node: &IrNode) -> Result<String, IrFootprintError> {
@@ -66,16 +92,16 @@ impl<'a> IrFootprintEmitter<'a> {
                     sanitize_param_name(&field.path)
                 },
             ),
-            IrNode::AddChecked(node) => self.combine_binary(node, "+"),
-            IrNode::SubChecked(node) => self.combine_binary(node, "-"),
-            IrNode::MulChecked(node) => self.combine_binary(node, "*"),
-            IrNode::DivChecked(node) => self.combine_binary(node, "/"),
-            IrNode::ModChecked(node) => self.combine_binary(node, "%"),
+            IrNode::AddChecked(node) => self.call_binary(node, "tn_e_add", true),
+            IrNode::SubChecked(node) => self.call_binary(node, "tn_e_sub", true),
+            IrNode::MulChecked(node) => self.call_binary(node, "tn_e_mul", true),
+            IrNode::DivChecked(node) => self.call_binary(node, "tn_e_div", true),
+            IrNode::ModChecked(node) => self.call_binary(node, "tn_e_mod", true),
             IrNode::BitAnd(node) => self.combine_binary(node, "&"),
             IrNode::BitOr(node) => self.combine_binary(node, "|"),
             IrNode::BitXor(node) => self.combine_binary(node, "^"),
-            IrNode::LeftShift(node) => self.combine_binary(node, "<<"),
-            IrNode::RightShift(node) => self.combine_binary(node, ">>"),
+            IrNode::LeftShift(node) => self.call_binary(node, "tn_e_shl", true),
+            IrNode::RightShift(node) => self.call_binary(node, "tn_e_shr", false),
             IrNode::AlignUp(node) => self.align_expr(node),
             IrNode::CallNested(node) => self.call_nested_expr(node),
             IrNode::Switch(node) => self.switch_expr(node),
@@ -99,17 +125,30 @@ impl<'a> IrFootprintEmitter<'a> {
         Ok(format!("({} {} {})", left, op, right))
     }
 
+    fn call_binary(
+        &self,
+        node: &BinaryOpNode,
+        func: &str,
+        fallible: bool,
+    ) -> Result<String, IrFootprintError> {
+        let left = self.node_to_expr(&node.left)?;
+        let right = self.node_to_expr(&node.right)?;
+        Ok(format!(
+            "{}({}, {}){}",
+            func,
+            left,
+            right,
+            if fallible { "?" } else { "" }
+        ))
+    }
+
     fn align_expr(&self, node: &AlignNode) -> Result<String, IrFootprintError> {
         let inner = self.node_to_expr(&node.node)?;
         let align = node.alignment.max(1);
         if align <= 1 {
             return Ok(inner);
         }
-        Ok(format!(
-            "((({inner}) + {align}u64 - 1u64) & !({align}u64 - 1u64))",
-            inner = inner,
-            align = align
-        ))
+        Ok(format!("tn_align_u64({}, {})?", inner, align))
     }
 
     fn call_nested_expr(&self, node: &CallNestedNode) -> Result<String, IrFootprintError> {
@@ -120,8 +159,8 @@ impl<'a> IrFootprintEmitter<'a> {
             }
             write!(&mut args, "{}", sanitize_param_name(&arg.value)).unwrap();
         }
-        let fn_name = format!("{}_footprint_ir", sanitize_param_name(&node.type_name));
-        Ok(format!("{}({})", fn_name, args))
+        let fn_name = self.fn_names(&node.type_name).footprint_checked;
+        Ok(format!("{}({})?", fn_name, args))
     }
 
     fn switch_expr(&self, node: &SwitchNode) -> Result<String, IrFootprintError> {
@@ -141,7 +180,11 @@ impl<'a> IrFootprintEmitter<'a> {
             let expr = self.node_to_expr(default_node)?;
             writeln!(&mut out, "            _ => {},", expr).unwrap();
         } else {
-            writeln!(&mut out, "            _ => 0u64,").unwrap();
+            writeln!(
+                &mut out,
+                "            _ => return Err(AbiError::MissingSwitchCase),"
+            )
+            .unwrap();
         }
         writeln!(&mut out, "        }}\n    }}").unwrap();
         Ok(out)
@@ -183,11 +226,28 @@ pub fn emit_ir_footprint_fn(type_ir: &TypeIr) -> Result<String, IrFootprintError
     IrFootprintEmitter::new(type_ir).emit()
 }
 
+/* `emit_ir_footprint_fn` with helper names from a package's name table. */
+pub fn emit_ir_footprint_fn_named(
+    type_ir: &TypeIr,
+    names: IrNameFn<'_>,
+) -> Result<String, IrFootprintError> {
+    IrFootprintEmitter::new(type_ir).with_names(names).emit()
+}
+
 fn format_ir_parameter_list(type_ir: &TypeIr) -> String {
     type_ir
         .parameters
         .iter()
         .map(|param| format!("{}: u64", sanitize_param_name(&param.name)))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn format_ir_argument_list(type_ir: &TypeIr) -> String {
+    type_ir
+        .parameters
+        .iter()
+        .map(|param| sanitize_param_name(&param.name))
         .collect::<Vec<_>>()
         .join(", ")
 }

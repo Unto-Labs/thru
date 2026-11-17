@@ -1,0 +1,318 @@
+.uds-frame {
+  box-sizing: border-box;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface-higher);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-secondary);
+  width: 360px;
+  max-width: 100%;
+  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-none);
+  font-family: var(--font-sans);
+}
+.uds-frame--full {
+  width: 440px;
+}
+
+/* Content swaps inside a mounted frame (`animateResize`): the box eases to
+   its new size instead of jumping. Frame.tsx pins the height from the old
+   value to the new one so the transition has two lengths to run between;
+   width follows the mode class (dialog ↔ full). */
+.uds-frame--resize {
+  transition:
+    height 280ms var(--ease-standard),
+    width 280ms var(--ease-standard);
+}
+@media (prefers-reduced-motion: reduce) {
+  .uds-frame--resize {
+    transition: none;
+  }
+}
+
+/* Standalone island motion (the overlay animates its popup instead). */
+.uds-frame--in {
+  animation: uds-island-in 640ms var(--ease-standard) both;
+}
+.uds-frame--out {
+  animation: uds-island-out 480ms var(--ease-standard) both;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .uds-frame--in {
+    animation: uds-island-fade-in var(--duration-fast) var(--ease-standard) both;
+  }
+  .uds-frame--out {
+    animation: uds-island-fade-out var(--duration-fast) var(--ease-standard) both;
+  }
+}
+
+.uds-frame__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-tertiary);
+}
+.uds-frame__site {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-primary);
+}
+.uds-frame__label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.uds-frame__label--wrap {
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.uds-frame__bar:has(.uds-frame__label--wrap) {
+  min-height: 40px;
+  height: auto;
+}
+.uds-frame__logo {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-brick);
+}
+.uds-frame__verified {
+  width: 15px;
+  height: 15px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-grass);
+  color: var(--color-text-primary-inverse);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.uds-frame__chip {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-primary);
+  color: var(--color-text-tertiary);
+}
+.uds-frame__close {
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: -4px 0;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-none);
+  cursor: pointer;
+  color: var(--color-text-tertiary);
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
+}
+.uds-frame__close:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface-primary);
+}
+.uds-frame__close:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+}
+
+.uds-frame__bar--plain {
+  border-bottom-color: transparent;
+}
+
+.uds-frame__bar--float {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  border-bottom: none;
+}
+
+.uds-frame__back {
+  margin: -4px 0 -4px calc(-1 * var(--space-2));
+}
+
+.uds-frame__content {
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 640px) {
+  .uds-frame {
+    width: 100%;
+    max-width: 100%;
+    border-width: 0;
+    border-radius: 12px 12px 0 0;
+    padding-top: 4px;
+  }
+
+  .uds-frame::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    margin: 4px auto 0;
+    border-radius: var(--radius-pill);
+    background: var(--color-border-secondary);
+    flex: none;
+  }
+
+  .uds-frame__bar {
+    height: 52px;
+    padding: 0 6px 0 16px;
+  }
+
+  /* Keep the floating close where the bar's close sits: under the 4px frame
+     padding and the 4px grabber with its 4px margin. */
+  .uds-frame__bar--float {
+    top: 12px;
+  }
+
+  .uds-frame__site {
+    font-size: 13px;
+  }
+
+  .uds-frame__logo {
+    width: 24px;
+    height: 24px;
+  }
+
+  .uds-frame__verified {
+    width: 16px;
+    height: 16px;
+  }
+
+  .uds-frame__chip {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  .uds-frame__back {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .uds-frame__close {
+    width: 44px;
+    height: 44px;
+    margin: 0;
+  }
+
+  /* The home indicator sits under the sheet on iOS. */
+  .uds-frame__content {
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    flex: 1;
+    min-height: 0;
+  }
+}
+
+/* A bottom-anchored sheet taller than the viewport pushes its bar off the top
+   with no way to scroll back, so cap it; the body scrolls (Screen.css). */
+@media (max-width: 640px) {
+  .uds-frame {
+    max-height: 92vh;
+    max-height: 92dvh;
+  }
+}
+
+@media (max-width: 640px) {
+  .uds-frame__bar:has(.uds-frame__label--wrap) {
+    min-height: 52px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+}
+
+/* The status sits outside the content, so a scrolling body never runs into
+   it, and lets taps through to a control it overlaps. */
+
+.uds-frame__network {
+  --uds-network-space: var(--space-3);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: var(--uds-network-space) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--color-text-tertiary);
+  pointer-events: none;
+}
+.uds-frame__network-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-grass);
+  box-shadow: 0 0 6px var(--color-surface-grass);
+}
+/* Read before the name ("Network: Alphanet"), never shown. */
+.uds-frame__network-hint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.uds-frame__network-name {
+  min-width: 0;
+  word-break: break-all;
+  text-align: center;
+}
+
+.uds-frame--network .uds-screen:not(:has(~ .uds-powered)) > :last-child:not(.uds-screen__bottom),
+.uds-frame--network .uds-powered:last-child {
+  padding-bottom: 0;
+}
+/* Which control ends the sheet is read off the last band of a Screen that
+   is not under [hidden] (a screen kept mounted while another one shows).
+   `:has()` can't nest, so "no PoweredBy after it" is "no PoweredBy in the
+   frame" here; PoweredBy only ever ends a sheet. */
+/* The bottom row: its padding (--space-3), down to its label's line. The
+   row fills its whole box on hover, so the label's leading stays and keeps
+   that fill clear of the status. */
+.uds-frame--network:has(.uds-screen:not([hidden] *) > .uds-screen__bottom:last-child):not(:has(.uds-powered)) .uds-frame__network {
+  margin-top: calc(-1 * var(--space-3));
+}
+/* A ghost button: its padding (--space-2) and 1px border. */
+.uds-frame--network:has(.uds-screen:not([hidden] *) > .uds-screen__body:last-child > .uds-btn--ghost:last-child):not(:has(.uds-powered)) .uds-frame__network {
+  margin-top: calc(-1 * (var(--space-2) + 1px));
+}
+/* PoweredBy: the status is the footer's second line, on its --space-2. */
+.uds-frame--network:has(.uds-powered:last-child) .uds-frame__network {
+  --uds-network-space: var(--space-2);
+}
+
+/* The home indicator's room goes under the band. */
+@media (max-width: 640px) {
+  .uds-frame--network .uds-frame__content {
+    padding-bottom: 0;
+  }
+  .uds-frame__network {
+    padding-bottom: calc(var(--uds-network-space) + max(16px, env(safe-area-inset-bottom)));
+  }
+}

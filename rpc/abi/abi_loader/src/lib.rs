@@ -17,7 +17,10 @@ pub use file::{
     AbiFile, AbiMetadata, AbiOptions, ImportSource, OnchainTarget, ProgramMetadata, RevisionSpec,
     RootTypes,
 };
-pub use flatten::{flatten, flatten_to_yaml, flatten_with_options, normalize_type_refs};
+pub use flatten::{
+    flatten, flatten_to_yaml, flatten_with_options, normalize_type_refs, prepare_for_publish,
+    validate_root_types,
+};
 pub use package::{PackageId, ResolutionResult, ResolveError, ResolvedPackage};
 pub use resolver::ImportResolver;
 

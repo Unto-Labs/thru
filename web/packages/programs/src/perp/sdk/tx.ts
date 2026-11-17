@@ -16,8 +16,6 @@ import {
   type PerpOrderSide,
   type PerpOrderType,
 } from '../index';
-import type { PerpAbiVersion } from '../versions/model';
-import { assertPerpSupports } from '../versions/registry';
 import { bytesToHex, encodePerpInstructions, type PerpInstructionSpec } from './instructions';
 import { readAccount, type ReadAccountOptions, type ThruClient } from './rpc';
 
@@ -66,7 +64,7 @@ export interface PerpTxParts {
 /** An unsigned perp transaction: JSON-serialisable but for instructionData,
     which JSON.stringify drops (rebuild it with perpTransactionFromJSON). */
 export interface PerpTransaction extends PerpTxParts {
-  /** What it does, e.g. "buy 2 lots of BTC-THRUSD at 84250". */
+  /** What it does, e.g. "buy 2 lots of BTC-UUSD at 84250". */
   label: string;
   instructions: PerpInstructionSpec[];
 }
@@ -107,7 +105,7 @@ export interface CrossAccountRef {
 
 export type PerpCrossAccountRef = CrossAccountRef;
 
-/** A builder code (0.5.0): the fee seat an order transaction's market record
+/** A builder code: the fee seat an order transaction's market record
     names and the rate it pays it, ppm of filled notional (capped by the
     market's builder cap).  The seat authority signs it with the record. */
 export interface PerpBuilderCode {
@@ -121,8 +119,6 @@ export interface PerpTxOptions {
   /** ordersTx only: the builder its orders pay as taker, and that its
       resting orders carry as maker. */
   builder?: PerpBuilderCode;
-  /** Refuse an instruction this program version does not have. */
-  version?: PerpAbiVersion;
   label?: string;
 }
 
@@ -292,7 +288,6 @@ export function withMarginRecord(tx: PerpTransaction, ref: { deployment: Pick<Ma
 function crossAware(tx: PerpTransaction, ref: MarketRef, options: PerpTxOptions): PerpTransaction {
   const labelled = options.label ? { ...tx, label: options.label } : tx;
   if (!options.margin) return labelled;
-  if (options.version) assertPerpSupports(options.version, 'crossMargin', 'a cross seat transaction');
   if (!options.margin.links.some((link) => link.seatArena === ref.market.seatArena)) {
     throw new Error(`margin account ${options.margin.address} does not link market ${ref.market.seatArena}`);
   }
@@ -394,7 +389,6 @@ export function ordersTx(
   book?: OrderBookState,
   options: PerpTxOptions = {},
 ): PerpTransaction {
-  if (options.builder && options.version) assertPerpSupports(options.version, 'tradingFees', 'a builder code');
   const record = marketRecordSpec(ref, authority, seatIndex, false);
   const instructions: PerpInstructionSpec[] = [
     options.builder ? { ...record, builderSeatIndex: options.builder.builderSeatIndex, builderFeePpm: options.builder.feePpm } : record,
@@ -494,9 +488,6 @@ export function liquidateTx(ref: MarketRef, authority: string, seatIndex: number
     marketReadOnlyAddresses(ref),
   );
   const liquidator = options.liquidator ?? options.margin;
-  if (options.target || liquidator) {
-    if (options.version) assertPerpSupports(options.version, 'crossMargin', 'a cross liquidation');
-  }
   if (liquidator) tx = withMarginRecord(tx, ref, liquidator, false, 1);
   if (options.target) tx = withMarginRecord(tx, ref, options.target, false, 0);
   return tx;
@@ -611,7 +602,6 @@ export function fundingUpdateTx(ref: MarketRef, settleSeats: number[] = []): Per
     up to date, e.g. before showing a withdrawable amount. */
 export function settleFundingTx(ref: MarketRef, seatIndexes: number[], options: PerpTxOptions = {}): PerpTransaction {
   if (!seatIndexes.length) throw new Error('no seats to settle');
-  if (options.version) assertPerpSupports(options.version, 'settleFunding', 'settle_funding');
   return perpTransaction(
     options.label ?? `settle funding of seat${seatIndexes.length > 1 ? 's' : ''} ${seatIndexes.map((seat) => `#${seat}`).join(', ')}`,
     [
@@ -633,7 +623,6 @@ export function settleAccountFundingTx(
   markets: Iterable<MarketRef['market']> | ((seatArena: string) => MarketRef['market'] | undefined),
   options: PerpTxOptions = {},
 ): PerpTransaction {
-  if (options.version) assertPerpSupports(options.version, 'settleFunding', 'settle_funding');
   const marketOf =
     typeof markets === 'function'
       ? markets
@@ -713,13 +702,12 @@ export function marketSetVaultTx(ref: MarketRef, exchangeAdmin: string, newVault
   );
 }
 
-/* Trading fees and builder codes (0.5.0) *************************************/
+/* Trading fees and builder codes *************************************/
 
 /** Market authority: set the fee rates (ppm).  A taker fee or builder cap
     increase is pending for PERP_FEE_INCREASE_DELAY_NS; perpFeesAfterSet
     previews the result.  Rejected with FEE_PARAM_INVALID (-231). */
 export function marketSetFeesTx(ref: MarketRef, marketAuthority: string, params: PerpFeeParams, options: PerpTxOptions = {}): PerpTransaction {
-  if (options.version) assertPerpSupports(options.version, 'tradingFees', 'market_set_fees');
   return perpTransaction(
     options.label ?? 'set fees',
     [fundingRecord(ref, marketAuthority), { ix: 'market_set_fees', marketRecordIndex: PERP_DEFAULT_MARKET_RECORD_INDEX, ...params }],
@@ -735,7 +723,6 @@ export function marketSetFeesTx(ref: MarketRef, marketAuthority: string, params:
     belong to the market authority.  Refused with FEE_CLAIM_BLOCKED (-234)
     while the market has bad debt or for more than its fee balance. */
 export function feeClaimTx(ref: MarketRef, authority: string, seatIndex: number, amount: bigint, options: PerpTxOptions = {}): PerpTransaction {
-  if (options.version) assertPerpSupports(options.version, 'tradingFees', 'fee_claim');
   return perpTransaction(
     options.label ?? `claim ${amount} protocol fees`,
     [
@@ -750,7 +737,6 @@ export function feeClaimTx(ref: MarketRef, authority: string, seatIndex: number,
 /** The seat (isolated, flat, no resting orders) becomes a builder's fee
     seat: irreversible, it never trades again.  Refused with FEE_SEAT (-232). */
 export function seatSetFeeReceiverTx(ref: MarketRef, authority: string, seatIndex: number, options: PerpTxOptions = {}): PerpTransaction {
-  if (options.version) assertPerpSupports(options.version, 'tradingFees', 'seat_set_fee_receiver');
   return perpTransaction(
     options.label ?? `make seat #${seatIndex} a fee seat`,
     [marketRecordSpec(ref, authority, seatIndex, false), { ix: 'seat_set_fee_receiver', marketRecordIndex: PERP_DEFAULT_MARKET_RECORD_INDEX }],
@@ -768,7 +754,6 @@ export function seatSetBuilderApprovalTx(
   approval: { builderSeatIndex: number; maxFeePpm: number },
   options: PerpTxOptions = {},
 ): PerpTransaction {
-  if (options.version) assertPerpSupports(options.version, 'tradingFees', 'seat_set_builder_approval');
   const label = approval.builderSeatIndex ? `approve builder #${approval.builderSeatIndex} up to ${approval.maxFeePpm} ppm` : 'revoke builder approval';
   return perpTransaction(
     options.label ?? label,

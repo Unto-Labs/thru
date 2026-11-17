@@ -1,0 +1,286 @@
+{
+  "abi": "rpc/abi/type-library/tn_nft_program.abi.yaml",
+  "account_root": "NftProgramAccount",
+  "values": {
+    "1": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "mint_authority",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "supply",
+                    "offset": 32,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "next_id",
+                    "offset": 40,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 48
+          },
+          "ref": "NftMintAccount"
+        },
+        "size": 48
+      },
+      "variant": "mint_v1"
+    },
+    "2": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "mint",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "owner",
+                    "offset": 32,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "id",
+                    "offset": 64,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "metadata",
+                    "offset": 72,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "flags",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 8,
+                                    "kind": {
+                                      "primitive": "Integral(U64)"
+                                    },
+                                    "size": 8
+                                  }
+                                },
+                                {
+                                  "name": "external_metadata_uri",
+                                  "offset": 8,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 256
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 256
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 264
+                        },
+                        "ref": "NftMetadata"
+                      },
+                      "size": 264
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 336
+          },
+          "ref": "NftAccount"
+        },
+        "size": 336
+      },
+      "variant": "nft_v1"
+    }
+  }
+}

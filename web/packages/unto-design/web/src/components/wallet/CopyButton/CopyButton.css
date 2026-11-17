@@ -1,0 +1,33 @@
+.uds-copy-text {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-brand);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 0;
+}
+.uds-copy-text:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.uds-copy-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  min-height: 16px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--color-text-tertiary);
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+.uds-copy-icon:hover {
+  color: var(--color-text-primary);
+}

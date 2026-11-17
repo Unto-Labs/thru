@@ -3,17 +3,30 @@ use serde_json::{Map, Value as JsonValue};
 
 pub const MAX_NESTED_INSTRUCTION_DEPTH: usize = 15;
 
+/// Most nested instructions one call decodes, across all levels. Every view
+/// of a union payload can hold instruction data, so depth alone does not
+/// bound the work (eight views per level would be 8^depth decodes).
+pub const MAX_NESTED_INSTRUCTION_DECODES: usize = 256;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NestedInstructionDecodeOptions {
     pub max_depth: usize,
+    pub max_decodes: usize,
 }
 
 impl Default for NestedInstructionDecodeOptions {
     fn default() -> Self {
         Self {
             max_depth: MAX_NESTED_INSTRUCTION_DEPTH,
+            max_decodes: MAX_NESTED_INSTRUCTION_DECODES,
         }
     }
+}
+
+/* Limits for one call: the depth cap and the decodes still allowed. */
+struct Budget {
+    max_depth: usize,
+    decodes_left: usize,
 }
 
 pub fn resolve_nested_instruction_data<A, F>(
@@ -43,12 +56,16 @@ where
     A: AsRef<str>,
     F: FnMut(&str, &[u8]) -> Result<Option<FormattedReflection>, String>,
 {
+    let mut budget = Budget {
+        max_depth: options.max_depth,
+        decodes_left: options.max_decodes,
+    };
     resolve_value(
         &mut reflection.value,
         0,
         account_addresses,
         &mut decoder,
-        options.max_depth,
+        &mut budget,
     );
     reflection
 }
@@ -58,7 +75,7 @@ fn resolve_value<A, F>(
     instruction_depth: usize,
     account_addresses: &[A],
     decoder: &mut F,
-    max_depth: usize,
+    budget: &mut Budget,
 ) where
     A: AsRef<str>,
     F: FnMut(&str, &[u8]) -> Result<Option<FormattedReflection>, String>,
@@ -71,7 +88,7 @@ fn resolve_value<A, F>(
                     instruction_depth,
                     account_addresses,
                     decoder,
-                    max_depth,
+                    budget,
                 );
                 return;
             }
@@ -80,24 +97,12 @@ fn resolve_value<A, F>(
                 if key == "decodedInstruction" {
                     continue;
                 }
-                resolve_value(
-                    child,
-                    instruction_depth,
-                    account_addresses,
-                    decoder,
-                    max_depth,
-                );
+                resolve_value(child, instruction_depth, account_addresses, decoder, budget);
             }
         }
         JsonValue::Array(items) => {
             for item in items {
-                resolve_value(
-                    item,
-                    instruction_depth,
-                    account_addresses,
-                    decoder,
-                    max_depth,
-                );
+                resolve_value(item, instruction_depth, account_addresses, decoder, budget);
             }
         }
         JsonValue::Null | JsonValue::Bool(_) | JsonValue::Number(_) | JsonValue::String(_) => {}
@@ -109,7 +114,7 @@ fn resolve_instruction_data_value<A, F>(
     instruction_depth: usize,
     account_addresses: &[A],
     decoder: &mut F,
-    max_depth: usize,
+    budget: &mut Budget,
 ) where
     A: AsRef<str>,
     F: FnMut(&str, &[u8]) -> Result<Option<FormattedReflection>, String>,
@@ -134,7 +139,7 @@ fn resolve_instruction_data_value<A, F>(
         return;
     };
 
-    if instruction_depth >= max_depth {
+    if instruction_depth >= budget.max_depth {
         insert_error(map, "Nested instruction depth limit reached");
         return;
     }
@@ -157,6 +162,12 @@ fn resolve_instruction_data_value<A, F>(
         }
     };
 
+    if budget.decodes_left == 0 {
+        insert_error(map, "Nested instruction decode limit reached");
+        return;
+    }
+    budget.decodes_left -= 1;
+
     match decoder(&program_address, &data) {
         Ok(Some(mut decoded)) => {
             resolve_value(
@@ -164,7 +175,7 @@ fn resolve_instruction_data_value<A, F>(
                 instruction_depth + 1,
                 account_addresses,
                 decoder,
-                max_depth,
+                budget,
             );
             match serde_json::to_value(decoded) {
                 Ok(value) => {
@@ -328,6 +339,59 @@ mod tests {
         assert_eq!(level4_type, Some("Level4"));
     }
 
+    /* Fan-out (every union view of a payload can be instruction data) is
+     * bounded by a decode budget shared across the whole call, not just by
+     * depth: eight children per level would otherwise mean 8^depth calls. */
+    #[test]
+    fn stops_at_shared_nested_decode_budget() {
+        let fan_out = || {
+            let children: Map<String, JsonValue> = (0..8)
+                .map(|i| (format!("view{i}"), instruction_data(0, "0x01")))
+                .collect();
+            JsonValue::Object(children)
+        };
+        let mut calls = 0usize;
+        let result = resolve_nested_instruction_data_with_options(
+            reflection(fan_out(), "RootInstruction"),
+            &addresses(&["p0"]),
+            |_, _| {
+                calls += 1;
+                Ok(Some(reflection(fan_out(), "Level")))
+            },
+            NestedInstructionDecodeOptions {
+                max_depth: 6,
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(calls, MAX_NESTED_INSTRUCTION_DECODES);
+        let text = serde_json::to_string(&result.value).expect("serialize");
+        assert!(text.contains("Nested instruction decode limit reached"));
+    }
+
+    /* 257 sibling instructions: the last one is over the default budget
+     * (matches Go `TestNestedDecodeBudgetCoversSiblings`). */
+    #[test]
+    fn decode_budget_covers_siblings() {
+        let items: Vec<JsonValue> = (0..257).map(|_| instruction_data(0, "0x01")).collect();
+        let mut calls = 0usize;
+        let result = resolve_nested_instruction_data(
+            reflection(JsonValue::Array(items), "Root"),
+            &addresses(&["p0"]),
+            |_, _| {
+                calls += 1;
+                Ok(Some(reflection(json!({}), "Leaf")))
+            },
+        );
+        assert_eq!(calls, 256);
+        assert_eq!(
+            result.value[256]
+                .get("decodeError")
+                .and_then(JsonValue::as_str),
+            Some("Nested instruction decode limit reached")
+        );
+    }
+
     #[test]
     fn stops_at_nested_instruction_depth_cap() {
         let result = resolve_nested_instruction_data_with_options(
@@ -342,7 +406,10 @@ mod tests {
                     "Level1",
                 )))
             },
-            NestedInstructionDecodeOptions { max_depth: 1 },
+            NestedInstructionDecodeOptions {
+                max_depth: 1,
+                ..Default::default()
+            },
         );
 
         let child = &result.value["first"]["decodedInstruction"]["value"]["child"];

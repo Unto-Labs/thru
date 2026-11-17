@@ -37,7 +37,7 @@ type __TnIrNode =
   | {
       readonly op: "switch";
       readonly tag: string;
-      readonly cases: readonly { readonly value: number; readonly node: __TnIrNode }[];
+      readonly cases: readonly { readonly value: number | bigint; readonly node: __TnIrNode }[];
       readonly default?: __TnIrNode;
     }
   | {
@@ -50,6 +50,7 @@ type __TnIrNode =
       readonly count: __TnIrNode;
       readonly elementTypeName: string;
       readonly fieldName: string;
+      readonly payloadParam?: string;
     };
 
 type __TnIrContext = {
@@ -76,7 +77,8 @@ type __TnStructFieldInput =
   | { bytes?: () => Uint8Array };
 type __TnVariantDescriptor = {
   readonly name: string;
-  readonly tag: number;
+  /* A bigint for tags past 2^53 - 1, which a number cannot hold exactly. */
+  readonly tag: number | bigint;
   readonly payloadSize: number | null;
   readonly payloadType?: string;
   readonly createPayloadBuilder?: () => unknown | null;
@@ -117,6 +119,20 @@ function __tnWarnOnce(message: string): void {
     __tnWarnings.add(message);
     __tnLogWarn(message);
   }
+}
+
+/* Builders never return bytes their type's `validate` rejects. */
+function __tnBuilderValidateOrThrow(typeName: string, result: { ok: boolean; code?: string }): void {
+  if (!result.ok) throw new Error(`${typeName}Builder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
+}
+
+/* Packed params as a measuring walk's context: `T.kind` becomes `kind`. */
+function __tnParamsContext(record: Record<string, bigint>, prefix: string): Record<string, bigint> {
+  const ctx: Record<string, bigint> = Object.create(null);
+  for (const key of Object.keys(record)) {
+    ctx[key.startsWith(prefix) ? key.slice(prefix.length) : key] = record[key];
+  }
+  return ctx;
 }
 
 function __tnResolveBuilderInput(
@@ -284,11 +300,19 @@ function __tnBigIntGreaterThan(lhs: bigint, rhs: bigint): boolean {
   return (lhs as unknown as number) > (rhs as unknown as number);
 }
 
+/* Set bits of a u64 (a bigint is read as its low 64 bits; a number as
+   its low 32, as before). */
 function __tnPopcount(value: number | bigint): number {
-  let v =
-    typeof value === "bigint"
-      ? Number(value & BigInt(0xffffffff))
-      : Number(value) >>> 0;
+  if (typeof value === "bigint") {
+    let v = BigInt.asUintN(64, value);
+    let count = 0;
+    while (v !== BigInt(0)) {
+      v &= v - BigInt(1);
+      count++;
+    }
+    return count;
+  }
+  let v = Number(value) >>> 0;
   v = v - ((v >>> 1) & 0x55555555);
   v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
   return (((v + (v >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24;
@@ -303,10 +327,10 @@ function __tnRaiseIrError(code: string, message: string): never {
 function __tnCheckedAdd(lhs: bigint, rhs: bigint): bigint {
   if (__tnHasNativeBigInt) {
     const result = (lhs as bigint) + (rhs as bigint);
-    if (result < BigInt(0)) {
+    if (result < BigInt(0) || result > __tnU64(-BigInt(1))) {
       __tnRaiseIrError(
         "tn.ir.overflow",
-        "IR runtime detected negative size via addition"
+        "IR runtime detected an addition outside u64"
       );
     }
     return result;
@@ -355,10 +379,10 @@ function __tnCheckedSub(lhs: bigint, rhs: bigint): bigint {
 function __tnCheckedMul(lhs: bigint, rhs: bigint): bigint {
   if (__tnHasNativeBigInt) {
     const result = (lhs as bigint) * (rhs as bigint);
-    if (result < BigInt(0)) {
+    if (result < BigInt(0) || result > __tnU64(-BigInt(1))) {
       __tnRaiseIrError(
         "tn.ir.overflow",
-        "IR runtime detected negative size via multiplication"
+        "IR runtime detected a multiplication outside u64"
       );
     }
     return result;
@@ -432,13 +456,23 @@ function __tnCheckedShift(
   rhs: bigint,
   direction: "left" | "right"
 ): bigint {
+  /* As C and Rust: shifting 0, or shifting right by 64 or more, is 0;
+     shifting a non-zero value left by 64 or more overflows. */
+  if (__tnBigIntEquals(lhs, __tnToBigInt(0))) return lhs;
+  if (direction === "right" && __tnBigIntGreaterThan(rhs, __tnToBigInt(63))) {
+    return __tnToBigInt(0);
+  }
   const amount = __tnBigIntToNumber(rhs, "IR shift amount");
   if (amount < 0 || amount >= 64 || !Number.isInteger(amount)) {
     __tnRaiseIrError("tn.ir.overflow", "IR runtime invalid shift amount");
   }
   if (__tnHasNativeBigInt) {
     const shift = BigInt(amount);
-    return direction === "left" ? (lhs as bigint) << shift : (lhs as bigint) >> shift;
+    const shifted = direction === "left" ? (lhs as bigint) << shift : (lhs as bigint) >> shift;
+    if (shifted > __tnU64(-BigInt(1))) {
+      __tnRaiseIrError("tn.ir.overflow", "IR runtime shift overflows u64");
+    }
+    return shifted;
   }
   const value = lhs as unknown as number;
   const result = direction === "left" ? value * 2 ** amount : Math.floor(value / 2 ** amount);
@@ -446,6 +480,100 @@ function __tnCheckedShift(
     __tnWarnOnce("[thru-net] Precision loss while polyfilling BigInt shift");
   }
   return (result as unknown) as bigint;
+}
+
+/* 2^64: no u64 value, so no enum tag and no buffer size. */
+const __tnMeasureLimit = __tnHasNativeBigInt
+  ? BigInt(1) << BigInt(64)
+  : ((2 ** 64) as unknown as bigint);
+
+/* Checked u64 arithmetic for size, enum tag and derived-parameter expressions over
+   buffer values, as C and Rust evaluate them: operands are read as u64, and a
+   result outside u64 (an overflowing add/mul/pow/shift, a negative sub, a
+   shift of 64 or more of a non-zero value, a division by zero) is `null`,
+   which propagates. No operation builds a value wider than 128 bits. */
+function __tnU64(value: bigint): bigint {
+  return BigInt.asUintN(64, value);
+}
+
+function __tnU64Op(op: string, lhs: bigint | null, rhs: bigint | null): bigint | null {
+  if (lhs === null || rhs === null) return null;
+  const a = __tnU64(lhs);
+  const b = __tnU64(rhs);
+  const zero = BigInt(0);
+  const one = BigInt(1);
+  const max = __tnU64(-one);
+  let result: bigint;
+  switch (op) {
+    case "add": result = a + b; break;
+    case "sub": result = a - b; break;
+    case "mul": result = a * b; break;
+    case "div": if (b === zero) return null; result = a / b; break;
+    case "mod": if (b === zero) return null; result = a % b; break;
+    case "and": result = a & b; break;
+    case "or": result = a | b; break;
+    case "xor": result = a ^ b; break;
+    case "shl":
+      if (a === zero) return zero;
+      if (b > BigInt(63)) return null;
+      result = a << b;
+      break;
+    case "shr": result = b > BigInt(63) ? zero : a >> b; break;
+    case "pow": {
+      if (b === zero) return one;
+      if (a === zero || a === one) return a;
+      if (b > BigInt(64)) return null;
+      result = one;
+      for (let i = zero; i < b; i++) {
+        result *= a;
+        if (result > max) return null;
+      }
+      break;
+    }
+    case "eq": return a === b ? one : zero;
+    case "ne": return a !== b ? one : zero;
+    case "lt": return a < b ? one : zero;
+    case "gt": return a > b ? one : zero;
+    case "le": return a <= b ? one : zero;
+    case "ge": return a >= b ? one : zero;
+    case "land": return a !== zero && b !== zero ? one : zero;
+    case "lor": return a !== zero || b !== zero ? one : zero;
+    case "lxor": return (a !== zero) !== (b !== zero) ? one : zero;
+    default: return null;
+  }
+  return result < zero || result > max ? null : result;
+}
+
+function __tnU64Unary(op: string, operand: bigint | null): bigint | null {
+  if (operand === null) return null;
+  const a = __tnU64(operand);
+  const zero = BigInt(0);
+  switch (op) {
+    case "bitnot": return __tnU64(~a);
+    case "neg": return a === zero ? zero : null;
+    case "not": return a === zero ? BigInt(1) : zero;
+    case "popcount": return BigInt(__tnPopcount(a));
+    default: return null;
+  }
+}
+
+/* A checked count as a number (views read validated bytes: an overflow
+   means they changed since). */
+function __tnCountNumber(count: bigint | null): number {
+  if (count === null) throw new Error("array count overflows u64");
+  return __tnBigIntToNumber(count, "array count");
+}
+
+/* Whether two enum tags are the same u64 (numbers and bigints compared
+   exactly; a null tag equals nothing). */
+function __tnTagEquals(lhs: number | bigint | null, rhs: number | bigint): boolean {
+  if (lhs === null) return false;
+  return __tnToBigInt(lhs) === __tnToBigInt(rhs);
+}
+
+/* A checked tag as a number; an overflow (`null`) selects no variant. */
+function __tnTagNumber(tag: bigint | null): number {
+  return tag === null || tag > BigInt(Number.MAX_SAFE_INTEGER) ? -1 : Number(tag);
 }
 
 function __tnAlign(value: bigint, alignment: number): bigint {
@@ -735,6 +863,17 @@ function __tnValidateIrTree(
   return { ok: true, consumed: required };
 }
 
+/* A parameter as the u64 C and Rust evaluate: a value read from a signed
+   field is its two's complement (i8 -1 is 2^64-1); a derived value past
+   u64 (an overflowed computed count or tag) is an overflow. */
+function __tnIrU64(value: bigint, name: string): bigint {
+  if (!__tnHasNativeBigInt) return value;
+  if (value > __tnU64(-BigInt(1))) {
+    __tnRaiseIrError("tn.ir.overflow", `IR parameter '${name}' overflows u64`);
+  }
+  return __tnU64(value);
+}
+
 function __tnEvalIrNode(
   node: __TnIrNode,
   ctx: __TnIrContext,
@@ -757,7 +896,7 @@ function __tnEvalIrNode(
           `${prefix}Missing IR parameter '${node.param}'`
         );
       }
-      return val;
+      return __tnIrU64(val, node.param);
     }
     case "add":
       {
@@ -774,11 +913,13 @@ function __tnEvalIrNode(
         __tnEvalIrNode(node.left, ctx, baseOffset),
         __tnEvalIrNode(node.right, ctx, baseOffset)
       );
-    case "mul":
-      return __tnCheckedMul(
-        __tnEvalIrNode(node.left, ctx, baseOffset),
-        __tnEvalIrNode(node.right, ctx, baseOffset)
-      );
+    case "mul": {
+      /* `count * element`: no elements select no variant (an unknown tag
+         with a zero count is valid), so a zero left side ends here. */
+      const left = __tnEvalIrNode(node.left, ctx, baseOffset);
+      if (__tnBigIntEquals(left, __tnToBigInt(0))) return left;
+      return __tnCheckedMul(left, __tnEvalIrNode(node.right, ctx, baseOffset));
+    }
     case "div":
       return __tnCheckedDiv(
         __tnEvalIrNode(node.left, ctx, baseOffset),
@@ -822,7 +963,8 @@ function __tnEvalIrNode(
     case "align":
       return __tnAlign(__tnEvalIrNode(node.node, ctx, baseOffset), node.alignment);
     case "switch": {
-      const tagVal = ctx.params[node.tag];
+      const rawTag = ctx.params[node.tag];
+      const tagVal = rawTag === undefined ? rawTag : __tnIrU64(rawTag, node.tag);
       if (tagVal === undefined) {
         const prefix = ctx.typeName ? `${ctx.typeName}: ` : "";
         __tnRaiseIrError(
@@ -830,16 +972,16 @@ function __tnEvalIrNode(
           `${prefix}Missing IR switch tag '${node.tag}'`
         );
       }
-      const tagNumber = Number(tagVal);
+      /* Case values past 2^53 - 1 are bigints: compare exact u64s. */
       for (const caseNode of node.cases) {
-        if (caseNode.value === tagNumber) {
+        if (__tnTagEquals(tagVal, caseNode.value)) {
           return __tnEvalIrNode(caseNode.node, ctx, baseOffset);
         }
       }
       if (node.default) return __tnEvalIrNode(node.default, ctx, baseOffset);
       __tnRaiseIrError(
         "tn.ir.invalid_tag",
-        `Unhandled IR switch value ${tagNumber} for '${node.tag}'`
+        `Unhandled IR switch value ${tagVal} for '${node.tag}'`
       );
     }
     case "call": {
@@ -880,6 +1022,11 @@ function __tnEvalIrNode(
       return __tnInvokeFootprint(node.typeName, nestedParams);
     }
     case "sumOverArray": {
+      if (!ctx.buffer && node.payloadParam !== undefined) {
+        /* Sizing from params: the array's byte total is a parameter. */
+        const total = ctx.params[node.payloadParam];
+        if (total !== undefined) return total;
+      }
       if (!ctx.buffer) {
         __tnRaiseIrError(
           "tn.ir.missing_buffer",

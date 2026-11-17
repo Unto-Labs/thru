@@ -1,7 +1,7 @@
 /* The perps actions as LLM tools.
 
-   perpsToolDefinitions(client) gives one tool per action the deployment's
-   ABI version supports, each with a JSON Schema of its input
+   perpsToolDefinitions() gives one tool per action, each with a JSON
+   Schema of its input
    ({ name, description, input_schema }: the shape Anthropic's Messages API
    takes as `tools`; rename input_schema to `parameters` for others).
    callPerpsTool runs a tool call and returns JSON the model can read:
@@ -25,9 +25,9 @@ import {
 } from '@thru/programs/perps';
 
 export async function perpsAgentTools(client: PerpsClient, signer?: PerpsSigner) {
-  const takesOwner = new Set(describePerpsActions(client).filter((action) => action.parameters.properties?.owner).map((action) => action.name));
+  const takesOwner = new Set(describePerpsActions().filter((action) => action.parameters.properties?.owner).map((action) => action.name));
   return {
-    tools: perpsToolDefinitions(client),
+    tools: perpsToolDefinitions(),
     /** Handles one tool_use block: name "perps_<action>", input the model's JSON. */
     async callPerpsTool(name: string, input: Record<string, unknown>): Promise<PerpsActionResult> {
       const action = name.replace(/^perps_/, '');

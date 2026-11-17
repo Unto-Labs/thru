@@ -1,0 +1,94 @@
+{
+  "abi": "web/chain-indexer/test/sample_amended.abi.yaml",
+  "account_root": "SampleProgramAccount",
+  "values": {
+    "1": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "small",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(I8)"
+                      },
+                      "size": 1
+                    }
+                  },
+                  {
+                    "name": "large",
+                    "offset": 1,
+                    "type": {
+                      "alignment": 4,
+                      "kind": {
+                        "primitive": "Integral(I32)"
+                      },
+                      "size": 4
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 5
+          },
+          "ref": "SampleAccount"
+        },
+        "size": 5
+      },
+      "variant": "pda_v1"
+    },
+    "2": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "large",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 4,
+                      "kind": {
+                        "primitive": "Integral(I32)"
+                      },
+                      "size": 4
+                    }
+                  },
+                  {
+                    "name": "small",
+                    "offset": 4,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(I8)"
+                      },
+                      "size": 1
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 5
+          },
+          "ref": "SampleAccountV2"
+        },
+        "size": 5
+      },
+      "variant": "pda_v2"
+    }
+  }
+}

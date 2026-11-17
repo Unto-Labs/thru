@@ -160,6 +160,17 @@ export type {
 } from "./components/wallet/Screen/Screen";
 export { PresetsInput } from "./components/wallet/PresetsInput/PresetsInput";
 export type { PresetsInputProps, PresetOption } from "./components/wallet/PresetsInput/PresetsInput";
+export { IdentityNumberInput } from "./components/wallet/IdentityNumberInput/IdentityNumberInput";
+export type { IdentityNumberInputProps } from "./components/wallet/IdentityNumberInput/IdentityNumberInput";
+export { IDENTITY_FORMATS } from "./components/wallet/IdentityNumberInput/identity";
+export type { IdentityNumberKind } from "./components/wallet/IdentityNumberInput/identity";
+export { UsStatePicker } from "./components/wallet/UsStatePicker/UsStatePicker";
+export type { UsStatePickerProps } from "./components/wallet/UsStatePicker/UsStatePicker";
+export { US_STATES } from "./components/wallet/UsStatePicker/usStates";
+export type { UsStateCode, UsStateBlocks } from "./components/wallet/UsStatePicker/usStates";
+export { DobInput } from "./components/wallet/DobInput/DobInput";
+export type { DobInputProps } from "./components/wallet/DobInput/DobInput";
+export { formatDob, parseDob, dobToIso, validateDob } from "./components/wallet/DobInput/dob";
 export { Steps } from "./components/wallet/Steps/Steps";
 export type { StepsProps, StepItem, StepStatus } from "./components/wallet/Steps/Steps";
 export { Checklist } from "./components/wallet/Checklist/Checklist";
@@ -227,6 +238,7 @@ export type {
   WalletSheetDepositMethod,
   WalletSheetDepositProps,
   WalletSheetDepositCryptoProps,
+  WalletSheetDepositAgreementProps,
   WalletSheetDepositCardProps,
   WalletSheetDepositFaucetProps,
   WalletSheetDepositPhoneProps,
@@ -235,6 +247,7 @@ export type {
   DepositStepProgress,
   WalletSheetDepositVerifyProps,
   WalletSheetDepositPendingProps,
+  WalletSheetDepositVerifiedProps,
   WalletSheetDepositDoneProps,
   WalletSheetDepositDoneRow,
   DepositDestinationInfo,
@@ -245,5 +258,12 @@ export type {
 export { WalletOverlay } from "./components/wallet/WalletOverlay/WalletOverlay";
 export type { WalletOverlayProps } from "./components/wallet/WalletOverlay/WalletOverlay";
 
-export { ThruUsdLogo, type ThruUsdLogoProps } from "./ThruUsdLogo";
-export { isThruUsdSymbol } from "../../tokens/src/thrusd";
+export { UusdLogo, type UusdLogoProps } from "./UusdLogo";
+export { isUusdSymbol } from "../../tokens/src/uusd";
+
+export type { WalletSheetDepositKycProps } from "./components/wallet/WalletSheet/DepositKyc";
+export type {
+  WalletSheetDepositBankMethod,
+  WalletSheetDepositBankRow,
+  WalletSheetDepositActivityRow,
+} from "./components/wallet/WalletSheet/DepositBank";

@@ -1,0 +1,7 @@
+test-case:
+  name: "wide_tag_enums_u16_big"
+  abi-file: "../../abi_definitions/wide_tag_enums.abi.yaml"
+  type: "U16TagEnum"
+  description: "u16 tag 258 selects Big (u32 payload); narrowing to u8 would pick Two"
+  tags: ["enums", "wide-tag"]
+  binary-hex: "0201 efbeadde"

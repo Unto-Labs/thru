@@ -58,7 +58,13 @@ pub fn emit_builder(resolved_type: &ResolvedType, type_ir: Option<&TypeIr>) -> O
         }
     }
     if let Some(plan) = tail_typeref_builder_plan(resolved_type) {
-        return Some(emit_tail_typeref_struct_builder(resolved_type, plan));
+        let has_params =
+            type_ir.map_or(false, |ir| ir.parameters.iter().any(|param| !param.derived));
+        return Some(emit_tail_typeref_struct_builder(
+            resolved_type,
+            plan,
+            has_params,
+        ));
     }
     if supports_const_struct(resolved_type) {
         return Some(emit_const_struct_builder(resolved_type));
@@ -1044,14 +1050,14 @@ fn jagged_typeref_array_builder_plan<'a>(
     let array_field = array_field?;
     let count_field = count_field?;
     let count_param = sanitize_param_name(&count_field.name);
+    let payload_param = format!("{}.payload_size", array_field.name);
     let bindings: Vec<_> = deduplicated_ts_parameter_bindings(type_ir)
         .into_iter()
         .filter(|binding| !binding.derived)
         .collect();
-    if bindings
-        .iter()
-        .any(|binding| !binding_matches_param_name(binding, &count_param))
-    {
+    if bindings.iter().any(|binding| {
+        !binding_matches_param_name(binding, &count_param) && binding.canonical != payload_param
+    }) {
         return None;
     }
 
@@ -1200,9 +1206,12 @@ fn emit_const_struct_builder(resolved_type: &ResolvedType) -> String {
         }
     }
 
+    /* Setters take raw bytes for type-refs, so the value is validated (its
+    enum tags) before it leaves the builder. */
     writeln!(
         out,
-        "  build(): Uint8Array {{\n    return this.buffer.slice();\n  }}\n"
+        "  build(): Uint8Array {{\n    const buffer = this.buffer.slice();\n    __tnBuilderValidateOrThrow(\"{c}\", {c}.validate(buffer));\n    return buffer;\n  }}\n",
+        c = class_name
     )
     .unwrap();
 
@@ -1214,6 +1223,12 @@ fn emit_const_struct_builder(resolved_type: &ResolvedType) -> String {
     writeln!(
         out,
         "    if (target.length - offset < this.buffer.length) throw new Error(\"target buffer too small\");"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    __tnBuilderValidateOrThrow(\"{c}\", {c}.validate(this.buffer));",
+        c = class_name
     )
     .unwrap();
     writeln!(
@@ -1513,9 +1528,11 @@ fn emit_tagged_enum_struct_builder(resolved_type: &ResolvedType) -> String {
     )
     .unwrap();
     writeln!(out, "    buffer[0] = this.tag;").unwrap();
+    writeln!(out, "    buffer.set(this.payload, 1);").unwrap();
     writeln!(
         out,
-        "    buffer.set(this.payload, 1);\n    return buffer;\n  }}\n"
+        "    __tnBuilderValidateOrThrow(\"{c}\", {c}.validate(buffer));\n    return buffer;\n  }}\n",
+        c = class_name
     )
     .unwrap();
 
@@ -2390,6 +2407,19 @@ fn emit_jagged_typeref_array_builder(
         .collect();
     let mut param_exprs = Vec::new();
     for binding in &bindings {
+        /* The jagged array's byte total sizes it from params. */
+        if binding.canonical == format!("{}.payload_size", plan.array_field.name) {
+            param_exprs.push((
+                binding.ts_name.clone(),
+                format!(
+                    "(() => {{ const fragments = this.{storage}; if (!fragments) throw new Error(\"{ty}Builder: field '{field}' must be written before computing params\"); return __tnToBigInt(fragments.reduce((total, fragment) => total + fragment.length, 0)); }})()",
+                    storage = plan.storage_ident,
+                    ty = class_name,
+                    field = plan.array_field.name
+                ),
+            ));
+            continue;
+        }
         if binding_matches_param_name(binding, &count_param) {
             param_exprs.push((
                 binding.ts_name.clone(),
@@ -2659,6 +2689,7 @@ fn emit_jagged_typeref_array_builder(
 fn emit_tail_typeref_struct_builder(
     resolved_type: &ResolvedType,
     plan: TailTypeRefPlan<'_>,
+    has_params: bool,
 ) -> String {
     let class_name = &resolved_type.name;
     let builder_name = format!("{}Builder", class_name);
@@ -2777,6 +2808,24 @@ fn emit_tail_typeref_struct_builder(
     writeln!(out, "  finishView(): {} {{", class_name).unwrap();
     writeln!(out, "    return this.finish();").unwrap();
     writeln!(out, "  }}\n").unwrap();
+
+    if has_params {
+        /* The params a container needs: read back from the built bytes. */
+        writeln!(out, "  dynamicParams(): {}.Params {{", class_name).unwrap();
+        writeln!(
+            out,
+            "    const result = {}.validate(this.build());",
+            class_name
+        )
+        .unwrap();
+        writeln!(
+            out,
+            "    if (!result.ok || !result.params) throw new Error(\"{}Builder: cannot derive params\");",
+            class_name
+        )
+        .unwrap();
+        writeln!(out, "    return result.params;\n  }}\n").unwrap();
+    }
 
     writeln!(out, "  private __tnCollectTailFragments(): Uint8Array[] {{").unwrap();
     writeln!(out, "    return [").unwrap();

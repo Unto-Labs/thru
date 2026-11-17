@@ -2,8 +2,22 @@ import type { FormattedReflection } from "./types";
 
 export const MAX_NESTED_INSTRUCTION_DEPTH = 15;
 
+/**
+ * Most nested instructions one call decodes, across all levels. Every view of
+ * a union payload can hold instruction data, so depth alone does not bound
+ * the work (eight views per level would be 8^depth decodes).
+ */
+export const MAX_NESTED_INSTRUCTION_DECODES = 256;
+
 export interface NestedInstructionDecodeOptions {
   maxDepth?: number;
+  maxDecodes?: number;
+}
+
+/** Limits for one call: the depth cap and the decodes still allowed. */
+interface Budget {
+  maxDepth: number;
+  decodesLeft: number;
 }
 
 export type NestedInstructionDecoder = (
@@ -19,13 +33,10 @@ export async function resolveNestedInstructionData(
   decoder: NestedInstructionDecoder,
   options: NestedInstructionDecodeOptions = {},
 ): Promise<FormattedReflection> {
-  await resolveValue(
-    reflection.value,
-    0,
-    accountAddresses,
-    decoder,
-    options.maxDepth ?? MAX_NESTED_INSTRUCTION_DEPTH,
-  );
+  await resolveValue(reflection.value, 0, accountAddresses, decoder, {
+    maxDepth: options.maxDepth ?? MAX_NESTED_INSTRUCTION_DEPTH,
+    decodesLeft: options.maxDecodes ?? MAX_NESTED_INSTRUCTION_DECODES,
+  });
   return reflection;
 }
 
@@ -34,11 +45,11 @@ async function resolveValue(
   instructionDepth: number,
   accountAddresses: readonly string[],
   decoder: NestedInstructionDecoder,
-  maxDepth: number,
+  budget: Budget,
 ): Promise<void> {
   if (Array.isArray(value)) {
     for (const item of value) {
-      await resolveValue(item, instructionDepth, accountAddresses, decoder, maxDepth);
+      await resolveValue(item, instructionDepth, accountAddresses, decoder, budget);
     }
     return;
   }
@@ -51,14 +62,14 @@ async function resolveValue(
       instructionDepth,
       accountAddresses,
       decoder,
-      maxDepth,
+      budget,
     );
     return;
   }
 
   for (const [key, child] of Object.entries(value)) {
     if (key === "decodedInstruction") continue;
-    await resolveValue(child, instructionDepth, accountAddresses, decoder, maxDepth);
+    await resolveValue(child, instructionDepth, accountAddresses, decoder, budget);
   }
 }
 
@@ -67,7 +78,7 @@ async function resolveInstructionDataValue(
   instructionDepth: number,
   accountAddresses: readonly string[],
   decoder: NestedInstructionDecoder,
-  maxDepth: number,
+  budget: Budget,
 ): Promise<void> {
   delete value.decodeError;
   delete value.decodedInstruction;
@@ -76,7 +87,7 @@ async function resolveInstructionDataValue(
   const programIndex = value.programIndex as number;
   const dataHex = value.dataHex as string;
 
-  if (instructionDepth >= maxDepth) {
+  if (instructionDepth >= budget.maxDepth) {
     insertError(value, "Nested instruction depth limit reached");
     return;
   }
@@ -96,6 +107,12 @@ async function resolveInstructionDataValue(
     return;
   }
 
+  if (budget.decodesLeft <= 0) {
+    insertError(value, "Nested instruction decode limit reached");
+    return;
+  }
+  budget.decodesLeft -= 1;
+
   try {
     const decoded = await decoder(programAddress, data);
     if (!decoded) {
@@ -108,7 +125,7 @@ async function resolveInstructionDataValue(
       instructionDepth + 1,
       accountAddresses,
       decoder,
-      maxDepth,
+      budget,
     );
     value.decodedInstruction = decoded;
   } catch (err) {

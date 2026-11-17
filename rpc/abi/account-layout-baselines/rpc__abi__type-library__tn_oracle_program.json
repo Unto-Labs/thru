@@ -1,0 +1,440 @@
+{
+  "abi": "rpc/abi/type-library/tn_oracle_program.abi.yaml",
+  "account_root": "OracleFeedAccount",
+  "values": {
+    "1": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "common",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "max_staleness_ns",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 8,
+                                    "kind": {
+                                      "primitive": "Integral(U64)"
+                                    },
+                                    "size": 8
+                                  }
+                                },
+                                {
+                                  "name": "last_update_ns",
+                                  "offset": 8,
+                                  "type": {
+                                    "alignment": 8,
+                                    "kind": {
+                                      "primitive": "Integral(U64)"
+                                    },
+                                    "size": 8
+                                  }
+                                },
+                                {
+                                  "name": "admin_address",
+                                  "offset": 16,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "layout": {
+                                        "alignment": 1,
+                                        "kind": {
+                                          "struct": {
+                                            "aligned": null,
+                                            "fields": [
+                                              {
+                                                "name": "bytes",
+                                                "offset": 0,
+                                                "type": {
+                                                  "alignment": 1,
+                                                  "kind": {
+                                                    "array": {
+                                                      "element": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "primitive": "Integral(U8)"
+                                                        },
+                                                        "size": 1
+                                                      },
+                                                      "jagged": false,
+                                                      "size": {
+                                                        "literal": {
+                                                          "u64": 32
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "size": 32
+                                                }
+                                              }
+                                            ],
+                                            "packed": true
+                                          }
+                                        },
+                                        "size": 32
+                                      },
+                                      "ref": "Pubkey"
+                                    },
+                                    "size": 32
+                                  }
+                                },
+                                {
+                                  "name": "reporter_address",
+                                  "offset": 48,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "layout": {
+                                        "alignment": 1,
+                                        "kind": {
+                                          "struct": {
+                                            "aligned": null,
+                                            "fields": [
+                                              {
+                                                "name": "bytes",
+                                                "offset": 0,
+                                                "type": {
+                                                  "alignment": 1,
+                                                  "kind": {
+                                                    "array": {
+                                                      "element": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "primitive": "Integral(U8)"
+                                                        },
+                                                        "size": 1
+                                                      },
+                                                      "jagged": false,
+                                                      "size": {
+                                                        "literal": {
+                                                          "u64": 32
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "size": 32
+                                                }
+                                              }
+                                            ],
+                                            "packed": true
+                                          }
+                                        },
+                                        "size": 32
+                                      },
+                                      "ref": "Pubkey"
+                                    },
+                                    "size": 32
+                                  }
+                                },
+                                {
+                                  "name": "feed_name",
+                                  "offset": 80,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "layout": {
+                                        "alignment": 1,
+                                        "kind": {
+                                          "array": {
+                                            "element": {
+                                              "alignment": 1,
+                                              "kind": {
+                                                "primitive": "Integral(U8)"
+                                              },
+                                              "size": 1
+                                            },
+                                            "jagged": false,
+                                            "size": {
+                                              "literal": {
+                                                "u64": 64
+                                              }
+                                            }
+                                          }
+                                        },
+                                        "size": 64
+                                      },
+                                      "ref": "FeedName64"
+                                    },
+                                    "size": 64
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 144
+                        },
+                        "ref": "OracleFeedCommonData"
+                      },
+                      "size": 144
+                    }
+                  },
+                  {
+                    "name": "price",
+                    "offset": 144,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "max_variance_bps",
+                    "offset": 152,
+                    "type": {
+                      "alignment": 4,
+                      "kind": {
+                        "primitive": "Integral(U32)"
+                      },
+                      "size": 4
+                    }
+                  },
+                  {
+                    "name": "exponent",
+                    "offset": 156,
+                    "type": {
+                      "alignment": 4,
+                      "kind": {
+                        "primitive": "Integral(I32)"
+                      },
+                      "size": 4
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 160
+          },
+          "ref": "OraclePriceFeedData"
+        },
+        "size": 160
+      },
+      "variant": "price_feed_v1"
+    },
+    "2": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "common",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "max_staleness_ns",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 8,
+                                    "kind": {
+                                      "primitive": "Integral(U64)"
+                                    },
+                                    "size": 8
+                                  }
+                                },
+                                {
+                                  "name": "last_update_ns",
+                                  "offset": 8,
+                                  "type": {
+                                    "alignment": 8,
+                                    "kind": {
+                                      "primitive": "Integral(U64)"
+                                    },
+                                    "size": 8
+                                  }
+                                },
+                                {
+                                  "name": "admin_address",
+                                  "offset": 16,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "layout": {
+                                        "alignment": 1,
+                                        "kind": {
+                                          "struct": {
+                                            "aligned": null,
+                                            "fields": [
+                                              {
+                                                "name": "bytes",
+                                                "offset": 0,
+                                                "type": {
+                                                  "alignment": 1,
+                                                  "kind": {
+                                                    "array": {
+                                                      "element": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "primitive": "Integral(U8)"
+                                                        },
+                                                        "size": 1
+                                                      },
+                                                      "jagged": false,
+                                                      "size": {
+                                                        "literal": {
+                                                          "u64": 32
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "size": 32
+                                                }
+                                              }
+                                            ],
+                                            "packed": true
+                                          }
+                                        },
+                                        "size": 32
+                                      },
+                                      "ref": "Pubkey"
+                                    },
+                                    "size": 32
+                                  }
+                                },
+                                {
+                                  "name": "reporter_address",
+                                  "offset": 48,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "layout": {
+                                        "alignment": 1,
+                                        "kind": {
+                                          "struct": {
+                                            "aligned": null,
+                                            "fields": [
+                                              {
+                                                "name": "bytes",
+                                                "offset": 0,
+                                                "type": {
+                                                  "alignment": 1,
+                                                  "kind": {
+                                                    "array": {
+                                                      "element": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "primitive": "Integral(U8)"
+                                                        },
+                                                        "size": 1
+                                                      },
+                                                      "jagged": false,
+                                                      "size": {
+                                                        "literal": {
+                                                          "u64": 32
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "size": 32
+                                                }
+                                              }
+                                            ],
+                                            "packed": true
+                                          }
+                                        },
+                                        "size": 32
+                                      },
+                                      "ref": "Pubkey"
+                                    },
+                                    "size": 32
+                                  }
+                                },
+                                {
+                                  "name": "feed_name",
+                                  "offset": 80,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "layout": {
+                                        "alignment": 1,
+                                        "kind": {
+                                          "array": {
+                                            "element": {
+                                              "alignment": 1,
+                                              "kind": {
+                                                "primitive": "Integral(U8)"
+                                              },
+                                              "size": 1
+                                            },
+                                            "jagged": false,
+                                            "size": {
+                                              "literal": {
+                                                "u64": 64
+                                              }
+                                            }
+                                          }
+                                        },
+                                        "size": 64
+                                      },
+                                      "ref": "FeedName64"
+                                    },
+                                    "size": 64
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 144
+                        },
+                        "ref": "OracleFeedCommonData"
+                      },
+                      "size": 144
+                    }
+                  },
+                  {
+                    "name": "value",
+                    "offset": 144,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 145
+          },
+          "ref": "OracleBooleanFeedData"
+        },
+        "size": 145
+      },
+      "variant": "bool_feed_v1"
+    }
+  }
+}

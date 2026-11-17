@@ -1,0 +1,1310 @@
+{
+  "abi": "rpc/abi/type-library/tn_clob_program.abi.yaml",
+  "account_root": "ClobProgramAccount",
+  "values": {
+    "1": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "status_flags",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  },
+                  {
+                    "name": "reserved0",
+                    "offset": 1,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "primitive": "Integral(U8)"
+                            },
+                            "size": 1
+                          },
+                          "jagged": false,
+                          "size": {
+                            "literal": {
+                              "u64": 6
+                            }
+                          }
+                        }
+                      },
+                      "size": 6
+                    }
+                  },
+                  {
+                    "name": "token_program_pubkey",
+                    "offset": 7,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "exchange_admin_pubkey",
+                    "offset": 39,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "reserved1",
+                    "offset": 71,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "primitive": "Integral(U8)"
+                            },
+                            "size": 1
+                          },
+                          "jagged": false,
+                          "size": {
+                            "literal": {
+                              "u64": 16
+                            }
+                          }
+                        }
+                      },
+                      "size": 16
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 87
+          },
+          "ref": "ExchangeMetaAccount"
+        },
+        "size": 87
+      },
+      "variant": "exchange_meta_v1"
+    },
+    "2": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "market",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "status_flags",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "primitive": "Integral(U8)"
+                                    },
+                                    "size": 1
+                                  }
+                                },
+                                {
+                                  "name": "exchange_status_flags",
+                                  "offset": 1,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "primitive": "Integral(U8)"
+                                    },
+                                    "size": 1
+                                  }
+                                },
+                                {
+                                  "name": "reserved0",
+                                  "offset": 2,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 5
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 5
+                                  }
+                                },
+                                {
+                                  "name": "lot_size",
+                                  "offset": 7,
+                                  "type": {
+                                    "alignment": 8,
+                                    "kind": {
+                                      "primitive": "Integral(U64)"
+                                    },
+                                    "size": 8
+                                  }
+                                },
+                                {
+                                  "name": "tick_size",
+                                  "offset": 15,
+                                  "type": {
+                                    "alignment": 8,
+                                    "kind": {
+                                      "primitive": "Integral(U64)"
+                                    },
+                                    "size": 8
+                                  }
+                                },
+                                {
+                                  "name": "next_order_id",
+                                  "offset": 23,
+                                  "type": {
+                                    "alignment": 8,
+                                    "kind": {
+                                      "primitive": "Integral(U64)"
+                                    },
+                                    "size": 8
+                                  }
+                                },
+                                {
+                                  "name": "order_entry_pubkey",
+                                  "offset": 31,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "layout": {
+                                        "alignment": 1,
+                                        "kind": {
+                                          "struct": {
+                                            "aligned": null,
+                                            "fields": [
+                                              {
+                                                "name": "bytes",
+                                                "offset": 0,
+                                                "type": {
+                                                  "alignment": 1,
+                                                  "kind": {
+                                                    "array": {
+                                                      "element": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "primitive": "Integral(U8)"
+                                                        },
+                                                        "size": 1
+                                                      },
+                                                      "jagged": false,
+                                                      "size": {
+                                                        "literal": {
+                                                          "u64": 32
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "size": 32
+                                                }
+                                              }
+                                            ],
+                                            "packed": true
+                                          }
+                                        },
+                                        "size": 32
+                                      },
+                                      "ref": "Pubkey"
+                                    },
+                                    "size": 32
+                                  }
+                                },
+                                {
+                                  "name": "bids_cbook_pubkey",
+                                  "offset": 63,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "layout": {
+                                        "alignment": 1,
+                                        "kind": {
+                                          "struct": {
+                                            "aligned": null,
+                                            "fields": [
+                                              {
+                                                "name": "bytes",
+                                                "offset": 0,
+                                                "type": {
+                                                  "alignment": 1,
+                                                  "kind": {
+                                                    "array": {
+                                                      "element": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "primitive": "Integral(U8)"
+                                                        },
+                                                        "size": 1
+                                                      },
+                                                      "jagged": false,
+                                                      "size": {
+                                                        "literal": {
+                                                          "u64": 32
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "size": 32
+                                                }
+                                              }
+                                            ],
+                                            "packed": true
+                                          }
+                                        },
+                                        "size": 32
+                                      },
+                                      "ref": "Pubkey"
+                                    },
+                                    "size": 32
+                                  }
+                                },
+                                {
+                                  "name": "asks_cbook_pubkey",
+                                  "offset": 95,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "layout": {
+                                        "alignment": 1,
+                                        "kind": {
+                                          "struct": {
+                                            "aligned": null,
+                                            "fields": [
+                                              {
+                                                "name": "bytes",
+                                                "offset": 0,
+                                                "type": {
+                                                  "alignment": 1,
+                                                  "kind": {
+                                                    "array": {
+                                                      "element": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "primitive": "Integral(U8)"
+                                                        },
+                                                        "size": 1
+                                                      },
+                                                      "jagged": false,
+                                                      "size": {
+                                                        "literal": {
+                                                          "u64": 32
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "size": 32
+                                                }
+                                              }
+                                            ],
+                                            "packed": true
+                                          }
+                                        },
+                                        "size": 32
+                                      },
+                                      "ref": "Pubkey"
+                                    },
+                                    "size": 32
+                                  }
+                                },
+                                {
+                                  "name": "base_vault_pubkey",
+                                  "offset": 127,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "layout": {
+                                        "alignment": 1,
+                                        "kind": {
+                                          "struct": {
+                                            "aligned": null,
+                                            "fields": [
+                                              {
+                                                "name": "bytes",
+                                                "offset": 0,
+                                                "type": {
+                                                  "alignment": 1,
+                                                  "kind": {
+                                                    "array": {
+                                                      "element": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "primitive": "Integral(U8)"
+                                                        },
+                                                        "size": 1
+                                                      },
+                                                      "jagged": false,
+                                                      "size": {
+                                                        "literal": {
+                                                          "u64": 32
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "size": 32
+                                                }
+                                              }
+                                            ],
+                                            "packed": true
+                                          }
+                                        },
+                                        "size": 32
+                                      },
+                                      "ref": "Pubkey"
+                                    },
+                                    "size": 32
+                                  }
+                                },
+                                {
+                                  "name": "quote_vault_pubkey",
+                                  "offset": 159,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "layout": {
+                                        "alignment": 1,
+                                        "kind": {
+                                          "struct": {
+                                            "aligned": null,
+                                            "fields": [
+                                              {
+                                                "name": "bytes",
+                                                "offset": 0,
+                                                "type": {
+                                                  "alignment": 1,
+                                                  "kind": {
+                                                    "array": {
+                                                      "element": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "primitive": "Integral(U8)"
+                                                        },
+                                                        "size": 1
+                                                      },
+                                                      "jagged": false,
+                                                      "size": {
+                                                        "literal": {
+                                                          "u64": 32
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "size": 32
+                                                }
+                                              }
+                                            ],
+                                            "packed": true
+                                          }
+                                        },
+                                        "size": 32
+                                      },
+                                      "ref": "Pubkey"
+                                    },
+                                    "size": 32
+                                  }
+                                },
+                                {
+                                  "name": "market_authority_pubkey",
+                                  "offset": 191,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "layout": {
+                                        "alignment": 1,
+                                        "kind": {
+                                          "struct": {
+                                            "aligned": null,
+                                            "fields": [
+                                              {
+                                                "name": "bytes",
+                                                "offset": 0,
+                                                "type": {
+                                                  "alignment": 1,
+                                                  "kind": {
+                                                    "array": {
+                                                      "element": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "primitive": "Integral(U8)"
+                                                        },
+                                                        "size": 1
+                                                      },
+                                                      "jagged": false,
+                                                      "size": {
+                                                        "literal": {
+                                                          "u64": 32
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "size": 32
+                                                }
+                                              }
+                                            ],
+                                            "packed": true
+                                          }
+                                        },
+                                        "size": 32
+                                      },
+                                      "ref": "Pubkey"
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 223
+                        },
+                        "ref": "MarketAccount"
+                      },
+                      "size": 223
+                    }
+                  },
+                  {
+                    "name": "reserved_market_padding",
+                    "offset": 223,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "primitive": "Integral(U8)"
+                            },
+                            "size": 1
+                          },
+                          "jagged": false,
+                          "size": {
+                            "literal": {
+                              "u64": 32
+                            }
+                          }
+                        }
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "header",
+                    "offset": 255,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "reserved0",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 52
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 52
+                                  }
+                                },
+                                {
+                                  "name": "next_entry_idx",
+                                  "offset": 52,
+                                  "type": {
+                                    "alignment": 4,
+                                    "kind": {
+                                      "primitive": "Integral(U32)"
+                                    },
+                                    "size": 4
+                                  }
+                                },
+                                {
+                                  "name": "free_magic",
+                                  "offset": 56,
+                                  "type": {
+                                    "alignment": 8,
+                                    "kind": {
+                                      "primitive": "Integral(U64)"
+                                    },
+                                    "size": 8
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 64
+                        },
+                        "ref": "ArenaHeader"
+                      },
+                      "size": 64
+                    }
+                  },
+                  {
+                    "name": "entries",
+                    "offset": 319,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "layout": {
+                                "alignment": 1,
+                                "kind": {
+                                  "struct": {
+                                    "aligned": null,
+                                    "fields": [
+                                      {
+                                        "name": "seat_authority_pubkey",
+                                        "offset": 0,
+                                        "type": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "layout": {
+                                              "alignment": 1,
+                                              "kind": {
+                                                "struct": {
+                                                  "aligned": null,
+                                                  "fields": [
+                                                    {
+                                                      "name": "bytes",
+                                                      "offset": 0,
+                                                      "type": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "array": {
+                                                            "element": {
+                                                              "alignment": 1,
+                                                              "kind": {
+                                                                "primitive": "Integral(U8)"
+                                                              },
+                                                              "size": 1
+                                                            },
+                                                            "jagged": false,
+                                                            "size": {
+                                                              "literal": {
+                                                                "u64": 32
+                                                              }
+                                                            }
+                                                          }
+                                                        },
+                                                        "size": 32
+                                                      }
+                                                    }
+                                                  ],
+                                                  "packed": true
+                                                }
+                                              },
+                                              "size": 32
+                                            },
+                                            "ref": "Pubkey"
+                                          },
+                                          "size": 32
+                                        }
+                                      },
+                                      {
+                                        "name": "quantity_base",
+                                        "offset": 32,
+                                        "type": {
+                                          "alignment": 8,
+                                          "kind": {
+                                            "primitive": "Integral(U64)"
+                                          },
+                                          "size": 8
+                                        }
+                                      },
+                                      {
+                                        "name": "quantity_quote",
+                                        "offset": 40,
+                                        "type": {
+                                          "alignment": 8,
+                                          "kind": {
+                                            "primitive": "Integral(U64)"
+                                          },
+                                          "size": 8
+                                        }
+                                      },
+                                      {
+                                        "name": "head_order_entry_idx",
+                                        "offset": 48,
+                                        "type": {
+                                          "alignment": 4,
+                                          "kind": {
+                                            "primitive": "Integral(U32)"
+                                          },
+                                          "size": 4
+                                        }
+                                      },
+                                      {
+                                        "name": "reserved0",
+                                        "offset": 52,
+                                        "type": {
+                                          "alignment": 4,
+                                          "kind": {
+                                            "primitive": "Integral(U32)"
+                                          },
+                                          "size": 4
+                                        }
+                                      },
+                                      {
+                                        "name": "non_nullable_reserved",
+                                        "offset": 56,
+                                        "type": {
+                                          "alignment": 8,
+                                          "kind": {
+                                            "primitive": "Integral(U64)"
+                                          },
+                                          "size": 8
+                                        }
+                                      }
+                                    ],
+                                    "packed": true
+                                  }
+                                },
+                                "size": 64
+                              },
+                              "ref": "SeatEntry"
+                            },
+                            "size": 64
+                          },
+                          "jagged": false,
+                          "size": {
+                            "div": {
+                              "left": {
+                                "sub": {
+                                  "left": {
+                                    "field-ref": {
+                                      "path": [
+                                        "__buffer_size"
+                                      ]
+                                    }
+                                  },
+                                  "right": {
+                                    "literal": {
+                                      "u64": 319
+                                    }
+                                  }
+                                }
+                              },
+                              "right": {
+                                "literal": {
+                                  "u64": 64
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "size": "variable"
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": "variable"
+          },
+          "ref": "SeatArenaAccount"
+        },
+        "size": "variable"
+      },
+      "variant": "market_v1"
+    },
+    "3": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "reserved_header",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "primitive": "Integral(U8)"
+                            },
+                            "size": 1
+                          },
+                          "jagged": false,
+                          "size": {
+                            "literal": {
+                              "u64": 7
+                            }
+                          }
+                        }
+                      },
+                      "size": 7
+                    }
+                  },
+                  {
+                    "name": "header",
+                    "offset": 7,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "reserved0",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 52
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 52
+                                  }
+                                },
+                                {
+                                  "name": "next_entry_idx",
+                                  "offset": 52,
+                                  "type": {
+                                    "alignment": 4,
+                                    "kind": {
+                                      "primitive": "Integral(U32)"
+                                    },
+                                    "size": 4
+                                  }
+                                },
+                                {
+                                  "name": "free_magic",
+                                  "offset": 56,
+                                  "type": {
+                                    "alignment": 8,
+                                    "kind": {
+                                      "primitive": "Integral(U64)"
+                                    },
+                                    "size": 8
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 64
+                        },
+                        "ref": "ArenaHeader"
+                      },
+                      "size": 64
+                    }
+                  },
+                  {
+                    "name": "entries",
+                    "offset": 71,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "layout": {
+                                "alignment": 1,
+                                "kind": {
+                                  "struct": {
+                                    "aligned": null,
+                                    "fields": [
+                                      {
+                                        "name": "seat_ptrs",
+                                        "offset": 0,
+                                        "type": {
+                                          "alignment": 8,
+                                          "kind": {
+                                            "primitive": "Integral(U64)"
+                                          },
+                                          "size": 8
+                                        }
+                                      },
+                                      {
+                                        "name": "level_ptrs",
+                                        "offset": 8,
+                                        "type": {
+                                          "alignment": 8,
+                                          "kind": {
+                                            "primitive": "Integral(U64)"
+                                          },
+                                          "size": 8
+                                        }
+                                      },
+                                      {
+                                        "name": "qty_in_lots",
+                                        "offset": 16,
+                                        "type": {
+                                          "alignment": 8,
+                                          "kind": {
+                                            "primitive": "Integral(U64)"
+                                          },
+                                          "size": 8
+                                        }
+                                      },
+                                      {
+                                        "name": "order_id",
+                                        "offset": 24,
+                                        "type": {
+                                          "alignment": 8,
+                                          "kind": {
+                                            "primitive": "Integral(U64)"
+                                          },
+                                          "size": 8
+                                        }
+                                      },
+                                      {
+                                        "name": "reserved0",
+                                        "offset": 32,
+                                        "type": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "array": {
+                                              "element": {
+                                                "alignment": 1,
+                                                "kind": {
+                                                  "primitive": "Integral(U8)"
+                                                },
+                                                "size": 1
+                                              },
+                                              "jagged": false,
+                                              "size": {
+                                                "literal": {
+                                                  "u64": 8
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "size": 8
+                                        }
+                                      },
+                                      {
+                                        "name": "client_id",
+                                        "offset": 40,
+                                        "type": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "layout": {
+                                              "alignment": 1,
+                                              "kind": {
+                                                "array": {
+                                                  "element": {
+                                                    "alignment": 1,
+                                                    "kind": {
+                                                      "primitive": "Integral(U8)"
+                                                    },
+                                                    "size": 1
+                                                  },
+                                                  "jagged": false,
+                                                  "size": {
+                                                    "literal": {
+                                                      "u64": 16
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              "size": 16
+                                            },
+                                            "ref": "ClientId"
+                                          },
+                                          "size": 16
+                                        }
+                                      },
+                                      {
+                                        "name": "expiry",
+                                        "offset": 56,
+                                        "type": {
+                                          "alignment": 8,
+                                          "kind": {
+                                            "primitive": "Integral(I64)"
+                                          },
+                                          "size": 8
+                                        }
+                                      }
+                                    ],
+                                    "packed": true
+                                  }
+                                },
+                                "size": 64
+                              },
+                              "ref": "OrderEntry"
+                            },
+                            "size": 64
+                          },
+                          "jagged": false,
+                          "size": {
+                            "div": {
+                              "left": {
+                                "sub": {
+                                  "left": {
+                                    "field-ref": {
+                                      "path": [
+                                        "__buffer_size"
+                                      ]
+                                    }
+                                  },
+                                  "right": {
+                                    "literal": {
+                                      "u64": 71
+                                    }
+                                  }
+                                }
+                              },
+                              "right": {
+                                "literal": {
+                                  "u64": 64
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "size": "variable"
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": "variable"
+          },
+          "ref": "OrderArenaAccount"
+        },
+        "size": "variable"
+      },
+      "variant": "order_arena_v1"
+    },
+    "4": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "header",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "reserved0",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 3
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 3
+                                  }
+                                },
+                                {
+                                  "name": "best_level_idx",
+                                  "offset": 3,
+                                  "type": {
+                                    "alignment": 4,
+                                    "kind": {
+                                      "primitive": "Integral(U32)"
+                                    },
+                                    "size": 4
+                                  }
+                                },
+                                {
+                                  "name": "best_price_in_ticks",
+                                  "offset": 7,
+                                  "type": {
+                                    "alignment": 8,
+                                    "kind": {
+                                      "primitive": "Integral(U64)"
+                                    },
+                                    "size": 8
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 15
+                        },
+                        "ref": "CbookHeader"
+                      },
+                      "size": 15
+                    }
+                  },
+                  {
+                    "name": "levels",
+                    "offset": 15,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "layout": {
+                                "alignment": 1,
+                                "kind": {
+                                  "struct": {
+                                    "aligned": null,
+                                    "fields": [
+                                      {
+                                        "name": "head_entry_idx",
+                                        "offset": 0,
+                                        "type": {
+                                          "alignment": 4,
+                                          "kind": {
+                                            "primitive": "Integral(U32)"
+                                          },
+                                          "size": 4
+                                        }
+                                      },
+                                      {
+                                        "name": "tail_entry_idx",
+                                        "offset": 4,
+                                        "type": {
+                                          "alignment": 4,
+                                          "kind": {
+                                            "primitive": "Integral(U32)"
+                                          },
+                                          "size": 4
+                                        }
+                                      }
+                                    ],
+                                    "packed": true
+                                  }
+                                },
+                                "size": 8
+                              },
+                              "ref": "CbookLevel"
+                            },
+                            "size": 8
+                          },
+                          "jagged": false,
+                          "size": {
+                            "div": {
+                              "left": {
+                                "sub": {
+                                  "left": {
+                                    "field-ref": {
+                                      "path": [
+                                        "__buffer_size"
+                                      ]
+                                    }
+                                  },
+                                  "right": {
+                                    "literal": {
+                                      "u64": 15
+                                    }
+                                  }
+                                }
+                              },
+                              "right": {
+                                "literal": {
+                                  "u64": 8
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "size": "variable"
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": "variable"
+          },
+          "ref": "CbookAccount"
+        },
+        "size": "variable"
+      },
+      "variant": "cbook_v1"
+    }
+  }
+}

@@ -2,21 +2,15 @@ abi:
   package: thru.program.nft_market
   name: "NFT Market Program"
   abi-version: 1
-  package-version: 0.1.0
+  package-version: 0.2.0
   description: Peer-to-peer NFT trading via resting bid/ask orders with configurable marketplace fees
   imports:
     # thru_primitives
-    - type: onchain
-      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
-      target: abi
-      network: mainnet
-      revision: latest
+    - type: path
+      path: thru_primitives.abi.yaml
     # state_proof
-    - type: onchain
-      address: ta1l4yBjT6a7PQ4Wu_sJPQwb8jJiJ8Ei71gOuE5Dnotfrl
-      target: abi
-      network: mainnet
-      revision: latest
+    - type: path
+      path: state_proof.abi.yaml
   options:
     program-metadata:
       root-types:
@@ -40,7 +34,7 @@ types:
 # ============================================================================
 # Account structures
 # ============================================================================
-# Config account (66 bytes packed)
+# Config account payload (66 bytes packed, 67 with the discriminator)
 - name: NftMarketConfig
   kind:
     struct:
@@ -59,7 +53,8 @@ types:
       - name: fee_bps
         field-type:
           primitive: u16
-# Order account (145 bytes packed, same struct for bid and ask)
+# Order account payload (145 bytes packed, 146 with the discriminator; same
+# struct for bid and ask)
 - name: NftMarketOrder
   kind:
     struct:
@@ -95,25 +90,35 @@ types:
         field-type:
           primitive: u64
 # ============================================================================
-# Account root (size-discriminated union)
+# Account root
 # ============================================================================
+# Account root: byte 0 is the account discriminator (account_type), one value
+# per (account kind, layout). Values are never reused; a new layout or a new
+# kind takes the next unused value.
 - name: NftMarketProgramAccount
   kind:
     struct:
       packed: true
       fields:
-      - name: data
+      - name: account_type
         field-type:
-          size-discriminated-union:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
             packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - account_type
             variants:
-            - name: config
-              expected-size: 66
+            - name: config_v1
+              tag-value: 1
               variant-type:
                 type-ref:
                   name: NftMarketConfig
-            - name: order
-              expected-size: 145
+            - name: order_v1
+              tag-value: 2
               variant-type:
                 type-ref:
                   name: NftMarketOrder

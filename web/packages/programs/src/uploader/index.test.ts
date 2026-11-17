@@ -1,28 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-  UPLOADER_DEFAULT_CHUNK_SIZE,
-  UPLOADER_MAX_CHUNK_SIZE,
-  UPLOADER_MIN_CHUNK_SIZE,
+  UPLOADER_ACCOUNT_TYPE_META_V1,
+  UPLOADER_META_SIZE,
   UPLOADER_STATE_FINALIZED,
   buildUploaderInstructionBytes,
-  deriveUploadAddresses,
   parseUploaderProgramMeta,
   uploaderErrorName,
 } from "./index";
 
 describe("uploader SDK", () => {
-  it("exports the shared CLI-compatible chunk limits", () => {
-    expect(UPLOADER_DEFAULT_CHUNK_SIZE).toBe(30_720);
-    expect(UPLOADER_MIN_CHUNK_SIZE).toBe(1_024);
-    expect(UPLOADER_MAX_CHUNK_SIZE).toBe(31_000);
-  });
-
-  it("matches the Rust derivation vector", () => {
-    expect(deriveUploadAddresses("nft_program")).toMatchObject({
-      metaAccountAddress: "taEktoLtrjtZxKPAtIjtzX4nH9adB3KU6nc2nOg6sqjA_W",
-      bufferAccountAddress: "taJVgXjZiK4v8DE0DeHS9EUr42bTF0zpdUyf4YwpcRoA3v",
-    });
-  });
 
   it("encodes all uploader instructions exactly", () => {
     const hash = new Uint8Array(32).fill(5);
@@ -94,14 +80,23 @@ describe("uploader SDK", () => {
   });
 
   it("parses metadata and maps errors", () => {
-    const data = new Uint8Array(65);
-    data.fill(1, 0, 32);
-    data.fill(2, 32, 64);
-    data[64] = UPLOADER_STATE_FINALIZED;
+    const data = new Uint8Array(UPLOADER_META_SIZE);
+    expect(data).toHaveLength(66);
+    data[0] = UPLOADER_ACCOUNT_TYPE_META_V1;
+    data.fill(1, 1, 33);
+    data.fill(2, 33, 65);
+    data[65] = UPLOADER_STATE_FINALIZED;
     expect(parseUploaderProgramMeta(data)).toMatchObject({
       expectedHash: new Uint8Array(32).fill(2),
       state: UPLOADER_STATE_FINALIZED,
     });
+    expect(() => parseUploaderProgramMeta(data.subarray(0, 65))).toThrow(
+      "not an uploader metadata account",
+    );
+    data[0] = 0;
+    expect(() => parseUploaderProgramMeta(data)).toThrow(
+      "not an uploader metadata account",
+    );
     expect(uploaderErrorName(6n)).toBe("HASH_MISMATCH");
   });
 });

@@ -1,0 +1,131 @@
+abi:
+  package: "test.name_clashes"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Declared type names that clash with each other and with generated Go helpers"
+
+types:
+  # `foo` and `Foo` are both exported as `Foo`.
+  - name: "Foo"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "a"
+            field-type:
+              primitive: u8
+  - name: "foo"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "b"
+            field-type:
+              primitive: u16
+  # Helpers of `Message`: its builder, params, parse function.
+  - name: "Message"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "n"
+            field-type:
+              primitive: u8
+          - name: "data"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["n"]
+                element-type:
+                  primitive: u8
+  - name: "MessageBuilder"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "y"
+            field-type:
+              primitive: u8
+  - name: "MessageParams"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "z"
+            field-type:
+              primitive: u8
+  - name: "ParseMessage"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "w"
+            field-type:
+              primitive: u8
+  # Enum helpers: `KindBodyRef`, the tag constant `KindBodyTagA`, the table.
+  - name: "Kind"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "tag"
+            field-type:
+              primitive: u8
+          - name: "body"
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  field-ref:
+                    path: ["tag"]
+                variants:
+                  - name: "A"
+                    tag-value: 0
+                    variant-type:
+                      primitive: u8
+                  - name: "B"
+                    tag-value: 1
+                    variant-type:
+                      primitive: u16
+  - name: "KindBodyRef"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "r"
+            field-type:
+              primitive: u8
+  - name: "KindBodyTagA"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "t"
+            field-type:
+              primitive: u8
+  - name: "KindBodyVariants"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "v"
+            field-type:
+              primitive: u8
+  # The context type of `Thing`.
+  - name: "Thing__Ext"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "e"
+            field-type:
+              primitive: u8
+  - name: "Thing"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "x"
+            field-type:
+              primitive: u8

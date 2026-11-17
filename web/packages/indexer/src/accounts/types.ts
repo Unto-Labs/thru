@@ -30,12 +30,16 @@ export interface AccountStreamDefinition<TSchema extends SchemaDefinition> {
    */
   ownerProgramFactory?: () => Uint8Array;
 
-  /** Expected account data size (for filtering by account type) */
+  /**
+   * Expected account data size: a server-side prefilter only. Size does not
+   * identify an account kind; `parse` must still check the account type
+   * (byte 0 of every program-owned account) through the program's ABI root.
+   */
   expectedSize?: number;
 
   /**
-   * Additional data sizes to accept.
-   * Use when an account type can have multiple valid sizes.
+   * Additional data sizes to accept (prefilter only, like `expectedSize`).
+   * Use when a stream reads more than one fixed-size account kind.
    */
   dataSizes?: number[];
 
@@ -72,6 +76,13 @@ export interface AccountStreamDefinition<TSchema extends SchemaDefinition> {
    * @returns Parsed row data or null to skip
    */
   parse: (account: AccountState) => InferRow<TSchema> | null;
+
+  /**
+   * Whether a live account is closed. A program may close an account by
+   * zeroing it in place instead of deleting it; its row is then removed
+   * like a deleted account's, rather than skipped like an unparsable one.
+   */
+  isClosed?: (account: AccountState) => boolean;
 
   /** API configuration (used for route generation) */
   api?: ApiConfig;
@@ -116,6 +127,9 @@ export interface AccountStream<TSchema extends SchemaDefinition = SchemaDefiniti
 
   /** Parse function */
   readonly parse: (account: AccountState) => InferRow<TSchema> | null;
+
+  /** Closed-account check (see AccountStreamDefinition.isClosed) */
+  readonly isClosed?: (account: AccountState) => boolean;
 
   /** API configuration */
   readonly api?: ApiConfig;

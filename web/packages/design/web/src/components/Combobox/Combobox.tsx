@@ -27,6 +27,9 @@ import "./Combobox.css";
  */
 export const Combobox = {
   Root: Base.Root,
+  Trigger: Base.Trigger,
+  Value: Base.Value,
+  Icon: Base.Icon,
   Input: styledPart(Base.Input, "tds-combobox-input"),
   Portal: Base.Portal,
   Positioner: Base.Positioner,

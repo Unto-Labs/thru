@@ -6,8 +6,10 @@
 
 use clap::Parser;
 use serde_json::{Value, json};
+use std::io::IsTerminal;
 use std::process;
 
+mod api_key_hints;
 pub mod cli;
 pub mod commands;
 pub mod config;
@@ -15,11 +17,12 @@ pub mod crypto;
 pub mod error;
 pub mod feature_gate_account;
 pub mod feature_gate_registry;
+pub mod keys;
 pub mod output;
 pub mod utils;
 pub mod version_check;
 
-use cli::{Cli, Commands, FaucetCommands, FaucetWithdrawCommands};
+use cli::{AuthCommands, Cli, Commands, FaucetCommands, FaucetWithdrawCommands};
 use config::Config;
 use error::CliError;
 
@@ -31,6 +34,16 @@ pub async fn run() -> anyhow::Result<()> {
     // Parse command line arguments
     let cli = Cli::parse();
 
+    // Migration reads the raw document itself: it needs the inline seeds that
+    // the normal loader drops (keeping only their alias names).
+    if let Commands::Keys {
+        subcommand: cli::KeysCommands::Migrate { store },
+    } = &cli.command
+    {
+        let result = commands::keys::migrate_keys(*store, cli.json).await;
+        return finish_command(result, cli.json);
+    }
+
     // Check for newer version if not in quiet/json mode and running interactively
     if !cli.quiet && !cli.json && version_check::is_interactive() {
         version_check::check_and_notify().await;
@@ -39,21 +52,52 @@ pub async fn run() -> anyhow::Result<()> {
     // Load configuration. A default key is resolved lazily by commands that
     // omit an explicit named signer.
     let auth_only = matches!(&cli.command, Commands::Auth { .. });
+    // `thru auth status` reports whether RPC calls to the selected endpoint
+    // carry an API key, so it reads the RPC configuration, best effort.
+    let auth_status = matches!(
+        &cli.command,
+        Commands::Auth {
+            subcommand: AuthCommands::Status
+        }
+    );
     let developers_only = auth_only
         || matches!(
             &cli.command,
             Commands::Faucet {
                 subcommand: FaucetCommands::Withdraw {
-                    subcommand: FaucetWithdrawCommands::Thrusd { .. }
+                    subcommand: FaucetWithdrawCommands::Uusd { .. }
                         | FaucetWithdrawCommands::Thru { .. }
                 }
             }
         );
-    let mut config = if auth_only {
+    // Config errors go through `finish_command` so `--json` gets a JSON error.
+    let mut config = if auth_status {
+        load_config_for_auth_status(&cli).await
+    } else if auth_only {
         Config::default()
     } else {
-        Config::load().await?
+        match Config::load().await {
+            Ok(config) => config,
+            Err(error) => return finish_command(Err(error), cli.json),
+        }
     };
+    config.keys.begin_command();
+
+    // Legacy inline keys only fail the commands that sign with them.
+    let unmigrated = config.keys.unmigrated_aliases();
+    if !unmigrated.is_empty() && !cli.quiet && !cli.json {
+        let path = Config::get_config_path()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|_| "the CLI config".to_string());
+        let (keys, are, them) = match unmigrated.as_slice() {
+            [one] => (format!("signing key '{one}'"), "is", "it"),
+            many => (format!("signing keys {}", many.join(", ")), "are", "them"),
+        };
+        eprintln!(
+            "warning: {keys} {are} still stored inline in {path}; commands that sign with \
+             {them} fail until you run 'thru keys migrate'"
+        );
+    }
 
     // Announce the pending transaction signature before sending, except in
     // machine-readable (`--json`) or `--quiet` modes. This works in scripts,
@@ -61,32 +105,13 @@ pub async fn run() -> anyhow::Result<()> {
     // to the `--json` payload on stdout.
     config.announce_pending_signature = !cli.json && !cli.quiet;
 
-    // Apply global network overrides
-    if auth_only {
-        // Developers auth does not load or select a wallet/RPC identity.
-    } else if let Some(ref url) = cli.url {
-        config.rpc_base_url = url.clone();
-    } else if let Some(ref network_name) = cli.network {
-        let name = network_name.to_lowercase();
-        let net = config.networks.get(&name).cloned().ok_or_else(|| {
-            let available = config.list_network_names();
-            CliError::Validation(format!(
-                "Network '{}' not found. Available networks: {}",
-                name,
-                if available.is_empty() {
-                    "(none)".to_string()
-                } else {
-                    available.join(", ")
-                }
-            ))
-        })?;
-        config.rpc_base_url = net.url;
-        config.auth_token = net.auth_token;
-    } else if let Some(default_name) = config.default_network.clone() {
-        let default_name = default_name.to_lowercase();
-        if let Some(net) = config.networks.get(&default_name).cloned() {
-            config.rpc_base_url = net.url;
-            config.auth_token = net.auth_token;
+    // Apply global network overrides. Developers auth does not load or select
+    // a wallet/RPC identity (`auth status` selected its endpoint above). An
+    // unknown `--network` goes through `finish_command` so `--json` gets JSON.
+    if !auth_only {
+        if let Err(error) = select_network(&mut config, cli.url.as_deref(), cli.network.as_deref())
+        {
+            return finish_command(Err(error), cli.json);
         }
     }
 
@@ -103,12 +128,14 @@ pub async fn run() -> anyhow::Result<()> {
     // developer API key from the environment, then to the key `thru auth login`
     // provisioned, but only for official Thru RPC endpoints over verified HTTPS
     // (see `Config::rpc_auth_token`). Both are held in non-serialized fields so
-    // no `config.save()` can persist them; the provisioned key is read from the
-    // OS keychain only when an official endpoint would receive it.
-    if !auth_only {
+    // no `config.save()` can persist them; the provisioned key is read from its
+    // file only when an official endpoint would receive it.
+    if !auth_only || auth_status {
         config.env_api_key = env_api_key();
         config.provisioned_api_key =
             commands::developers::provisioned_rpc_key(!cli.quiet && !cli.json);
+    }
+    if !auth_only {
         if !cli.quiet && !cli.json && !developers_only {
             if config.env_api_key_withheld() {
                 eprintln!(
@@ -122,10 +149,32 @@ pub async fn run() -> anyhow::Result<()> {
             // endpoints silently: local and custom nodes are routine, and the
             // user never asked for that key to go anywhere in particular.
         }
+
+        // Tell a keyless user of an official endpoint, once, that a key lifts
+        // the per-IP limit, before the limit surprises them, and offer to sign
+        // in. The command then runs with the key the login provisioned, which
+        // `config` reads lazily on first use.
+        if api_key_hints::show_no_api_key_note_once(
+            &config,
+            !cli.quiet && !cli.json && std::io::stderr().is_terminal(),
+        ) && api_key_hints::offer_sign_in(cli.json, cli.quiet)
+        {
+            match commands::developers::sign_in_interactively().await {
+                Ok(()) => eprintln!("Continuing with your command."),
+                Err(err) => {
+                    eprintln!(
+                        "warning: sign-in did not complete ({err}); continuing without an API key."
+                    )
+                }
+            }
+        }
     }
 
     // Execute the command
     let result: Result<(), CliError> = match cli.command {
+        Commands::Governance { subcommand } => {
+            commands::governance::handle_governance_command(&config, subcommand, cli.json).await
+        }
         Commands::GetVersion => commands::rpc::get_version(&config, cli.json).await,
         Commands::GetHealth => commands::rpc::get_health(&config, cli.json).await,
         Commands::GetStatus => commands::rpc::get_status(&config, cli.json).await,
@@ -165,7 +214,7 @@ pub async fn run() -> anyhow::Result<()> {
             commands::token::handle_token_command(&config, subcommand, cli.json).await
         }
         Commands::Auth { subcommand } => {
-            commands::developers::handle_auth(subcommand, cli.json).await
+            commands::developers::handle_auth(subcommand, cli.json, &config).await
         }
         Commands::Faucet { subcommand } => {
             commands::faucet::handle_faucet_command(&config, subcommand, cli.json).await
@@ -178,6 +227,9 @@ pub async fn run() -> anyhow::Result<()> {
         }
         Commands::Wthru { subcommand } => {
             commands::wthru::handle_wthru_command(&config, subcommand, cli.json).await
+        }
+        Commands::Multisig { subcommand } => {
+            commands::multisig::handle_multisig_command(&config, subcommand, cli.json).await
         }
         Commands::Bond { subcommand } => {
             commands::bond::handle_bond_command(&config, subcommand, cli.json).await
@@ -236,22 +288,124 @@ pub async fn run() -> anyhow::Result<()> {
     };
 
     if let Err(err) = result {
+        // A keyless caller who hits a rate limit is told how to get a key.
+        let hint = api_key_hints::rate_limit_hint(&err, || config.rpc_auth_token().is_some());
         match (&err, cli.json) {
             (CliError::Reported, _) => {
                 // Command already emitted user-facing output; just exit with failure.
             }
             (_, true) => {
-                let payload = format_error_json(&err);
+                let mut payload = format_error_json(&err);
+                if let (Some(hint), Some(error)) = (hint, payload["error"].as_object_mut()) {
+                    error.insert("hint".to_string(), json!(hint));
+                }
                 output::print_output(payload, true);
             }
             (_, false) => {
                 eprintln!("Error: {}", err);
+                if let Some(hint) = hint {
+                    eprintln!("hint: {hint}");
+                    // The failed command is not retried: it may not be safe
+                    // to repeat, so the exit code stays 1.
+                    if api_key_hints::offer_sign_in(cli.json, cli.quiet) {
+                        match commands::developers::sign_in_interactively().await {
+                            Ok(()) => {
+                                eprintln!("Signed in. Run the command again to use your API key.")
+                            }
+                            Err(err) => eprintln!("Error: {err}"),
+                        }
+                    }
+                }
             }
         }
         process::exit(1);
     }
 
     Ok(())
+}
+
+/// Report an error raised before a command has a config (so no rate-limit hint
+/// applies) the same way `run` reports command errors: JSON on stdout with
+/// `--json`, text on stderr otherwise.
+fn finish_command(result: Result<(), CliError>, json: bool) -> anyhow::Result<()> {
+    if let Err(err) = result {
+        match (&err, json) {
+            (CliError::Reported, _) => {
+                // Command already emitted user-facing output; just exit with failure.
+            }
+            (_, true) => output::print_output(format_error_json(&err), true),
+            (_, false) => eprintln!("Error: {}", err),
+        }
+        process::exit(1);
+    }
+
+    Ok(())
+}
+
+/// Points `config` at the RPC endpoint the global flags select: `--url`, else
+/// the `--network` profile (an unknown name is an error), else the default
+/// profile.
+fn select_network(
+    config: &mut Config,
+    url: Option<&str>,
+    network: Option<&str>,
+) -> Result<(), CliError> {
+    if let Some(url) = url {
+        config.rpc_base_url = url.to_string();
+    } else if let Some(network_name) = network {
+        let name = network_name.to_lowercase();
+        let net = config.networks.get(&name).cloned().ok_or_else(|| {
+            let available = config.list_network_names();
+            CliError::Validation(format!(
+                "Network '{}' not found. Available networks: {}",
+                name,
+                if available.is_empty() {
+                    "(none)".to_string()
+                } else {
+                    available.join(", ")
+                }
+            ))
+        })?;
+        config.rpc_base_url = net.url;
+        config.auth_token = net.auth_token;
+    } else if let Some(default_name) = config.default_network.clone() {
+        let default_name = default_name.to_lowercase();
+        if let Some(net) = config.networks.get(&default_name).cloned() {
+            config.rpc_base_url = net.url;
+            config.auth_token = net.auth_token;
+        }
+    }
+    Ok(())
+}
+
+/// The RPC configuration `thru auth status` reports on. Never fails and never
+/// creates a config file: a missing config is the default one, and an
+/// unreadable config or unknown `--network` falls back to the default
+/// endpoint with a warning.
+async fn load_config_for_auth_status(cli: &Cli) -> Config {
+    let exists = Config::get_config_path().is_ok_and(|path| path.exists());
+    let mut config = if exists {
+        match Config::load().await {
+            Ok(config) => config,
+            Err(err) => {
+                if !cli.quiet {
+                    eprintln!(
+                        "warning: could not load the CLI config ({err}); reporting the default RPC endpoint."
+                    );
+                }
+                Config::default()
+            }
+        }
+    } else {
+        Config::default()
+    };
+    if let Err(err) = select_network(&mut config, cli.url.as_deref(), cli.network.as_deref()) {
+        if !cli.quiet {
+            eprintln!("warning: {err}; reporting the default RPC endpoint.");
+        }
+        config = Config::default();
+    }
+    config
 }
 
 /// Format a [`CliError`] as a JSON [`Value`] for structured output.
@@ -382,6 +536,13 @@ pub fn format_error_json(err: &CliError) -> Value {
                 "message": message,
                 "account": account,
                 "seed": seed,
+            }
+        }),
+        CliError::RateLimited { message, unkeyed } => json!({
+            "error": {
+                "type": "rate_limited",
+                "message": message,
+                "unkeyed": unkeyed,
             }
         }),
         CliError::AccountNotFound(message) => json!({

@@ -1,0 +1,15 @@
+abi:
+  package: "nest.inner"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "A package whose parent (`nest`) is itself a package"
+
+types:
+  - name: "InnerItem"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "v"
+            field-type:
+              primitive: u16

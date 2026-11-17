@@ -22,11 +22,11 @@
 //! # }
 //! ```
 
-pub mod error;
 mod compression;
+pub mod error;
 pub use compression::{
-    AccountState, AccountDecompressionPreparation, PreparedAccountDecompression,
-    ACCOUNT_COMPRESSION_COOLDOWN,
+    ACCOUNT_COMPRESSION_COOLDOWN, AccountDecompressionPreparation, AccountState,
+    PreparedAccountDecompression,
 };
 
 use std::collections::HashMap;
@@ -59,7 +59,7 @@ use thru_grpc_client::thru::{
     },
 };
 
-pub use error::ClientError;
+pub use error::{ClientError, GET_KEY_URL, escape_controls};
 pub use thru_grpc_client::thru as proto;
 
 /* Convenience type alias for Result */
@@ -68,6 +68,13 @@ pub type Result<T> = std::result::Result<T, ClientError>;
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
 /* About 5 s at POLL_INTERVAL: a node's durable cursor trails finalized by a few slots. */
 const PINNED_READ_RETRIES: u32 = 10;
+/* Rate-limit backoff: 0.5 s doubling to 8 s, about 30 s across all retries. */
+const RATE_LIMIT_RETRIES: u32 = 6;
+const RATE_LIMIT_INITIAL_BACKOFF: Duration = Duration::from_millis(500);
+const RATE_LIMIT_MAX_BACKOFF: Duration = Duration::from_secs(8);
+/* ListAccounts caps a page at 1000 accounts. */
+const LIST_ACCOUNTS_MAX_PAGE_SIZE: u32 = 1000;
+const OWNER_FILTER_EXPRESSION: &str = "account.meta.owner.value == params.owner_bytes";
 
 /// Builder used to construct a gRPC client with configuration.
 #[derive(Debug, Clone)]
@@ -159,7 +166,10 @@ impl ClientBuilder {
                 // Replace the default WebPKI verifier with one that accepts any
                 // certificate. See `ClientBuilder::insecure`.
                 endpoint
-                    .tls_config_with_verifier(ClientTlsConfig::new(), Arc::new(danger::NoCertVerifier))
+                    .tls_config_with_verifier(
+                        ClientTlsConfig::new(),
+                        Arc::new(danger::NoCertVerifier),
+                    )
                     .map_err(|e| {
                         ClientError::Validation(format!("failed to configure insecure TLS: {}", e))
                     })?
@@ -318,7 +328,7 @@ impl Client {
                 Ok(Some(Account::from_proto(account)?))
             }
             Err(status) if status.code() == tonic::Code::NotFound => Ok(None),
-            Err(status) => Err(ClientError::Rpc(status.to_string())),
+            Err(status) => Err(ClientError::from(status)),
         }
     }
 
@@ -371,7 +381,7 @@ impl Client {
                     retries += 1;
                     time::sleep(POLL_INTERVAL).await;
                 }
-                Err(status) => return Err(ClientError::Rpc(status.to_string())),
+                Err(status) => return Err(ClientError::from(status)),
             }
         }
     }
@@ -500,6 +510,164 @@ impl Client {
         })
     }
 
+    /// Lists live accounts owned by `owner`, following pagination until done
+    /// or `limit` accounts have been collected.
+    ///
+    /// Equivalent to [`Client::list_accounts_by_owner_in_state`] with
+    /// [`AccountStateFilter::Live`]: compressed accounts are not included.
+    pub async fn list_accounts_by_owner(
+        &self,
+        owner: &Pubkey,
+        limit: Option<usize>,
+    ) -> Result<Vec<ListedAccount>> {
+        self.list_accounts_by_owner_in_state(owner, AccountStateFilter::Live, limit)
+            .await
+    }
+
+    /// Lists accounts owned by `owner` in the selected account `state`,
+    /// following pagination until done or `limit` accounts have been collected.
+    ///
+    /// Uses `QueryService.ListAccounts` with the CEL filter
+    /// `account.meta.owner.value == params.owner_bytes`. The node's listing
+    /// returns metadata only, so each account with a non-empty body is then
+    /// read with `GetAccount` to fill [`ListedAccount::data`]. An account
+    /// deleted between the listing and that read is omitted. Results are
+    /// ordered by address.
+    ///
+    /// Including compressed accounts (`Compressed`/`All`) scans the archive
+    /// and a node may refuse it with "account listing database budget
+    /// exceeded"; that error is returned, not retried. Rate limiting and
+    /// transient listing-capacity refusals are retried with exponential
+    /// backoff a bounded number of times.
+    pub async fn list_accounts_by_owner_in_state(
+        &self,
+        owner: &Pubkey,
+        state: AccountStateFilter,
+        limit: Option<usize>,
+    ) -> Result<Vec<ListedAccount>> {
+        let listed = self
+            .list_account_protos_by_owner(owner, state, limit)
+            .await?;
+        let mut accounts = Vec::with_capacity(listed.len());
+        for proto in listed {
+            let address = proto_pubkey(proto.address.as_ref(), "account address")?;
+            let has_data = proto.data.as_ref().is_some_and(|data| data.data.is_some());
+            let data_size = proto.meta.as_ref().map_or(0, |meta| meta.data_size);
+            let proto = if has_data || data_size == 0 {
+                proto
+            } else {
+                match self.get_account_proto(&address).await? {
+                    Some(full) => full,
+                    None => continue,
+                }
+            };
+            accounts.push(ListedAccount::from_proto(address, proto)?);
+        }
+        Ok(accounts)
+    }
+
+    /// Page through `ListAccounts` for accounts owned by `owner`, returning the
+    /// raw protos (metadata, plus data only if the node chose to include it).
+    async fn list_account_protos_by_owner(
+        &self,
+        owner: &Pubkey,
+        state: AccountStateFilter,
+        limit: Option<usize>,
+    ) -> Result<Vec<corev1::Account>> {
+        let client = QueryServiceClient::new(self.channel.clone())
+            .max_decoding_message_size(128 * 1024 * 1024) /* 128 MB */
+            .max_encoding_message_size(128 * 1024 * 1024); /* 128 MB */
+        let owner_bytes = pubkey_bytes(owner)?;
+
+        let mut accounts = Vec::new();
+        let mut page_token: Option<String> = None;
+        loop {
+            let remaining = limit.map(|limit| limit.saturating_sub(accounts.len()));
+            if remaining == Some(0) {
+                break;
+            }
+            let request =
+                list_accounts_by_owner_request(&owner_bytes, state, remaining, page_token);
+            let message = self
+                .with_rate_limit_retry(|| {
+                    let mut grpc_request = Request::new(request.clone());
+                    self.apply_metadata(&mut grpc_request);
+                    grpc_request.set_timeout(self.timeout);
+                    let mut client = client.clone();
+                    async move { client.list_accounts(grpc_request).await }
+                })
+                .await?;
+
+            accounts.extend(message.accounts);
+            if let Some(limit) = limit {
+                accounts.truncate(limit);
+            }
+
+            page_token = message
+                .page
+                .and_then(|page| page.next_page_token.filter(|token| !token.is_empty()));
+            if page_token.is_none() {
+                break;
+            }
+        }
+        Ok(accounts)
+    }
+
+    /// Fetch a full account (metadata and data) as a raw proto, `None` when the
+    /// account does not exist.
+    async fn get_account_proto(&self, pubkey: &Pubkey) -> Result<Option<corev1::Account>> {
+        let client = QueryServiceClient::new(self.channel.clone())
+            .max_decoding_message_size(128 * 1024 * 1024) /* 128 MB */
+            .max_encoding_message_size(128 * 1024 * 1024); /* 128 MB */
+        let request = servicesv1::GetAccountRequest {
+            address: Some(commonv1::Pubkey {
+                value: pubkey_bytes(pubkey)?.to_vec(),
+            }),
+            view: Some(corev1::AccountView::Full as i32),
+            version_context: Some(current_or_historical_version_context()),
+            data_slice: None,
+        };
+        let result = self
+            .with_rate_limit_retry(|| {
+                let mut grpc_request = Request::new(request.clone());
+                self.apply_metadata(&mut grpc_request);
+                grpc_request.set_timeout(self.timeout);
+                let mut client = client.clone();
+                async move { client.get_account(grpc_request).await }
+            })
+            .await;
+        match result {
+            Ok(account) => Ok(Some(account)),
+            Err(status) if status.code() == tonic::Code::NotFound => Ok(None),
+            Err(status) => Err(ClientError::Rpc(status.to_string())),
+        }
+    }
+
+    /// Run a unary call, retrying with exponential backoff while the node or
+    /// its edge reports rate limiting.
+    async fn with_rate_limit_retry<T, F, Fut>(
+        &self,
+        mut call: F,
+    ) -> std::result::Result<T, tonic::Status>
+    where
+        F: FnMut() -> Fut,
+        Fut: std::future::Future<Output = std::result::Result<tonic::Response<T>, tonic::Status>>,
+    {
+        let mut backoff = RATE_LIMIT_INITIAL_BACKOFF;
+        let mut retries = 0;
+        loop {
+            match call().await {
+                Ok(response) => return Ok(response.into_inner()),
+                Err(status) if is_rate_limited(&status) && retries < RATE_LIMIT_RETRIES => {
+                    retries += 1;
+                    time::sleep(backoff).await;
+                    backoff = (backoff * 2).min(RATE_LIMIT_MAX_BACKOFF);
+                }
+                Err(status) => return Err(status),
+            }
+        }
+    }
+
     /// Get transaction details by signature.
     pub async fn get_transaction(
         &self,
@@ -529,10 +697,13 @@ impl Client {
     ) -> Result<Option<corev1::TransactionExecutionResult>> {
         let mut client = QueryServiceClient::new(self.channel.clone())
             .max_decoding_message_size(128 * 1024 * 1024);
-        let bytes = signature.to_bytes()
+        let bytes = signature
+            .to_bytes()
             .map_err(|e| ClientError::Validation(e.to_string()))?;
         let mut request = Request::new(servicesv1::GetTransactionRequest {
-            signature: Some(commonv1::Signature { value: bytes.to_vec() }),
+            signature: Some(commonv1::Signature {
+                value: bytes.to_vec(),
+            }),
             view: Some(corev1::TransactionView::Full as i32),
             version_context: Some(current_version_context()),
             min_consensus: Some(commonv1::ConsensusStatus::Included as i32),
@@ -729,7 +900,7 @@ impl Client {
                 Err(status) => {
                     /* Only retry on NOT_FOUND errors; fail immediately on other errors */
                     if status.code() != tonic::Code::NotFound {
-                        return Err(ClientError::Rpc(status.to_string()));
+                        return Err(ClientError::from(status));
                     }
                     /* For NOT_FOUND, continue looping and retry */
                 }
@@ -861,7 +1032,7 @@ impl Client {
                     }
                 }
                 Ok(Ok(None)) => break,
-                Ok(Err(status)) => return Err(ClientError::Rpc(status.to_string())),
+                Ok(Err(status)) => return Err(ClientError::from(status)),
                 Err(_) => break,
             }
         }
@@ -1203,10 +1374,7 @@ impl Client {
         self.apply_metadata(&mut grpc_request);
         /* No per-request timeout: this is a long-lived subscription. */
 
-        let stream = client
-            .stream_transactions(grpc_request)
-            .await?
-            .into_inner();
+        let stream = client.stream_transactions(grpc_request).await?.into_inner();
         Ok(ConfirmationStream { inner: stream })
     }
 
@@ -1288,7 +1456,7 @@ impl Client {
                 Err(status) => {
                     /* Only retry on NOT_FOUND errors; fail immediately on other errors */
                     if status.code() != tonic::Code::NotFound {
-                        return Err(ClientError::Rpc(status.to_string()));
+                        return Err(ClientError::from(status));
                     }
                     /* For NOT_FOUND, continue looping and retry */
                 }
@@ -1482,13 +1650,16 @@ impl Client {
         self.apply_metadata(&mut grpc_request);
         grpc_request.set_timeout(self.timeout);
 
-        let response = client.get_raw_account(grpc_request).await.map_err(|status| {
-            if status.code() == tonic::Code::NotFound {
-                ClientError::AccountNotFound(pubkey.to_string())
-            } else {
-                ClientError::from(status)
-            }
-        })?;
+        let response = client
+            .get_raw_account(grpc_request)
+            .await
+            .map_err(|status| {
+                if status.code() == tonic::Code::NotFound {
+                    ClientError::AccountNotFound(pubkey.to_string())
+                } else {
+                    ClientError::from(status)
+                }
+            })?;
         Ok(response.into_inner())
     }
 }
@@ -1505,6 +1676,28 @@ impl AccountView {
     fn to_proto(self) -> corev1::AccountView {
         match self {
             AccountView::Full => corev1::AccountView::Full,
+        }
+    }
+}
+
+/// Which account states `ListAccounts` scans.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AccountStateFilter {
+    /// Live (uncompressed) accounts only.
+    #[default]
+    Live,
+    /// Compressed accounts only (requires retained compression archives).
+    Compressed,
+    /// Live and compressed accounts.
+    All,
+}
+
+impl AccountStateFilter {
+    fn to_proto(self) -> servicesv1::AccountStateFilter {
+        match self {
+            AccountStateFilter::Live => servicesv1::AccountStateFilter::Live,
+            AccountStateFilter::Compressed => servicesv1::AccountStateFilter::Compressed,
+            AccountStateFilter::All => servicesv1::AccountStateFilter::All,
         }
     }
 }
@@ -1685,7 +1878,9 @@ impl SlotMetricsStream {
     /// - `Err(_)`      — the stream failed. A `RESOURCE_EXHAUSTED` status is
     ///   reported as [`ClientError::StreamLagged`]: the server drops a
     ///   subscriber that cannot keep up rather than skipping messages, so the
-    ///   subscription is over and re-subscribing leaves a gap.
+    ///   subscription is over and re-subscribing leaves a gap. The exception
+    ///   is an edge rate limit (a message starting with `rate limit`), which
+    ///   is reported as [`ClientError::RateLimited`].
     pub async fn next(&mut self) -> Result<Option<SlotMetricsUpdate>> {
         match self.inner.message().await {
             Ok(Some(resp)) => Ok(Some(slot_metrics_from_response(resp)?)),
@@ -1708,12 +1903,20 @@ impl SlotMetricsStream {
 /// a proxy quota or a message-size limit surfaces the same way, and this maps on
 /// the code alone rather than matching server text, which would be brittle.
 ///
+/// The one cause told apart by text is the edge's rate limit, which the edge
+/// contract marks with a message that starts with `rate limit`. Reporting that
+/// as lag would send the caller after a slow consumer instead of an API key, so
+/// it becomes [`ClientError::RateLimited`].
+///
 /// Both paths funnel through here -- rejected while opening the stream, and
 /// raised once it is running -- because the meaning is the same either way. The
-/// crate's blanket `From<tonic::Status>` flattens everything to
+/// crate's blanket `From<tonic::Status>` maps every other `RESOURCE_EXHAUSTED` to
 /// [`ClientError::Rpc`], which is why the open path maps explicitly rather than
 /// leaning on `?`.
 fn map_stream_status(status: tonic::Status) -> ClientError {
+    if let Some(err) = ClientError::rate_limited_from_status(&status) {
+        return err;
+    }
     if status.code() == tonic::Code::ResourceExhausted {
         return ClientError::StreamLagged(status.message().to_string());
     }
@@ -1757,8 +1960,8 @@ fn slot_metrics_from_response(
         global_deactivated_state_counter: resp.global_deactivated_state_counter,
         block_timestamp: match resp.block_timestamp {
             /* A timestamp the server sent but that will not convert is bad
-               data, not an absent field. Folding it into None would report it
-               as "the server said nothing", which is a different claim. */
+            data, not an absent field. Folding it into None would report it
+            as "the server said nothing", which is a different claim. */
             Some(ts) => Some(ts.try_into().map_err(|err| {
                 ClientError::Validation(format!("invalid block timestamp: {err}"))
             })?),
@@ -1787,12 +1990,12 @@ impl ConfirmationStream {
     /// - `Err(_)`      — the underlying stream ended or errored.
     pub async fn next(&mut self, timeout: Duration) -> Result<Option<Confirmation>> {
         /* One deadline for the whole call: `timeout` bounds the total wait, not
-           each individual `message()` fetch. Without this, a steady trickle of
-           not-yet-includable messages would restart the budget every iteration and
-           block far longer than the caller asked — unbounded in the worst case.
-           The `while Instant::now() < deadline` guard also guarantees termination
-           even if such messages arrive already-ready (a zero `remaining` would let
-           `time::timeout` return the ready value rather than elapse). */
+        each individual `message()` fetch. Without this, a steady trickle of
+        not-yet-includable messages would restart the budget every iteration and
+        block far longer than the caller asked — unbounded in the worst case.
+        The `while Instant::now() < deadline` guard also guarantees termination
+        even if such messages arrive already-ready (a zero `remaining` would let
+        `time::timeout` return the ready value rather than elapse). */
         let deadline = Instant::now() + timeout;
         while Instant::now() < deadline {
             let remaining = deadline.saturating_duration_since(Instant::now());
@@ -1810,7 +2013,7 @@ impl ConfirmationStream {
                         "confirmation stream closed by server".to_string(),
                     ));
                 }
-                Ok(Err(status)) => return Err(ClientError::Rpc(status.to_string())),
+                Ok(Err(status)) => return Err(ClientError::from(status)),
                 Err(_) => return Ok(None), /* timed out waiting for a message */
             }
         }
@@ -1826,12 +2029,12 @@ fn confirmation_from_transaction(tx: &corev1::Transaction) -> Option<Confirmatio
     let sig = tx.signature.as_ref()?;
     let signature = <[u8; 64]>::try_from(sig.value.as_slice()).ok()?;
     /* Require an execution result before reporting a confirmation. The same
-       stream also carries block-inclusion copies (consensus INCLUDED) that have
-       a slot and signature but no execution result yet; those must NOT be
-       collapsed into a `(vm_error, execution_result) == (0, 0)` success, which
-       `Confirmation` documents as executed-successfully. Treat the absent result
-       like the not-yet-includable case above and keep reading — the executed
-       copy (consensus CLUSTER_EXECUTED) carries the real outcome. */
+    stream also carries block-inclusion copies (consensus INCLUDED) that have
+    a slot and signature but no execution result yet; those must NOT be
+    collapsed into a `(vm_error, execution_result) == (0, 0)` success, which
+    `Confirmation` documents as executed-successfully. Treat the absent result
+    like the not-yet-includable case above and keep reading — the executed
+    copy (consensus CLUSTER_EXECUTED) carries the real outcome. */
     let result = tx.execution_result.as_ref()?;
     let (vm_error, execution_result) = (result.vm_error, result.execution_result);
     Some(Confirmation {
@@ -1859,6 +2062,67 @@ fn transaction_signature_from_wire(transaction: &[u8]) -> Result<[u8; 64]> {
             )
         })?;
     array_from_vec(signature.to_vec(), "signature").map_err(ClientError::Validation)
+}
+
+/// Build one `ListAccounts` page request filtering on `owner_bytes`. The page
+/// size is the remaining limit, capped at the server maximum.
+fn list_accounts_by_owner_request(
+    owner_bytes: &[u8; 32],
+    state: AccountStateFilter,
+    remaining: Option<usize>,
+    page_token: Option<String>,
+) -> servicesv1::ListAccountsRequest {
+    let page_size = remaining.map_or(LIST_ACCOUNTS_MAX_PAGE_SIZE, |remaining| {
+        u32::try_from(remaining)
+            .unwrap_or(u32::MAX)
+            .clamp(1, LIST_ACCOUNTS_MAX_PAGE_SIZE)
+    });
+    let params = HashMap::from([(
+        "owner_bytes".to_string(),
+        commonv1::FilterParamValue {
+            kind: Some(commonv1::filter_param_value::Kind::BytesValue(
+                owner_bytes.to_vec(),
+            )),
+        },
+    )]);
+    servicesv1::ListAccountsRequest {
+        view: Some(corev1::AccountView::Full as i32),
+        version_context: None,
+        filter: Some(commonv1::Filter {
+            expression: Some(OWNER_FILTER_EXPRESSION.to_string()),
+            params,
+        }),
+        page: Some(commonv1::PageRequest {
+            page_size: Some(page_size),
+            page_token,
+            order_by: None,
+        }),
+        min_consensus: None,
+        state: state.to_proto() as i32,
+    }
+}
+
+/// True when a status reports a transient refusal worth retrying: rate
+/// limiting ("rate limit exceeded") or `RESOURCE_EXHAUSTED` such as "account
+/// listing capacity exhausted; retry later". A database budget overrun is
+/// deterministic for the request, so it is not retried.
+fn is_rate_limited(status: &tonic::Status) -> bool {
+    let message = status.message().to_ascii_lowercase();
+    if message.contains("budget exceeded") {
+        return false;
+    }
+    message.contains("rate limit") || status.code() == tonic::Code::ResourceExhausted
+}
+
+/// Decode a required 32-byte proto pubkey.
+fn proto_pubkey(pubkey: Option<&commonv1::Pubkey>, label: &str) -> Result<Pubkey> {
+    let bytes = pubkey
+        .ok_or_else(|| ClientError::Rpc(format!("{label} missing")))?
+        .value
+        .clone();
+    let array = array_from_vec::<32>(bytes, label)
+        .map_err(|e| ClientError::Rpc(format!("invalid {label}: {e}")))?;
+    Ok(Pubkey::from_bytes(&array))
 }
 
 fn pubkey_bytes(pubkey: &Pubkey) -> Result<[u8; 32]> {
@@ -1894,6 +2158,8 @@ pub struct Account {
     pub balance: u64,
     pub data: Option<String>,
     pub owner: Pubkey,
+    /// Exact wire capability bits, including pin/compression/native receipt.
+    pub flags: u8,
     pub program: bool,
     pub data_size: u64,
     pub nonce: u64,
@@ -1936,6 +2202,16 @@ impl Account {
             .flags
             .as_ref()
             .map_or(false, |flags| flags.is_privileged);
+        let flags = meta.flags.as_ref().map_or(0, |f| {
+            u8::from(f.is_program)
+                | (u8::from(f.is_privileged) << 1)
+                | (u8::from(f.is_uncompressable) << 2)
+                | (u8::from(f.is_ephemeral) << 3)
+                | (u8::from(f.is_deleted) << 4)
+                | (u8::from(f.is_new) << 5)
+                | (u8::from(f.is_compressed) << 6)
+                | (u8::from(f.is_native_receiver) << 7)
+        });
 
         let data = account.data.and_then(|data| {
             data.data.and_then(|d| {
@@ -1960,6 +2236,7 @@ impl Account {
             balance: meta.balance,
             data,
             owner,
+            flags,
             program,
             data_size: meta.data_size as u64,
             nonce: meta.nonce,
@@ -1972,6 +2249,37 @@ impl Account {
             block_timestamp,
             version_seq,
             block_offset,
+        })
+    }
+}
+
+/// An account returned by [`Client::list_accounts_by_owner`].
+#[derive(Debug, Clone)]
+pub struct ListedAccount {
+    /// The account's address.
+    pub address: Pubkey,
+    /// The program that owns the account.
+    pub owner: Pubkey,
+    /// The full raw account data (empty when the account has no data).
+    pub data: Vec<u8>,
+    /// Metadata (balance, flags, seq, nonce, version context). Its `data`
+    /// field holds the same bytes base64-encoded.
+    pub account: Account,
+}
+
+impl ListedAccount {
+    fn from_proto(address: Pubkey, proto: corev1::Account) -> Result<Self> {
+        let data = proto
+            .data
+            .as_ref()
+            .and_then(|data| data.data.clone())
+            .unwrap_or_default();
+        let account = Account::from_proto(proto)?;
+        Ok(ListedAccount {
+            address,
+            owner: account.owner.clone(),
+            data,
+            account,
         })
     }
 }
@@ -2346,13 +2654,14 @@ mod tests {
 
     #[test]
     fn slot_metrics_absent_commitments_are_none() {
-        let m = slot_metrics_from_response(response_with(None, None)).expect("absence is not an error");
+        let m =
+            slot_metrics_from_response(response_with(None, None)).expect("absence is not an error");
         assert!(m.compressed_state_root.is_none());
         assert!(m.active_state_hash.is_none());
     }
 
     /* Zero is a legitimate root -- the compressed trie is empty until
-       compression warms up -- so it must arrive as Some, not None. */
+    compression warms up -- so it must arrive as Some, not None. */
     #[test]
     fn slot_metrics_zero_root_is_some() {
         let m = slot_metrics_from_response(response_with(Some(vec![0u8; 32]), None))
@@ -2361,7 +2670,7 @@ mod tests {
     }
 
     /* A short or long commitment is a protocol violation. Padding or truncating
-       it would hand the caller a hash the node never published. */
+    it would hand the caller a hash the node never published. */
     #[test]
     fn slot_metrics_reject_wrong_length_commitment() {
         let err = slot_metrics_from_response(response_with(Some(vec![1u8; 31]), None))
@@ -2374,7 +2683,7 @@ mod tests {
     }
 
     /* The flags are the whole opt-in contract: dropping one leaves the caller
-       waiting for a commitment the server was never asked to send. */
+    waiting for a commitment the server was never asked to send. */
     #[test]
     fn slot_metrics_request_forwards_each_flag_independently() {
         let neither = slot_metrics_request(false, false);
@@ -2395,7 +2704,7 @@ mod tests {
     }
 
     /* The rest of the response must survive conversion too -- a "slot metrics"
-       stream that quietly drops the counters is not one. */
+    stream that quietly drops the counters is not one. */
     #[test]
     fn slot_metrics_carry_the_whole_response() {
         let resp = servicesv1::StreamSlotMetricsResponse {
@@ -2419,8 +2728,8 @@ mod tests {
     }
 
     /* A valid timestamp must survive conversion: without this, an implementation
-       that rejected every present timestamp would still pass the malformed-input
-       test below. */
+    that rejected every present timestamp would still pass the malformed-input
+    test below. */
     #[test]
     fn slot_metrics_keep_a_valid_timestamp() {
         let resp = servicesv1::StreamSlotMetricsResponse {
@@ -2432,12 +2741,15 @@ mod tests {
             ..Default::default()
         };
         let m = slot_metrics_from_response(resp).expect("a valid timestamp converts");
-        assert!(m.block_timestamp.is_some(), "a valid timestamp must survive");
+        assert!(
+            m.block_timestamp.is_some(),
+            "a valid timestamp must survive"
+        );
     }
 
     /* A timestamp the server sent but that cannot be represented is bad data,
-       not an absent field: folding it into None would report it as "the server
-       said nothing". */
+    not an absent field: folding it into None would report it as "the server
+    said nothing". */
     #[test]
     fn slot_metrics_reject_unrepresentable_timestamp() {
         let resp = servicesv1::StreamSlotMetricsResponse {
@@ -2469,8 +2781,37 @@ mod tests {
         }
     }
 
+    /* The edge's rate limit is not lag: the caller needs an API key or to slow
+    down, not to drain the stream faster. */
+    #[test]
+    fn rate_limit_on_a_stream_is_not_stream_lagged() {
+        let unkeyed = "rate limit for requests without an API key exceeded (10 weighted \
+            requests/s per IP). Get a free key with higher limits at \
+            https://dev.thru.org/keys?ref=edge-429 and send it as \"Authorization: Bearer \
+            thru_...\". Docs: https://thru.org/docs/api-ref/rate-limits/";
+        let err = map_stream_status(tonic::Status::resource_exhausted(unkeyed));
+        match &err {
+            ClientError::RateLimited {
+                message, unkeyed, ..
+            } => {
+                assert!(message.starts_with("rate limit for requests"));
+                assert!(*unkeyed);
+            }
+            other => panic!("expected RateLimited, got {other:?}"),
+        }
+        assert_eq!(
+            err.get_key_url(),
+            Some("https://dev.thru.org/keys?ref=edge-429")
+        );
+
+        match map_stream_status(tonic::Status::resource_exhausted("rate limit exceeded")) {
+            ClientError::RateLimited { unkeyed, .. } => assert!(!unkeyed),
+            other => panic!("expected RateLimited, got {other:?}"),
+        }
+    }
+
     /* Everything else stays a plain RPC error -- widening this would hide real
-       failures behind a "you fell behind" message. */
+    failures behind a "you fell behind" message. */
     #[test]
     fn other_statuses_stay_rpc_errors() {
         for status in [
@@ -2487,8 +2828,8 @@ mod tests {
     }
 
     /* A bare seq is not a version key -- it restarts across account
-       incarnations -- so the wire representation must always carry the
-       slot alongside it. */
+    incarnations -- so the wire representation must always carry the
+    slot alongside it. */
     #[test]
     fn slot_seq_version_context_variant_converts_to_proto() {
         let proto = VersionContext::SlotSeq { slot: 20, seq: 4 }.to_proto();
@@ -2529,8 +2870,8 @@ mod tests {
     }
 
     /* The version context's seq/block_offset identify which resolved
-       version was returned; they must survive conversion the same way
-       slot/block_timestamp already do. */
+    version was returned; they must survive conversion the same way
+    slot/block_timestamp already do. */
     #[test]
     fn account_from_proto_surfaces_version_context_seq_and_block_offset() {
         let account = Account::from_proto(account_proto_with_version_context(Some(
@@ -2561,5 +2902,23 @@ mod tests {
         assert!(account.slot.is_none());
         assert!(account.version_seq.is_none());
         assert!(account.block_offset.is_none());
+    }
+
+    #[test]
+    fn account_from_proto_preserves_every_capability_bit() {
+        for bits in 0u8..=255 {
+            let mut proto = account_proto_with_version_context(None);
+            proto.meta.as_mut().unwrap().flags = Some(corev1::AccountFlags {
+                is_program: bits & 1 != 0,
+                is_privileged: bits & 2 != 0,
+                is_uncompressable: bits & 4 != 0,
+                is_ephemeral: bits & 8 != 0,
+                is_deleted: bits & 16 != 0,
+                is_new: bits & 32 != 0,
+                is_compressed: bits & 64 != 0,
+                is_native_receiver: bits & 128 != 0,
+            });
+            assert_eq!(Account::from_proto(proto).unwrap().flags, bits);
+        }
     }
 }

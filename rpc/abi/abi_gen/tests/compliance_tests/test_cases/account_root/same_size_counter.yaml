@@ -1,0 +1,7 @@
+test-case:
+  name: "account_root_same_size_counter"
+  abi-file: "../../abi_definitions/account_root.abi.yaml"
+  type: "SameSizeAccount"
+  description: "Same-size variants: counter_v1"
+  tags: ["enums", "tagged", "account-root"]
+  binary-hex: "01 05 00 00 00 00 00 00 00"

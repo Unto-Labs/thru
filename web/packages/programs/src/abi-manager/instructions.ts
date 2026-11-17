@@ -149,6 +149,7 @@ export function buildABIManagerInstructionBytes(
           )
           .set_srcbuf_offset(sourceOffset(args.sourceOffset))
           .set_srcbuf_size(sourceSize(args.sourceSize))
+          .set_srcbuf_sha256(exactBytes(args.sourceSha256, 32, 'sourceSha256'))
           .set_authority_account_idx(
             validateIndex(args.authorityAccountIdx, 'authorityAccountIdx')
           )
@@ -173,6 +174,7 @@ export function buildABIManagerInstructionBytes(
           )
           .set_srcbuf_offset(sourceOffset(args.sourceOffset))
           .set_srcbuf_size(sourceSize(args.sourceSize))
+          .set_srcbuf_sha256(exactBytes(args.sourceSha256, 32, 'sourceSha256'))
           .set_authority_account_idx(
             validateIndex(args.authorityAccountIdx, 'authorityAccountIdx')
           )
@@ -193,6 +195,7 @@ export function buildABIManagerInstructionBytes(
           )
           .set_srcbuf_offset(sourceOffset(args.sourceOffset))
           .set_srcbuf_size(sourceSize(args.sourceSize))
+          .set_srcbuf_sha256(exactBytes(args.sourceSha256, 32, 'sourceSha256'))
           .set_authority_account_idx(
             validateIndex(args.authorityAccountIdx, 'authorityAccountIdx')
           )
@@ -214,6 +217,7 @@ export function buildABIManagerInstructionBytes(
           )
           .set_srcbuf_offset(sourceOffset(args.sourceOffset))
           .set_srcbuf_size(sourceSize(args.sourceSize))
+          .set_srcbuf_sha256(exactBytes(args.sourceSha256, 32, 'sourceSha256'))
           .set_authority_account_idx(
             validateIndex(args.authorityAccountIdx, 'authorityAccountIdx')
           )
@@ -237,6 +241,7 @@ export function buildABIManagerInstructionBytes(
           )
           .set_srcbuf_offset(sourceOffset(args.sourceOffset))
           .set_srcbuf_size(sourceSize(args.sourceSize))
+          .set_srcbuf_sha256(exactBytes(args.sourceSha256, 32, 'sourceSha256'))
           .set_authority_account_idx(
             validateIndex(args.authorityAccountIdx, 'authorityAccountIdx')
           )
@@ -257,6 +262,7 @@ export function buildABIManagerInstructionBytes(
           )
           .set_srcbuf_offset(sourceOffset(args.sourceOffset))
           .set_srcbuf_size(sourceSize(args.sourceSize))
+          .set_srcbuf_sha256(exactBytes(args.sourceSha256, 32, 'sourceSha256'))
           .set_authority_account_idx(
             validateIndex(args.authorityAccountIdx, 'authorityAccountIdx')
           )
@@ -382,6 +388,7 @@ function officialABIIndices(
     ),
     sourceOffset: args.sourceOffset,
     sourceSize: args.sourceSize,
+    sourceSha256: args.sourceSha256,
   };
 }
 
@@ -403,6 +410,7 @@ function externalABIIndices(
     ),
     sourceOffset: args.sourceOffset,
     sourceSize: args.sourceSize,
+    sourceSha256: args.sourceSha256,
     authorityAccountIdx: accountIndex(
       context,
       args.authorityAccount,

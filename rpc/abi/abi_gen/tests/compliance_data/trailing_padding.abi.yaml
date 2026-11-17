@@ -1,0 +1,99 @@
+abi:
+  package: "test.trailing_padding"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Variable-size structs whose encoded size rounds up to the struct alignment"
+
+types:
+  # Alignment 4 (the count): 4 + count bytes, rounded up to 4.
+  - name: "PaddedTail"
+    kind:
+      struct:
+        packed: false
+        fields:
+          - name: "count"
+            field-type:
+              primitive: u32
+          - name: "data"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  primitive: u8
+
+  # Alignment 8: count 0 is 8 + 1 = 9 bytes of fields, 16 with padding.
+  - name: "AlignedTrailer"
+    kind:
+      struct:
+        packed: false
+        fields:
+          - name: "count"
+            field-type:
+              primitive: u64
+          - name: "payload"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  primitive: u64
+          - name: "marker"
+            field-type:
+              primitive: u8
+          - name: "suffix"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  primitive: u8
+
+  # Alignment 1 (only the u8 count is fixed): no trailing padding.
+  - name: "MessageWithTrailer"
+    kind:
+      struct:
+        packed: false
+        fields:
+          - name: "count"
+            field-type:
+              primitive: u8
+          - name: "payload"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  primitive: u64
+          - name: "marker"
+            field-type:
+              primitive: u8
+          - name: "suffix"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  primitive: u8
+
+  # A padded child: the field after it starts past the child's padding.
+  - name: "PaddedHolder"
+    kind:
+      struct:
+        packed: false
+        fields:
+          - name: "head"
+            field-type:
+              primitive: u8
+          - name: "inner"
+            field-type:
+              type-ref:
+                name: "PaddedTail"
+          - name: "tail"
+            field-type:
+              primitive: u8

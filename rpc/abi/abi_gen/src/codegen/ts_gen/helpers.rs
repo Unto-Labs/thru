@@ -414,8 +414,9 @@ pub fn sequential_size_expression(expr: &ExprKind) -> Option<String> {
             sequential_size_expression(&e.left)?,
             sequential_size_expression(&e.right)?
         )),
+        /* Integer division, as the layout evaluates it. */
         ExprKind::Div(e) => Some(format!(
-            "({} / {})",
+            "Math.trunc({} / {})",
             sequential_size_expression(&e.left)?,
             sequential_size_expression(&e.right)?
         )),
@@ -455,6 +456,53 @@ pub fn sequential_size_expression(expr: &ExprKind) -> Option<String> {
             "(Number(!({})))",
             sequential_size_expression(&e.operand)?
         )),
+        ExprKind::Eq(e) => Some(format!(
+            "(({}) === ({}) ? 1 : 0)",
+            sequential_size_expression(&e.left)?,
+            sequential_size_expression(&e.right)?
+        )),
+        ExprKind::Ne(e) => Some(format!(
+            "(({}) !== ({}) ? 1 : 0)",
+            sequential_size_expression(&e.left)?,
+            sequential_size_expression(&e.right)?
+        )),
+        ExprKind::Lt(e) => Some(format!(
+            "(({}) < ({}) ? 1 : 0)",
+            sequential_size_expression(&e.left)?,
+            sequential_size_expression(&e.right)?
+        )),
+        ExprKind::Gt(e) => Some(format!(
+            "(({}) > ({}) ? 1 : 0)",
+            sequential_size_expression(&e.left)?,
+            sequential_size_expression(&e.right)?
+        )),
+        ExprKind::Le(e) => Some(format!(
+            "(({}) <= ({}) ? 1 : 0)",
+            sequential_size_expression(&e.left)?,
+            sequential_size_expression(&e.right)?
+        )),
+        ExprKind::Ge(e) => Some(format!(
+            "(({}) >= ({}) ? 1 : 0)",
+            sequential_size_expression(&e.left)?,
+            sequential_size_expression(&e.right)?
+        )),
+        /* `&&` / `||` short-circuit (JavaScript evaluates the right side
+        only when the left does not decide), giving 1 or 0. */
+        ExprKind::And(e) => Some(format!(
+            "(({}) !== 0 && ({}) !== 0 ? 1 : 0)",
+            sequential_size_expression(&e.left)?,
+            sequential_size_expression(&e.right)?
+        )),
+        ExprKind::Or(e) => Some(format!(
+            "(({}) !== 0 || ({}) !== 0 ? 1 : 0)",
+            sequential_size_expression(&e.left)?,
+            sequential_size_expression(&e.right)?
+        )),
+        ExprKind::Xor(e) => Some(format!(
+            "((({}) !== 0) !== (({}) !== 0) ? 1 : 0)",
+            sequential_size_expression(&e.left)?,
+            sequential_size_expression(&e.right)?
+        )),
         _ => None,
     }
 }
@@ -481,8 +529,9 @@ where
             expr_to_ts_with_resolver(&e.left, resolver)?,
             expr_to_ts_with_resolver(&e.right, resolver)?
         )),
+        /* Integer division, as the layout evaluates it. */
         ExprKind::Div(e) => Some(format!(
-            "({} / {})",
+            "Math.trunc({} / {})",
             expr_to_ts_with_resolver(&e.left, resolver)?,
             expr_to_ts_with_resolver(&e.right, resolver)?
         )),
@@ -531,94 +580,140 @@ where
         ExprKind::Popcount(e) => Some(format!(
             "(__tnPopcount({}))",
             expr_to_ts_with_resolver(&e.operand, resolver)?
+        )),
+        ExprKind::Eq(e) => Some(format!(
+            "(({}) === ({}) ? 1 : 0)",
+            expr_to_ts_with_resolver(&e.left, resolver)?,
+            expr_to_ts_with_resolver(&e.right, resolver)?
+        )),
+        ExprKind::Ne(e) => Some(format!(
+            "(({}) !== ({}) ? 1 : 0)",
+            expr_to_ts_with_resolver(&e.left, resolver)?,
+            expr_to_ts_with_resolver(&e.right, resolver)?
+        )),
+        ExprKind::Lt(e) => Some(format!(
+            "(({}) < ({}) ? 1 : 0)",
+            expr_to_ts_with_resolver(&e.left, resolver)?,
+            expr_to_ts_with_resolver(&e.right, resolver)?
+        )),
+        ExprKind::Gt(e) => Some(format!(
+            "(({}) > ({}) ? 1 : 0)",
+            expr_to_ts_with_resolver(&e.left, resolver)?,
+            expr_to_ts_with_resolver(&e.right, resolver)?
+        )),
+        ExprKind::Le(e) => Some(format!(
+            "(({}) <= ({}) ? 1 : 0)",
+            expr_to_ts_with_resolver(&e.left, resolver)?,
+            expr_to_ts_with_resolver(&e.right, resolver)?
+        )),
+        ExprKind::Ge(e) => Some(format!(
+            "(({}) >= ({}) ? 1 : 0)",
+            expr_to_ts_with_resolver(&e.left, resolver)?,
+            expr_to_ts_with_resolver(&e.right, resolver)?
+        )),
+        /* `&&` / `||` short-circuit (JavaScript evaluates the right side
+        only when the left does not decide), giving 1 or 0. */
+        ExprKind::And(e) => Some(format!(
+            "(({}) !== 0 && ({}) !== 0 ? 1 : 0)",
+            expr_to_ts_with_resolver(&e.left, resolver)?,
+            expr_to_ts_with_resolver(&e.right, resolver)?
+        )),
+        ExprKind::Or(e) => Some(format!(
+            "(({}) !== 0 || ({}) !== 0 ? 1 : 0)",
+            expr_to_ts_with_resolver(&e.left, resolver)?,
+            expr_to_ts_with_resolver(&e.right, resolver)?
+        )),
+        ExprKind::Xor(e) => Some(format!(
+            "((({}) !== 0) !== (({}) !== 0) ? 1 : 0)",
+            expr_to_ts_with_resolver(&e.left, resolver)?,
+            expr_to_ts_with_resolver(&e.right, resolver)?
         )),
         _ => None,
     }
 }
 
-/// Convert expression to TypeScript string with BigInt literals.
-///
-/// This is similar to `expr_to_ts_with_resolver` but uses BigInt-compatible
-/// literals (e.g., `62n` instead of `62`) so that bitwise operations work
-/// correctly with 64-bit field values.
-///
-/// JavaScript's bitwise operators on Number are limited to 32 bits and will
-/// truncate larger values. By using BigInt literals, we ensure that operations
-/// like `value >> 62n` work correctly for 64-bit values.
+/// TypeScript evaluating `expr` with checked u64 arithmetic (`__tnU64Op`):
+/// a `bigint | null` expression, `null` when a step leaves u64 (as C and Rust
+/// reject it). `resolver` maps a field reference to a bigint expression.
+/// Used for enum tags and derived parameters, whose operands come from the
+/// buffer: no step builds a huge value.
 pub fn expr_to_ts_bigint_with_resolver<F>(expr: &ExprKind, resolver: &mut F) -> Option<String>
 where
     F: FnMut(&[String]) -> Option<String>,
 {
+    let bin = |op: &str, l: &ExprKind, r: &ExprKind, resolver: &mut F| -> Option<String> {
+        Some(format!(
+            "__tnU64Op(\"{op}\", {}, {})",
+            expr_to_ts_bigint_with_resolver(l, resolver)?,
+            expr_to_ts_bigint_with_resolver(r, resolver)?
+        ))
+    };
     match expr {
         ExprKind::Literal(lit) => Some(literal_to_bigint_string(lit)),
         ExprKind::FieldRef(field_ref) => resolver(&field_ref.path),
-        ExprKind::Add(e) => Some(format!(
-            "({} + {})",
-            expr_to_ts_bigint_with_resolver(&e.left, resolver)?,
-            expr_to_ts_bigint_with_resolver(&e.right, resolver)?
+        ExprKind::Add(e) => bin("add", &e.left, &e.right, resolver),
+        ExprKind::Sub(e) => bin("sub", &e.left, &e.right, resolver),
+        ExprKind::Mul(e) => bin("mul", &e.left, &e.right, resolver),
+        ExprKind::Div(e) => bin("div", &e.left, &e.right, resolver),
+        ExprKind::Mod(e) => bin("mod", &e.left, &e.right, resolver),
+        ExprKind::Pow(e) => bin("pow", &e.left, &e.right, resolver),
+        ExprKind::BitAnd(e) => bin("and", &e.left, &e.right, resolver),
+        ExprKind::BitOr(e) => bin("or", &e.left, &e.right, resolver),
+        ExprKind::BitXor(e) => bin("xor", &e.left, &e.right, resolver),
+        ExprKind::LeftShift(e) => bin("shl", &e.left, &e.right, resolver),
+        ExprKind::RightShift(e) => bin("shr", &e.left, &e.right, resolver),
+        ExprKind::Eq(e) => bin("eq", &e.left, &e.right, resolver),
+        ExprKind::Ne(e) => bin("ne", &e.left, &e.right, resolver),
+        ExprKind::Lt(e) => bin("lt", &e.left, &e.right, resolver),
+        ExprKind::Gt(e) => bin("gt", &e.left, &e.right, resolver),
+        ExprKind::Le(e) => bin("le", &e.left, &e.right, resolver),
+        ExprKind::Ge(e) => bin("ge", &e.left, &e.right, resolver),
+        /* `&&` / `||` short-circuit: the right side is evaluated only when
+        the left does not decide (a guarded `(n != 0) && (4 / n)` with n = 0
+        is 0, not a division by zero), as the generated Rust evaluates it. */
+        ExprKind::And(e) => Some(format!(
+            "((__tnL: bigint | null): bigint | null => __tnL === null ? null : __tnU64(__tnL) === 0n ? 0n : __tnU64Op(\"land\", __tnL, {}))({})",
+            expr_to_ts_bigint_with_resolver(&e.right, resolver)?,
+            expr_to_ts_bigint_with_resolver(&e.left, resolver)?
         )),
-        ExprKind::Sub(e) => Some(format!(
-            "({} - {})",
-            expr_to_ts_bigint_with_resolver(&e.left, resolver)?,
-            expr_to_ts_bigint_with_resolver(&e.right, resolver)?
+        ExprKind::Or(e) => Some(format!(
+            "((__tnL: bigint | null): bigint | null => __tnL === null ? null : __tnU64(__tnL) !== 0n ? 1n : __tnU64Op(\"lor\", __tnL, {}))({})",
+            expr_to_ts_bigint_with_resolver(&e.right, resolver)?,
+            expr_to_ts_bigint_with_resolver(&e.left, resolver)?
         )),
-        ExprKind::Mul(e) => Some(format!(
-            "({} * {})",
-            expr_to_ts_bigint_with_resolver(&e.left, resolver)?,
-            expr_to_ts_bigint_with_resolver(&e.right, resolver)?
-        )),
-        ExprKind::Div(e) => Some(format!(
-            "({} / {})",
-            expr_to_ts_bigint_with_resolver(&e.left, resolver)?,
-            expr_to_ts_bigint_with_resolver(&e.right, resolver)?
-        )),
-        ExprKind::Mod(e) => Some(format!(
-            "({} % {})",
-            expr_to_ts_bigint_with_resolver(&e.left, resolver)?,
-            expr_to_ts_bigint_with_resolver(&e.right, resolver)?
-        )),
-        ExprKind::BitAnd(e) => Some(format!(
-            "({} & {})",
-            expr_to_ts_bigint_with_resolver(&e.left, resolver)?,
-            expr_to_ts_bigint_with_resolver(&e.right, resolver)?
-        )),
-        ExprKind::BitOr(e) => Some(format!(
-            "({} | {})",
-            expr_to_ts_bigint_with_resolver(&e.left, resolver)?,
-            expr_to_ts_bigint_with_resolver(&e.right, resolver)?
-        )),
-        ExprKind::BitXor(e) => Some(format!(
-            "({} ^ {})",
-            expr_to_ts_bigint_with_resolver(&e.left, resolver)?,
-            expr_to_ts_bigint_with_resolver(&e.right, resolver)?
-        )),
-        ExprKind::LeftShift(e) => Some(format!(
-            "({} << {})",
-            expr_to_ts_bigint_with_resolver(&e.left, resolver)?,
-            expr_to_ts_bigint_with_resolver(&e.right, resolver)?
-        )),
-        ExprKind::RightShift(e) => Some(format!(
-            "({} >> {})",
-            expr_to_ts_bigint_with_resolver(&e.left, resolver)?,
-            expr_to_ts_bigint_with_resolver(&e.right, resolver)?
-        )),
+        ExprKind::Xor(e) => bin("lxor", &e.left, &e.right, resolver),
         ExprKind::BitNot(e) => Some(format!(
-            "(~({}))",
+            "__tnU64Unary(\"bitnot\", {})",
             expr_to_ts_bigint_with_resolver(&e.operand, resolver)?
         )),
         ExprKind::Neg(e) => Some(format!(
-            "(-({}))",
+            "__tnU64Unary(\"neg\", {})",
             expr_to_ts_bigint_with_resolver(&e.operand, resolver)?
         )),
         ExprKind::Not(e) => Some(format!(
-            "(Number(!({})))",
+            "__tnU64Unary(\"not\", {})",
             expr_to_ts_bigint_with_resolver(&e.operand, resolver)?
         )),
         ExprKind::Popcount(e) => Some(format!(
-            "(__tnPopcount({}))",
+            "__tnU64Unary(\"popcount\", {})",
             expr_to_ts_bigint_with_resolver(&e.operand, resolver)?
         )),
-        _ => None,
+        /* `sizeof` / `alignof` of a constant-size type are folded into
+        literals before the emitters run (`ts.rs`); one that reaches here
+        names a variable-size type, which C, Rust and Go report unsupported:
+        evaluating it rejects the value (null), like a checked overflow. */
+        ExprKind::Sizeof(_) | ExprKind::Alignof(_) => Some("(null as bigint | null)".to_string()),
+    }
+}
+
+/// An enum tag as a TypeScript literal that keeps its exact value: a number
+/// up to 2^53 - 1, a bigint past it (a JavaScript number would round
+/// 2^53 + 1 to 2^53).
+pub fn ts_tag_literal(tag: u64) -> String {
+    if tag <= (1u64 << 53) - 1 {
+        tag.to_string()
+    } else {
+        format!("{tag}n")
     }
 }
 

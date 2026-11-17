@@ -49,14 +49,25 @@ describe("Oracle read helpers", () => {
 
   it("rejects malformed tags, lengths, and boolean values", () => {
     expect(() => parseOracleFeedAccount(Uint8Array.of(99))).toThrow(
-      "Unknown Oracle feed type",
+      "Not an Oracle feed account",
     );
     expect(() => parseOracleEvent(Uint8Array.of(99))).toThrow(
       "Unknown Oracle event type",
     );
     expect(() =>
       parseOracleFeedAccount(fixture("price_feed").subarray(0, 160)),
-    ).toThrow("expected 161 bytes");
+    ).toThrow("Not an Oracle feed account");
+    expect(fixture("price_feed")).toHaveLength(161);
+    expect(fixture("boolean_feed")).toHaveLength(146);
+
+    const priceAsBoolean = fixture("price_feed");
+    priceAsBoolean[0] = 2;
+    expect(() => parseOracleFeedAccount(priceAsBoolean)).toThrow(
+      "Not an Oracle feed account",
+    );
+    expect(() => parseOracleFeedAccount(new Uint8Array(161))).toThrow(
+      "Not an Oracle feed account",
+    );
 
     const invalidBoolean = fixture("boolean_feed");
     invalidBoolean[145] = 2;

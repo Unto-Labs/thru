@@ -9,7 +9,6 @@ import {
   decodeAddress,
   deriveWalletAddress,
   encodeAddAuthorityInstruction,
-  encodeLegacyAddAuthorityInstruction,
   encodeRegisterCredentialInstruction,
   encodeValidateInstruction,
   parseWalletAuthorities,
@@ -175,11 +174,7 @@ export async function addAuthorityToAccount(
   });
 
   const passkeyProgramPubkey = decodeAddress(params.programAddress);
-  const encodeAuthorityInstruction =
-    parsed.layout === "legacyAuthority"
-      ? encodeLegacyAddAuthorityInstruction
-      : encodeAddAuthorityInstruction;
-  const addAuthorityInstruction = encodeAuthorityInstruction({
+  const addAuthorityInstruction = encodeAddAuthorityInstruction({
     walletAccountIdx: ctx.walletAccountIdx,
     authorityRecord: params.authorityRecord,
   });

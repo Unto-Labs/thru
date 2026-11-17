@@ -2,22 +2,20 @@ abi:
   package: thru.program.consensus_validator
   name: Consensus Validator
   abi-version: 1
-  package-version: 1.0.0
+  package-version: 1.1.0
   description: >-
     Consensus validator program. It owns the attestor table, stakes attestor
     tokens into the converted vault, verifies BLS-aggregated block
     certificates, and pays attestor rewards from the WTHRU unclaimed vault.
   imports:
     # thru_primitives
-    - type: onchain
-      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
-      target: abi
-      network: mainnet
-      revision: latest
+    - type: path
+      path: thru_primitives.abi.yaml
   options:
     program-metadata:
       root-types:
         instruction-root: ConsensusValidatorInstruction
+        account-root: ConsensusValidatorAccount
         errors: ConsensusValidatorError
 types:
   - name: BlsPubkey
@@ -74,6 +72,8 @@ types:
           - name: unclaimed_vault_proof_size
             field-type: { primitive: u64 }
           - name: table_proof_size
+            field-type: { primitive: u64 }
+          - name: max_pending_blocks
             field-type: { primitive: u64 }
           - name: converted_vault_proof
             field-type:
@@ -221,16 +221,20 @@ types:
             field-type: { primitive: u32 }
           - name: vote
             field-type: { primitive: u8 }
-          - name: padding
+          - name: generation
             field-type:
               array:
-                size: { literal: { u64: 3 } }
+                size: { literal: { u64: 8 } }
                 element-type: { primitive: u8 }
           - name: block_hash
             field-type:
               type-ref:
                 name: Hash
                 package: "thru.common.primitives"
+          - name: slot
+            field-type: { primitive: u64 }
+          - name: bet_time
+            field-type: { primitive: u64 }
   - name: Certificate
     kind:
       struct:
@@ -238,8 +242,6 @@ types:
         fields:
           - name: payload
             field-type: { type-ref: { name: CertificatePayload } }
-          - name: bet_time
-            field-type: { primitive: u64 }
           - name: weight_slot
             field-type: { primitive: u64 }
           - name: aggregate_signature
@@ -308,11 +310,96 @@ types:
                   - name: post_certificate
                     tag-value: 6
                     variant-type: { type-ref: { name: PostCertificateArgs } }
+  # Account root: byte 0 is the account discriminator (account_type), one
+  # value per (account kind, layout). Values are never reused; a new layout
+  # or a new kind takes the next unused value.
+  - name: ConsensusValidatorAccount
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: account_type
+            field-type: { primitive: u8 }
+          - name: payload
+            field-type:
+              enum:
+                packed: true
+                tag-ref: { field-ref: { path: [account_type] } }
+                variants:
+                  - name: attestor_table_v1
+                    tag-value: 1
+                    variant-type: { type-ref: { name: AttestorTable } }
+  - name: AttestorTable
+    kind:
+      struct:
+        packed: true
+        comment: >-
+          Attestor table payload: the 232-byte header after the account_type
+          byte (the header is 233 bytes with it), then body. base_sm_off,
+          metadata_off and pending_map_off are offsets from the start of the
+          account (byte 0 is account_type). The body holds the consensus base
+          state machine at base_sm_off (aligned up from 233, so 240), the
+          per-seat metadata array (server_count entries of claim_authority
+          and unclaimed_tokens) at metadata_off, and the deferred-payout map
+          (pending_cap entries of block_hash, weight_slot, credit_basis and a
+          (server_count + 63) / 64 word bitset) at pending_map_off.
+        fields:
+          - name: token_program_id
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+          - name: attestor_mint
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+          - name: converted_vault
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+          - name: unclaimed_vault
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+          - name: admin
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+          - name: server_count
+            field-type: { primitive: u64 }
+          - name: base_sm_off
+            field-type: { primitive: u64 }
+          - name: metadata_off
+            field-type: { primitive: u64 }
+          - name: pending_decay
+            field-type: { primitive: u64 }
+          - name: last_decay_calc_slot
+            field-type: { primitive: u64 }
+          - name: last_decay_emit_slot
+            field-type: { primitive: u64 }
+          - name: last_processed_slot
+            field-type: { primitive: u64 }
+          - name: pending_map_off
+            field-type: { primitive: u64 }
+          - name: pending_cap
+            field-type: { primitive: u64 }
+          - name: body
+            field-type:
+              array:
+                size:
+                  sub:
+                    left: { field-ref: { path: ["__buffer_size"] } }
+                    right: { literal: { u64: 232 } }
+                element-type: { primitive: u8 }
   - name: ConsensusValidatorError
     kind:
       struct:
         packed: true
-        comment: Error codes are the TN_CONSENSUS_VALIDATOR_ERR_* values (0x01-0x53).
+        comment: Error codes are the TN_CONSENSUS_VALIDATOR_ERR_* values (0x01-0x84) in tn_consensus_validator_program.h; 0x84 is an invalid attestor table.
         fields:
           - name: code
             field-type: { primitive: u64 }

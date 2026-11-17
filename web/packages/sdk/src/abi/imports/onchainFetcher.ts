@@ -8,6 +8,8 @@ import type { AbiAccountData, RpcEndpoints, RevisionSpec, OnchainTarget } from "
 import { ABI_MANAGER_PROGRAM_ADDRESS as DEFAULT_ABI_MANAGER_PROGRAM_ID } from "../../core-program-addresses";
 import {
   ABI_ACCOUNT_HEADER_SIZE,
+  ABI_ACCOUNT_TYPE_CONTENT_V1,
+  ABI_ACCOUNT_TYPE_META_V1,
   ABI_STATE_OPEN,
   ABI_STATE_FINALIZED,
   DEFAULT_RPC_ENDPOINTS,
@@ -30,11 +32,11 @@ export interface ThruRpcClient {
 const ABI_ACCOUNT_SUFFIX = "_abi_account";
 const ABI_ACCOUNT_SUFFIX_BYTES = new TextEncoder().encode(ABI_ACCOUNT_SUFFIX);
 
+/* ABI meta account: account_type (u8), kind (u8), flags (u16), body. */
 const ABI_META_HEADER_SIZE = 4;
 const ABI_META_BODY_SIZE = 96;
 const ABI_META_ACCOUNT_SIZE = ABI_META_HEADER_SIZE + ABI_META_BODY_SIZE;
 
-const ABI_META_VERSION = 1;
 const ABI_META_KIND_OFFICIAL = 0;
 const ABI_META_KIND_EXTERNAL = 1;
 
@@ -100,38 +102,38 @@ export async function deriveOfficialAbiAddress(
 }
 
 type AbiMetaAccount = {
-  version: number;
   kind: number;
   flags: number;
   body: Uint8Array;
 };
 
-function parseAbiMetaAccount(data: Uint8Array): AbiMetaAccount {
-  if (data.length < ABI_META_ACCOUNT_SIZE) {
+/**
+ * Parse an ABI meta account. Byte 0 must be the ABI meta account type and the
+ * account must be exactly 100 bytes.
+ */
+export function parseAbiMetaAccount(data: Uint8Array): AbiMetaAccount {
+  if (data.length !== ABI_META_ACCOUNT_SIZE || data[0] !== ABI_ACCOUNT_TYPE_META_V1) {
     throw new Error(
-      `ABI meta account data too short: ${data.length} bytes, expected at least ${ABI_META_ACCOUNT_SIZE}`
+      `Not an ABI meta account: expected ${ABI_META_ACCOUNT_SIZE} bytes with account type ${ABI_ACCOUNT_TYPE_META_V1}, got ${data.length} bytes with account type ${data[0]}`
     );
   }
 
-  const version = data[0];
   const kind = data[1];
   const flags = data[2] | (data[3] << 8);
   const body = data.slice(ABI_META_HEADER_SIZE, ABI_META_HEADER_SIZE + ABI_META_BODY_SIZE);
 
-  if (version !== ABI_META_VERSION) {
-    throw new Error(`Unsupported ABI meta version: ${version}`);
-  }
   if (kind !== ABI_META_KIND_OFFICIAL && kind !== ABI_META_KIND_EXTERNAL) {
     throw new Error(`Unsupported ABI meta kind: ${kind}`);
   }
 
-  return { version, kind, flags, body };
+  return { kind, flags, body };
 }
 
 /**
- * Parse ABI account data from raw bytes.
+ * Parse ABI content account data from raw bytes.
  *
- * Account header layout (45 bytes):
+ * Account header layout (46 bytes):
+ * - account_type: u8 (2 = ABI content)
  * - abi_meta_account: [u8; 32]
  * - revision: u64 (little-endian)
  * - state: u8 (0x00=OPEN, 0x01=FINALIZED)
@@ -139,27 +141,27 @@ function parseAbiMetaAccount(data: Uint8Array): AbiMetaAccount {
  * - content: [u8; content_sz]
  */
 export function parseAbiAccountData(data: Uint8Array): AbiAccountData {
-  if (data.length < ABI_ACCOUNT_HEADER_SIZE) {
+  if (data.length < ABI_ACCOUNT_HEADER_SIZE || data[0] !== ABI_ACCOUNT_TYPE_CONTENT_V1) {
     throw new Error(
-      `ABI account data too short: ${data.length} bytes, expected at least ${ABI_ACCOUNT_HEADER_SIZE}`
+      `Not an ABI content account: expected at least ${ABI_ACCOUNT_HEADER_SIZE} bytes with account type ${ABI_ACCOUNT_TYPE_CONTENT_V1}, got ${data.length} bytes with account type ${data[0]}`
     );
   }
 
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
 
-  const abiMetaAccount = data.slice(0, 32);
-  const revision = view.getBigUint64(32, true);
-  const state = data[40];
-  const contentSize = view.getUint32(41, true);
+  const abiMetaAccount = data.slice(1, 33);
+  const revision = view.getBigUint64(33, true);
+  const state = data[41];
+  const contentSize = view.getUint32(42, true);
 
   if (state !== ABI_STATE_OPEN && state !== ABI_STATE_FINALIZED) {
     throw new Error(`Invalid ABI account state: ${state}`);
   }
 
   const expectedSize = ABI_ACCOUNT_HEADER_SIZE + contentSize;
-  if (data.length < expectedSize) {
+  if (data.length !== expectedSize) {
     throw new Error(
-      `ABI account data truncated: ${data.length} bytes, expected ${expectedSize}`
+      `ABI account data size mismatch: ${data.length} bytes, expected ${expectedSize}`
     );
   }
 

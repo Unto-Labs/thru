@@ -1,0 +1,92 @@
+.uds-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  /* A flex item's default min-width:auto resolves to a text input's intrinsic
+     width, so an Input placed in a flex row refuses to shrink and pushes the
+     layout wider than its container. */
+  min-width: 0;
+}
+
+.uds-field__label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+.uds-input-wrap {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-none);
+  cursor: text;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+/* 48px clears the 44px minimum hit target, border included. */
+.uds-input-wrap--lg {
+  box-sizing: border-box;
+  min-height: 48px;
+  padding: 0 var(--space-3);
+}
+
+.uds-input-wrap:focus-within {
+  border-color: var(--color-border-primary);
+  box-shadow: inset 0 0 0 1px var(--color-border-primary);
+}
+
+.uds-input-wrap[data-error] {
+  border-color: var(--color-border-danger);
+  box-shadow: inset 0 0 0 1px var(--color-border-danger);
+}
+
+.uds-input-wrap:has(.uds-input:disabled) {
+  background: var(--color-surface-disabled);
+  cursor: not-allowed;
+}
+
+.uds-input {
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.uds-input--body {
+  font-family: var(--font-sans);
+}
+
+/* 16px: iOS Safari auto-zooms the page when a focused input is under 16px,
+   and disabling pinch-zoom in the viewport meta would cost accessibility. */
+.uds-input-wrap--lg .uds-input {
+  font-size: 16px;
+}
+
+.uds-input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.uds-input:disabled {
+  cursor: not-allowed;
+}
+
+:where([data-theme="dark"], :root[data-theme="dark"]) .uds-input-wrap {
+  background: var(--color-surface-primary);
+  border-color: var(--color-border-secondary);
+}
+
+.uds-input-wrap + .uds-field__error {
+  font-family: var(--font-sans);
+  font-size: 12px;
+}

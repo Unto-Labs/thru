@@ -8,10 +8,11 @@ import {
   AmmAddLiquidityInstructionBuilder,
   AmmInitPoolInstructionBuilder,
   AmmInstructionBuilder,
-  AmmPoolMetadata as AmmPoolMetadataView,
+  AmmProgramAccount,
   AmmSwapInstructionBuilder,
   AmmWithdrawLiquidityInstructionBuilder,
 } from './abi/thru/program/amm/types';
+import { decodeAccountRoot } from '../utils/account-root';
 
 export {
   AmmAddLiquidityInstruction,
@@ -26,6 +27,8 @@ export {
   AmmInstructionBuilder,
   AmmPoolMetadata as AmmPoolMetadataView,
   AmmPoolMetadataBuilder,
+  AmmProgramAccount,
+  AmmProgramAccountBuilder,
   AmmSwapInstruction,
   AmmSwapInstructionBuilder,
   AmmWithdrawLiquidityInstruction,
@@ -60,7 +63,11 @@ export const AMM_MAX_SWAP_FEE_BPS = 500;
 export const AMM_MINIMUM_LIQUIDITY = 1_000n;
 export const AMM_LP_DECIMALS = 6;
 export const AMM_LP_SCALE = 1_000_000n;
-export const AMM_POOL_METADATA_SIZE = 203;
+/** Account discriminator of a pool (byte 0). Values are never reused; a new
+    layout takes the next value. */
+export const AMM_ACCOUNT_TYPE_POOL_V1 = 1;
+/** Pool account size: account_type + pool metadata. */
+export const AMM_POOL_METADATA_SIZE = 204;
 export const AMM_PROGRAM_ADDRESS = BOOTSTRAP_PROGRAM_ADDRESSES.amm;
 
 type AmmInstructionVariant = 'init_pool' | 'add_liquidity' | 'withdraw_liquidity' | 'swap';
@@ -364,13 +371,20 @@ export function createSwapInstruction(args: SwapArgs): InstructionData {
   };
 }
 
+/**
+ * Decodes AMM program account data through its account root (byte 0 is the
+ * account type). Returns null for any other type or size.
+ */
+export function decodeAmmProgramAccount(data: Uint8Array): AmmProgramAccount | null {
+  return decodeAccountRoot(data, (bytes) => AmmProgramAccount.from_array(bytes));
+}
+
 export function parseAmmPoolMetadata(accountOrData: Account | Uint8Array): AmmPoolMetadata {
   const data = accountOrData instanceof Uint8Array ? accountOrData : accountOrData.data?.data;
   if (!data) throw new Error('AMM pool account data is missing');
-  if (data.length < AMM_POOL_METADATA_SIZE) throw new Error('AMM pool account data is malformed');
 
-  const metadata = AmmPoolMetadataView.from_array(data);
-  if (!metadata) throw new Error('AMM pool account data is malformed');
+  const metadata = decodeAmmProgramAccount(data)?.payload().asPoolV1();
+  if (!metadata) throw new Error('Account data is not an AMM pool account');
   return {
     isInitialized: metadata.get_is_initialized() !== 0,
     lockedLpSupply: metadata.get_locked_lp_supply(),

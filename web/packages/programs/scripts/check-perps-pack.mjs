@@ -30,7 +30,6 @@ try {
     'package/dist/perps/testing.js',
     'package/dist/perps/testing.cjs',
     'package/src/perp/README.md',
-    'package/src/perp/VERSIONS.md',
     'package/src/perp/examples/place-and-cancel.ts',
     'package/src/perp/examples/market-maker-bot.ts',
     'package/src/perp/examples/agent-tools.ts',
@@ -60,29 +59,26 @@ try {
     const perps = ${load('@thru/programs/perps')};
     const alias = ${load('@thru/programs/perp')};
     if (perps.createPerpsClient !== alias.createPerpsClient) throw new Error('./perp and ./perps load different modules');
-    const ids = perps.perpAbiVersions().map((v) => v.id).join(',');
-    if (ids !== 'perp-abi@0.2.0,perp-abi@0.3.0,perp-abi@0.4.0,perp-abi@0.5.0') throw new Error('versions: ' + ids);
     if (perps.describePerpsActions().length < 20) throw new Error('actions');
     if (typeof perps.parsePerpSeatArenaAccount !== 'function' || typeof perps.ordersTx !== 'function') throw new Error('exports');
-    console.log('ok ' + perps.PERP_ABI_LATEST.id);`;
-  assert.equal(run('esm.mjs', smoke((name) => `await import('${name}')`)), 'ok perp-abi@0.5.0');
-  assert.equal(run('cjs.cjs', smoke((name) => `require('${name}')`)), 'ok perp-abi@0.5.0');
+    console.log('ok ' + perps.perpsToolDefinitions()[0].name);`;
+  assert.equal(run('esm.mjs', smoke((name) => `await import('${name}')`)), 'ok perps_getMarkets');
+  assert.equal(run('cjs.cjs', smoke((name) => `require('${name}')`)), 'ok perps_getMarkets');
 
   /* Types for both formats, and the examples, against the installed package. */
   writeFileSync(join(project, 'types.mts'), `
-    import { createPerpsClient, ordersTx, type PerpAbiVersion, type PerpsClient, type PerpTransaction } from '@thru/programs/perps';
-    import { PERP_ABI_LATEST } from '@thru/programs/perp';
-    const version: PerpAbiVersion = PERP_ABI_LATEST;
+    import { createPerpsClient, ordersTx, type PerpsClient, type PerpTransaction } from '@thru/programs/perps';
+    import { parsePerpSeatArenaAccount, type PerpMarket } from '@thru/programs/perp';
+    const market = (data: Uint8Array): PerpMarket => parsePerpSeatArenaAccount(data).market;
     const client: Promise<PerpsClient> = createPerpsClient({ deployment: 'betanet' });
     const tx: typeof ordersTx = ordersTx;
     export type { PerpTransaction };
-    export { version, client, tx };
+    export { market, client, tx };
   `);
   writeFileSync(join(project, 'types.cts'), `
     import perps = require('@thru/programs/perps');
-    const version: perps.PerpAbiVersion = perps.PERP_ABI_LATEST;
-    const flags: boolean = version.features.crossMargin;
-    export = flags;
+    const actions: perps.PerpsActionDescription[] = perps.describePerpsActions();
+    export = actions;
   `);
   cpSync(join(installed, 'src/perp/examples'), join(project, 'examples'), { recursive: true });
   writeFileSync(join(project, 'tsconfig.json'), JSON.stringify({

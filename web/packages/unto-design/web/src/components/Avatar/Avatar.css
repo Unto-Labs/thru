@@ -1,0 +1,23 @@
+.uds-avatar {
+  width: 40px;
+  height: 40px;
+  background: var(--color-surface-lower);
+  border-radius: var(--radius-none);
+  display: inline-grid;
+  place-items: center;
+  overflow: hidden;
+  flex: none;
+}
+
+.uds-avatar__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.uds-avatar__fallback {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}

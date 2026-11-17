@@ -1,0 +1,243 @@
+/* Class names keep the uds-connect-menu prefix: ConnectButton was its first
+   home. */
+
+.uds-connect-menu {
+  box-sizing: border-box;
+  width: 300px;
+  padding: 0;
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+}
+.uds-connect-menu .uds-menu-item {
+  font-size: 0.8125rem;
+}
+/* Base UI marks hovered anchors as highlighted; a host stylesheet's `a`
+   rules must not add an underline or recolor the row. */
+.uds-connect-menu a.uds-menu-item {
+  text-decoration: none;
+  color: inherit;
+}
+.uds-connect-menu a.uds-menu-item[data-highlighted] {
+  color: var(--color-text-primary-inverse);
+}
+.uds-connect-menu__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-2);
+}
+.uds-connect-menu__who {
+  flex: 1;
+  min-width: 0;
+}
+.uds-connect-menu__name {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.uds-connect-menu__addr {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.uds-connect-menu__copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  min-height: 16px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--color-text-tertiary);
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+.uds-connect-menu__copy:hover {
+  color: var(--color-text-primary);
+}
+.uds-connect-menu__copy:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+}
+.uds-connect-menu__bal {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  flex: none;
+}
+
+.uds-connect-menu__manage {
+  padding: 0 var(--space-3) var(--space-3);
+}
+.uds-connect-menu__manage-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-family: var(--font-sans);
+  font-weight: var(--fw-semibold);
+  font-size: 12px;
+  line-height: 1;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-none);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text-primary);
+  background: transparent;
+  text-decoration: none;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
+}
+.uds-connect-menu__manage-link:hover,
+.uds-connect-menu__manage-link:focus-visible {
+  border-color: var(--color-text-primary);
+  background: var(--color-surface-primary);
+  text-decoration: none;
+  color: var(--color-text-primary);
+}
+
+.uds-connect-menu__sep {
+  margin: 0;
+}
+.uds-connect-menu__group {
+  padding: var(--space-2) var(--space-3) var(--space-1);
+}
+.uds-connect-menu__account {
+  font-family: var(--font-sans);
+}
+.uds-connect-menu__account-avatar {
+  display: inline-flex;
+  flex: none;
+}
+.uds-connect-menu__account-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.uds-connect-menu__account-name {
+  font-size: 13px;
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.uds-connect-menu__account-addr {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: inherit;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+.uds-connect-menu__account-bal {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  flex: none;
+}
+
+.uds-connect-menu__icon {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.uds-connect-menu__grow {
+  flex: 1;
+}
+.uds-connect-menu__ext {
+  opacity: 0.7;
+  flex: none;
+}
+.uds-connect-menu__danger {
+  color: var(--color-text-danger);
+}
+.uds-connect-menu__pad {
+  height: var(--space-1);
+}
+
+.uds-connect-menu__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.uds-connect-menu__toggle-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.uds-connect-menu__toggle-hint {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+.uds-connect-menu__toggle[data-highlighted] .uds-connect-menu__toggle-hint {
+  color: inherit;
+  opacity: 0.8;
+}
+.uds-connect-menu__switch {
+  flex: none;
+  position: relative;
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--color-border-strong);
+  transition: background 120ms ease;
+}
+.uds-connect-menu__switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--color-surface-higher);
+  transition: transform 120ms ease;
+}
+.uds-connect-menu__toggle[data-checked] .uds-connect-menu__switch {
+  background: var(--color-text-primary);
+}
+.uds-connect-menu__toggle[data-checked] .uds-connect-menu__switch-thumb {
+  transform: translateX(12px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .uds-connect-menu__switch-thumb {
+    transition: none;
+  }
+}
+
+.uds-connect-menu--sheet {
+  width: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  border: none;
+  box-shadow: none;
+}
+.uds-connect-menu--sheet .uds-menu-item {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  text-align: left;
+}
+.uds-connect-menu--sheet .uds-menu-item:not(:disabled):hover,
+.uds-connect-menu--sheet .uds-menu-item:focus-visible {
+  background: var(--color-surface-lower-inverse);
+  color: var(--color-text-primary-inverse);
+  outline: none;
+}
+.uds-connect-menu--sheet .uds-connect-menu__manage-link {
+  min-height: 44px;
+  box-sizing: border-box;
+}

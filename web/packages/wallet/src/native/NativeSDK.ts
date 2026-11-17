@@ -845,6 +845,9 @@ export class NativeSDK implements WalletSDK {
    * @deprecated Use `deposits.open()`.
    */
   async deposit(payload: DepositRequestPayload): Promise<DepositResult> {
+    if (payload.method === "bank") {
+      throw new Error("Bank deposits are not available in the native wallet");
+    }
     if (!this.initialized) await this.initialize();
     this.assertDepositNetwork(payload.destination?.network);
     const providerId = payload.providerId ?? "unifold";
@@ -990,7 +993,7 @@ export class NativeSDK implements WalletSDK {
             network: destination.network,
             depositTarget: destination.depositTarget,
           }
-        : DepositTarget.THRUSD,
+        : DepositTarget.UUSD,
     );
     return {
       destination: destination

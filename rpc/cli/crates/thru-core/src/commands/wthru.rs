@@ -24,11 +24,12 @@ use crate::commands::state_proof::make_state_proof;
 use crate::commands::token::check_transaction_result;
 use crate::config::Config;
 use crate::error::CliError;
+use crate::keys::LoadedKey;
 use crate::output;
 use crate::utils::validate_address_or_hex;
 
 use thru_base::rpc_types::ProofType;
-use thru_base::tn_tools::{KeyPair, Pubkey};
+use thru_base::tn_tools::Pubkey;
 use thru_base::txn_lib::Transaction;
 use thru_base::txn_tools::{EOA_PROGRAM, TransactionBuilder};
 use thru_client::{Account as ChainAccount, Client, ClientBuilder, TransactionDetails};
@@ -37,12 +38,14 @@ const WTHRU_PROGRAM_FEE: u64 = 0;
 const WTHRU_TRANSFER_FEE: u64 = 1;
 const WTHRU_DECIMALS: u8 = 8;
 const TX_TIMEOUT_SECS: u64 = 30;
-const TOKEN_ACCOUNT_MINT_OFFSET: usize = 0;
-const TOKEN_ACCOUNT_OWNER_OFFSET: usize = 32;
-const TOKEN_ACCOUNT_AMOUNT_OFFSET: usize = 64;
-const TOKEN_ACCOUNT_FROZEN_OFFSET: usize = 72;
-const VAULT_METADATA_MINT_OFFSET: usize = 0;
-const VAULT_METADATA_LAST_BALANCE_OFFSET: usize = 32;
+/* tn_wthru_vault_metadata (tn_wthru_program.h): packed, account_type
+(TN_WTHRU_ACCOUNT_TYPE_VAULT_V1) at byte 0, then the mint and last balance. */
+const VAULT_METADATA_ACCOUNT_TYPE_OFFSET: usize = 0;
+const VAULT_METADATA_MINT_OFFSET: usize = 1;
+const VAULT_METADATA_LAST_BALANCE_OFFSET: usize = 33;
+const VAULT_METADATA_SIZE: usize = 41;
+/* TN_WTHRU_ACCOUNT_TYPE_VAULT_V1 */
+const VAULT_ACCOUNT_TYPE_V1: u8 = 1;
 
 /// Main WTHRU command router
 pub async fn handle_wthru_command(
@@ -115,7 +118,7 @@ async fn initialize_wthru(
     token_program_override: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer_name)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer_name)?;
     let (wthru_program_pubkey, wthru_program_bytes) =
         resolve_wthru_program_pubkey(config, program_override)?;
     let (token_program_pubkey, token_program_bytes) =
@@ -225,7 +228,7 @@ async fn deposit_wthru(
         ));
     }
 
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer_name)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer_name)?;
     let (_wthru_program_pubkey, wthru_program_bytes) =
         resolve_wthru_program_pubkey(config, program_override)?;
     let (_token_program_pubkey, token_program_bytes) =
@@ -412,7 +415,7 @@ async fn withdraw_wthru(
         ));
     }
 
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer_name)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer_name)?;
     let (_wthru_program_pubkey, wthru_program_bytes) =
         resolve_wthru_program_pubkey(config, program_override)?;
     let (_token_program_pubkey, token_program_bytes) =
@@ -529,22 +532,6 @@ async fn withdraw_wthru(
     }
 
     Ok(())
-}
-
-fn resolve_fee_payer_keypair(
-    config: &Config,
-    fee_payer: Option<&str>,
-) -> Result<KeyPair, CliError> {
-    let key_name = fee_payer.unwrap_or("default");
-    let key_hex = config.keys.get_key(key_name).map_err(|_| {
-        CliError::Validation(format!(
-            "Fee payer key '{}' not found in configuration",
-            key_name
-        ))
-    })?;
-
-    KeyPair::from_hex_private_key(key_name, key_hex)
-        .map_err(|e| CliError::Crypto(format!("Failed to create fee payer keypair: {}", e)))
 }
 
 fn resolve_wthru_program_pubkey(
@@ -708,7 +695,7 @@ async fn ensure_account_exists(
 
 async fn fetch_nonce_and_balance(
     client: &Client,
-    fee_payer: &KeyPair,
+    fee_payer: &LoadedKey,
 ) -> Result<(u64, u64), CliError> {
     let account_info = client
         .get_account_info(&fee_payer.address_string, None, None)
@@ -765,11 +752,6 @@ async fn fetch_vault_state(
 ) -> Result<(VaultMetadata, u64), CliError> {
     let account = fetch_account(client, vault_pubkey, "vault").await?;
     let data = decode_account_data(&account, "vault")?;
-    if data.len() < VAULT_METADATA_LAST_BALANCE_OFFSET + 8 {
-        return Err(CliError::Validation(
-            "Vault account data is too small".to_string(),
-        ));
-    }
     let meta = parse_vault_metadata(&data)?;
     Ok((meta, account.balance))
 }
@@ -785,10 +767,19 @@ fn decode_account_data(account: &ChainAccount, label: &str) -> Result<Vec<u8>, C
 }
 
 fn parse_vault_metadata(data: &[u8]) -> Result<VaultMetadata, CliError> {
-    if data.len() < VAULT_METADATA_LAST_BALANCE_OFFSET + 8 {
-        return Err(CliError::Validation(
-            "Vault metadata is truncated".to_string(),
-        ));
+    if data.len() != VAULT_METADATA_SIZE {
+        return Err(CliError::Validation(format!(
+            "Vault metadata is {} bytes (expected {})",
+            data.len(),
+            VAULT_METADATA_SIZE
+        )));
+    }
+    let account_type = data[VAULT_METADATA_ACCOUNT_TYPE_OFFSET];
+    if account_type != VAULT_ACCOUNT_TYPE_V1 {
+        return Err(CliError::Validation(format!(
+            "Vault account type {} is not a WTHRU vault (expected {})",
+            account_type, VAULT_ACCOUNT_TYPE_V1
+        )));
     }
     let mut mint = [0u8; 32];
     mint.copy_from_slice(&data[VAULT_METADATA_MINT_OFFSET..VAULT_METADATA_MINT_OFFSET + 32]);
@@ -831,26 +822,19 @@ async fn validate_token_account(
     Ok(parsed)
 }
 
+/// Decode a token account through the token ABI's account root (byte 0 is
+/// the token account discriminator).
 fn parse_token_account(data: &[u8]) -> Result<TokenAccountData, CliError> {
-    if data.len() <= TOKEN_ACCOUNT_FROZEN_OFFSET {
-        return Err(CliError::Validation(
-            "Token account data is truncated".to_string(),
-        ));
+    let decoded = crate::commands::token::decode_token_account_blob(data)
+        .map_err(|e| CliError::Validation(format!("Invalid token account: {}", e)))?;
+    if decoded.is_closed {
+        return Err(CliError::Validation("Token account is closed".to_string()));
     }
-    let mut mint = [0u8; 32];
-    mint.copy_from_slice(&data[TOKEN_ACCOUNT_MINT_OFFSET..TOKEN_ACCOUNT_MINT_OFFSET + 32]);
-    let mut owner = [0u8; 32];
-    owner.copy_from_slice(&data[TOKEN_ACCOUNT_OWNER_OFFSET..TOKEN_ACCOUNT_OWNER_OFFSET + 32]);
-    let amount_bytes: [u8; 8] = data[TOKEN_ACCOUNT_AMOUNT_OFFSET..TOKEN_ACCOUNT_AMOUNT_OFFSET + 8]
-        .try_into()
-        .map_err(|_| CliError::Validation("Failed to parse token amount".to_string()))?;
-    let amount = u64::from_le_bytes(amount_bytes);
-    let is_frozen = data[TOKEN_ACCOUNT_FROZEN_OFFSET] != 0;
     Ok(TokenAccountData {
-        mint,
-        owner,
-        amount,
-        is_frozen,
+        mint: decoded.mint,
+        owner: decoded.owner,
+        amount: decoded.amount,
+        is_frozen: decoded.is_frozen,
     })
 }
 
@@ -864,4 +848,50 @@ struct TokenAccountData {
     owner: [u8; 32],
     amount: u64,
     is_frozen: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn vault_fixture() -> Vec<u8> {
+        let mut data = vec![0u8; VAULT_METADATA_SIZE];
+        data[0] = VAULT_ACCOUNT_TYPE_V1;
+        data[1..33].fill(0x5a);
+        data[33..41].copy_from_slice(&1_234u64.to_le_bytes());
+        data
+    }
+
+    #[test]
+    fn vault_metadata_decodes_after_the_account_type() {
+        let meta = parse_vault_metadata(&vault_fixture()).unwrap();
+        assert_eq!(meta.mint, [0x5a; 32]);
+        assert_eq!(meta.last_balance, 1_234);
+    }
+
+    #[test]
+    fn vault_metadata_rejects_wrong_type_or_size() {
+        let mut data = vault_fixture();
+        data[0] = 0;
+        assert!(parse_vault_metadata(&data).is_err());
+        assert!(parse_vault_metadata(&vault_fixture()[..40]).is_err());
+        let mut long = vault_fixture();
+        long.push(0);
+        assert!(parse_vault_metadata(&long).is_err());
+    }
+
+    #[test]
+    fn token_account_decodes_through_the_token_abi() {
+        let mut data = vec![2u8];
+        data.extend_from_slice(&[0x11; 32]);
+        data.extend_from_slice(&[0x22; 32]);
+        data.extend_from_slice(&77u64.to_le_bytes());
+        data.push(1);
+        let parsed = parse_token_account(&data).unwrap();
+        assert_eq!(parsed.mint, [0x11; 32]);
+        assert_eq!(parsed.owner, [0x22; 32]);
+        assert_eq!(parsed.amount, 77);
+        assert!(parsed.is_frozen);
+        assert!(parse_token_account(&[0u8; 74]).is_err());
+    }
 }

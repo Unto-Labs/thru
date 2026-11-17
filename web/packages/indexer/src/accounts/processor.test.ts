@@ -288,6 +288,33 @@ describe("runAccountStreamProcessor", () => {
     expect(onCheckpoint.mock.calls).toEqual([[{ slot: 5n }], [{ slot: 5n }]]);
   });
 
+  it("removes the row of an account its stream reports closed, dropping a buffered older update", async () => {
+    /* Token close zeroes an account in place: the chain still has it
+       (isDelete false), so only the stream can tell it is closed. */
+    replayMocks.events = [
+      accountEvent(4n, { data: new Uint8Array([2, 7]) }),
+      accountEvent(5n, { data: new Uint8Array([0, 0]) }),
+      { type: "blockFinished", block: { slot: 5n } },
+    ];
+    const where = vi.fn(async () => undefined);
+    const deleteRow = vi.fn(() => ({ where }));
+    const insert = vi.fn(() => ({ values: () => ({ onConflictDoUpdate: () => ({ returning: async () => [] }) }) }));
+    const parse = vi.fn(() => ({ address: encodeAddress(new Uint8Array(32).fill(1)), slot: 4n }));
+
+    await runAccountStreamProcessor(createStream({
+      table: accountsTable,
+      parse,
+      isClosed: (account: { data: Uint8Array }) => account.data[0] === 0,
+    }), {
+      clientFactory: vi.fn(), db: { insert, delete: deleteRow } as any, logLevel: "error",
+    });
+
+    expect(parse).toHaveBeenCalledTimes(1);
+    expect(deleteRow).toHaveBeenCalledTimes(1);
+    expect(where).toHaveBeenCalledTimes(1);
+    expect(insert).not.toHaveBeenCalled();
+  });
+
   it("does not report a committed deletion or checkpoint when deleting the row fails", async () => {
     replayMocks.events = [{ type: "account", account: {
       address: new Uint8Array(32).fill(1), addressHex: "01".repeat(32),

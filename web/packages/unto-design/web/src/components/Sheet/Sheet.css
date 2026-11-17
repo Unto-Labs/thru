@@ -1,0 +1,181 @@
+/* The panel does not own how it is mounted: on web the consumer puts it under
+   `Sheet.Scrim`; on a native host the OS sheet supplies the scrim. */
+
+.uds-sheet-scrim {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: var(--uds-overlay, rgba(23, 23, 26, 0.48));
+}
+
+/* Only the viewport-owning presentation animates: a `--full` panel fills a
+   host sheet the OS already animated in. The scrim stays static because
+   fading it tints the host app for the first frames of the entrance. */
+@keyframes uds-sheet-enter {
+  from {
+    transform: translateY(16px);
+  }
+}
+
+.uds-sheet--half {
+  animation: uds-sheet-enter var(--duration-med) var(--ease-standard) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uds-sheet--half {
+    animation: none;
+  }
+}
+
+.uds-sheet {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-height: 0;
+  /* An unshrinkable child (a text input's intrinsic width) would make the page
+     scroll sideways, and iOS pans it when the keyboard focuses that input. */
+  max-width: 100%;
+  overflow-x: hidden;
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.18);
+  padding: 0 var(--space-5) var(--space-5);
+}
+
+/* A bottom-anchored sheet's own padding clears the home indicator. */
+.uds-sheet--half {
+  height: auto;
+  min-height: 50%;
+  max-height: 90%;
+  padding-bottom: max(var(--space-5), env(safe-area-inset-bottom));
+}
+
+.uds-sheet--full {
+  flex: 1;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.uds-sheet__grabber {
+  flex: none;
+  align-self: center;
+  width: 36px;
+  height: 4px;
+  margin: var(--space-2) 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-border-strong);
+}
+
+.uds-sheet__header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.uds-sheet__slot {
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+
+.uds-sheet__control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-primary);
+  color: var(--color-text-tertiary);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+.uds-sheet__control:hover {
+  background: var(--color-surface-lower);
+}
+.uds-sheet__control:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+}
+
+/* Expands the tap target to the 44px minimum without growing the header. */
+.uds-sheet__control::after {
+  content: "";
+  position: absolute;
+  width: 44px;
+  height: 44px;
+}
+
+.uds-sheet__center {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.uds-sheet__body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-height: 0;
+  margin-top: var(--space-4);
+  overflow-y: auto;
+}
+
+.uds-sheet__title {
+  font-size: 18px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.25px;
+  color: var(--color-text-primary);
+}
+
+.uds-sheet__lead {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--color-text-tertiary);
+}
+
+.uds-sheet__footer {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+.uds-sheet__caption {
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-disabled);
+}
+.uds-sheet__caption a {
+  color: var(--color-text-primary);
+  font-weight: var(--fw-semibold);
+}
+
+/* Short viewport: in practice an on-screen keyboard shrinking a native
+   host's webview. Captions stay visible: on the review step one carries
+   Coinbase's mandated disclosure. */
+@media (max-height: 520px) {
+  .uds-sheet__body {
+    margin-top: var(--space-2);
+  }
+
+  .uds-sheet__footer {
+    margin-top: var(--space-4);
+  }
+}

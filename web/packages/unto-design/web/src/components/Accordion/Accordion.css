@@ -1,0 +1,66 @@
+/* Panel height animates via Base UI's --accordion-panel-height. */
+
+.uds-acc {
+  border: 1px solid var(--color-border-tertiary);
+  width: 100%;
+}
+
+.uds-acc__item {
+  border-bottom: 1px solid var(--color-border-tertiary);
+}
+.uds-acc__item:last-child {
+  border-bottom: none;
+}
+
+.uds-acc__trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  background: var(--color-surface-higher);
+  border: none;
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+.uds-acc__trigger:hover {
+  background: color-mix(in srgb, var(--color-surface-primary) 72%, var(--color-surface-higher));
+}
+
+.uds-acc__trigger > svg {
+  color: var(--color-text-tertiary);
+  transition: transform var(--duration-med) var(--ease-standard);
+}
+.uds-acc__trigger[data-panel-open] > svg {
+  transform: rotate(90deg);
+}
+
+.uds-acc__panel {
+  overflow: hidden;
+  height: var(--accordion-panel-height);
+  transition: height var(--duration-med) var(--ease-standard);
+}
+.uds-acc__panel[data-starting-style],
+.uds-acc__panel[data-ending-style] {
+  height: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .uds-acc__trigger > svg,
+  .uds-acc__panel {
+    transition: none;
+  }
+}
+
+.uds-acc__panel-inner {
+  padding: 0 var(--space-4) var(--space-4);
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}
+
+.uds-acc__header {
+  margin: 0;
+}

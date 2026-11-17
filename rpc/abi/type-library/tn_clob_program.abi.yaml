@@ -2,14 +2,11 @@ abi:
   package: thru.program.clob
   name: "CLOB Program"
   abi-version: 1
-  package-version: "0.1.0"
+  package-version: "0.2.0"
   description: ABI for the Thru CLOB program instructions, account state, events, and errors
   imports:
-    - type: onchain
-      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
-      target: abi
-      network: mainnet
-      revision: latest
+    - type: path
+      path: thru_primitives.abi.yaml
   options:
     program-metadata:
       root-types:
@@ -666,67 +663,6 @@ types:
     struct:
       packed: true
       fields:
-      - name: magic
-        field-type:
-          primitive: u8
-      - name: status_flags
-        field-type:
-          primitive: u8
-      - name: exchange_status_flags
-        field-type:
-          primitive: u8
-      - name: reserved0
-        field-type:
-          array:
-            size:
-              literal:
-                u64: 5
-            element-type:
-              primitive: u8
-      - name: lot_size
-        field-type:
-          primitive: u64
-      - name: tick_size
-        field-type:
-          primitive: u64
-      - name: next_order_id
-        field-type:
-          primitive: u64
-      - name: order_entry_pubkey
-        field-type:
-          type-ref:
-            name: Pubkey
-            package: "thru.common.primitives"
-      - name: bids_cbook_pubkey
-        field-type:
-          type-ref:
-            name: Pubkey
-            package: "thru.common.primitives"
-      - name: asks_cbook_pubkey
-        field-type:
-          type-ref:
-            name: Pubkey
-            package: "thru.common.primitives"
-      - name: base_vault_pubkey
-        field-type:
-          type-ref:
-            name: Pubkey
-            package: "thru.common.primitives"
-      - name: quote_vault_pubkey
-        field-type:
-          type-ref:
-            name: Pubkey
-            package: "thru.common.primitives"
-      - name: market_authority_pubkey
-        field-type:
-          type-ref:
-            name: Pubkey
-            package: "thru.common.primitives"
-- name: MarketAccountPayload
-  kind:
-    struct:
-      packed: true
-      fields:
       - name: status_flags
         field-type:
           primitive: u8
@@ -785,57 +721,6 @@ types:
     struct:
       packed: true
       fields:
-      - name: magic
-        field-type:
-          primitive: u64
-      - name: version
-        field-type:
-          primitive: u8
-      - name: status_flags
-        field-type:
-          primitive: u8
-      - name: reserved0
-        field-type:
-          array:
-            size:
-              literal:
-                u64: 6
-            element-type:
-              primitive: u8
-      - name: token_program_pubkey
-        field-type:
-          type-ref:
-            name: Pubkey
-            package: "thru.common.primitives"
-      - name: exchange_admin_pubkey
-        field-type:
-          type-ref:
-            name: Pubkey
-            package: "thru.common.primitives"
-      - name: reserved1
-        field-type:
-          array:
-            size:
-              literal:
-                u64: 16
-            element-type:
-              primitive: u8
-- name: ExchangeMetaAccountPayload
-  kind:
-    struct:
-      packed: true
-      fields:
-      - name: magic_suffix
-        field-type:
-          array:
-            size:
-              literal:
-                u64: 7
-            element-type:
-              primitive: u8
-      - name: version
-        field-type:
-          primitive: u8
       - name: status_flags
         field-type:
           primitive: u8
@@ -951,7 +836,7 @@ types:
           array:
             size:
               literal:
-                u64: 4
+                u64: 3
             element-type:
               primitive: u8
       - name: best_level_idx
@@ -1004,7 +889,7 @@ types:
                         path: ["__buffer_size"]
                     right:
                       literal:
-                        u64: 320
+                        u64: 319
                 right:
                   literal:
                     u64: 64
@@ -1021,7 +906,7 @@ types:
           array:
             size:
               literal:
-                u64: 8
+                u64: 7
             element-type:
               primitive: u8
       - name: header
@@ -1040,7 +925,7 @@ types:
                         path: ["__buffer_size"]
                     right:
                       literal:
-                        u64: 72
+                        u64: 71
                 right:
                   literal:
                     u64: 64
@@ -1068,19 +953,24 @@ types:
                         path: ["__buffer_size"]
                     right:
                       literal:
-                        u64: 16
+                        u64: 15
                 right:
                   literal:
                     u64: 8
             element-type:
               type-ref:
                 name: CbookLevel
+# ClobProgramAccount is the account root. Byte 0 of every account the CLOB
+# program owns is account_type, one value per (account kind, layout) pair;
+# the payload follows immediately. 0 is invalid. Values are never reused: a
+# changed layout of an existing kind, or a new kind of account, takes the
+# next unused value. Market vaults are token program accounts.
 - name: ClobProgramAccount
   kind:
     struct:
       packed: true
       fields:
-      - name: account_tag
+      - name: account_type
         field-type:
           primitive: u8
       - name: payload
@@ -1090,18 +980,28 @@ types:
             tag-ref:
               field-ref:
                 path:
-                - account_tag
+                - account_type
             variants:
-            - name: market
-              tag-value: 119
+            - name: exchange_meta_v1
+              tag-value: 1
               variant-type:
                 type-ref:
-                  name: MarketAccountPayload
-            - name: exchange_meta
-              tag-value: 120
+                  name: ExchangeMetaAccount
+            - name: market_v1
+              tag-value: 2
               variant-type:
                 type-ref:
-                  name: ExchangeMetaAccountPayload
+                  name: SeatArenaAccount
+            - name: order_arena_v1
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: OrderArenaAccount
+            - name: cbook_v1
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: CbookAccount
 - name: ClobError
   kind:
     struct:

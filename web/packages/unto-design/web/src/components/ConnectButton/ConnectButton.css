@@ -1,0 +1,59 @@
+.uds-connect {
+  white-space: nowrap;
+}
+.uds-connect--loading {
+  cursor: progress;
+}
+.uds-connect--brick:hover:not(:disabled),
+.uds-connect--brick:focus-visible {
+  background: var(--brick-300);
+  opacity: 1;
+}
+
+.uds-connect-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-none);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  color: var(--color-text-primary);
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+.uds-connect-chip:hover,
+.uds-connect-chip[data-popup-open] {
+  border-color: var(--color-border-secondary);
+}
+.uds-connect-chip:active {
+  transform: translateY(1px);
+}
+.uds-connect-chip:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+}
+.uds-connect-chip--md { padding: 7px 14px; font-size: 13px; }
+.uds-connect-chip--sm { padding: 6px 10px; font-size: 12px; }
+.uds-connect-chip--xs { padding: 4px 8px; font-size: 11px; }
+
+.uds-connect-chip__avatar {
+  display: inline-flex;
+  flex: none;
+}
+.uds-connect-chip__sep {
+  width: 1px;
+  height: 14px;
+  background: var(--color-border-tertiary);
+}
+.uds-connect-chip__bal {
+  color: var(--color-text-secondary);
+}
+.uds-connect-chip__chev {
+  color: var(--color-text-tertiary);
+  flex: none;
+}

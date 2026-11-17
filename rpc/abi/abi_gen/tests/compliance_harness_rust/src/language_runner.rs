@@ -21,11 +21,13 @@ pub trait LanguageRunner {
 }
 
 pub mod c;
+pub mod go;
 pub mod rust;
 pub mod typescript;
 
 pub use self::rust::RustRunner;
 pub use c::CRunner;
+pub use go::GoRunner;
 pub use typescript::TypeScriptRunner;
 
 /* Get runner for specified language */
@@ -34,6 +36,7 @@ pub fn get_runner(language: &str) -> Option<Box<dyn LanguageRunner>> {
         "rust" => Some(Box::new(RustRunner)),
         "c" => Some(Box::new(CRunner)),
         "typescript" | "ts" => Some(Box::new(TypeScriptRunner)),
+        "go" => Some(Box::new(GoRunner)),
         _ => None,
     }
 }

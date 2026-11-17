@@ -2,7 +2,7 @@ abi:
   package: thru.program.block_producer
   name: Block Producer
   abi-version: 1
-  package-version: 1.0.0
+  package-version: 1.1.0
   description: >-
     Block-producer bond program. Producers bond WTHRU in a bond account that
     is a PDA keyed by their block-signing identity. PayOutBlock is callable
@@ -10,16 +10,13 @@ abi:
     from the bond token account into the consensus escrow.
   imports:
     # thru_primitives
-    - type: onchain
-      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
-      target: abi
-      network: mainnet
-      revision: latest
+    - type: path
+      path: thru_primitives.abi.yaml
   options:
     program-metadata:
       root-types:
         instruction-root: BlockProducerInstruction
-        account-root: BondAccount
+        account-root: BlockProducerAccount
         errors: BlockProducerError
 types:
   - name: CreateAccountArgs
@@ -214,14 +211,31 @@ types:
                   - name: pay_out_block
                     tag-value: 7
                     variant-type: { type-ref: { name: PayOutBlockArgs } }
+  # Account root: byte 0 is the account discriminator (account_type), one
+  # value per (account kind, layout). Values are never reused; a new layout
+  # or a new kind takes the next unused value. bond_v1 is 129 bytes total.
+  - name: BlockProducerAccount
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: account_type
+            field-type: { primitive: u8 }
+          - name: payload
+            field-type:
+              enum:
+                packed: true
+                tag-ref: { field-ref: { path: [account_type] } }
+                variants:
+                  - name: bond_v1
+                    tag-value: 1
+                    variant-type: { type-ref: { name: BondAccount } }
   - name: BondAccount
     kind:
       struct:
         packed: true
-        comment: magic is 0xF17EDA2CB04D0001 while the bond is live and 0 after deletion.
+        comment: Bond payload (the 128 bytes after the account_type byte).
         fields:
-          - name: magic
-            field-type: { primitive: u64 }
           - name: signer_pubkey
             field-type:
               type-ref:
@@ -257,7 +271,8 @@ types:
           funds, 13 token program call failed, 14 account create failed, 15
           not consensus caller, 16 bond address mismatch, 17 invalid amount,
           18 overflow, 19 nothing to sweep, 20 account resize failed, 21 not
-          implemented, 22 wrong mint, 23 signer address mismatch.
+          implemented, 22 wrong mint, 23 signer address mismatch, 24 invalid
+          token program, 25 invalid token account.
         fields:
           - name: code
             field-type: { primitive: u64 }

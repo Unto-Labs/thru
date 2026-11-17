@@ -54,7 +54,7 @@ pub fn run(
 
     /* Get all types and normalize FQDN references */
     let mut all_typedefs = resolver.get_all_types().to_vec();
-    normalize_type_refs(&mut all_typedefs, &resolver);
+    normalize_type_refs(&mut all_typedefs, &resolver)?;
 
     let all_typedefs = all_typedefs;
 

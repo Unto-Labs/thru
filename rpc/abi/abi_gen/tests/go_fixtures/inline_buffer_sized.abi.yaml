@@ -1,0 +1,50 @@
+abi:
+  package: "test.inline_buffer_sized"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "An inline struct sized by the bytes left for it"
+
+types:
+  - name: "Outer"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "n"
+            field-type:
+              primitive: u8
+          - name: "inner"
+            field-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "m"
+                    field-type:
+                      primitive: u8
+                  - name: "head"
+                    field-type:
+                      array:
+                        size:
+                          field-ref:
+                            path: ["m"]
+                        element-type:
+                          primitive: u8
+                  # Takes the bytes `inner` has after `m` and `head`.
+                  - name: "tail"
+                    field-type:
+                      array:
+                        size:
+                          sub:
+                            left:
+                              sub:
+                                left:
+                                  field-ref:
+                                    path: ["__buffer_size"]
+                                right:
+                                  literal:
+                                    u64: 1
+                            right:
+                              field-ref:
+                                path: ["m"]
+                        element-type:
+                          primitive: u8

@@ -2,27 +2,20 @@ abi:
   package: thru.program.abi_manager
   name: "ABI Manager"
   abi-version: 1
-  package-version: 0.1.0
+  package-version: 0.2.0
   description: ABI for the Thru ABI manager program instructions and account state.
-    Manages on-chain ABI metadata and content for both official (program-authority-gated)
-    and external (publisher-gated) ABIs.
+    Manages official ABIs under Public per-program authority or current Core governance,
+    and external publisher-gated ABIs. Core YAML mutations commit exact source bytes.
   imports:
-    # thru_primitives
-    - type: onchain
-      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
-      target: abi
-      network: mainnet
-      revision: latest
-    # state_proof
-    - type: onchain
-      address: ta1l4yBjT6a7PQ4Wu_sJPQwb8jJiJ8Ei71gOuE5Dnotfrl
-      target: abi
-      network: mainnet
-      revision: latest
+    - type: path
+      path: thru_primitives.abi.yaml
+    - type: path
+      path: state_proof.abi.yaml
   options:
     program-metadata:
       root-types:
         instruction-root: "AbiManagerInstruction"
+        account-root: "AbiManagerProgramAccount"
         errors: "AbiManagerError"
 
 types:
@@ -99,16 +92,43 @@ types:
           type-ref:
             name: AbiMetaBodyExternal
 
-# Full ABI meta account (100 bytes).  kind field discriminates the body:
-#   0x00 = official, 0x01 = external
+# Account root. Byte 0 of every account this program owns is account_type.
+# Values are never reused; a new layout takes the next unused value.
+- name: AbiManagerProgramAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: account_type
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - account_type
+            variants:
+            - name: meta_v1
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: AbiMetaAccount
+            - name: content_v1
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: AbiAccount
+
+# ABI meta payload (99 bytes after account_type; 100-byte account). The kind
+# field selects the body: 0x00 = official, 0x01 = external.
 - name: AbiMetaAccount
   kind:
     struct:
       packed: true
       fields:
-      - name: version
-        field-type:
-          primitive: u8
       - name: kind
         field-type:
           primitive: u8
@@ -122,7 +142,8 @@ types:
 
 # ── ABI Content Account ──
 
-# Stores the actual ABI blob, linked to an ABI meta account
+# Stores the actual ABI blob, linked to an ABI meta account. Payload after
+# account_type (45-byte header, then content_sz bytes of contents).
 - name: AbiAccount
   kind:
     struct:
@@ -263,6 +284,12 @@ types:
       - name: srcbuf_size
         field-type:
           primitive: u32
+      # SHA-256 of exactly srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size);
+      # official Public-wire contents must match it.
+      - name: srcbuf_sha256
+        field-type:
+          type-ref:
+            name: Seed32
       - name: authority_account_idx
         field-type:
           primitive: u16
@@ -296,6 +323,12 @@ types:
       - name: srcbuf_size
         field-type:
           primitive: u32
+      # SHA-256 of exactly srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size);
+      # official Public-wire contents must match it.
+      - name: srcbuf_sha256
+        field-type:
+          type-ref:
+            name: Seed32
       - name: authority_account_idx
         field-type:
           primitive: u16
@@ -321,6 +354,12 @@ types:
       - name: srcbuf_size
         field-type:
           primitive: u32
+      # SHA-256 of exactly srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size);
+      # the external ABI contents must match it.
+      - name: srcbuf_sha256
+        field-type:
+          type-ref:
+            name: Seed32
       - name: authority_account_idx
         field-type:
           primitive: u16
@@ -351,6 +390,12 @@ types:
       - name: srcbuf_size
         field-type:
           primitive: u32
+      # SHA-256 of exactly srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size);
+      # the external ABI contents must match it.
+      - name: srcbuf_sha256
+        field-type:
+          type-ref:
+            name: Seed32
       - name: authority_account_idx
         field-type:
           primitive: u16
@@ -379,6 +424,12 @@ types:
       - name: srcbuf_size
         field-type:
           primitive: u32
+      # SHA-256 of exactly srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size);
+      # official Public-wire contents must match it.
+      - name: srcbuf_sha256
+        field-type:
+          type-ref:
+            name: Seed32
       - name: authority_account_idx
         field-type:
           primitive: u16
@@ -404,6 +455,12 @@ types:
       - name: srcbuf_size
         field-type:
           primitive: u32
+      # SHA-256 of exactly srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size);
+      # the external ABI contents must match it.
+      - name: srcbuf_sha256
+        field-type:
+          type-ref:
+            name: Seed32
       - name: authority_account_idx
         field-type:
           primitive: u16
@@ -477,6 +534,83 @@ types:
       - name: authority_account_idx
         field-type:
           primitive: u16
+
+# Core-only envelope: seven bound accounts (238 bytes), source range (8),
+# exact YAML SHA-256 (32). Unused operands must be zero. Root correction has
+# no manager metadata; create-meta has no content/source; close/finalize
+# have no source. Existing index-only official operations remain Public-only.
+- name: AbiBoundAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: index
+        field-type:
+          primitive: u16
+      - name: address
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+
+- name: GovernedAbiArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: config
+        field-type:
+          type-ref:
+            name: AbiBoundAccount
+      - name: admin
+        field-type:
+          type-ref:
+            name: AbiBoundAccount
+      - name: subject
+        field-type:
+          type-ref:
+            name: AbiBoundAccount
+      - name: program_metadata
+        field-type:
+          type-ref:
+            name: AbiBoundAccount
+      - name: abi_metadata
+        field-type:
+          type-ref:
+            name: AbiBoundAccount
+      - name: abi_content
+        field-type:
+          type-ref:
+            name: AbiBoundAccount
+      - name: source
+        field-type:
+          type-ref:
+            name: AbiBoundAccount
+      - name: source_offset
+        field-type:
+          primitive: u32
+      - name: source_size
+        field-type:
+          primitive: u32
+      - name: content_sha256
+        field-type:
+          type-ref:
+            name: Seed32
+
+- name: GovernedAbiCreatePermanentArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: governed
+        field-type:
+          type-ref:
+            name: GovernedAbiArgs
+      - name: state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            package: "thru.blockchain.state_proof"
 
 # ── Instruction envelope ──
 
@@ -567,3 +701,43 @@ types:
               variant-type:
                 type-ref:
                   name: FinalizeAbiExternalArgs
+            - name: upgrade_root_official_abi
+              tag-value: 14
+              variant-type:
+                type-ref:
+                  name: GovernedAbiArgs
+            - name: core_create_meta_permanent
+              tag-value: 15
+              variant-type:
+                type-ref:
+                  name: GovernedAbiCreatePermanentArgs
+            - name: core_create_meta_ephemeral
+              tag-value: 16
+              variant-type:
+                type-ref:
+                  name: GovernedAbiArgs
+            - name: core_create_content_permanent
+              tag-value: 17
+              variant-type:
+                type-ref:
+                  name: GovernedAbiCreatePermanentArgs
+            - name: core_create_content_ephemeral
+              tag-value: 18
+              variant-type:
+                type-ref:
+                  name: GovernedAbiArgs
+            - name: core_upgrade
+              tag-value: 19
+              variant-type:
+                type-ref:
+                  name: GovernedAbiArgs
+            - name: core_close
+              tag-value: 20
+              variant-type:
+                type-ref:
+                  name: GovernedAbiArgs
+            - name: core_finalize
+              tag-value: 21
+              variant-type:
+                type-ref:
+                  name: GovernedAbiArgs

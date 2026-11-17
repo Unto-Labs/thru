@@ -1,12 +1,13 @@
 export {
   ABI_ACCOUNT_HEADER_SIZE,
+  ABI_ACCOUNT_TYPE_CONTENT_V1,
+  ABI_ACCOUNT_TYPE_META_V1,
   ABI_ACCOUNT_SEED_SUFFIX,
   ABI_MANAGER_PROGRAM_ADDRESS,
   ABI_MANAGER_PROGRAM_PUBKEY,
   ABI_META_KIND_EXTERNAL,
   ABI_META_KIND_OFFICIAL,
   ABI_META_SIZE,
-  ABI_META_VERSION,
   ABI_STATE_FINALIZED,
   ABI_STATE_OPEN,
 } from './constants';
@@ -16,7 +17,7 @@ export {
   deriveProgramABIAddresses,
   hashExternalABISeed,
 } from './derivation';
-export { parseABIAccount, parseABIMetaAccount } from './accounts';
+export { decodeAbiManagerProgramAccount, parseABIAccount, parseABIMetaAccount } from './accounts';
 export {
   ABI_MANAGER_ERROR_COMPONENTS,
   ABI_MANAGER_ERROR_REASONS,
@@ -54,3 +55,5 @@ export type {
   ProgramABIAddresses,
 } from './types';
 export * from './abi/thru/program/abi_manager/types';
+export { buildGovernedABIOperationPlan } from './governance';
+export type { GovernedABIOperation, GovernedABIPlanOptions } from './governance';

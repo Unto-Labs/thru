@@ -1,0 +1,7 @@
+test-case:
+  name: "nested_refs_tx"
+  abi-file: "../../abi_definitions/nested_refs.abi.yaml"
+  type: "Tx"
+  description: "Transaction shape: keys sized by hdr.rw_cnt + hdr.ro_cnt (2+1), data by hdr.data_sz (3)"
+  tags: ["arrays", "nested-field-ref"]
+  binary-hex: "02 01 0300 0a000000 0b000000 0c000000 aabbcc"

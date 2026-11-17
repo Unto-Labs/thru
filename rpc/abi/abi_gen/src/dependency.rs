@@ -590,6 +590,103 @@ impl DependencyAnalyzer {
         for typedef in typedefs {
             self.validate_type_internal_duplicates(typedef);
         }
+
+        /* Names and comments are copied into generated C, Rust, TypeScript
+        and Go source, in identifiers, strings and comments. Only plain
+        identifiers and comments that cannot close a block comment are
+        accepted, so no ABI text can end up as generated code. */
+        for typedef in typedefs {
+            self.check_identifier(&typedef.name, "type", &typedef.name);
+            self.validate_kind_text(&typedef.name, &typedef.kind);
+        }
+    }
+
+    fn check_identifier(&mut self, type_name: &str, what: &str, name: &str) {
+        let mut chars = name.chars();
+        let ok = matches!(chars.next(), Some(c) if c == '_' || c.is_ascii_alphabetic())
+            && chars.all(|c| c == '_' || c.is_ascii_alphanumeric());
+        if !ok {
+            self.graph.add_validation_error(ValidationError {
+                error_type: "InvalidName".to_string(),
+                violating_type: type_name.to_string(),
+                duplicate_name: name.to_string(),
+                reason: format!(
+                    "{what} name '{}' in '{type_name}' is not an identifier ([A-Za-z_][A-Za-z0-9_]*)",
+                    name.escape_debug()
+                ),
+            });
+        }
+    }
+
+    fn check_comment(&mut self, type_name: &str, comment: &Option<String>) {
+        if let Some(c) = comment {
+            if c.contains("*/") {
+                self.graph.add_validation_error(ValidationError {
+                    error_type: "InvalidComment".to_string(),
+                    violating_type: type_name.to_string(),
+                    duplicate_name: String::new(),
+                    reason: format!("a comment in '{type_name}' contains '*/'"),
+                });
+            }
+        }
+    }
+
+    fn validate_kind_text(&mut self, type_name: &str, kind: &TypeKind) {
+        match kind {
+            TypeKind::Struct(t) => {
+                self.check_comment(type_name, &t.container_attributes.comment);
+                for f in &t.fields {
+                    self.check_identifier(type_name, "field", &f.name);
+                    self.validate_kind_text(type_name, &f.field_type);
+                }
+            }
+            TypeKind::Union(t) => {
+                self.check_comment(type_name, &t.container_attributes.comment);
+                for v in &t.variants {
+                    self.check_identifier(type_name, "variant", &v.name);
+                    self.validate_kind_text(type_name, &v.variant_type);
+                }
+            }
+            TypeKind::Enum(t) => {
+                self.check_comment(type_name, &t.container_attributes.comment);
+                for v in &t.variants {
+                    self.check_identifier(type_name, "variant", &v.name);
+                    self.validate_kind_text(type_name, &v.variant_type);
+                }
+            }
+            TypeKind::SizeDiscriminatedUnion(t) => {
+                self.check_comment(type_name, &t.container_attributes.comment);
+                /* Bindings expose the variant index as a u8 (Go uint8, Rust
+                u8), so an SDU holds at most 256 variants. */
+                if t.variants.len() > 256 {
+                    self.graph.add_validation_error(ValidationError {
+                        error_type: "TooManyVariants".to_string(),
+                        violating_type: type_name.to_string(),
+                        duplicate_name: String::new(),
+                        reason: format!(
+                            "a size-discriminated union in '{type_name}' has {} variants; at most 256 are allowed",
+                            t.variants.len()
+                        ),
+                    });
+                }
+                for v in &t.variants {
+                    self.check_identifier(type_name, "variant", &v.name);
+                    self.validate_kind_text(type_name, &v.variant_type);
+                }
+            }
+            TypeKind::Array(t) => {
+                self.check_comment(type_name, &t.container_attributes.comment);
+                self.validate_kind_text(type_name, &t.element_type);
+            }
+            TypeKind::TypeRef(t) => {
+                self.check_comment(type_name, &t.comment);
+                /* A reference may be qualified with its package (`a.b.T`). */
+                for segment in t.name.split('.') {
+                    self.check_identifier(type_name, "type reference", segment);
+                }
+            }
+            TypeKind::Primitive(_) => {}
+        }
     }
 
     fn validate_type_internal_duplicates(&mut self, typedef: &TypeDef) {

@@ -1,0 +1,1632 @@
+//! Reference-only signing keys. Secrets never enter configuration or command output.
+
+use crate::error::CliError;
+use clap::ValueEnum;
+use ed25519_dalek::SigningKey;
+use rand::{TryRng, rngs::SysRng};
+use serde::{
+    Deserialize, Serialize,
+    de::{self, MapAccess, Visitor},
+};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    fs::{self, File, OpenOptions},
+    io::{Read, Write},
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
+use thru_base::{key_file, tn_tools::Pubkey};
+use zeroize::Zeroizing;
+
+#[cfg(target_os = "macos")]
+const KEYCHAIN_SERVICE: &str = "org.thru.cli.signing-keys";
+
+fn invalid(message: &str) -> CliError {
+    CliError::Validation(message.to_owned())
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
+pub enum KeyStorage {
+    #[default]
+    File,
+    Keychain,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", deny_unknown_fields)]
+pub enum KeySource {
+    #[serde(rename = "file")]
+    File {
+        path: PathBuf,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        managed: bool,
+    },
+    #[serde(rename = "macos-keychain")]
+    MacosKeychain { id: String },
+}
+
+impl KeySource {
+    fn validate(&self) -> Result<(), CliError> {
+        match self {
+            Self::File { path, .. } if path.as_os_str().is_empty() || path.to_str().is_none() => {
+                Err(invalid("Key file path must be nonempty UTF-8"))
+            }
+            Self::MacosKeychain { id }
+                if id.is_empty() || id.len() > 256 || id.chars().any(char::is_control) =>
+            {
+                Err(invalid(
+                    "Keychain ID must be nonempty, at most 256 bytes, and contain no control characters",
+                ))
+            }
+            _ => Ok(()),
+        }
+    }
+
+    pub fn reference(&self) -> String {
+        match self {
+            Self::File { path, .. } => format!("file:{}", path.display()),
+            Self::MacosKeychain { id } => format!("keychain:{id}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct KeyEntry {
+    pub public_key: String,
+    pub source: KeySource,
+}
+
+impl KeyEntry {
+    pub fn reference(&self) -> String {
+        self.source.reference()
+    }
+
+    fn validate(&self) -> Result<(), CliError> {
+        parse_stored_public_key(&self.public_key)?;
+        self.source.validate()
+    }
+}
+
+pub struct LoadedKey {
+    pub private_key: Zeroizing<[u8; 32]>,
+    pub public_key: [u8; 32],
+    pub address_string: Pubkey,
+}
+
+impl fmt::Debug for LoadedKey {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("LoadedKey")
+            .field("private_key", &"[REDACTED]")
+            .field("public_key", &self.address_string)
+            .finish()
+    }
+}
+
+impl LoadedKey {
+    pub(crate) fn from_seed(private_key: Zeroizing<[u8; 32]>) -> Self {
+        let public_key = SigningKey::from_bytes(&private_key)
+            .verifying_key()
+            .to_bytes();
+        Self {
+            private_key,
+            public_key,
+            address_string: Pubkey::from_bytes(&public_key),
+        }
+    }
+}
+
+/// A command's cache ignores registration ownership metadata: aliases and
+/// direct selectors for one backing secret must share the loaded identity.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+enum SourceIdentity {
+    File(PathBuf),
+    Keychain(String),
+}
+
+#[derive(Debug, Default)]
+struct CommandKeys(Mutex<BTreeMap<SourceIdentity, Arc<LoadedKey>>>);
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(transparent)]
+pub struct KeyManager {
+    keys: BTreeMap<String, KeyEntry>,
+    #[serde(skip)]
+    base_dir: PathBuf,
+    #[serde(skip)]
+    command_keys: Option<Arc<CommandKeys>>,
+    /// Lowercased names of legacy inline entries left in the config file. Only
+    /// the names are kept; the seeds stay in the file until `thru keys migrate`.
+    #[serde(skip)]
+    unmigrated: BTreeSet<String>,
+}
+
+pub(crate) const UNQUOTED_SEED_ERROR: &str = "Unquoted numeric signing key; quote the ORIGINAL seed digits in YAML before running 'thru keys migrate'. Do not use a rounded or converted number";
+
+// An explicit visitor prevents serde's invalid-type diagnostic from echoing an
+// old inline seed. Migration is the only consumer allowed to retain that seed.
+pub(crate) enum StoredEntry {
+    Reference(KeyEntry),
+    Inline(Zeroizing<String>),
+    UnquotedNumber,
+}
+
+impl<'de> Deserialize<'de> for StoredEntry {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct EntryVisitor;
+        impl<'de> Visitor<'de> for EntryVisitor {
+            type Value = StoredEntry;
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("a signing key reference")
+            }
+            fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
+                Ok(StoredEntry::Inline(Zeroizing::new(value.to_owned())))
+            }
+            fn visit_string<E: de::Error>(self, value: String) -> Result<Self::Value, E> {
+                Ok(StoredEntry::Inline(Zeroizing::new(value)))
+            }
+            // Numeric deserializers may already have rounded the original YAML
+            // scalar. Retain neither the value nor a reconstructed seed.
+            fn visit_i64<E: de::Error>(self, _: i64) -> Result<Self::Value, E> {
+                Ok(StoredEntry::UnquotedNumber)
+            }
+            fn visit_u64<E: de::Error>(self, _: u64) -> Result<Self::Value, E> {
+                Ok(StoredEntry::UnquotedNumber)
+            }
+            fn visit_i128<E: de::Error>(self, _: i128) -> Result<Self::Value, E> {
+                Ok(StoredEntry::UnquotedNumber)
+            }
+            fn visit_u128<E: de::Error>(self, _: u128) -> Result<Self::Value, E> {
+                Ok(StoredEntry::UnquotedNumber)
+            }
+            fn visit_f64<E: de::Error>(self, _: f64) -> Result<Self::Value, E> {
+                Ok(StoredEntry::UnquotedNumber)
+            }
+            fn visit_map<M: MapAccess<'de>>(self, map: M) -> Result<Self::Value, M::Error> {
+                KeyEntry::deserialize(de::value::MapAccessDeserializer::new(map))
+                    .map(StoredEntry::Reference)
+                    .map_err(|_| de::Error::custom("Invalid signing key reference metadata"))
+            }
+        }
+        deserializer.deserialize_any(EntryVisitor)
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct MigrationKeys(pub BTreeMap<String, StoredEntry>);
+
+impl<'de> Deserialize<'de> for MigrationKeys {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct KeysVisitor;
+        impl<'de> Visitor<'de> for KeysVisitor {
+            type Value = MigrationKeys;
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("a map of signing key references")
+            }
+            fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<Self::Value, M::Error> {
+                let mut keys = BTreeMap::new();
+                while let Some((name, entry)) = map.next_entry::<String, StoredEntry>()? {
+                    if keys.insert(name.to_lowercase(), entry).is_some() {
+                        return Err(de::Error::custom(
+                            "Duplicate case-insensitive signing key alias",
+                        ));
+                    }
+                }
+                Ok(MigrationKeys(keys))
+            }
+        }
+        deserializer.deserialize_map(KeysVisitor)
+    }
+}
+
+impl<'de> Deserialize<'de> for KeyManager {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let entries = MigrationKeys::deserialize(deserializer)?;
+        let mut manager = Self::new();
+        for (name, entry) in entries.0 {
+            match entry {
+                StoredEntry::Reference(entry) => manager
+                    .insert_migrated_entry(&name, entry, false)
+                    .map_err(|_| de::Error::custom("Invalid signing key reference metadata"))?,
+                StoredEntry::Inline(_) => {
+                    return Err(de::Error::custom(
+                        "Inline signing keys are no longer supported; run 'thru keys migrate'",
+                    ));
+                }
+                StoredEntry::UnquotedNumber => {
+                    return Err(de::Error::custom(UNQUOTED_SEED_ERROR));
+                }
+            }
+        }
+        Ok(manager)
+    }
+}
+
+impl KeyManager {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Start a fresh invocation. Subsequent clones share its loaded identities;
+    /// ordinary library managers remain uncached unless explicitly opted in.
+    pub fn begin_command(&mut self) {
+        self.command_keys = Some(Arc::new(CommandKeys::default()));
+    }
+
+    pub fn set_base_dir(&mut self, directory: PathBuf) {
+        self.base_dir = directory;
+    }
+
+    /// Record the aliases of legacy inline entries (names only, never seeds).
+    pub(crate) fn set_unmigrated(&mut self, names: impl IntoIterator<Item = String>) {
+        self.unmigrated = names.into_iter().map(|name| name.to_lowercase()).collect();
+    }
+
+    /// Aliases still stored inline in the config file, for notices and
+    /// `keys list`. Names that look like key material are shown as "(hidden)".
+    pub fn unmigrated_aliases(&self) -> Vec<String> {
+        self.unmigrated
+            .iter()
+            .map(|name| {
+                if looks_like_key_material(name) {
+                    "(hidden)".to_string()
+                } else {
+                    name.clone()
+                }
+            })
+            .collect()
+    }
+
+    /// Lookup failure for `name`, pointing at migration when the alias is
+    /// still stored inline rather than reporting it as unknown.
+    fn not_found(&self, name: &str) -> CliError {
+        if !self.unmigrated.contains(&name.to_lowercase()) {
+            return Self::missing_alias(name);
+        }
+        let alias = if looks_like_key_material(name) {
+            String::new()
+        } else {
+            format!(" {name:?}")
+        };
+        invalid(&format!(
+            "Signing key alias{alias} is still stored inline in the CLI config; run 'thru keys migrate' (or 'thru keys migrate --store keychain' on macOS) to use it"
+        ))
+    }
+
+    pub fn list_keys(&self) -> Vec<String> {
+        self.keys.keys().cloned().collect()
+    }
+
+    pub fn has_key(&self, name: &str) -> bool {
+        self.keys.contains_key(&name.to_lowercase())
+    }
+
+    pub fn is_default_key_name(name: &str) -> bool {
+        name.eq_ignore_ascii_case("default")
+    }
+
+    pub fn validate_name(name: &str) -> Result<(), CliError> {
+        if name.is_empty()
+            || name.trim() != name
+            || name.chars().any(char::is_control)
+            || explicit_source(name)?.is_some()
+            || name.contains(':')
+            || (name.strip_prefix("0x").unwrap_or(name).len() == 64
+                && name
+                    .strip_prefix("0x")
+                    .unwrap_or(name)
+                    .bytes()
+                    .all(|byte| byte.is_ascii_hexdigit()))
+            || Pubkey::new(name.to_owned()).is_ok()
+        {
+            return Err(invalid(
+                "Key aliases cannot be empty, public keys, or reserved file/keychain selectors",
+            ));
+        }
+        Ok(())
+    }
+
+    fn missing_alias(name: &str) -> CliError {
+        if Self::is_default_key_name(name) {
+            return invalid(
+                "Default signing key alias 'default' not found; run 'thru keys generate default' or select an existing signer",
+            );
+        }
+        // Never echo input that looks like key material: a run of 16 or more
+        // hex digits anywhere (covers an optional 0x, selector prefixes, and
+        // truncated seeds of any length). Any other syntactically valid alias
+        // is named regardless of length.
+        if looks_like_key_material(name) {
+            return invalid(
+                "Signing key alias not found; raw private keys are not signer references. Use 'thru keys list' or import with 'thru keys add <name> --stdin'",
+            );
+        }
+        invalid(&format!(
+            "Signing key alias {name:?} not found; use 'thru keys list' or 'thru keys generate <name>'"
+        ))
+    }
+
+    pub fn get_entry(&self, name: &str) -> Result<&KeyEntry, CliError> {
+        self.keys
+            .get(&name.to_lowercase())
+            .ok_or_else(|| self.not_found(name))
+    }
+
+    pub fn insert_entry(
+        &mut self,
+        name: &str,
+        entry: KeyEntry,
+        overwrite: bool,
+    ) -> Result<(), CliError> {
+        Self::validate_name(name)?;
+        self.insert_migrated_entry(name, entry, overwrite)
+    }
+
+    /// Preserve previously legal aliases during explicit legacy migration.
+    pub(crate) fn insert_migrated_entry(
+        &mut self,
+        name: &str,
+        mut entry: KeyEntry,
+        overwrite: bool,
+    ) -> Result<(), CliError> {
+        entry.validate()?;
+        entry.public_key =
+            Pubkey::from_bytes(&parse_stored_public_key(&entry.public_key)?).to_string();
+        let name = name.to_lowercase();
+        if self.keys.contains_key(&name) && !overwrite {
+            return Err(invalid(
+                "Signing key alias already exists; use --overwrite to replace it",
+            ));
+        }
+        self.keys.insert(name, entry);
+        Ok(())
+    }
+
+    pub fn remove_key(&mut self, name: &str) -> Result<KeyEntry, CliError> {
+        let removed = self.keys.remove(&name.to_lowercase());
+        removed.ok_or_else(|| self.not_found(name))
+    }
+
+    pub(crate) fn validate_all_keys(&self) -> Result<(), CliError> {
+        for entry in self.keys.values() {
+            entry.validate()?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn resolved_source(&self, entry: &KeyEntry) -> KeySource {
+        match &entry.source {
+            KeySource::File { path, managed } => KeySource::File {
+                path: self.base_dir.join(path),
+                managed: *managed,
+            },
+            source => source.clone(),
+        }
+    }
+
+    fn load_resolved_source(&self, source: &KeySource) -> Result<Arc<LoadedKey>, CliError> {
+        let Some(command) = &self.command_keys else {
+            return load_source(source).map(Arc::new);
+        };
+        let identity = match source {
+            KeySource::File { path, .. } => {
+                let absolute = if path.is_absolute() {
+                    path.clone()
+                } else {
+                    std::env::current_dir()?.join(path)
+                };
+                // Components remove redundant "." without resolving symlinks or
+                // re-opening a file whose identity is already pinned.
+                SourceIdentity::File(absolute.components().collect())
+            }
+            KeySource::MacosKeychain { id } => SourceIdentity::Keychain(id.clone()),
+        };
+        let mut loaded = command
+            .0
+            .lock()
+            .map_err(|_| invalid("Signing key command cache is unavailable"))?;
+        if let Some(key) = loaded.get(&identity) {
+            return Ok(Arc::clone(key));
+        }
+        // Keep the lock through loading so concurrent clones never read the
+        // same Keychain item twice or observe different file identities.
+        let key = Arc::new(load_source(source)?);
+        loaded.insert(identity, Arc::clone(&key));
+        Ok(key)
+    }
+
+    pub fn load_fee_payer(&self, reference: Option<&str>) -> Result<Arc<LoadedKey>, CliError> {
+        self.load_key(reference.unwrap_or("default"))
+    }
+
+    pub fn load_key(&self, reference: &str) -> Result<Arc<LoadedKey>, CliError> {
+        let alias = reference.strip_prefix("alias:");
+        if alias.is_none() && parse_public_key(reference).is_ok() {
+            return Err(invalid(
+                "A public key is not a signer reference; select a registered alias, file, or Keychain item. Use 'alias:<name>' for a legacy address-shaped alias",
+            ));
+        }
+        let (source, expected) = match if alias.is_some() {
+            None
+        } else {
+            explicit_source(reference)?
+        } {
+            Some(source) => (source, None),
+            None => {
+                let entry = self.get_entry(alias.unwrap_or(reference))?;
+                (
+                    self.resolved_source(entry),
+                    Some(parse_stored_public_key(&entry.public_key)?),
+                )
+            }
+        };
+        let key = self.load_resolved_source(&source)?;
+        if expected.is_some_and(|expected| key.public_key != expected) {
+            return Err(invalid(
+                "Signing key does not match its registered public key; registration was not changed",
+            ));
+        }
+        Ok(key)
+    }
+
+    pub fn public_key(&self, reference: &str) -> Result<[u8; 32], CliError> {
+        if let Some(alias) = reference.strip_prefix("alias:") {
+            return parse_stored_public_key(&self.get_entry(alias)?.public_key);
+        }
+        if parse_public_key(reference).is_ok() {
+            return Err(invalid(
+                "A public key is not a signing key alias; use 'alias:<name>' for a legacy address-shaped alias",
+            ));
+        }
+        if let Some(source) = explicit_source(reference)? {
+            return self.load_resolved_source(&source).map(|key| key.public_key);
+        }
+        parse_stored_public_key(&self.get_entry(reference)?.public_key)
+    }
+
+    pub fn resolve_public_key(&self, input: &str) -> Result<[u8; 32], CliError> {
+        if let Some(alias) = input.strip_prefix("alias:") {
+            return parse_stored_public_key(&self.get_entry(alias)?.public_key);
+        }
+        if let Some(source) = explicit_source(input)? {
+            return self.load_resolved_source(&source).map(|key| key.public_key);
+        }
+        // Address-shaped legacy aliases need an explicit alias selector; never
+        // silently reinterpret an address as a different registered identity.
+        if let Ok(public_key) = parse_public_key(input) {
+            return Ok(public_key);
+        }
+        if let Some(entry) = self.keys.get(&input.to_lowercase()) {
+            return parse_stored_public_key(&entry.public_key);
+        }
+        if (input.starts_with("ta") && input.len() == 46)
+            || input.strip_prefix("0x").unwrap_or(input).len() == 64
+        {
+            return Err(invalid(
+                "Invalid destination public address; use a valid Thru address, 64 hexadecimal public-key characters, or 'alias:<name>' for a registered alias",
+            ));
+        }
+        Err(self.not_found(input))
+    }
+
+    #[cfg(test)]
+    pub fn test_fixture(seeds: &[(&str, [u8; 32])]) -> (tempfile::TempDir, Self) {
+        let directory = tempfile::tempdir().unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(directory.path(), fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        let mut manager = Self::new();
+        manager.set_base_dir(directory.path().to_owned());
+        for (name, seed) in seeds {
+            let key = LoadedKey::from_seed(Zeroizing::new(*seed));
+            let mut staged = stage_secret(KeyStorage::File, directory.path(), &key).unwrap();
+            manager
+                .insert_entry(name, staged.entry.clone(), false)
+                .unwrap();
+            staged.commit();
+        }
+        (directory, manager)
+    }
+}
+
+fn explicit_source(reference: &str) -> Result<Option<KeySource>, CliError> {
+    let source = if let Some(id) = reference.strip_prefix("keychain:") {
+        Some(KeySource::MacosKeychain { id: id.to_owned() })
+    } else if let Some(path) = reference.strip_prefix("file:") {
+        Some(KeySource::File {
+            path: path.into(),
+            managed: false,
+        })
+    } else if Path::new(reference).is_absolute()
+        || reference.starts_with("./")
+        || reference.starts_with("../")
+    {
+        Some(KeySource::File {
+            path: reference.into(),
+            managed: false,
+        })
+    } else {
+        None
+    };
+    if let Some(source) = &source {
+        source.validate()?;
+    }
+    Ok(source)
+}
+
+/// True when the input contains a run of 16 or more hex digits, i.e. may be (part of) a seed.
+fn looks_like_key_material(input: &str) -> bool {
+    input
+        .as_bytes()
+        .split(|byte| !byte.is_ascii_hexdigit())
+        .any(|run| run.len() >= 16)
+}
+
+/// Stored `public_key` metadata must be the canonical `ta` address, the only
+/// form every config reader accepts. The error never echoes the value.
+fn parse_stored_public_key(input: &str) -> Result<[u8; 32], CliError> {
+    Pubkey::new(input.to_owned())
+        .and_then(|key| key.to_bytes())
+        .map_err(|_| invalid("Invalid public key metadata; expected a canonical 'ta' address"))
+}
+
+fn parse_public_key(input: &str) -> Result<[u8; 32], CliError> {
+    let input = input.strip_prefix("0x").unwrap_or(input);
+    if input.len() == 64 {
+        let mut bytes = [0; 32];
+        if hex::decode_to_slice(input, &mut bytes).is_ok() {
+            return Ok(bytes);
+        }
+    }
+    Pubkey::new(input.to_owned())
+        .and_then(|key| key.to_bytes())
+        .map_err(|_| invalid("Invalid public key metadata or public address"))
+}
+
+pub(crate) fn decode_seed(raw: &[u8]) -> Result<Zeroizing<[u8; 32]>, CliError> {
+    key_file::decode_seed(raw).map_err(Into::into)
+}
+
+pub(crate) fn generate_seed() -> Result<Zeroizing<[u8; 32]>, CliError> {
+    let mut seed = Zeroizing::new([0; 32]);
+    SysRng
+        .try_fill_bytes(seed.as_mut())
+        .map_err(|_| invalid("Could not obtain secure randomness"))?;
+    Ok(seed)
+}
+
+fn unique_id() -> Result<String, CliError> {
+    let mut bytes = [0; 16];
+    SysRng
+        .try_fill_bytes(&mut bytes)
+        .map_err(|_| invalid("Could not obtain secure randomness"))?;
+    Ok(hex::encode(bytes))
+}
+
+pub(crate) fn private_directory(directory: &Path) -> Result<(), CliError> {
+    key_file::ensure_private_dir(directory)?;
+    Ok(())
+}
+
+pub(crate) fn open_key_file(path: &Path) -> Result<File, CliError> {
+    key_file::open_key_file(path).map_err(Into::into)
+}
+
+pub(crate) fn read_seed(reader: impl Read) -> Result<Zeroizing<[u8; 32]>, CliError> {
+    key_file::read_seed(reader).map_err(Into::into)
+}
+
+fn file_error(path: &Path, error: std::io::Error) -> CliError {
+    std::io::Error::new(
+        error.kind(),
+        format!("Signing key file {}: {error}", path.display()),
+    )
+    .into()
+}
+
+pub(crate) fn load_source(source: &KeySource) -> Result<LoadedKey, CliError> {
+    source.validate()?;
+    let seed = match source {
+        KeySource::File { path, .. } => {
+            key_file::read_seed(open_key_file(path)?).map_err(|error| file_error(path, error))?
+        }
+        KeySource::MacosKeychain { id } => keychain_read(id)?,
+    };
+    Ok(LoadedKey::from_seed(seed))
+}
+
+/// A newly-created, unique secret. Until commit, failure or unwinding removes
+/// only this new secret; an overwritten alias's old secret is never destroyed.
+pub(crate) struct StagedSecret {
+    pub entry: KeyEntry,
+    committed: bool,
+}
+
+impl StagedSecret {
+    pub fn commit(&mut self) {
+        self.committed = true;
+    }
+}
+
+impl Drop for StagedSecret {
+    fn drop(&mut self) {
+        if !self.committed {
+            if let Err(error) = delete_source(&self.entry.source) {
+                eprintln!(
+                    "Could not clean up unregistered signing key {}: {error}",
+                    self.entry.reference()
+                );
+            }
+        }
+    }
+}
+
+pub(crate) fn stage_secret(
+    store: KeyStorage,
+    directory: &Path,
+    key: &LoadedKey,
+) -> Result<StagedSecret, CliError> {
+    let source = match store {
+        KeyStorage::File => {
+            private_directory(directory)?;
+            let path = directory.join(format!("{}.key", unique_id()?));
+            let mut options = OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+            }
+            let mut file = options
+                .open(&path)
+                .map_err(|error| file_error(&path, error))?;
+            // Version-1 JSON key file (see thru_base::key_file).
+            let encoded = key_file::encode_key_file(&key.private_key);
+            let result = file
+                .write_all(encoded.as_bytes())
+                .and_then(|_| file.sync_all());
+            drop(file);
+            if let Err(error) = result {
+                let _ = fs::remove_file(&path);
+                return Err(file_error(&path, error));
+            }
+            #[cfg(unix)]
+            if let Err(error) = File::open(directory).and_then(|directory| directory.sync_all()) {
+                let _ = fs::remove_file(&path);
+                return Err(file_error(directory, error));
+            }
+            KeySource::File {
+                path,
+                managed: true,
+            }
+        }
+        KeyStorage::Keychain => {
+            let id = unique_id()?;
+            keychain_create(&id, &key.private_key, &key.address_string.to_string())?;
+            KeySource::MacosKeychain { id }
+        }
+    };
+    let staged = StagedSecret {
+        entry: KeyEntry {
+            public_key: key.address_string.to_string(),
+            source,
+        },
+        committed: false,
+    };
+    if load_source(&staged.entry.source)?.public_key != key.public_key {
+        return Err(invalid("Stored signing key failed read-back verification"));
+    }
+    Ok(staged)
+}
+
+/// Rewrite a legacy hex key file as version-1 JSON in place: a temp file in the
+/// same directory, fsync, rename over the original, directory fsync, read-back.
+/// Returns false when the file is already JSON. The caller holds the config lock
+/// and passes only CLI-managed files.
+pub(crate) fn convert_key_file_to_json(path: &Path, public_key: &str) -> Result<bool, CliError> {
+    let (seed, format) =
+        key_file::read_key_file(open_key_file(path)?).map_err(|error| file_error(path, error))?;
+    if format == key_file::KeyFileFormat::Json {
+        return Ok(false);
+    }
+    let key = LoadedKey::from_seed(seed);
+    if key.address_string.to_string() != public_key {
+        return Err(invalid(
+            "Signing key file does not match its registered public key; left unchanged",
+        ));
+    }
+    let directory = path.parent().unwrap_or(Path::new("."));
+    let temp = directory.join(format!(".{}.tmp", unique_id()?));
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+    }
+    let written = (|| -> std::io::Result<()> {
+        let mut file = options.open(&temp)?;
+        file.write_all(key_file::encode_key_file(&key.private_key).as_bytes())?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temp, path)?;
+        #[cfg(unix)]
+        File::open(directory)?.sync_all()?;
+        Ok(())
+    })();
+    if let Err(error) = written {
+        let _ = fs::remove_file(&temp);
+        return Err(file_error(path, error));
+    }
+    let (check, format) =
+        key_file::read_key_file(open_key_file(path)?).map_err(|error| file_error(path, error))?;
+    if format != key_file::KeyFileFormat::Json || *check != *key.private_key {
+        return Err(invalid(
+            "Converted signing key file failed read-back verification",
+        ));
+    }
+    Ok(true)
+}
+
+pub(crate) fn delete_source(source: &KeySource) -> Result<(), CliError> {
+    match source {
+        KeySource::File { path, .. } => {
+            let _file = open_key_file(path)?;
+            fs::remove_file(path).map_err(|error| file_error(path, error))?;
+            Ok(())
+        }
+        KeySource::MacosKeychain { id } => keychain_delete(id),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn keychain_call<T: Send>(
+    operation: impl FnOnce() -> Result<T, CliError> + Send,
+) -> Result<T, CliError> {
+    // Keychain APIs may present UI or wait on securityd. The synchronous signer
+    // API bridges via an OS thread; async management uses spawn_blocking too.
+    let run = || {
+        std::thread::scope(|scope| scope.spawn(operation).join())
+            .map_err(|_| invalid("macOS Keychain operation failed"))?
+    };
+    if tokio::runtime::Handle::try_current()
+        .is_ok_and(|handle| handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread)
+    {
+        tokio::task::block_in_place(run)
+    } else {
+        run()
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn keychain_error(operation: &str, error: impl fmt::Display) -> CliError {
+    invalid(&format!(
+        "macOS Keychain {operation} failed (no file fallback): {error}"
+    ))
+}
+
+#[cfg(target_os = "macos")]
+fn keychain_read(id: &str) -> Result<Zeroizing<[u8; 32]>, CliError> {
+    keychain_call(|| {
+        let entry = keyring::Entry::new(KEYCHAIN_SERVICE, id)
+            .map_err(|error| keychain_error("open", error))?;
+        let bytes = Zeroizing::new(
+            entry
+                .get_secret()
+                .map_err(|error| keychain_error("read", error))?,
+        );
+        if bytes.len() != 32 {
+            return Err(invalid(
+                "macOS Keychain signing secret must be exactly 32 raw bytes",
+            ));
+        }
+        let mut seed = Zeroizing::new([0; 32]);
+        seed.copy_from_slice(&bytes);
+        Ok(seed)
+    })
+}
+
+/// The item's comment holds the key's public address (public metadata only), so
+/// the otherwise opaque random-ID item can be identified in Keychain Access.
+#[cfg(target_os = "macos")]
+fn keychain_create(id: &str, seed: &[u8; 32], address: &str) -> Result<(), CliError> {
+    keychain_call(|| {
+        use core_foundation::data::CFData;
+        use security_framework::item::{ItemAddOptions, ItemAddValue, ItemClass, Location};
+        use security_framework::os::macos::keychain::{SecKeychain, SecPreferencesDomain};
+        let keychain = SecKeychain::default_for_domain(SecPreferencesDomain::User)
+            .map_err(|error| keychain_error("open", error))?;
+        // CFData borrows a zeroizing copy of the seed, wiped when CF releases it.
+        let data = CFData::from_arc(Arc::new(Zeroizing::new(*seed)));
+        let mut options = ItemAddOptions::new(ItemAddValue::Data {
+            class: ItemClass::generic_password(),
+            data,
+        });
+        options
+            .set_location(Location::FileKeychain(keychain))
+            .set_service(KEYCHAIN_SERVICE)
+            .set_account_name(id)
+            .set_label(KEYCHAIN_SERVICE)
+            .set_comment(address);
+        // Unlike set_secret, SecItemAdd is atomic create-only: an existing
+        // credential is never overwritten, even if a random ID collided.
+        options
+            .add()
+            .map_err(|error| keychain_error("create", error))
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn keychain_delete(id: &str) -> Result<(), CliError> {
+    keychain_call(|| {
+        security_framework::passwords::delete_generic_password(KEYCHAIN_SERVICE, id)
+            .map_err(|error| keychain_error("delete", error))
+    })
+}
+
+/// Outcome of giving an existing Keychain item its public-address comment.
+#[cfg(target_os = "macos")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CommentBackfill {
+    /// The item had no comment; the public address was added.
+    Added,
+    /// The item already has a comment, which is never replaced.
+    AlreadySet,
+    /// No Keychain item has this ID.
+    Missing,
+}
+
+#[cfg(target_os = "macos")]
+impl CommentBackfill {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Added => "added",
+            Self::AlreadySet => "already_set",
+            Self::Missing => "missing",
+        }
+    }
+}
+
+/// Give an item created before address comments existed its public address as
+/// the comment. Reads attributes only (never the secret) and never replaces an
+/// existing comment.
+#[cfg(target_os = "macos")]
+pub(crate) fn keychain_backfill_comment(
+    id: &str,
+    address: &str,
+) -> Result<CommentBackfill, CliError> {
+    keychain_call(|| {
+        use security_framework::item::{
+            ItemClass, ItemSearchOptions, ItemUpdateOptions, update_item,
+        };
+        const ERR_SEC_ITEM_NOT_FOUND: i32 = -25300;
+        let query = || {
+            let mut search = ItemSearchOptions::new();
+            search
+                .class(ItemClass::generic_password())
+                .service(KEYCHAIN_SERVICE)
+                .account(id);
+            search
+        };
+        let found = match query().load_attributes(true).search() {
+            Ok(found) => found,
+            Err(error) if error.code() == ERR_SEC_ITEM_NOT_FOUND => {
+                return Ok(CommentBackfill::Missing);
+            }
+            Err(error) => return Err(keychain_error("lookup", error)),
+        };
+        let Some(attributes) = found.first().and_then(|item| item.simplify_dict()) else {
+            return Ok(CommentBackfill::Missing);
+        };
+        if attributes
+            .get("icmt")
+            .is_some_and(|comment| !comment.is_empty())
+        {
+            return Ok(CommentBackfill::AlreadySet);
+        }
+        let mut update = ItemUpdateOptions::new();
+        update.set_comment(address);
+        update_item(&query(), &update).map_err(|error| keychain_error("update", error))?;
+        Ok(CommentBackfill::Added)
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn keychain_read(_: &str) -> Result<Zeroizing<[u8; 32]>, CliError> {
+    Err(invalid(
+        "Signing keychain storage is available only on macOS; no file fallback is used",
+    ))
+}
+#[cfg(not(target_os = "macos"))]
+fn keychain_create(_: &str, _: &[u8; 32], _: &str) -> Result<(), CliError> {
+    Err(invalid(
+        "Signing keychain storage is available only on macOS; no file fallback is used",
+    ))
+}
+#[cfg(not(target_os = "macos"))]
+fn keychain_delete(_: &str) -> Result<(), CliError> {
+    Err(invalid(
+        "Signing keychain storage is available only on macOS; no file fallback is used",
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn references_aliases_and_public_metadata() {
+        let (_directory, manager) = KeyManager::test_fixture(&[("Alice", [7; 32])]);
+        let entry = manager.get_entry("ALICE").unwrap();
+        let key = manager.load_key("alice").unwrap();
+        assert_eq!(manager.list_keys(), vec!["alice"]);
+        assert_eq!(
+            manager.load_key(&entry.reference()).unwrap().public_key,
+            key.public_key
+        );
+        assert_eq!(
+            manager.resolve_public_key(&entry.public_key).unwrap(),
+            key.public_key
+        );
+        assert_eq!(
+            manager
+                .resolve_public_key(&hex::encode(key.public_key))
+                .unwrap(),
+            key.public_key
+        );
+        assert_eq!(
+            manager
+                .resolve_public_key(&format!("0x{}", hex::encode(key.public_key)))
+                .unwrap(),
+            key.public_key
+        );
+        assert!(manager.load_key(&hex::encode([7; 32])).is_err());
+        assert!(manager.load_key("file:/missing/key").is_err());
+        assert!(manager.load_key("keychain:").is_err());
+        assert!(manager.load_key("file:").is_err());
+        for alias in ["file:x", "keychain:x", "./x", "../x", "/x", "", " default"] {
+            assert!(KeyManager::validate_name(alias).is_err());
+        }
+    }
+
+    #[test]
+    fn relative_registered_paths_use_config_directory_not_cwd() {
+        let (directory, mut manager) = KeyManager::test_fixture(&[("default", [8; 32])]);
+        let mut entry = manager.get_entry("default").unwrap().clone();
+        if let KeySource::File { path, .. } = &mut entry.source {
+            *path = path.file_name().unwrap().into();
+        }
+        manager
+            .insert_entry("default", entry.clone(), true)
+            .unwrap();
+        assert!(manager.load_key("default").is_ok());
+        assert!(manager.load_key(&entry.reference()).is_err());
+        manager.set_base_dir(directory.path().join("absent"));
+        assert!(manager.load_key("default").is_err());
+    }
+
+    #[test]
+    fn public_lookups_never_open_secret_and_signing_rejects_mismatch() {
+        let (_directory, mut manager) =
+            KeyManager::test_fixture(&[("default", [1; 32]), ("other", [2; 32])]);
+        let mut entry = manager.get_entry("default").unwrap().clone();
+        entry.public_key = manager.get_entry("other").unwrap().public_key.clone();
+        manager
+            .insert_entry("default", entry.clone(), true)
+            .unwrap();
+        assert!(manager.load_key("default").is_err());
+        delete_source(&entry.source).unwrap();
+        assert_eq!(
+            manager.public_key("default").unwrap(),
+            manager.public_key("other").unwrap()
+        );
+        assert!(manager.load_key("default").is_err());
+    }
+
+    #[test]
+    fn serialization_and_errors_never_disclose_seed() {
+        let seed = hex::encode([31; 32]);
+        let (_directory, manager) = KeyManager::test_fixture(&[("default", [31; 32])]);
+        assert!(!serde_json::to_string(&manager).unwrap().contains(&seed));
+        assert!(!serde_yaml::to_string(&manager).unwrap().contains(&seed));
+        assert!(!format!("{:?}", manager.load_key("default").unwrap()).contains(&seed));
+        let error = serde_yaml::from_str::<KeyManager>(&format!("default: '{seed}'")).unwrap_err();
+        assert!(!error.to_string().contains(&seed));
+        assert!(serde_yaml::from_str::<KeyManager>("Alice: {}\nalice: {}\n").is_err());
+        assert!(KeyManager::new().list_keys().is_empty());
+    }
+
+    #[test]
+    fn numeric_legacy_seeds_require_original_quoted_digits() {
+        let seed = "19".repeat(32);
+        for number in [seed.as_str(), "1234", "-1234", "1.25"] {
+            let yaml = format!("default: {number}\n");
+            let migration: MigrationKeys = serde_yaml::from_str(&yaml).unwrap();
+            assert!(matches!(
+                migration.0.get("default"),
+                Some(StoredEntry::UnquotedNumber)
+            ));
+            let error = serde_yaml::from_str::<KeyManager>(&yaml)
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains(UNQUOTED_SEED_ERROR));
+            assert!(!error.contains(number));
+        }
+        let migration: MigrationKeys =
+            serde_yaml::from_str(&format!("default: '{seed}'\n")).unwrap();
+        let Some(StoredEntry::Inline(original)) = migration.0.get("default") else {
+            panic!("quoted seed must retain its original digits");
+        };
+        assert_eq!(original.as_str(), seed);
+        assert_eq!(*decode_seed(original.as_bytes()).unwrap(), [0x19; 32]);
+    }
+
+    #[test]
+    fn legacy_aliases_survive_migration_and_reference_deserialization() {
+        let (_directory, manager) = KeyManager::test_fixture(&[("default", [11; 32])]);
+        let entry = manager.get_entry("default").unwrap().clone();
+        let mut migrated = KeyManager::new();
+        for alias in [
+            "acc:1",
+            "file:/missing/legacy",
+            "keychain:legacy",
+            "alias:old",
+            "",
+            " spaced ",
+            "tab\tname",
+        ] {
+            let raw = format!("{alias:?}: '{}'\n", hex::encode([11; 32]));
+            let legacy: MigrationKeys = serde_yaml::from_str(&raw).unwrap();
+            assert!(matches!(legacy.0.get(alias), Some(StoredEntry::Inline(_))));
+            let error = serde_yaml::from_str::<KeyManager>(&raw).unwrap_err();
+            assert!(error.to_string().contains("migrate"));
+            assert!(!error.to_string().contains(&hex::encode([11; 32])));
+            migrated
+                .insert_migrated_entry(alias, entry.clone(), false)
+                .unwrap();
+            assert!(KeyManager::validate_name(alias).is_err());
+        }
+        let encoded = serde_yaml::to_string(&migrated).unwrap();
+        let restored: KeyManager = serde_yaml::from_str(&encoded).unwrap();
+        restored.validate_all_keys().unwrap();
+        assert_eq!(
+            restored.load_key("ACC:1").unwrap().public_key,
+            manager.public_key("default").unwrap()
+        );
+        assert_eq!(
+            restored
+                .load_key("alias:FILE:/missing/legacy")
+                .unwrap()
+                .public_key,
+            manager.public_key("default").unwrap()
+        );
+        assert!(restored.load_key("file:/missing/legacy").is_err());
+        for alias in restored.list_keys() {
+            assert_eq!(
+                restored
+                    .load_key(&format!("alias:{alias}"))
+                    .unwrap()
+                    .public_key,
+                manager.public_key("default").unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_address_aliases_require_explicit_selection() {
+        let (_directory, mut manager) = KeyManager::test_fixture(&[("default", [12; 32])]);
+        let entry = manager.get_entry("default").unwrap().clone();
+        let address = Pubkey::from_bytes(&[13; 32]).to_string();
+        manager
+            .insert_migrated_entry(&address, entry, false)
+            .unwrap();
+        assert_eq!(manager.resolve_public_key(&address).unwrap(), [13; 32]);
+        assert!(manager.load_key(&address).is_err());
+        assert!(manager.public_key(&address).is_err());
+        let selector = format!("alias:{address}");
+        assert_eq!(
+            manager.resolve_public_key(&selector).unwrap(),
+            manager.public_key("default").unwrap()
+        );
+        assert!(manager.load_key(&selector).is_ok());
+    }
+
+    #[test]
+    fn missing_alias_redacts_key_material_but_names_long_aliases() {
+        let manager = KeyManager::new();
+        for secret in [
+            "ab".repeat(20),
+            "1".repeat(63),
+            format!("0x{}", "cd".repeat(10)),
+            format!("alias:{}", "ef".repeat(24)),
+        ] {
+            let message = manager.get_entry(&secret).unwrap_err().to_string();
+            assert!(!message.contains(&secret[secret.len() - 16..]));
+            assert!(message.contains("raw private keys"));
+        }
+        for alias in [
+            "x".repeat(50),
+            "prod-signer-with-a-long-name".repeat(2),
+            "bob".into(),
+        ] {
+            assert!(
+                manager
+                    .get_entry(&alias)
+                    .unwrap_err()
+                    .to_string()
+                    .contains(&alias)
+            );
+        }
+    }
+
+    #[test]
+    fn unmigrated_aliases_point_at_migration_and_hide_key_material() {
+        let (_directory, mut manager) = KeyManager::test_fixture(&[("bob", [5; 32])]);
+        let hexish = "ab".repeat(10);
+        manager.set_unmigrated(["Alice".to_string(), "default".into(), hexish.clone()]);
+        assert_eq!(
+            manager.unmigrated_aliases(),
+            ["(hidden)", "alice", "default"]
+        );
+        for error in [
+            manager.load_fee_payer(None).unwrap_err(),
+            manager.load_key("ALICE").unwrap_err(),
+            manager.load_key("alias:alice").unwrap_err(),
+            manager.public_key("alice").unwrap_err(),
+            manager.resolve_public_key("alice").unwrap_err(),
+            manager.remove_key("alice").unwrap_err(),
+        ] {
+            let message = error.to_string();
+            assert!(message.contains("stored inline"), "{message}");
+            assert!(message.contains("thru keys migrate"), "{message}");
+        }
+        let message = manager.get_entry(&hexish).unwrap_err().to_string();
+        assert!(message.contains("stored inline") && !message.contains(&hexish));
+        // Registered and unknown aliases behave as before.
+        assert!(manager.load_key("bob").is_ok());
+        let message = manager.get_entry("carol").unwrap_err().to_string();
+        assert!(message.contains("not found") && !message.contains("migrate"));
+    }
+
+    #[test]
+    fn stored_public_key_must_be_canonical_address() {
+        let (_directory, mut manager) = KeyManager::test_fixture(&[("default", [3; 32])]);
+        let mut entry = manager.get_entry("default").unwrap().clone();
+        let address = entry.public_key.clone();
+        entry.public_key = hex::encode(LoadedKey::from_seed(Zeroizing::new([3; 32])).public_key);
+        let error = manager
+            .insert_entry("hexed", entry.clone(), false)
+            .unwrap_err()
+            .to_string();
+        assert!(!error.contains(&entry.public_key));
+        entry.public_key = address;
+        manager.insert_entry("canon", entry, false).unwrap();
+    }
+
+    #[test]
+    fn missing_alias_and_destination_errors_are_actionable_and_redacted() {
+        let manager = KeyManager::new();
+        let default = manager.load_fee_payer(None).unwrap_err().to_string();
+        assert!(default.contains("default"));
+        assert!(default.contains("thru keys generate default"));
+        for alias in ["misspelled", "tanya", "ta-invalid", "0xname"] {
+            for error in [
+                manager.load_key(alias).unwrap_err(),
+                manager.resolve_public_key(alias).unwrap_err(),
+                manager.public_key(alias).unwrap_err(),
+                manager.get_entry(alias).unwrap_err(),
+            ] {
+                assert!(matches!(error, CliError::Validation(_)));
+                let message = error.to_string();
+                assert!(message.contains(alias));
+                assert!(message.contains("alias"));
+                assert!(message.contains("thru keys list"));
+            }
+        }
+        let destination = manager
+            .resolve_public_key(&format!("ta{}!", "a".repeat(43)))
+            .unwrap_err()
+            .to_string();
+        assert!(destination.contains("address"));
+        assert!(destination.contains("alias:"));
+    }
+
+    #[test]
+    fn prefix_only_aliases_resolve_as_registered_names() {
+        let (_directory, manager) =
+            KeyManager::test_fixture(&[("tanya", [17; 32]), ("0xname", [18; 32])]);
+        for alias in ["tanya", "0xname"] {
+            let public_key = manager.load_key(alias).unwrap().public_key;
+            assert_eq!(manager.public_key(alias).unwrap(), public_key);
+            assert_eq!(manager.resolve_public_key(alias).unwrap(), public_key);
+            assert_eq!(
+                manager
+                    .resolve_public_key(&format!("alias:{alias}"))
+                    .unwrap(),
+                public_key
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_full_and_near_seeds_are_redacted_by_public_lookups() {
+        let mut manager = KeyManager::new();
+        let seed = hex::encode([19; 32]);
+        for material in [
+            seed.clone(),
+            seed[..63].to_owned(),
+            format!("{}g", &seed[..63]),
+            format!("{}!", seed),
+        ] {
+            for reference in [
+                material.clone(),
+                format!("0x{material}"),
+                format!("alias:{material}"),
+                format!("alias:0x{material}"),
+            ] {
+                for error in [
+                    manager.load_key(&reference).unwrap_err(),
+                    manager.public_key(&reference).unwrap_err(),
+                    manager.get_entry(&reference).unwrap_err(),
+                    manager.remove_key(&reference).unwrap_err(),
+                ] {
+                    let message = error.to_string();
+                    assert!(!message.contains(&material));
+                    assert!(!message.contains(&material[..32]));
+                }
+                // Valid full hex remains a supported public destination, not a
+                // signer; malformed and explicit alias forms must fail safely.
+                if !reference.starts_with("alias:") && parse_public_key(&reference).is_ok() {
+                    assert!(manager.resolve_public_key(&reference).is_ok());
+                } else {
+                    let message = manager
+                        .resolve_public_key(&reference)
+                        .unwrap_err()
+                        .to_string();
+                    assert!(!message.contains(&material));
+                    assert!(!message.contains(&material[..32]));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn command_cache_pins_source_across_clones_and_resets_between_invocations() {
+        let (_directory, mut manager) = KeyManager::test_fixture(&[("default", [21; 32])]);
+        let entry = manager.get_entry("default").unwrap().clone();
+        let reference = entry.reference();
+        let KeySource::File { path, .. } = &entry.source else {
+            unreachable!()
+        };
+        manager.begin_command();
+        let first = manager.resolve_public_key(&reference).unwrap();
+        let clone = manager.clone();
+        let loaded = manager.load_key(&reference).unwrap();
+        fs::write(path, hex::encode([22; 32])).unwrap();
+        assert_eq!(clone.public_key(&reference).unwrap(), first);
+        assert!(Arc::ptr_eq(&loaded, &clone.load_fee_payer(None).unwrap()));
+        assert!(Arc::ptr_eq(
+            &loaded,
+            &manager.load_key("alias:default").unwrap()
+        ));
+        assert!(!format!("{manager:?}").contains(&hex::encode([21; 32])));
+        manager.begin_command();
+        let next = manager.load_key(&reference).unwrap();
+        assert_ne!(next.public_key, loaded.public_key);
+        assert!(!Arc::ptr_eq(&next, &loaded));
+        assert!(manager.load_key("default").is_err());
+        assert!(Arc::ptr_eq(&loaded, &clone.load_key("default").unwrap()));
+    }
+
+    #[test]
+    fn command_cache_deduplicates_sources_but_rechecks_alias_metadata() {
+        let (directory, mut manager) =
+            KeyManager::test_fixture(&[("default", [23; 32]), ("other", [24; 32])]);
+        let mut entry = manager.get_entry("default").unwrap().clone();
+        let KeySource::File { path, managed } = &mut entry.source else {
+            unreachable!()
+        };
+        let reference = format!("file:{}", path.display());
+        *path = path.file_name().unwrap().into();
+        *managed = false;
+        manager
+            .insert_entry("duplicate", entry.clone(), false)
+            .unwrap();
+        manager.begin_command();
+        let loaded = manager.load_key(&reference).unwrap();
+        assert!(Arc::ptr_eq(
+            &loaded,
+            &manager.load_key("duplicate").unwrap()
+        ));
+        assert!(Arc::ptr_eq(&loaded, &manager.load_key("default").unwrap()));
+        entry.public_key = manager.get_entry("other").unwrap().public_key.clone();
+        manager.insert_entry("duplicate", entry, true).unwrap();
+        assert!(manager.load_key("duplicate").is_err());
+        let relative = directory.path().join(".").join(
+            Path::new(reference.strip_prefix("file:").unwrap())
+                .file_name()
+                .unwrap(),
+        );
+        assert!(Arc::ptr_eq(
+            &loaded,
+            &manager
+                .load_key(&format!("file:{}", relative.display()))
+                .unwrap()
+        ));
+    }
+
+    #[test]
+    fn ordinary_managers_do_not_cache_and_public_aliases_do_not_load_secrets() {
+        let (_directory, mut manager) = KeyManager::test_fixture(&[("default", [25; 32])]);
+        let entry = manager.get_entry("default").unwrap().clone();
+        let reference = entry.reference();
+        let KeySource::File { path, .. } = &entry.source else {
+            unreachable!()
+        };
+        let first = manager.load_key(&reference).unwrap();
+        fs::write(path, hex::encode([26; 32])).unwrap();
+        assert_ne!(
+            manager.load_key(&reference).unwrap().public_key,
+            first.public_key
+        );
+        manager.begin_command();
+        fs::remove_file(path).unwrap();
+        assert_eq!(
+            manager.public_key("alias:default").unwrap(),
+            first.public_key
+        );
+        assert_eq!(
+            manager.resolve_public_key("default").unwrap(),
+            first.public_key
+        );
+        assert!(manager.load_key("default").is_err());
+    }
+
+    #[test]
+    fn file_metadata_defaults_external_and_created_files_are_managed() {
+        let external: KeySource =
+            serde_json::from_str(r#"{"type":"file","path":"legacy.key"}"#).unwrap();
+        assert!(matches!(external, KeySource::File { managed: false, .. }));
+        assert!(
+            !serde_json::to_string(&external)
+                .unwrap()
+                .contains("managed")
+        );
+        let (_directory, manager) = KeyManager::test_fixture(&[("default", [27; 32])]);
+        assert!(matches!(
+            &manager.get_entry("default").unwrap().source,
+            KeySource::File { managed: true, .. }
+        ));
+    }
+
+    #[test]
+    fn malformed_file_diagnostics_include_path_without_seed_contents() {
+        let (_directory, manager) = KeyManager::test_fixture(&[("default", [28; 32])]);
+        let entry = manager.get_entry("default").unwrap();
+        let KeySource::File { path, .. } = &entry.source else {
+            unreachable!()
+        };
+        let secret = format!("{}!", hex::encode([28; 32]));
+        fs::write(path, &secret).unwrap();
+        let error = manager.load_key("default").unwrap_err().to_string();
+        assert!(error.contains(path.to_str().unwrap()));
+        assert!(!error.contains(&secret));
+        fs::remove_file(path).unwrap();
+        assert!(
+            manager
+                .load_key("default")
+                .unwrap_err()
+                .to_string()
+                .contains(path.to_str().unwrap())
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "requires an unlocked native macOS Keychain; creates and removes a unique test entry"]
+    fn command_cache_reuses_keychain_read_across_public_alias_and_signing_roles() {
+        let directory = tempfile::tempdir().unwrap();
+        let key = LoadedKey::from_seed(Zeroizing::new([29; 32]));
+        let staged = stage_secret(KeyStorage::Keychain, directory.path(), &key).unwrap();
+        let reference = staged.entry.reference();
+        let mut manager = KeyManager::new();
+        manager
+            .insert_entry("default", staged.entry.clone(), false)
+            .unwrap();
+        manager.begin_command();
+        assert_eq!(
+            manager.resolve_public_key(&reference).unwrap(),
+            key.public_key
+        );
+        let clone = manager.clone();
+        let loaded = manager.load_key(&reference).unwrap();
+        drop(staged);
+        // Deleting the backing item makes any accidental second read fail.
+        assert!(Arc::ptr_eq(&loaded, &clone.load_fee_payer(None).unwrap()));
+        assert!(Arc::ptr_eq(
+            &loaded,
+            &manager.load_key("alias:default").unwrap()
+        ));
+        assert_eq!(clone.public_key(&reference).unwrap(), key.public_key);
+        manager.begin_command();
+        assert!(manager.load_key(&reference).is_err());
+    }
+
+    #[test]
+    fn bounded_key_input_accepts_only_seed_hex() {
+        assert_eq!(
+            *read_seed(format!(" \n{}\t", hex::encode([9; 32])).as_bytes()).unwrap(),
+            [9; 32]
+        );
+        for raw in [
+            vec![b'1'; 63],
+            vec![b'1'; 65],
+            vec![b'g'; 64],
+            vec![b' '; 4097],
+        ] {
+            assert!(read_seed(raw.as_slice()).is_err());
+        }
+    }
+
+    #[test]
+    fn staged_failure_preserves_existing_key_and_removes_only_new_secret() {
+        let (directory, manager) = KeyManager::test_fixture(&[("default", [3; 32])]);
+        let old = manager.get_entry("default").unwrap().reference();
+        let new_reference;
+        {
+            let key = LoadedKey::from_seed(Zeroizing::new([4; 32]));
+            let staged = stage_secret(KeyStorage::File, directory.path(), &key).unwrap();
+            new_reference = staged.entry.reference();
+            assert!(manager.load_key(&new_reference).is_ok());
+        }
+        assert!(manager.load_key(&old).is_ok());
+        assert!(manager.load_key(&new_reference).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unsafe_permissions_and_links_are_rejected() {
+        use std::os::unix::fs::{PermissionsExt, symlink};
+        let (directory, manager) = KeyManager::test_fixture(&[("default", [6; 32])]);
+        let KeySource::File { path, .. } = &manager.get_entry("default").unwrap().source else {
+            unreachable!()
+        };
+        assert_eq!(
+            fs::metadata(path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        fs::set_permissions(path, fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(manager.load_key("default").is_err());
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600)).unwrap();
+        let link = directory.path().join("link");
+        symlink(path, &link).unwrap();
+        assert!(
+            manager
+                .load_key(&format!("file:{}", link.display()))
+                .is_err()
+        );
+        let hardlink = directory.path().join("hardlink");
+        fs::hard_link(path, &hardlink).unwrap();
+        assert!(manager.load_key("default").is_err());
+        fs::remove_file(hardlink).unwrap();
+        fs::set_permissions(directory.path(), fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(manager.load_key("default").is_err());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "requires an unlocked native macOS Keychain; creates and removes a unique test entry"]
+    fn native_keychain_uses_raw_binary_and_never_overwrites() {
+        let id = format!("test-{}", unique_id().unwrap());
+        let seed = Zeroizing::new([0xff; 32]);
+        let address = LoadedKey::from_seed(Zeroizing::new([0xff; 32]))
+            .address_string
+            .to_string();
+        keychain_create(&id, &seed, &address).unwrap();
+        let cleanup = StagedSecret {
+            entry: KeyEntry {
+                public_key: address.clone(),
+                source: KeySource::MacosKeychain { id: id.clone() },
+            },
+            committed: false,
+        };
+        assert_eq!(*keychain_read(&id).unwrap(), [0xff; 32]);
+        // Attributes only (no secret read): the comment is the public address
+        // and the name stays the service, as before.
+        let found = security_framework::item::ItemSearchOptions::new()
+            .class(security_framework::item::ItemClass::generic_password())
+            .service(KEYCHAIN_SERVICE)
+            .account(&id)
+            .load_attributes(true)
+            .search()
+            .unwrap();
+        let attributes = found[0].simplify_dict().unwrap();
+        assert_eq!(attributes.get("icmt"), Some(&address));
+        assert_eq!(
+            attributes.get("labl").map(String::as_str),
+            Some(KEYCHAIN_SERVICE)
+        );
+        // A comment that is already set is never replaced by the backfill.
+        assert_eq!(
+            keychain_backfill_comment(&id, "ta-other").unwrap(),
+            CommentBackfill::AlreadySet
+        );
+        assert!(keychain_create(&id, &[0; 32], &address).is_err());
+        assert_eq!(*keychain_read(&id).unwrap(), [0xff; 32]);
+        assert!(
+            KeyManager::new()
+                .load_key(&cleanup.entry.reference())
+                .is_ok()
+        );
+        drop(cleanup);
+        assert!(keychain_read(&id).is_err());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "requires an unlocked native macOS Keychain; creates and removes a unique test entry"]
+    fn keychain_backfill_adds_address_comment_to_items_without_one() {
+        use security_framework::item::{ItemClass, ItemSearchOptions};
+        use security_framework::os::macos::keychain::{SecKeychain, SecPreferencesDomain};
+        let comment = |id: &str| {
+            ItemSearchOptions::new()
+                .class(ItemClass::generic_password())
+                .service(KEYCHAIN_SERVICE)
+                .account(id)
+                .load_attributes(true)
+                .search()
+                .unwrap()[0]
+                .simplify_dict()
+                .unwrap()
+                .get("icmt")
+                .cloned()
+        };
+        let id = format!("test-{}", unique_id().unwrap());
+        let address = LoadedKey::from_seed(Zeroizing::new([0xee; 32]))
+            .address_string
+            .to_string();
+        // An item as created before comments existed: no comment attribute.
+        SecKeychain::default_for_domain(SecPreferencesDomain::User)
+            .unwrap()
+            .add_generic_password(KEYCHAIN_SERVICE, &id, &[0xee; 32])
+            .unwrap();
+        let cleanup = StagedSecret {
+            entry: KeyEntry {
+                public_key: address.clone(),
+                source: KeySource::MacosKeychain { id: id.clone() },
+            },
+            committed: false,
+        };
+        assert_eq!(comment(&id).filter(|c| !c.is_empty()), None);
+        assert_eq!(
+            keychain_backfill_comment(&id, &address).unwrap(),
+            CommentBackfill::Added
+        );
+        assert_eq!(comment(&id), Some(address.clone()));
+        assert_eq!(
+            keychain_backfill_comment(&id, &address).unwrap(),
+            CommentBackfill::AlreadySet
+        );
+        // The secret is untouched.
+        assert_eq!(*keychain_read(&id).unwrap(), [0xee; 32]);
+        drop(cleanup);
+        assert_eq!(
+            keychain_backfill_comment(&id, &address).unwrap(),
+            CommentBackfill::Missing
+        );
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn unsupported_keychain_never_creates_file_fallback() {
+        let directory = tempfile::tempdir().unwrap();
+        let key = LoadedKey::from_seed(Zeroizing::new([5; 32]));
+        assert!(stage_secret(KeyStorage::Keychain, directory.path(), &key).is_err());
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 0);
+        assert!(KeyManager::new().load_key("keychain:test").is_err());
+    }
+}

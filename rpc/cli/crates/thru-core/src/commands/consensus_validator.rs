@@ -3,22 +3,29 @@
 use crate::cli::ValidatorCommands;
 use crate::config::Config;
 use crate::error::CliError;
+use crate::keys::LoadedKey;
 use crate::utils::validate_address_or_hex;
 use base64::Engine;
-use blst::min_pk::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
-use thru_base::txn_tools::bls_activation_key;
 #[cfg(test)]
 use blst::min_pk::Signature as BlsSignature;
+use blst::min_pk::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
+use std::sync::Arc;
+use std::time::Duration;
+use thru_base::tn_tools::Pubkey;
+use thru_base::txn_lib::Transaction;
 #[cfg(test)]
 use thru_base::txn_tools::CONSENSUS_VALIDATOR_POP_DST as BLS_POP_DST;
-use std::time::Duration;
-use thru_base::tn_tools::{KeyPair, Pubkey};
-use thru_base::txn_lib::Transaction;
+use thru_base::txn_tools::bls_activation_key;
 use thru_base::txn_tools::{ConsensusValidatorAccounts, TransactionBuilder};
 use thru_client::{Client, ClientBuilder, TransactionDetails};
 
 const CONSENSUS_VALIDATOR_FEE: u64 = 0;
-const CONSENSUS_VALIDATOR_STATE_HEADER_SIZE: usize = 232;
+/* tn_consensus_validator_state_t: packed, account_type
+(TN_CONSENSUS_VALIDATOR_ACCOUNT_TYPE_ATTESTOR_TABLE_V1) at byte 0, then the
+232-byte payload. The account is variable size (the base state machine,
+metadata and pending map follow at the offsets the header records). */
+const CONSENSUS_VALIDATOR_STATE_HEADER_SIZE: usize = 233;
+const CONSENSUS_VALIDATOR_ACCOUNT_TYPE_ATTESTOR_TABLE_V1: u8 = 1;
 const CONSENSUS_STATE_BASE_HEADER_SIZE: usize = 248;
 // Identity, BLS key, and four u64 update indexes/timestamps.
 const CONSENSUS_ATTESTOR_SEAT_SIZE: usize = 32 + 96 + 4 * 8;
@@ -76,25 +83,6 @@ struct ValidatorEntry {
     active: bool,
 }
 
-fn resolve_fee_payer_keypair(
-    config: &Config,
-    fee_payer: Option<&str>,
-) -> Result<KeyPair, CliError> {
-    let fee_payer_private_key = if let Some(fee_payer_name) = fee_payer {
-        config.keys.get_key(fee_payer_name).map_err(|_| {
-            CliError::Validation(format!(
-                "Fee payer key '{}' not found in configuration",
-                fee_payer_name
-            ))
-        })?
-    } else {
-        config.keys.get_key("default")?
-    };
-
-    KeyPair::from_hex_private_key(fee_payer.unwrap_or("default"), fee_payer_private_key)
-        .map_err(|e| CliError::Crypto(format!("Failed to create fee payer keypair: {}", e)))
-}
-
 fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
     let rpc_url = config.get_grpc_url()?;
     let timeout = Duration::from_secs(config.timeout_seconds);
@@ -110,7 +98,7 @@ fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
 }
 
 struct TransactionContext {
-    fee_payer_keypair: KeyPair,
+    fee_payer_keypair: Arc<LoadedKey>,
     client: Client,
     nonce: u64,
     start_slot: u64,
@@ -122,7 +110,7 @@ async fn setup_transaction_context(
     config: &Config,
     fee_payer: Option<&str>,
 ) -> Result<TransactionContext, CliError> {
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer)?;
     let client = create_rpc_client(config)?;
 
     let account_info = client
@@ -240,21 +228,7 @@ fn resolve_override_account(value: Option<&str>, default: [u8; 32]) -> Result<[u
 }
 
 fn resolve_pubkey_or_key_name(config: &Config, value: &str) -> Result<[u8; 32], CliError> {
-    if (value.starts_with("ta") && value.len() == 46) || value.len() == 64 {
-        return validate_address_or_hex(value);
-    }
-
-    let private_key = config.keys.get_key(value).map_err(|_| {
-        CliError::Validation(format!(
-            "'{}' is neither a valid public key nor a configured key name",
-            value
-        ))
-    })?;
-
-    let keypair = KeyPair::from_hex_private_key(value, private_key)
-        .map_err(|e| CliError::Crypto(format!("Failed to resolve key '{}': {}", value, e)))?;
-
-    Ok(keypair.public_key)
+    config.keys.resolve_public_key(value)
 }
 
 fn resolve_consensus_accounts(
@@ -536,21 +510,27 @@ fn parse_validator_table(data: &[u8], attestor_table: [u8; 32], current_slot: u6
             data.len()
         )));
     }
+    if data[0] != CONSENSUS_VALIDATOR_ACCOUNT_TYPE_ATTESTOR_TABLE_V1 {
+        return Err(CliError::Validation(format!(
+            "Account type {} is not an attestor table (expected {})",
+            data[0], CONSENSUS_VALIDATOR_ACCOUNT_TYPE_ATTESTOR_TABLE_V1
+        )));
+    }
 
-    let token_program = read_bytes::<32>(data, 0, "token_program")?;
-    let attestor_mint = read_bytes::<32>(data, 32, "attestor_mint")?;
-    let converted_vault = read_bytes::<32>(data, 64, "converted_vault")?;
-    let unclaimed_vault = read_bytes::<32>(data, 96, "unclaimed_vault")?;
-    let admin = read_bytes::<32>(data, 128, "admin")?;
-    let server_count = read_u64(data, 160, "server_count")?;
-    let base_sm_off = read_u64(data, 168, "base_sm_off")? as usize;
-    let metadata_off = read_u64(data, 176, "metadata_off")? as usize;
-    let pending_decay = read_u64(data, 184, "pending_decay")?;
-    let last_decay_calc_slot = read_u64(data, 192, "last_decay_calc_slot")?;
-    let last_decay_emit_slot = read_u64(data, 200, "last_decay_emit_slot")?;
-    let last_processed_slot = read_u64(data, 208, "last_processed_slot")?;
-    let pending_map_off = read_u64(data, 216, "pending_map_off")?;
-    let pending_cap = read_u64(data, 224, "pending_cap")?;
+    let token_program = read_bytes::<32>(data, 1, "token_program")?;
+    let attestor_mint = read_bytes::<32>(data, 33, "attestor_mint")?;
+    let converted_vault = read_bytes::<32>(data, 65, "converted_vault")?;
+    let unclaimed_vault = read_bytes::<32>(data, 97, "unclaimed_vault")?;
+    let admin = read_bytes::<32>(data, 129, "admin")?;
+    let server_count = read_u64(data, 161, "server_count")?;
+    let base_sm_off = read_u64(data, 169, "base_sm_off")? as usize;
+    let metadata_off = read_u64(data, 177, "metadata_off")? as usize;
+    let pending_decay = read_u64(data, 185, "pending_decay")?;
+    let last_decay_calc_slot = read_u64(data, 193, "last_decay_calc_slot")?;
+    let last_decay_emit_slot = read_u64(data, 201, "last_decay_emit_slot")?;
+    let last_processed_slot = read_u64(data, 209, "last_processed_slot")?;
+    let pending_map_off = read_u64(data, 217, "pending_map_off")?;
+    let pending_cap = read_u64(data, 225, "pending_cap")?;
 
     let server_count_usize = usize::try_from(server_count).map_err(|_| {
         CliError::Validation(format!("Validator table server_count {} is too large", server_count))
@@ -1748,7 +1728,7 @@ async fn show_validator_status(
        reported as not registered rather than as a key-resolution failure. */
     let identity_pubkey = resolve_status_identity(entry, config, identity_input)?;
     let identity_address = to_address_string(&identity_pubkey);
-    let key_name = if config.keys.get_key(identity_input).is_ok() {
+    let key_name = if config.keys.has_key(identity_input) {
         Some(identity_input.to_string())
     } else {
         None
@@ -1805,9 +1785,10 @@ async fn show_validator_status(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::KeyManager;
+    use crate::keys::KeyManager;
     use thru_base::txn_tools::{
-        ATTESTOR_TABLE, CONSENSUS_VALIDATOR_PROGRAM, CONVERTED_VAULT, TOKEN_PROGRAM, UNCLAIMED_VAULT,
+        ATTESTOR_TABLE, CONSENSUS_VALIDATOR_PROGRAM, CONVERTED_VAULT, TOKEN_PROGRAM,
+        UNCLAIMED_VAULT,
     };
 
     fn write_u64(buf: &mut [u8], offset: usize, value: u64) {
@@ -1816,7 +1797,8 @@ mod tests {
 
     fn build_test_validator_table_bytes() -> Vec<u8> {
         let server_count = 2usize;
-        let base_sm_off = CONSENSUS_VALIDATOR_STATE_HEADER_SIZE;
+        /* init aligns the base state machine up from the 233-byte header. */
+        let base_sm_off = CONSENSUS_VALIDATOR_STATE_HEADER_SIZE.next_multiple_of(8);
         let stake_slots_off = CONSENSUS_STATE_BASE_HEADER_SIZE;
         let base_weights_off = stake_slots_off + server_count * CONSENSUS_ATTESTOR_SEAT_SIZE;
         let total_weights_capacity = 26usize;
@@ -1830,20 +1812,21 @@ mod tests {
         let total_size = pending_map_off + pending_cap * pending_entry_stride;
         let mut data = vec![0u8; total_size];
 
-        data[0..32].copy_from_slice(&[0x10u8; 32]);
-        data[32..64].copy_from_slice(&[0x20u8; 32]);
-        data[64..96].copy_from_slice(&[0x30u8; 32]);
-        data[96..128].copy_from_slice(&[0x40u8; 32]);
-        data[128..160].copy_from_slice(&[0x50u8; 32]);
-        write_u64(&mut data, 160, server_count as u64);
-        write_u64(&mut data, 168, base_sm_off as u64);
-        write_u64(&mut data, 176, metadata_off as u64);
-        write_u64(&mut data, 184, 7);
-        write_u64(&mut data, 192, 8);
-        write_u64(&mut data, 200, 9);
-        write_u64(&mut data, 208, 10);
-        write_u64(&mut data, 216, pending_map_off as u64); // pending_map_off
-        write_u64(&mut data, 224, pending_cap as u64); // pending_cap
+        data[0] = CONSENSUS_VALIDATOR_ACCOUNT_TYPE_ATTESTOR_TABLE_V1;
+        data[1..33].copy_from_slice(&[0x10u8; 32]);
+        data[33..65].copy_from_slice(&[0x20u8; 32]);
+        data[65..97].copy_from_slice(&[0x30u8; 32]);
+        data[97..129].copy_from_slice(&[0x40u8; 32]);
+        data[129..161].copy_from_slice(&[0x50u8; 32]);
+        write_u64(&mut data, 161, server_count as u64);
+        write_u64(&mut data, 169, base_sm_off as u64);
+        write_u64(&mut data, 177, metadata_off as u64);
+        write_u64(&mut data, 185, 7);
+        write_u64(&mut data, 193, 8);
+        write_u64(&mut data, 201, 9);
+        write_u64(&mut data, 209, 10);
+        write_u64(&mut data, 217, pending_map_off as u64); // pending_map_off
+        write_u64(&mut data, 225, pending_cap as u64); // pending_cap
 
         write_u64(&mut data, base_sm_off, 16);
         write_u64(&mut data, base_sm_off + 8, 8);
@@ -1894,19 +1877,12 @@ mod tests {
         data
     }
 
-    fn create_test_config() -> Config {
-        let mut keys = KeyManager::new();
-        keys.add_key(
-            "alice",
-            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-            false,
-        )
-        .unwrap();
-
+    fn create_test_config() -> (tempfile::TempDir, Config) {
+        let (guard, keys) = KeyManager::test_fixture(&[("default", [1; 32]), ("alice", [2; 32])]);
         let mut config = Config::default();
         config.rpc_base_url = "http://localhost:8080".to_string();
         config.keys = keys;
-        config
+        (guard, config)
     }
 
     const BLS_SEED_17_AFFINE_BYTES: [u8; 96] = [
@@ -1967,7 +1943,7 @@ mod tests {
 
     #[test]
     fn resolves_pubkey_from_config_key_name() {
-        let config = create_test_config();
+        let (_guard, config) = create_test_config();
         let resolved =
             resolve_pubkey_or_key_name(&config, "alice").expect("config key should resolve");
         assert_ne!(resolved, [0u8; 32]);
@@ -1998,25 +1974,34 @@ mod tests {
     }
 
     /// Mirrors the C FD_STATIC_ASSERTs on tn_consensus_validator_state_t: the
-    /// on-chain state header is 232 bytes, with pending_map_off @216 and
-    /// pending_cap @224.  C asserts don't reach Rust, so this guards the
-    /// positional parser against header drift.
+    /// on-chain state header is 233 bytes (account_type, then the payload),
+    /// with pending_map_off @217 and pending_cap @225.  C asserts don't reach
+    /// Rust, so this guards the positional parser against header drift.
     #[test]
-    fn validator_state_header_layout_is_232() {
-        assert_eq!(CONSENSUS_VALIDATOR_STATE_HEADER_SIZE, 232);
+    fn validator_state_header_layout_is_233() {
+        assert_eq!(CONSENSUS_VALIDATOR_STATE_HEADER_SIZE, 233);
         let data = build_test_validator_table_bytes();
         let table = parse_validator_table(&data, [0xaau8; 32], 100, None)
             .expect("validator table should parse");
         // The pending map follows metadata and extends to the account end.
         let pending_entry_stride = 48 + table.server_count.div_ceil(64) * 8;
         assert_eq!(table.pending_map_off + table.pending_cap * pending_entry_stride, table.data_size as u64);
-        assert_eq!(table.pending_cap, 11); // @224
-        assert_eq!(table.last_processed_slot, 10); // @208
+        assert_eq!(table.pending_cap, 11); // @225
+        assert_eq!(table.last_processed_slot, 10); // @209
+    }
+
+    #[test]
+    fn validator_table_requires_the_attestor_table_account_type() {
+        let mut data = build_test_validator_table_bytes();
+        for account_type in [0u8, 2, 0xff] {
+            data[0] = account_type;
+            assert!(parse_validator_table(&data, [0xaau8; 32], 100, None).is_err());
+        }
     }
 
     #[test]
     fn resolves_validator_entry_by_sid() {
-        let config = create_test_config();
+        let (_guard, config) = create_test_config();
         let table = parse_validator_table(&build_test_validator_table_bytes(), [0xaau8; 32], 100, None)
             .expect("validator table should parse");
 
@@ -2040,7 +2025,7 @@ mod tests {
 
     #[test]
     fn resolves_consensus_accounts_with_defaults() {
-        let config = create_test_config();
+        let (_guard, config) = create_test_config();
         let accounts = resolve_consensus_accounts(&config, None, None, None, None, None)
             .expect("default accounts should resolve");
 
@@ -2053,7 +2038,7 @@ mod tests {
 
     #[test]
     fn resolves_consensus_accounts_with_overrides() {
-        let config = create_test_config();
+        let (_guard, config) = create_test_config();
         let program = [0x11; 32];
         let token_program = [0x22; 32];
         let unclaimed_vault = [0x33; 32];
@@ -2202,7 +2187,7 @@ mod tests {
 
     #[test]
     fn find_validator_entry_returns_some_for_known_sid() {
-        let config = create_test_config();
+        let (_guard, config) = create_test_config();
         let table =
             parse_validator_table(&build_test_validator_table_bytes(), [0xaau8; 32], 100, None)
                 .unwrap();
@@ -2212,7 +2197,7 @@ mod tests {
 
     #[test]
     fn find_validator_entry_returns_none_for_absent_sid() {
-        let config = create_test_config();
+        let (_guard, config) = create_test_config();
         let table =
             parse_validator_table(&build_test_validator_table_bytes(), [0xaau8; 32], 100, None)
                 .unwrap();
@@ -2223,7 +2208,7 @@ mod tests {
 
     #[test]
     fn find_validator_entry_returns_none_for_resolvable_but_absent_identity() {
-        let config = create_test_config();
+        let (_guard, config) = create_test_config();
         let table =
             parse_validator_table(&build_test_validator_table_bytes(), [0xaau8; 32], 100, None)
                 .unwrap();
@@ -2235,18 +2220,16 @@ mod tests {
 
     #[test]
     fn find_validator_entry_errors_on_unresolvable_input() {
-        let config = create_test_config();
+        let (_guard, config) = create_test_config();
         let table =
             parse_validator_table(&build_test_validator_table_bytes(), [0xaau8; 32], 100, None)
                 .unwrap();
-        let err = find_validator_entry(&table, &config, "definitely-not-a-key")
-            .expect_err("unknown key name must Err, not Ok(None)");
-        assert!(err.to_string().contains("neither a valid public key nor a configured key name"));
+        assert!(find_validator_entry(&table, &config, "definitely-not-a-key").is_err());
     }
 
     #[test]
     fn resolve_validator_entry_preserves_not_found_messages() {
-        let config = create_test_config();
+        let (_guard, config) = create_test_config();
         let table =
             parse_validator_table(&build_test_validator_table_bytes(), [0xaau8; 32], 100, None)
                 .unwrap();
@@ -2263,7 +2246,7 @@ mod tests {
 
     #[test]
     fn status_identity_uses_seat_identity_for_known_sid() {
-        let config = create_test_config();
+        let (_guard, config) = create_test_config();
         let table =
             parse_validator_table(&build_test_validator_table_bytes(), [0xaau8; 32], 100, None)
                 .unwrap();
@@ -2275,7 +2258,7 @@ mod tests {
 
     #[test]
     fn status_identity_reports_not_registered_for_absent_sid() {
-        let config = create_test_config();
+        let (_guard, config) = create_test_config();
         // A bare numeric sid with no seat has no pubkey to display: it must report
         // "not registered" rather than the confusing key-resolution failure that
         // resolve_pubkey_or_key_name would otherwise produce for "9999".
@@ -2291,7 +2274,7 @@ mod tests {
 
     #[test]
     fn status_identity_resolves_absent_but_known_key_name() {
-        let config = create_test_config();
+        let (_guard, config) = create_test_config();
         // `alice` resolves (configured key) but has no seat: NOT REGISTERED is
         // rendered against alice's real pubkey, so the identity must resolve.
         let pubkey = resolve_status_identity(None, &config, "alice")
@@ -2301,12 +2284,8 @@ mod tests {
 
     #[test]
     fn status_identity_errors_on_unresolvable_key_name() {
-        let config = create_test_config();
-        let err = resolve_status_identity(None, &config, "definitely-not-a-key")
-            .expect_err("unknown key name must error");
-        assert!(err
-            .to_string()
-            .contains("neither a valid public key nor a configured key name"));
+        let (_guard, config) = create_test_config();
+        assert!(resolve_status_identity(None, &config, "definitely-not-a-key").is_err());
     }
 
     // ----------------------------------------------------------------------

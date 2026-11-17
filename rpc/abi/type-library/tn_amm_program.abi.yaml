@@ -2,26 +2,20 @@ abi:
   package: thru.program.amm
   name: "AMM Program"
   abi-version: 1
-  package-version: 0.2.0
+  package-version: 0.3.0
   description: ABI for the Thru AMM program instructions, pool account state, and events
   imports:
     # thru_primitives
-    - type: onchain
-      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
-      target: abi
-      network: mainnet
-      revision: latest
+    - type: path
+      path: thru_primitives.abi.yaml
     # state_proof
-    - type: onchain
-      address: ta1l4yBjT6a7PQ4Wu_sJPQwb8jJiJ8Ei71gOuE5Dnotfrl
-      target: abi
-      network: mainnet
-      revision: latest
+    - type: path
+      path: state_proof.abi.yaml
   options:
     program-metadata:
       root-types:
         instruction-root: "AmmInstruction"
-        account-root: "AmmPoolMetadata"
+        account-root: "AmmProgramAccount"
         errors: "AmmError"
         events: "AmmEvent"
 types:
@@ -316,6 +310,31 @@ types:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
+# Account root: byte 0 is the account discriminator (account_type), one value
+# per (account kind, layout). Values are never reused; a new layout or a new
+# kind takes the next unused value.
+- name: AmmProgramAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: account_type
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - account_type
+            variants:
+            - name: pool_v1
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: AmmPoolMetadata
 - name: AmmError
   # Code 20 (TN_AMM_ERR_SLIPPAGE_EXCEEDED): an output is below its signed minimum.
   kind:

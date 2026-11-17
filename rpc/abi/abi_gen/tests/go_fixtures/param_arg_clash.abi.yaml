@@ -1,0 +1,33 @@
+abi:
+  package: "test.param_arg_clash"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Fields buf and buf_ both size arrays; their Go argument names must differ"
+types:
+  - name: "ArgClash"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "buf"
+            field-type:
+              primitive: u8
+          - name: "buf_"
+            field-type:
+              primitive: u8
+          - name: "a"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["buf"]
+                element-type:
+                  primitive: u8
+          - name: "b"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["buf_"]
+                element-type:
+                  primitive: u8

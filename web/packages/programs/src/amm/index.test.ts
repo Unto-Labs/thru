@@ -9,6 +9,7 @@ import {
   AMM_INSTRUCTION_SWAP,
   AMM_INSTRUCTION_WITHDRAW_LIQUIDITY,
   AmmInstruction,
+  AMM_ACCOUNT_TYPE_POOL_V1,
   AMM_POOL_METADATA_SIZE,
   createAddLiquidityInstruction,
   createInitPoolInstruction,
@@ -241,7 +242,7 @@ describe('amm helpers', () => {
     expect(withdrawal?.min_amount_one_out).toBe(222n);
     expect(withdrawal?.min_amount_two_out).toBe(333n);
     for (const [instruction, oldSize] of [[addLiquidity, 38], [swap, 28], [withdraw, 30]] as const) {
-      expect(() => AmmInstruction.from_array(instruction.subarray(0, oldSize))?.payload()).toThrow();
+      expect(AmmInstruction.from_array(instruction.subarray(0, oldSize))).toBeNull();
     }
   });
 
@@ -299,16 +300,18 @@ describe('amm helpers', () => {
 
   it('parses pool metadata', () => {
     const data = new Uint8Array(AMM_POOL_METADATA_SIZE);
+    expect(data).toHaveLength(204);
     const view = new DataView(data.buffer);
-    view.setUint8(0, 1);
-    view.setBigUint64(1, 1_000_000_000n, true);
-    view.setUint16(9, 30, true);
-    data.set(key(11), 11);
-    data.set(key(12), 43);
-    data.set(key(13), 75);
-    data.set(key(14), 107);
-    data.set(key(15), 139);
-    data.set(key(16), 171);
+    view.setUint8(0, AMM_ACCOUNT_TYPE_POOL_V1);
+    view.setUint8(1, 1);
+    view.setBigUint64(2, 1_000_000_000n, true);
+    view.setUint16(10, 30, true);
+    data.set(key(11), 12);
+    data.set(key(12), 44);
+    data.set(key(13), 76);
+    data.set(key(14), 108);
+    data.set(key(15), 140);
+    data.set(key(16), 172);
 
     const parsed = parseAmmPoolMetadata(data);
     expect(parsed.isInitialized).toBe(true);
@@ -316,6 +319,10 @@ describe('amm helpers', () => {
     expect(parsed.swapFeeBps).toBe(30);
     expect(parsed.swapPoolAuthority).toBe(encodeAddressForTest(key(11)));
     expect(parsed.lpMint).toBe(encodeAddressForTest(key(16)));
+
+    expect(() => parseAmmPoolMetadata(data.subarray(0, 203))).toThrow('not an AMM pool account');
+    data[0] = 2;
+    expect(() => parseAmmPoolMetadata(data)).toThrow('not an AMM pool account');
   });
 
   it('quotes exact-in swaps with fee math matching the C program', () => {

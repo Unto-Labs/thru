@@ -8,6 +8,7 @@ use std::time::Instant;
 use super::LanguageRunner;
 use crate::{TestCaseData, TestError, TestResult, TestStages};
 
+use abi_gen::abi::expr::ConstantExpression;
 use abi_gen::abi::file::AbiFile;
 use abi_gen::abi::resolved::{ResolvedType, ResolvedTypeKind, Size, TypeResolver};
 use abi_gen::codegen::ts_gen::enum_utils::enum_field_info_by_name;
@@ -251,6 +252,7 @@ impl LanguageRunner for TypeScriptRunner {
                 &binary_file_path,
                 &type_context.package,
                 &type_context.enum_metadata_json,
+                &type_context.tail_array_json,
             )
         };
         fs::write(src_dir.join("test.ts"), test_runner_code)?;
@@ -531,9 +533,13 @@ fn prepare_type_context(abi_file_path: &Path, type_name: &str) -> Result<TypeCon
     let enum_metadata_json =
         serde_json::to_string(&enum_metadata).context("failed to serialize enum metadata")?;
 
+    let tail_array_json = serde_json::to_string(&collect_tail_array_metadata(resolved))
+        .context("failed to serialize tail array metadata")?;
+
     Ok(TypeContext {
         package: abi.package().to_string(),
         enum_metadata_json,
+        tail_array_json,
     })
 }
 
@@ -543,6 +549,7 @@ fn generate_typescript_test_runner_code(
     binary_file_path: &Path,
     package: &str,
     enum_metadata_json: &str,
+    tail_array_json: &str,
 ) -> String {
     let package_path = package.replace('.', "/");
     let binary_path_str = escape_js_string(&binary_file_path.display().to_string());
@@ -563,6 +570,46 @@ type EnumFieldMetadata = {{
 }};
 
 const ENUM_FIELD_METADATA: readonly EnumFieldMetadata[] = {enum_metadata_json} as const;
+
+type TailArrayMetadata = {{ field: string; primitive: string; element_size: number }};
+const TAIL_ARRAY_METADATA: readonly TailArrayMetadata[] = {tail_array_json} as const;
+
+/* Encode a primitive array the way the ABI lays it out (little-endian). */
+const encodePrimitiveArray = (values: readonly (number | bigint)[], primitive: string, elementSize: number): Uint8Array => {{
+  const out = new Uint8Array(values.length * elementSize);
+  const dv = new DataView(out.buffer);
+  values.forEach((value, idx) => {{
+    const at = idx * elementSize;
+    switch (primitive) {{
+      case "u8": dv.setUint8(at, Number(value)); break;
+      case "i8": dv.setInt8(at, Number(value)); break;
+      case "u16": dv.setUint16(at, Number(value), true); break;
+      case "i16": dv.setInt16(at, Number(value), true); break;
+      case "u32": dv.setUint32(at, Number(value), true); break;
+      case "i32": dv.setInt32(at, Number(value), true); break;
+      case "f32": dv.setFloat32(at, Number(value), true); break;
+      case "u64": dv.setBigUint64(at, BigInt(value), true); break;
+      case "i64": dv.setBigInt64(at, BigInt(value), true); break;
+      case "f64": dv.setFloat64(at, Number(value), true); break;
+      default: throw new Error(`unsupported tail primitive ${{primitive}}`);
+    }}
+  }});
+  return out;
+}};
+
+/* Write variable-size primitive arrays through the builder's public writer,
+   for any the builder still lacks after the other hydration steps. */
+const hydrateTailArrays = (builder: Record<string, any>, view: Record<string, any>): void => {{
+  for (const meta of TAIL_ARRAY_METADATA) {{
+    const writerFactory = builder[meta.field];
+    const getter = view[`get_${{meta.field}}`];
+    if (typeof writerFactory !== "function" || typeof getter !== "function") continue;
+    if (builder[`__tnFam_${{meta.field}}`] instanceof Uint8Array) continue;
+    const writer = writerFactory.call(builder);
+    if (!writer || typeof writer.write !== "function") continue;
+    writer.write(encodePrimitiveArray(getter.call(view), meta.primitive, meta.element_size)).finish();
+  }}
+}};
 
 const toUint8Array = (source: any): Uint8Array => {{
   if (source instanceof Uint8Array) {{
@@ -602,7 +649,7 @@ const buildFieldContextFromParams = (
   if (!params) {{
     return null;
   }}
-  const paramKeys = (TypeClass?.ParamKeys ?? {}) as Record<string, string>;
+  const paramKeys = (TypeClass?.ParamKeys ?? {{}}) as Record<string, string>;
   const context: Record<string, number | bigint> = Object.create(null);
   for (const [tsName, canonical] of Object.entries(paramKeys)) {{
     const value = (params as Record<string, number | bigint>)[tsName];
@@ -675,40 +722,52 @@ const hydrateEnumBuilder = (TypeClass: any, builder: any, view: any, bytes: Uint
   if (!ENUM_FIELD_METADATA.length) {{
     return false;
   }}
-  let hydrated = false;
+  /* Public API only: copy plain fields through set_<f>(get_<f>()), then select
+     each enum variant from the view's typed accessor and write its payload. */
+  const enumNames = new Set<string>();
   for (const meta of ENUM_FIELD_METADATA) {{
-    const getterName = `get_${{meta.tag_ts_name}}`;
-    const tagValue = callGetter(view, getterName);
-    builder[`__tnField_${{meta.tag_ts_name}}`] = tagValue;
-    const variant = meta.variants.find((candidate) => candidate.tag === tagValue);
-    if (!variant) {{
-      continue;
-    }}
-    const payloadStart = meta.payload_offset;
-    let payloadEnd: number;
-    if (variant.payload_size == null) {{
-      if (!meta.is_tail) {{
+    enumNames.add(meta.field_ts_name);
+  }}
+  const proto = Object.getPrototypeOf(builder);
+  for (const key of Object.getOwnPropertyNames(proto)) {{
+    if (!key.startsWith("set_")) continue;
+    const field = key.slice(4);
+    if (enumNames.has(field)) continue;
+    const getter = view[`get_${{field}}`];
+    if (typeof getter !== "function") continue;
+    const value = getter.call(view);
+    /* Nested struct getters return views; their setters take the exact bytes. */
+    const input = value && typeof value === "object" && !Array.isArray(value) && value.buffer instanceof Uint8Array
+      ? exactJaggedElementBytes(value)
+      : value;
+    builder[key](input);
+  }}
+  for (const meta of ENUM_FIELD_METADATA) {{
+    const accessor = view[meta.field_ts_name];
+    const selector = builder[meta.field_ts_name];
+    /* A fixed-size struct of a tag and the enum keyed on it (an account root
+       whose variants share one size) builds through select_<variant>(payload),
+       which also writes the tag. */
+    if (typeof accessor === "function" && typeof selector !== "function") {{
+      const inner = accessor.call(view);
+      const descriptor = inner.variant();
+      const select = descriptor ? builder[`select_${{descriptor.name}}`] : undefined;
+      if (typeof select === "function") {{
+        select.call(builder, inner.bytes());
         continue;
       }}
-      payloadEnd = bytes.length;
-    }} else {{
-      payloadEnd = payloadStart + variant.payload_size;
     }}
-    const payload = bytes.slice(payloadStart, payloadEnd);
-    const descriptors = (TypeClass as any)[meta.descriptor_prop] ?? [];
-    const descriptor = descriptors.find((entry: {{ tag: number }}) => entry.tag === tagValue) ?? null;
-    builder[`__tnPayload_${{meta.field_ts_name}}`] = {{ descriptor, bytes: payload }};
-    hydrated = true;
-    const prefixBuffer = builder[`__tnPrefixBuffer`];
-    if (prefixBuffer instanceof Uint8Array && meta.payload_offset > 0) {{
-      const prefixSlice = bytes.slice(0, meta.payload_offset);
-      const copyLength = Math.min(prefixBuffer.length, prefixSlice.length);
-      if (copyLength > 0) {{
-        prefixBuffer.set(prefixSlice.subarray(0, copyLength));
-      }}
+    if (typeof accessor !== "function" || typeof selector !== "function") {{
+      throw new Error(`No public accessor/selector for enum field '${{meta.field_ts_name}}'`);
     }}
+    const inner = accessor.call(view);
+    const descriptor = inner.variant();
+    if (!descriptor) {{
+      throw new Error(`Unknown variant for enum field '${{meta.field_ts_name}}'`);
+    }}
+    selector.call(builder).select(descriptor.name).writePayload(inner.bytes()).finish();
   }}
-  return hydrated;
+  return true;
 }};
 
 const exactJaggedElementBytes = (element: any): any => {{
@@ -775,6 +834,7 @@ const hydrateBuilderFromView = (TypeClass: any, builder: any, view: any, bytes: 
       builderAny[`${{storageProp}}Count`] = count;
     }}
     hydrateJaggedArrayBuilder(builderAny, viewAny);
+    hydrateTailArrays(builderAny, viewAny);
     return;
   }}
   if (hydrateEnumBuilder(TypeClass, builderAny, view, bytes)) {{
@@ -872,6 +932,7 @@ main().catch(err => {{
         type_name = type_name,
         package_path = package_path,
         enum_metadata_json = enum_metadata_json,
+        tail_array_json = tail_array_json,
         binary_path = binary_path_str
     )
 }
@@ -929,6 +990,48 @@ struct TsToolchain {
 struct TypeContext {
     package: String,
     enum_metadata_json: String,
+    tail_array_json: String,
+}
+
+#[derive(Serialize)]
+struct TailArrayMetadata {
+    field: String,
+    primitive: String,
+    element_size: u64,
+}
+
+/* Variable-size arrays of primitives in a struct root (written via FAM writers). */
+fn collect_tail_array_metadata(resolved_type: &ResolvedType) -> Vec<TailArrayMetadata> {
+    let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind else {
+        return Vec::new();
+    };
+    fields
+        .iter()
+        .filter_map(|field| {
+            let ResolvedTypeKind::Array {
+                element_type,
+                size_expression,
+                ..
+            } = &field.field_type.kind
+            else {
+                return None;
+            };
+            if size_expression.is_constant() {
+                return None;
+            }
+            let ResolvedTypeKind::Primitive { prim_type } = &element_type.kind else {
+                return None;
+            };
+            let Size::Const(element_size) = element_type.size else {
+                return None;
+            };
+            Some(TailArrayMetadata {
+                field: field.name.clone(),
+                primitive: serde_json::to_value(prim_type).ok()?.as_str()?.to_string(),
+                element_size,
+            })
+        })
+        .collect()
 }
 
 #[derive(Serialize)]
@@ -961,9 +1064,7 @@ fn collect_enum_field_metadata(resolved_type: &ResolvedType) -> Vec<EnumFieldMet
         let Some(enum_info) = enum_field_info_by_name(resolved_type, &field.name) else {
             continue;
         };
-        let Some(payload_offset) = enum_info.payload_offset else {
-            continue;
-        };
+        let payload_offset = enum_info.payload_offset.unwrap_or(0);
         let tag_offset = enum_info.tag_offset.unwrap_or(payload_offset);
         let descriptor_prop = enum_info.descriptor_prop.clone();
         let field_ts_name = enum_info.enum_ts_name.clone();

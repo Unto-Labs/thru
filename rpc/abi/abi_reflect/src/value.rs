@@ -25,10 +25,10 @@ pub enum Value {
         fields: Vec<(String, ReflectedValue)>,
     },
 
-    /* Union value - contains the active variant name and its value */
+    /* Union value - a union has no tag, so every variant is decoded over the
+     * union's bytes, in declaration order */
     Union {
-        variant_name: String,
-        variant_value: Box<ReflectedValue>,
+        variants: Vec<(String, ReflectedValue)>,
     },
 
     /* Enum value - contains the active variant name, tag value, and variant value */
@@ -230,8 +230,7 @@ pub enum ValueOnly {
     Primitive(PrimitiveValue),
     Struct(std::collections::HashMap<String, ValueOnly>),
     Union {
-        variant: String,
-        value: Box<ValueOnly>,
+        variants: std::collections::HashMap<String, ValueOnly>,
     },
     Enum {
         variant: String,
@@ -260,12 +259,11 @@ impl ValueOnly {
                 }
                 ValueOnly::Struct(map)
             }
-            Value::Union {
-                variant_name,
-                variant_value,
-            } => ValueOnly::Union {
-                variant: variant_name.clone(),
-                value: Box::new(ValueOnly::from_reflected_value(variant_value)),
+            Value::Union { variants } => ValueOnly::Union {
+                variants: variants
+                    .iter()
+                    .map(|(name, value)| (name.clone(), ValueOnly::from_reflected_value(value)))
+                    .collect(),
             },
             Value::Enum {
                 variant_name,

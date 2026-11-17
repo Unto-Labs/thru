@@ -13,9 +13,17 @@ const sources = {
   'domain/programs/multicall/abi': 'rpc/abi/type-library/tn_multicall.abi.yaml',
   'domain/programs/uploader/abi': 'rpc/abi/type-library/tn_uploader_program.abi.yaml',
   'domain/programs/wallet/abi': 'rpc/abi/type-library/tn_wallet.abi.yaml',
-  'domain/accounts/abi': 'rpc/abi/type-library/account_meta_flat.abi.yaml',
+  'domain/accounts/abi': 'programs/bootstrap/generated/account_meta.abi.yaml',
 };
 const check = process.argv.includes('--check');
+// Never regenerate in place before this check: that would hide stale inputs.
+const preparation = spawnSync(process.execPath, ['--import', 'tsx',
+  join(repo, 'programs/bootstrap/prepare-abis.ts'),
+  '--network', process.env.THRU_ABI_NETWORK ?? 'alphanet', '--check'], {
+  cwd: join(repo, 'programs/bootstrap'), stdio: 'inherit', env: process.env,
+});
+if (preparation.error) throw preparation.error;
+if (preparation.status !== 0) throw new Error('Prepared ABI freshness check failed');
 const temporary = check ? mkdtempSync(join(tmpdir(), 'compression-codecs-')) : undefined;
 function files(path) {
   return readdirSync(path, { withFileTypes: true }).flatMap(entry => entry.isDirectory()

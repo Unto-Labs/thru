@@ -1,22 +1,26 @@
 import { encodeAddress } from '@thru/sdk/helpers';
-import { deriveProgramAddress } from '@thru/sdk';
-import { padSeed, systemProgramPubkey } from '../utils/helpers.js';
+import { deriveProgramAddress, Pubkey } from '@thru/sdk';
+import { padSeed } from '../utils/helpers.js';
+import { CANONICAL_PROGRAMS, CORE_MANAGER_HEX } from '../bootstrap-addresses/registry.js';
 
-/** The immutable trust root manages only the upgradeable main Manager. */
-export const ROOT_MANAGER_PROGRAM_PUBKEY = systemProgramPubkey(0x01);
-export const ROOT_MANAGER_PROGRAM_ADDRESS = encodeAddress(ROOT_MANAGER_PROGRAM_PUBKEY);
-export const MANAGER_PROGRAM_SEED = 'thru-main-manager:949457';
+/** The fixed Core trust root governs canonical programs, including Public Manager. */
+export const CORE_MANAGER_PROGRAM_PUBKEY = Pubkey.from(CORE_MANAGER_HEX).toBytes();
+export const CORE_MANAGER_PROGRAM_ADDRESS = encodeAddress(CORE_MANAGER_PROGRAM_PUBKEY);
+export const MANAGER_PROGRAM_SEED = CANONICAL_PROGRAMS.find(entry => entry.name === 'public_manager')!.seed!;
 const managerMeta = deriveProgramAddress({
-  programAddress: ROOT_MANAGER_PROGRAM_ADDRESS,
+  programAddress: CORE_MANAGER_PROGRAM_ADDRESS,
   seed: padSeed(MANAGER_PROGRAM_SEED),
 });
 export const MANAGER_PROGRAM_PUBKEY = deriveProgramAddress({
-  programAddress: ROOT_MANAGER_PROGRAM_ADDRESS,
+  programAddress: CORE_MANAGER_PROGRAM_ADDRESS,
   seed: managerMeta.bytes,
 }).bytes;
 export const MANAGER_PROGRAM_ADDRESS = encodeAddress(MANAGER_PROGRAM_PUBKEY);
 
-export const MANAGER_META_SIZE = 73;
+/** Account discriminator of program metadata (byte 0); Core Manager uses the
+    same value for the same layout. */
+export const MANAGER_ACCOUNT_TYPE_PROGRAM_META_V1 = 1;
+export const MANAGER_META_SIZE = 74;
 
 export const MANAGER_STATE_OPEN = 0x00;
 export const MANAGER_STATE_PAUSED = 0x01;

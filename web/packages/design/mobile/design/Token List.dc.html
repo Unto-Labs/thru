@@ -43,7 +43,7 @@ a:hover{text-decoration:underline;text-underline-offset:3px;}
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:420},&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;ready&quot;,&quot;options&quot;:[&quot;ready&quot;,&quot;loading&quot;,&quot;error&quot;,&quot;empty&quot;,&quot;edge&quot;,&quot;many&quot;],&quot;tsType&quot;:&quot;'ready' | 'loading' | 'error' | 'empty' | 'edge' | 'many'&quot;},&quot;cap&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:0,&quot;max&quot;:8},&quot;selected&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;showLabel&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
 const T = (key, ticker, mint, amount, extra) => ({ key, kind: 'token', ticker, mint, amount, units: '', badge: '', dup: false, ...(extra || {}) });
-const THRUSD = { key: 'thrusd', kind: 'thrusd', ticker: 'THRUSD', mint: 'ta2u\u2026sD91', amount: '$56.00', units: '56', badge: '', dup: false };
+const UUSD = { key: 'uusd', kind: 'uusd', ticker: 'UUSD', mint: 'ta2u\u2026sD91', amount: '$56.00', units: '56', badge: '', dup: false };
 const SK = (i) => ({ key: 'sk' + i, kind: 'skeleton', ticker: '', mint: '', amount: '', units: '', badge: '', dup: false });
 const BONK = T('bonk', 'BONK', 'taBo\u2026nK77', '1,234,567,890.123456789');
 const COOL = T('cool', 'COOL', 'taZt\u20269Kq2', '1,250.5');
@@ -54,12 +54,12 @@ const LONG = T('long', 'LONGTICKERNAME16', 'taLn\u2026g8Tk', '7.25');
 const WBTC = T('wbtc', 'WBTC', 'taBt\u2026c4Hn', '0.015');
 const UNK = T('unk', 'Unknown token', 'taXk\u20260qPz', '12,000,000', { badge: 'Unsupported' });
 const LISTS = {
-  ready: [THRUSD, BONK, COOL, ETH, WBTC],
-  loading: [THRUSD, SK(1), SK(2), SK(3)],
-  error: [THRUSD],
-  empty: [THRUSD],
-  edge: [THRUSD, BONK, { ...COOL, dup: true }, COOL2, ETH, ICE, LONG, WBTC, UNK],
-  many: [THRUSD, T('aero', 'AERO', 'taAe\u2026r0Qd', '310.4'), BONK, { ...COOL, dup: true }, COOL2, T('drift', 'DRIFT', 'taDr\u2026f5Mw', '88'), ETH, T('hnt', 'HNT', 'taHn\u2026t9Cz', '12.308'), ICE, T('jup', 'JUP', 'taJu\u2026p2Ls', '540.25'), T('kmno', 'KMNO', 'taKm\u2026n6Xp', '2,000'), LONG, T('mnde', 'MNDE', 'taMn\u2026d1Rk', '75.5'), T('orca', 'ORCA', 'taOr\u2026c7Vb', '9.99'), T('pyth', 'PYTH', 'taPy\u2026h4Wn', '1,100'), T('ray', 'RAY', 'taRa\u2026y8Jm', '33.3'), WBTC, UNK],
+  ready: [UUSD, BONK, COOL, ETH, WBTC],
+  loading: [UUSD, SK(1), SK(2), SK(3)],
+  error: [UUSD],
+  empty: [UUSD],
+  edge: [UUSD, BONK, { ...COOL, dup: true }, COOL2, ETH, ICE, LONG, WBTC, UNK],
+  many: [UUSD, T('aero', 'AERO', 'taAe\u2026r0Qd', '310.4'), BONK, { ...COOL, dup: true }, COOL2, T('drift', 'DRIFT', 'taDr\u2026f5Mw', '88'), ETH, T('hnt', 'HNT', 'taHn\u2026t9Cz', '12.308'), ICE, T('jup', 'JUP', 'taJu\u2026p2Ls', '540.25'), T('kmno', 'KMNO', 'taKm\u2026n6Xp', '2,000'), LONG, T('mnde', 'MNDE', 'taMn\u2026d1Rk', '75.5'), T('orca', 'ORCA', 'taOr\u2026c7Vb', '9.99'), T('pyth', 'PYTH', 'taPy\u2026h4Wn', '1,100'), T('ray', 'RAY', 'taRa\u2026y8Jm', '33.3'), WBTC, UNK],
 };
 class Component extends DCLogic {
   renderVals() {

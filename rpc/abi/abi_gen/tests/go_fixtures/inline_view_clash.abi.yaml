@@ -1,0 +1,41 @@
+abi:
+  package: "test.inline_view_clash"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "A declared type named like the inline type of another type's field"
+
+types:
+  # The inline struct of `A.b` is `A::b`, spelled `A_b` like this type.
+  - name: "A_b"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "x"
+            field-type:
+              primitive: u64
+          - name: "y"
+            field-type:
+              primitive: u8
+  - name: "A"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "n"
+            field-type:
+              primitive: u8
+          - name: "b"
+            field-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "p"
+                    field-type:
+                      primitive: u8
+                  - name: "q"
+                    field-type:
+                      primitive: u16
+          - name: "tail"
+            field-type:
+              primitive: u8

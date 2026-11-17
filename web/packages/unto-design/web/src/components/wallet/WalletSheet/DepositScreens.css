@@ -1,0 +1,750 @@
+.uds-dep__rail-title {
+  font-size: 16px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.2px;
+  color: var(--color-text-primary);
+}
+.uds-dep__rail-sub {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  text-wrap: pretty;
+  margin-top: 4px;
+}
+
+.uds-dep__methods {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  /* 24px under the "Add funds" title, with the body gap and header padding. */
+  margin-top: var(--space-2);
+}
+.uds-dep__method {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+  background: var(--color-surface-primary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-none);
+  cursor: pointer;
+  text-align: left;
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.uds-dep__method:hover {
+  border-color: var(--color-border-strong);
+}
+.uds-dep__method:active {
+  transform: translateY(1px);
+}
+.uds-dep__method:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+}
+.uds-dep__method-art {
+  display: inline-flex;
+  align-items: center;
+  width: 52px;
+  flex: none;
+}
+.uds-dep__fan {
+  display: inline-flex;
+  border-radius: var(--radius-pill);
+  box-shadow: 0 0 0 2px var(--color-surface-primary);
+  flex: none;
+}
+.uds-dep__fan + .uds-dep__fan {
+  margin-left: -7px;
+}
+.uds-dep__logo {
+  display: block;
+  border-radius: var(--radius-pill);
+  flex: none;
+}
+.uds-dep__method-glyph {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  color: var(--color-text-primary);
+}
+.uds-dep__method-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.uds-dep__method-title {
+  font-size: 13px;
+  font-weight: var(--fw-semibold);
+}
+.uds-dep__method-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.uds-dep__method-chev {
+  color: var(--color-text-tertiary);
+  flex: none;
+}
+/* The panel rides Base UI's height var, so it eases open and shut and the
+   frame follows. */
+.uds-dep__item {
+  background: var(--color-surface-primary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-none);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.uds-dep__item:has(> .uds-dep__method:hover) {
+  border-color: var(--color-border-strong);
+}
+.uds-dep__item > .uds-dep__method {
+  background: transparent;
+  border: 0;
+}
+.uds-dep__item > .uds-dep__method:hover {
+  border-color: transparent;
+}
+.uds-dep__method-chev {
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+.uds-dep__method[data-panel-open] .uds-dep__method-chev {
+  transform: rotate(90deg);
+}
+.uds-dep__panel {
+  overflow: hidden;
+  height: var(--collapsible-panel-height);
+  transition: height 320ms cubic-bezier(0.2, 0, 0, 1);
+}
+.uds-dep__panel[data-starting-style],
+.uds-dep__panel[data-ending-style] {
+  height: 0;
+}
+.uds-dep__panel-body {
+  padding: 0 var(--space-3) var(--space-3);
+}
+.uds-dep__embedded {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+@media (prefers-reduced-motion: reduce) {
+  .uds-dep__method-chev,
+  .uds-dep__panel {
+    transition: none;
+  }
+}
+
+.uds-dep__lands {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+.uds-dep__lands-acct {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+.uds-dep__lands-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  flex: none;
+}
+/* Ending the sheet over the network status (Frame.css): the status moves up
+   by this row's half-leading, so it sits as far under the text as under a
+   button. The row is 11px on the host's 1.5 line. */
+.uds-frame--network:has(.uds-screen:not([hidden] *) > .uds-screen__body:last-child > .uds-dep__lands:last-child):not(:has(.uds-powered)) .uds-frame__network {
+  margin-top: calc(-0.25 * 11px);
+}
+
+.uds-dep__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+.uds-dep__label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+.uds-dep__select {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-none);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  text-align: left;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.uds-dep__select:hover,
+.uds-dep__select[data-popup-open] {
+  border-color: var(--color-text-primary);
+}
+.uds-dep__select:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+}
+.uds-dep__select[data-disabled] {
+  cursor: default;
+  opacity: 0.6;
+}
+.uds-dep__select-icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-primary);
+}
+.uds-dep__select-icon > img {
+  width: 16px;
+  height: 16px;
+}
+.uds-dep__select-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uds-dep__select-chev {
+  display: inline-flex;
+  color: var(--color-text-tertiary);
+  flex: none;
+  margin-left: auto;
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+.uds-dep__select[data-popup-open] .uds-dep__select-chev {
+  transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .uds-dep__select-chev {
+    transition: none;
+  }
+}
+/* Above the WalletOverlay island (z 61): the select lives inside the sheet. */
+.uds-dep__positioner {
+  z-index: 70;
+}
+.uds-dep__popup {
+  box-sizing: border-box;
+  width: var(--anchor-width);
+  max-height: var(--available-height);
+  overflow: auto;
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-none);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-1) 0;
+  outline: none;
+}
+.uds-dep__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-primary);
+  cursor: default;
+  user-select: none;
+}
+.uds-dep__option[data-highlighted] {
+  background: var(--color-surface-lower-inverse);
+  color: var(--color-text-primary-inverse);
+}
+.uds-dep__option-text {
+  flex: 1;
+  min-width: 0;
+}
+.uds-dep__option-check {
+  display: inline-flex;
+  flex: none;
+}
+.uds-dep__option:not([data-selected]) .uds-dep__option-check {
+  visibility: hidden;
+}
+
+.uds-dep__qr-row {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-1) 0;
+}
+.uds-dep__qr {
+  box-sizing: border-box;
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-strong);
+}
+.uds-dep__qr-svg {
+  display: block;
+  fill: var(--color-text-primary);
+}
+.uds-dep__qr--empty {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      var(--color-surface-primary) 0 6px,
+      var(--color-surface-higher) 6px 12px
+    );
+}
+.uds-dep__qr-mark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.uds-dep__qr-mark > svg {
+  display: block;
+  background: var(--color-surface-higher);
+  padding: 3px;
+  box-sizing: content-box;
+}
+
+.uds-dep__addr {
+  padding: var(--space-3);
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-strong);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-primary);
+  word-break: break-all;
+  line-height: 1.5;
+}
+.uds-dep__addr--empty {
+  color: var(--color-text-tertiary);
+  min-height: 42px;
+}
+.uds-dep__copy-check {
+  display: inline-flex;
+  color: var(--grass-400);
+}
+
+.uds-dep__back {
+  align-self: center;
+}
+
+.uds-dep__presets {
+  display: flex;
+  width: 100%;
+}
+.uds-dep__preset {
+  flex: 1;
+}
+.uds-dep__step-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.uds-dep__step-head .uds-stepper__dot {
+  border-radius: var(--radius-none);
+}
+
+.uds-dep__receipt {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.uds-dep__receipt-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.uds-dep__receipt-label {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+.uds-dep__receipt-value {
+  font-size: 13px;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.uds-dep__card-contact {
+  gap: 10px;
+}
+.uds-dep__quote {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  padding: 0 2px;
+}
+.uds-dep__quote strong {
+  color: var(--color-text-primary);
+  font-weight: var(--fw-semibold);
+}
+
+.uds-dep__terms {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-tertiary);
+  text-wrap: pretty;
+}
+.uds-dep__terms a {
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.uds-dep__terms a:hover {
+  color: var(--color-text-primary);
+}
+
+.uds-dep__cb {
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-higher);
+}
+.uds-dep__cb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-border-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+.uds-dep__cb-host {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.uds-dep__cb-body {
+  padding: 10px;
+}
+.uds-dep__cb-body--tall {
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.uds-dep__cb-body > iframe {
+  display: block;
+  width: 100%;
+  border: 0;
+}
+
+.uds-dep__cb-bare {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.uds-dep__popup-note {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+
+.uds-dep__verify-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-top: var(--space-1);
+}
+.uds-dep__verify-foot .uds-dep__back {
+  align-self: auto;
+}
+.uds-dep__attribution {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--color-text-tertiary);
+}
+
+.uds-dep__pending-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.uds-dep__note {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.uds-dep__done-head .uds-screen__title {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  letter-spacing: -0.4px;
+}
+.uds-dep__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.uds-dep__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 18px;
+}
+.uds-dep__row-label {
+  color: var(--color-text-tertiary);
+}
+.uds-dep__row-value {
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.uds-dep__row-value--strong {
+  font-weight: var(--fw-semibold);
+}
+
+.uds-dep__contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.uds-dep__contact-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.uds-dep__contact-phone {
+  position: relative;
+}
+.uds-dep__contact-phone .uds-dep__contact-input {
+  padding-left: 64px;
+}
+.uds-dep__contact-cc {
+  position: absolute;
+  left: 12px;
+  bottom: 14px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  pointer-events: none;
+}
+.uds-dep__contact-error {
+  font-size: 12px;
+  color: var(--color-text-danger);
+}
+
+.uds-dep__agreement .uds-dep__field {
+  gap: var(--space-1);
+}
+.uds-dep__agreement-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.uds-dep__agreement-box {
+  height: 240px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-higher);
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+.uds-dep__agree {
+  display: flex;
+  min-height: 34px;
+}
+@media (max-width: 640px) {
+  .uds-dep__agree {
+    min-height: 44px;
+  }
+}
+
+.uds-dep__kyc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.uds-dep__kyc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}
+.uds-dep__kyc-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.uds-dep__kyc-address {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.uds-dep__kyc-address legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
+}
+.uds-dep__kyc-locality {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, .9fr);
+  gap: 0 var(--space-3);
+  align-items: start;
+}
+.uds-dep__kyc-footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.uds-dep__kyc-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+@media (min-width: 641px) {
+  .uds-dep__kyc-contact {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  }
+  .uds-dep__kyc-identity {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.uds-dep__pending-progress {
+  display: flex;
+  justify-content: center;
+}
+
+.uds-dep__list {
+  border: 1px solid var(--color-border-tertiary);
+}
+.uds-dep__list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 var(--space-3);
+  padding: var(--space-2) 0;
+}
+.uds-dep__list-row + .uds-dep__list-row {
+  border-top: 1px solid var(--color-border-tertiary);
+}
+.uds-dep__list-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.uds-dep__list-mono {
+  font-family: var(--font-mono);
+}
+.uds-dep__list-sub {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+.uds-copy-icon.uds-dep__list-copy {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-right: calc(-1 * var(--space-2));
+}
+@media (max-width: 640px) {
+  /* A 44px target that reaches the list's edge, the icon still on the text column's edge. */
+  .uds-copy-icon.uds-dep__list-copy {
+    width: 44px;
+    height: 44px;
+    justify-content: flex-end;
+    margin-right: calc(-1 * var(--space-3));
+    padding-right: var(--space-3);
+  }
+  /* A 44px target for each transfer method's tab. */
+  .uds-dep__bank-tab {
+    min-height: 44px;
+  }
+  /* The outline button keeps the small label of the flow's other buttons. */
+  .uds-dep__activity .uds-wsheet__cta {
+    font-size: 13px;
+  }
+}
+.uds-dep__sr-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* One transfer method's panel: its rows, then how long it takes. */
+.uds-tabs__panel.uds-dep__bank-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) 0 0;
+}
+.uds-dep__bank-panel .uds-dep__list {
+  align-self: stretch;
+}
+
+.uds-dep__activity-detail,
+.uds-dep__activity-amount {
+  font-family: var(--font-mono);
+}
+/* Wraps, so a long return reason shows in full. */
+.uds-dep__activity-detail {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+.uds-dep__activity-amount {
+  flex: none;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.uds-dep__activity-amount--failed {
+  color: var(--color-text-secondary);
+}

@@ -1,0 +1,135 @@
+abi:
+  package: "compliance.nested_count_after_bytes"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Arrays sized by a field of a nested struct that follows variable-size data"
+
+types:
+  # `child.count` follows `bytes`, so its offset is only known at run time.
+  - name: "NestedCount"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "child"
+            field-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "n"
+                    field-type:
+                      primitive: u8
+                  - name: "bytes"
+                    field-type:
+                      array:
+                        size:
+                          field-ref:
+                            path: ["n"]
+                        element-type:
+                          primitive: u8
+                  - name: "count"
+                    field-type:
+                      primitive: u8
+          - name: "items"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["child", "count"]
+                element-type:
+                  primitive: u16
+          - name: "tail"
+            field-type:
+              primitive: u8
+  - name: "CountChild"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "n"
+            field-type:
+              primitive: u8
+          - name: "bytes"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["n"]
+                element-type:
+                  primitive: u8
+          - name: "count"
+            field-type:
+              primitive: u8
+  # The same through a named child type.
+  - name: "NamedCount"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "child"
+            field-type:
+              type-ref:
+                name: "CountChild"
+          - name: "items"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["child", "count"]
+                element-type:
+                  primitive: u8
+          - name: "tail"
+            field-type:
+              primitive: u8
+  # Two dynamic offsets deep: `outer.inner` follows `pad`, `inner.count` follows `data`.
+  - name: "DeepCount"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "lead"
+            field-type:
+              primitive: u8
+          - name: "outer"
+            field-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "m"
+                    field-type:
+                      primitive: u8
+                  - name: "pad"
+                    field-type:
+                      array:
+                        size:
+                          field-ref:
+                            path: ["m"]
+                        element-type:
+                          primitive: u8
+                  - name: "inner"
+                    field-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "k"
+                            field-type:
+                              primitive: u8
+                          - name: "data"
+                            field-type:
+                              array:
+                                size:
+                                  field-ref:
+                                    path: ["k"]
+                                element-type:
+                                  primitive: u8
+                          - name: "count"
+                            field-type:
+                              primitive: u8
+          - name: "items"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["outer", "inner", "count"]
+                element-type:
+                  primitive: u8

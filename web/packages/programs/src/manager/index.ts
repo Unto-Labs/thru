@@ -1,7 +1,8 @@
 export {
-  ROOT_MANAGER_PROGRAM_ADDRESS,
-  ROOT_MANAGER_PROGRAM_PUBKEY,
+  CORE_MANAGER_PROGRAM_ADDRESS,
+  CORE_MANAGER_PROGRAM_PUBKEY,
   MANAGER_PROGRAM_SEED,
+  MANAGER_ACCOUNT_TYPE_PROGRAM_META_V1,
   MANAGER_META_SIZE,
   MANAGER_PROGRAM_ADDRESS,
   MANAGER_PROGRAM_IMAGE_HEADER_SIZE,
@@ -14,7 +15,7 @@ export {
   MANAGER_STATE_PAUSED,
 } from './constants';
 export { deriveManagedProgramAddresses } from './derivation';
-export { parseManagerProgramMeta } from './accounts';
+export { decodeManagerProgramAccount, parseManagerProgramMeta } from './accounts';
 export { validateManagerProgramImage } from './validation';
 export {
   MANAGER_ERROR_OBJECTS,
@@ -60,6 +61,8 @@ export {
   ManagerErrorBuilder,
   ManagerInstruction,
   ManagerInstructionBuilder,
+  ManagerProgramAccount,
+  ManagerProgramAccountBuilder,
   ManagerProgramMeta,
   ManagerProgramMetaBuilder,
   SetAuthorityArgs,
@@ -69,3 +72,5 @@ export {
   UpgradeArgs,
   UpgradeArgsBuilder,
 } from './abi/thru/program/manager/types';
+export { resolveManagerSelection } from './selection';
+export type { ManagerSelection } from './selection';

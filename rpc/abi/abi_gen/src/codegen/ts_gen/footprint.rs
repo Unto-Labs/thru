@@ -1,9 +1,9 @@
 use super::ir_helpers::{
-    DerivedParamSpec, DynamicBinding, collect_dynamic_param_bindings,
-    deduplicated_ts_parameter_bindings, derived_param_specs, sanitize_param_name,
-    ts_name_dedup_map, ts_parameter_bindings,
+    DerivedParamSpec, DynamicBinding, deduplicated_ts_parameter_bindings, derived_param_specs,
+    extractor_emitted, sanitize_param_name, ts_name_dedup_map, ts_parameter_bindings,
 };
 use super::ir_serialization::ir_constant_name;
+use super::measure::{checks_tags, measure_fn, measure_fn_with_context};
 use crate::abi::resolved::{ResolvedType, ResolvedTypeKind, Size};
 use crate::abi::types::PrimitiveType;
 use crate::codegen::shared::ir::TypeIr;
@@ -12,7 +12,11 @@ use std::fmt::Write;
 
 /* Emit the static footprint() method for a type.
 Requires IR metadata - legacy fallback has been removed. */
-pub fn emit_footprint_method(resolved_type: &ResolvedType, type_ir: Option<&TypeIr>) -> String {
+pub fn emit_footprint_method(
+    resolved_type: &ResolvedType,
+    type_ir: Option<&TypeIr>,
+    type_lookup: &BTreeMap<String, ResolvedType>,
+) -> String {
     let ir = type_ir.unwrap_or_else(|| {
         panic!(
             "TypeScript codegen requires IR metadata for type '{}'. IR generation must have failed.",
@@ -20,7 +24,50 @@ pub fn emit_footprint_method(resolved_type: &ResolvedType, type_ir: Option<&Type
         )
     });
     let mut out = emit_ir_backed_footprint(resolved_type, ir);
-    out.push_str(&emit_validate_method(resolved_type, Some(ir)));
+    let mut validate = emit_validate_method(resolved_type, Some(ir));
+    /* Sizes alone do not check enum tags inside fixed-size values (a union
+    variant, a nested struct): walk the bytes as C and Rust do. */
+    if checks_tags(resolved_type, type_lookup) {
+        /* Never drop a required check: a type whose tags cannot be walked
+        fails generation (the CLI reports it). */
+        /* A value reading references from outside its bytes (a top-level
+        enum's tag) walks with its params as context (`kind` for the packed
+        `T.kind`). */
+        let has_params = validate.contains("const __tnParamsRec = ");
+        let (walk, call) = match measure_fn(resolved_type, type_lookup) {
+            Some(walk) => (walk, "this.__tnWalkTags(buffer)".to_string()),
+            None => {
+                let walk = has_params
+                    .then(|| measure_fn_with_context(resolved_type, type_lookup, "ctx"))
+                    .flatten()
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "TypeScript codegen cannot walk '{}' to check its enum tags",
+                            resolved_type.name
+                        )
+                    });
+                (
+                    walk,
+                    format!(
+                        "this.__tnWalkTags(buffer, __tnParamsContext(__tnParamsRec, \"{}.\"))",
+                        resolved_type.name
+                    ),
+                )
+            }
+        };
+        validate = validate.replace(
+            "    return { ok: true",
+            &format!(
+                "    if ({call} === null) return {{ ok: false, code: \"tn.invalid_tag\" }};\n    return {{ ok: true"
+            ),
+        );
+        writeln!(
+            validate,
+            "  /** Walks the value's bytes, checking every enum tag; its size, or null. */\n  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {{}}): number | null {{\n    void ctx;\n    return {walk}(buffer);\n  }}\n"
+        )
+        .unwrap();
+    }
+    out.push_str(&validate);
     out
 }
 
@@ -268,7 +315,9 @@ fn emit_ir_wrapper_footprint(resolved_type: &ResolvedType, params: &[String]) ->
 fn emit_validate_method(resolved_type: &ResolvedType, type_ir: Option<&TypeIr>) -> String {
     match type_ir {
         Some(ir) if ir.parameters.iter().any(|param| !param.derived) => {
-            let extractor_available = !collect_dynamic_param_bindings(resolved_type).is_empty();
+            /* A top-level enum's tag lives outside its bytes: no extractor. */
+            let extractor_available = !matches!(resolved_type.kind, ResolvedTypeKind::Enum { .. })
+                && extractor_emitted(resolved_type, ir);
             emit_validate_with_params(resolved_type, ir, extractor_available)
         }
         Some(_) if matches!(resolved_type.size, Size::Variable(_)) => {
@@ -309,7 +358,6 @@ fn emit_validate_ir_without_params(resolved_type: &ResolvedType) -> String {
         resolved_type.name
     )
     .unwrap();
-    writeln!(&mut output, "    if (consumed !== buffer.length) return {{ ok: false, code: \"tn.trailing_bytes\", consumed }};").unwrap();
     writeln!(&mut output, "    return {{ ok: true, consumed }};").unwrap();
     writeln!(
         &mut output,
@@ -365,6 +413,42 @@ fn emit_validate_with_params(
         )
         .unwrap();
         writeln!(&mut output, "      params = extracted.params;").unwrap();
+        if _type_ir
+            .parameters
+            .iter()
+            .any(|param| !param.derived && param.name.ends_with(".payload_size"))
+        {
+            /* A field sized by `<field>.payload_size` is measured from its
+            bytes only by the extractor: with supplied params, still measure
+            it, and refuse params that do not describe these bytes. */
+            writeln!(&mut output, "    }} else {{").unwrap();
+            writeln!(
+                &mut output,
+                "      const extracted = this.__tnExtractParams(view, buffer);"
+            )
+            .unwrap();
+            writeln!(
+                &mut output,
+                "      if (!extracted) return {{ ok: false, code: \"tn.param_extraction_failed\" }};"
+            )
+            .unwrap();
+            writeln!(
+                &mut output,
+                "      const supplied = params as unknown as Record<string, bigint>;"
+            )
+            .unwrap();
+            writeln!(
+                &mut output,
+                "      for (const [key, value] of Object.entries(extracted.params as unknown as Record<string, bigint>)) {{"
+            )
+            .unwrap();
+            writeln!(
+                &mut output,
+                "        if (supplied[key] === undefined || __tnToBigInt(supplied[key]) !== __tnToBigInt(value)) return {{ ok: false, code: \"tn.param_mismatch\" }};"
+            )
+            .unwrap();
+            writeln!(&mut output, "      }}").unwrap();
+        }
         writeln!(&mut output, "    }}").unwrap();
     } else {
         writeln!(&mut output, "    if (!params) {{").unwrap();

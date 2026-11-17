@@ -1,0 +1,178 @@
+abi:
+  package: "compliance.variable_union_nested"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Unions with variable-size variants, top level and nested in structs"
+
+types:
+  # Two variable-size variants over the same bytes plus a constant one.
+  - name: "TwoVar"
+    kind:
+      union:
+        packed: true
+        variants:
+          - name: "word"
+            variant-type:
+              primitive: u16
+          - name: "bytes"
+            variant-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "n"
+                    field-type:
+                      primitive: u8
+                  - name: "xs"
+                    field-type:
+                      array:
+                        size:
+                          field-ref:
+                            path: ["n"]
+                        element-type:
+                          primitive: u8
+          - name: "halves"
+            variant-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "pad"
+                    field-type:
+                      primitive: u8
+                  - name: "m"
+                    field-type:
+                      primitive: u8
+                  - name: "ys"
+                    field-type:
+                      array:
+                        size:
+                          field-ref:
+                            path: ["m"]
+                        element-type:
+                          primitive: u16
+  # A constant-size variant holding an enum tag next to a variable-size one:
+  # sizing from params must not depend on the constant variant's tag.
+  - name: "TagOrSized"
+    kind:
+      union:
+        packed: true
+        variants:
+          - name: "tagged"
+            variant-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "tag"
+                    field-type:
+                      primitive: u8
+                  - name: "body"
+                    field-type:
+                      enum:
+                        packed: true
+                        tag-ref:
+                          field-ref:
+                            path: ["tag"]
+                        variants:
+                          - name: "One"
+                            tag-value: 1
+                            variant-type:
+                              primitive: u8
+                          - name: "Two"
+                            tag-value: 2
+                            variant-type:
+                              primitive: u8
+          - name: "sized"
+            variant-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "len"
+                    field-type:
+                      primitive: u8
+                  - name: "data"
+                    field-type:
+                      array:
+                        size:
+                          field-ref:
+                            path: ["len"]
+                        element-type:
+                          primitive: u8
+  # Variable-size unions nested in a struct. (A type-ref to TwoVar is
+  # exercised by the C and Rust tests, which append it.)
+  - name: "VarHolder"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "lead"
+            field-type:
+              primitive: u8
+          - name: "body"
+            field-type:
+              union:
+                packed: true
+                variants:
+                  - name: "fixed"
+                    variant-type:
+                      primitive: u32
+                  - name: "sized"
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "len"
+                            field-type:
+                              primitive: u8
+                          - name: "data"
+                            field-type:
+                              array:
+                                size:
+                                  field-ref:
+                                    path: ["len"]
+                                element-type:
+                                  primitive: u8
+          - name: "pair"
+            field-type:
+              union:
+                packed: true
+                variants:
+                  - name: "word"
+                    variant-type:
+                      primitive: u16
+                  - name: "bytes"
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "n"
+                            field-type:
+                              primitive: u8
+                          - name: "xs"
+                            field-type:
+                              array:
+                                size:
+                                  field-ref:
+                                    path: ["n"]
+                                element-type:
+                                  primitive: u8
+                  - name: "halves"
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "pad"
+                            field-type:
+                              primitive: u8
+                          - name: "m"
+                            field-type:
+                              primitive: u8
+                          - name: "ys"
+                            field-type:
+                              array:
+                                size:
+                                  field-ref:
+                                    path: ["m"]
+                                element-type:
+                                  primitive: u16
+          - name: "trail"
+            field-type:
+              primitive: u8

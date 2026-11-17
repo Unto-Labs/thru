@@ -1,0 +1,7 @@
+test-case:
+  name: "wide_tag_enums_u32_zero"
+  abi-file: "../../abi_definitions/wide_tag_enums.abi.yaml"
+  type: "U32TagEnum"
+  description: "u32 tag 0 selects the empty Zero variant"
+  tags: ["enums", "wide-tag"]
+  binary-hex: "00000000"

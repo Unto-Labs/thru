@@ -1,0 +1,15 @@
+abi:
+  package: "cases.foo"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Package cases.foo (directory cases/foo on a case-insensitive file system)"
+
+types:
+  - name: "Lower"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "v"
+            field-type:
+              primitive: u8

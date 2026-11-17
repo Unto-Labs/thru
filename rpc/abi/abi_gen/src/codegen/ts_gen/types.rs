@@ -1,11 +1,11 @@
 use super::builder::fam_field_infos;
 use super::enum_utils::{EnumFieldInfo, enum_field_info_by_name, enum_field_infos};
 use super::helpers::{
-    collect_enum_variant_fam_refs, collect_field_value_refs, escape_ts_keyword,
-    generated_type_ident, is_nested_complex_type, literal_to_string, needs_endianness_arg,
-    primitive_size, primitive_to_dataview_getter, primitive_to_dataview_setter,
-    primitive_to_ts_return_type, sequential_size_expression, struct_field_const_offset,
-    to_camel_case, to_lower_camel_case,
+    collect_enum_variant_fam_refs, collect_field_ref_paths, collect_field_value_refs,
+    escape_ts_keyword, generated_type_ident, is_nested_complex_type, literal_to_string,
+    needs_endianness_arg, primitive_size, primitive_to_dataview_getter,
+    primitive_to_dataview_setter, primitive_to_ts_return_type, sequential_size_expression,
+    struct_field_const_offset, to_camel_case, to_lower_camel_case,
 };
 use super::ir_helpers::{collect_dynamic_param_bindings, deduplicated_ts_parameter_bindings};
 use super::ir_serialization::{emit_ir_constant, ir_constant_name};
@@ -20,106 +20,32 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 
 /* Convert size expression to TypeScript code that calls getter methods */
+/* A view's array length: the count in checked u64 arithmetic over its
+fields (short-circuit `&&` / `||`, as validation evaluates it), as a
+number. A view exists only over validated bytes, so an overflow (null)
+means the bytes changed since. */
 fn size_expression_to_ts_getter_code(expr: &ExprKind) -> String {
-    match expr {
-        ExprKind::Literal(lit) => {
-            use crate::abi::expr::LiteralExpr;
-            match lit {
-                LiteralExpr::U64(v) => v.to_string(),
-                LiteralExpr::U32(v) => v.to_string(),
-                LiteralExpr::U16(v) => v.to_string(),
-                LiteralExpr::U8(v) => v.to_string(),
-                LiteralExpr::I64(v) => v.to_string(),
-                LiteralExpr::I32(v) => v.to_string(),
-                LiteralExpr::I16(v) => v.to_string(),
-                LiteralExpr::I8(v) => v.to_string(),
-            }
+    let mut resolver = |path: &[String]| -> Option<String> {
+        /* `..` names a field of an enclosing struct: the view's context. */
+        if path.first().map_or(false, |seg| seg == "..") {
+            let key = path
+                .iter()
+                .filter(|seg| *seg != "..")
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(".");
+            return Some(format!("this.__tnResolveContextU64(\"{key}\")"));
         }
-        ExprKind::FieldRef(field_ref) => {
-            let dotted = field_ref.path.join(".");
-            if dotted == "__buffer_size" {
-                "this.buffer.length".to_string()
-            } else {
-                format!("this.__tnResolveFieldRef(\"{}\")", dotted)
-            }
-        }
-        ExprKind::Add(e) => {
-            format!(
-                "({} + {})",
-                size_expression_to_ts_getter_code(&e.left),
-                size_expression_to_ts_getter_code(&e.right)
-            )
-        }
-        ExprKind::Mul(e) => {
-            format!(
-                "({} * {})",
-                size_expression_to_ts_getter_code(&e.left),
-                size_expression_to_ts_getter_code(&e.right)
-            )
-        }
-        ExprKind::Sub(e) => {
-            format!(
-                "({} - {})",
-                size_expression_to_ts_getter_code(&e.left),
-                size_expression_to_ts_getter_code(&e.right)
-            )
-        }
-        ExprKind::Div(e) => {
-            format!(
-                "({} / {})",
-                size_expression_to_ts_getter_code(&e.left),
-                size_expression_to_ts_getter_code(&e.right)
-            )
-        }
-        ExprKind::Mod(e) => {
-            format!(
-                "({} % {})",
-                size_expression_to_ts_getter_code(&e.left),
-                size_expression_to_ts_getter_code(&e.right)
-            )
-        }
-        ExprKind::BitAnd(e) => {
-            format!(
-                "({} & {})",
-                size_expression_to_ts_getter_code(&e.left),
-                size_expression_to_ts_getter_code(&e.right)
-            )
-        }
-        ExprKind::BitOr(e) => {
-            format!(
-                "({} | {})",
-                size_expression_to_ts_getter_code(&e.left),
-                size_expression_to_ts_getter_code(&e.right)
-            )
-        }
-        ExprKind::BitXor(e) => {
-            format!(
-                "({} ^ {})",
-                size_expression_to_ts_getter_code(&e.left),
-                size_expression_to_ts_getter_code(&e.right)
-            )
-        }
-        ExprKind::LeftShift(e) => {
-            format!(
-                "({} << {})",
-                size_expression_to_ts_getter_code(&e.left),
-                size_expression_to_ts_getter_code(&e.right)
-            )
-        }
-        ExprKind::RightShift(e) => {
-            format!(
-                "({} >> {})",
-                size_expression_to_ts_getter_code(&e.left),
-                size_expression_to_ts_getter_code(&e.right)
-            )
-        }
-        ExprKind::Popcount(e) => {
-            format!(
-                "__tnPopcount({})",
-                size_expression_to_ts_getter_code(&e.operand)
-            )
-        }
-        _ => expr.to_c_string(), /* Fallback for unhandled cases */
+        let dotted = path.join(".");
+        Some(if dotted == "__buffer_size" {
+            "__tnToBigInt(this.buffer.length)".to_string()
+        } else {
+            format!("this.__tnResolveFieldRefU64(\"{dotted}\")")
+        })
+    };
+    match super::helpers::expr_to_ts_bigint_with_resolver(expr, &mut resolver) {
+        Some(checked) => format!("__tnCountNumber({checked})"),
+        None => "(() => { throw new Error(\"unsupported count expression\"); })()".to_string(),
     }
 }
 
@@ -215,6 +141,21 @@ fn emit_nested_types(
             }
         }
         ResolvedTypeKind::Enum { variants, .. } => {
+            let current_path = type_path.unwrap_or(&type_def.name);
+            for variant in variants {
+                if is_nested_complex_type(&variant.variant_type) {
+                    let nested_path = format!("{}_{}", current_path, variant.name);
+                    emit_nested_types(
+                        &variant.variant_type,
+                        Some(&nested_path),
+                        builder_registry,
+                        type_lookup,
+                        output,
+                    );
+                }
+            }
+        }
+        ResolvedTypeKind::SizeDiscriminatedUnion { variants } => {
             let current_path = type_path.unwrap_or(&type_def.name);
             for variant in variants {
                 if is_nested_complex_type(&variant.variant_type) {
@@ -390,11 +331,33 @@ fn emit_main_type(
         ResolvedTypeKind::Array { element_type, .. } => {
             emit_array_class(class_name, resolved_type, element_type.as_ref(), output);
         }
-        ResolvedTypeKind::Union { variants } => {
-            emit_union_class(class_name, variants, resolved_type, output);
+        ResolvedTypeKind::Union { .. } => {
+            let owner = if allow_builder {
+                class_name.as_str()
+            } else {
+                class_name.strip_suffix("_Inner").unwrap_or(class_name)
+            };
+            super::union::emit_union_class(
+                class_name,
+                owner,
+                resolved_type,
+                allow_builder,
+                type_lookup,
+                output,
+            );
         }
         ResolvedTypeKind::Enum { variants, .. } => {
             emit_enum_class(class_name, variants, resolved_type, output);
+            if allow_builder {
+                /* Reopen the class body for the top-level API. */
+                let close = output.rfind("}\n\n").expect("enum class body");
+                output.truncate(close);
+                super::union::emit_top_level_enum_methods(resolved_type, type_ir, output);
+                output.push_str("}\n\n");
+            }
+        }
+        ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
+            super::union::emit_sdu_class(resolved_type, type_lookup, output);
         }
         ResolvedTypeKind::Primitive { .. } => { /* Primitives don't need class definitions */ }
         _ => {}
@@ -617,14 +580,29 @@ fn emit_struct_class(
     let mut enum_method_blocks = Vec::new();
     let has_computed_tags = enum_infos.iter().any(|info| info.tag_parameter.is_some());
     for info in &enum_infos {
-        let Some(payload_offset) = info.payload_offset else {
+        /* Enums behind a variable-size field have no static offset; read them
+        through the per-view dynamic offset cache instead of skipping them. */
+        if info.payload_offset.is_none() && !has_dynamic_fields {
             continue;
-        };
+        }
+        let next_field_offset = fields
+            .iter()
+            .position(|field| field.name == info.enum_field.name)
+            .and_then(|idx| {
+                fields
+                    .get(idx + 1)
+                    .map(|next| (next, field_offsets[idx + 1]))
+            })
+            .map(|(next, offset)| match offset {
+                Some(offset) => offset.to_string(),
+                None => format!("this.__tnGetDynamicOffset(\"{}\")", next.name),
+            });
         let helper = emit_enum_reader_helper(
             class_name,
             resolved_type,
             info,
-            payload_offset,
+            info.payload_offset,
+            next_field_offset,
             type_lookup,
             uses_field_ref_resolver,
         );
@@ -878,7 +856,7 @@ fn emit_struct_class(
         writeln!(output, "    return this;\n  }}\n").unwrap();
         writeln!(
             output,
-            "  private __tnResolveFieldRef(path: string): number {{"
+            "  private __tnResolveFieldRefRaw(path: string): number | bigint {{"
         )
         .unwrap();
         writeln!(
@@ -889,12 +867,7 @@ fn emit_struct_class(
         writeln!(output, "    const getter = (this as any)[getterName];").unwrap();
         writeln!(output, "    if (typeof getter === \"function\") {{").unwrap();
         writeln!(output, "      const value = getter.call(this);").unwrap();
-        writeln!(
-            output,
-            "      return typeof value === \"bigint\" ? __tnBigIntToNumber(value, \"{}::__tnResolveFieldRef\") : value;",
-            class_name
-        )
-        .unwrap();
+        writeln!(output, "      return value;").unwrap();
         writeln!(output, "    }}").unwrap();
         writeln!(
             output,
@@ -906,13 +879,36 @@ fn emit_struct_class(
             "      const contextValue = this.__tnFieldContext[path];"
         )
         .unwrap();
-        writeln!(
-            output,
-            "      return typeof contextValue === \"bigint\" ? __tnBigIntToNumber(contextValue, \"{}::__tnResolveFieldRef\") : contextValue;",
-            class_name
-        )
-        .unwrap();
+        writeln!(output, "      return contextValue;").unwrap();
         writeln!(output, "    }}").unwrap();
+        /* A nested value with no getter (`child.count` after variable-size
+        data in `child`) is in the cached params under its ABI path. */
+        let nested_size_refs = fields.iter().any(|field| {
+            matches!(
+                &field.field_type.kind,
+                ResolvedTypeKind::Array { size_expression, .. }
+                    if collect_field_ref_paths(size_expression).iter().any(|p| p.len() > 1)
+            )
+        });
+        if has_param_cache && nested_size_refs {
+            writeln!(
+                output,
+                "    const params = this.__tnParams as unknown as Record<string, bigint>;"
+            )
+            .unwrap();
+            writeln!(
+                output,
+                "    for (const [key, abiPath] of Object.entries({}.ParamKeys as Record<string, string>)) {{",
+                class_name
+            )
+            .unwrap();
+            writeln!(
+                output,
+                "      if ((abiPath === path || abiPath.endsWith(\".\" + path)) && params[key] !== undefined) return params[key];"
+            )
+            .unwrap();
+            writeln!(output, "    }}").unwrap();
+        }
         writeln!(
             output,
             "    throw new Error(\"{}: field reference '\" + path + \"' is not available; provide fieldContext when creating this view\");",
@@ -920,6 +916,26 @@ fn emit_struct_class(
         )
         .unwrap();
         writeln!(output, "  }}\n").unwrap();
+        /* The value as a number (array lengths and offsets that index the
+        buffer), and as the u64 C and Rust evaluate expressions over (signed
+        fields as their two's complement; u64 values past 2^53 exact). */
+        writeln!(
+            output,
+            "  private __tnResolveFieldRef(path: string): number {{\n    const value = this.__tnResolveFieldRefRaw(path);\n    return typeof value === \"bigint\" ? __tnBigIntToNumber(value, \"{}::__tnResolveFieldRef\") : value;\n  }}\n",
+            class_name
+        )
+        .unwrap();
+        writeln!(
+            output,
+            "  private __tnResolveFieldRefU64(path: string): bigint {{\n    return __tnU64(__tnToBigInt(this.__tnResolveFieldRefRaw(path)));\n  }}\n"
+        )
+        .unwrap();
+        writeln!(
+            output,
+            "  private __tnResolveContextU64(path: string): bigint {{\n    if (this.__tnFieldContext && Object.prototype.hasOwnProperty.call(this.__tnFieldContext, path)) return __tnU64(__tnToBigInt(this.__tnFieldContext[path]));\n    throw new Error(\"{}: enclosing field '\" + path + \"' is not available; provide fieldContext when creating this view\");\n  }}\n",
+            class_name
+        )
+        .unwrap();
     }
 
     if emit_builder_method {
@@ -935,13 +951,15 @@ fn emit_struct_class(
     emit_struct_variant_descriptors(resolved_type, builder_registry, output);
     emit_flexible_array_descriptors(resolved_type, output);
 
-    if let Some(helper) = emit_sequential_layout_helper(
+    let layout_helper = emit_sequential_layout_helper(
         class_name,
         resolved_type,
         param_plan.as_ref(),
         &dynamic_field_names,
         type_lookup,
-    ) {
+    );
+    let has_layout_helper = layout_helper.is_some();
+    if let Some(helper) = layout_helper {
         output.push_str(&helper);
     }
 
@@ -953,7 +971,7 @@ fn emit_struct_class(
         emit_dynamic_offset_helpers(class_name, output, has_dynamic_fields);
     }
     if has_computed_tags {
-        emit_derived_param_helpers(class_name, output);
+        emit_derived_param_helpers(class_name, has_layout_helper, output);
     }
 
     /* Emit getter/setter methods for each field */
@@ -961,7 +979,52 @@ fn emit_struct_class(
         if matches!(field.field_type.kind, ResolvedTypeKind::Enum { .. }) {
             continue;
         }
-        emit_struct_field_getter(class_name, &field.name, &field.field_type, *offset, output);
+        /* A named field whose outside references (a top-level enum's tag)
+        this struct's params hold as `<field>.<path>`. */
+        let mut context = Vec::new();
+        if let (ResolvedTypeKind::TypeRef { target_name, .. }, Some(ir), true) =
+            (&field.field_type.kind, type_ir, has_param_cache)
+        {
+            for binding in deduplicated_ts_parameter_bindings(ir)
+                .into_iter()
+                .filter(|b| !b.derived)
+            {
+                if let Some(path) = binding.canonical.strip_prefix(&format!("{}.", field.name)) {
+                    if path != "payload_size" {
+                        context.push((
+                            super::ir_helpers::sanitize_param_name(&format!(
+                                "{target_name}.{path}"
+                            )),
+                            binding.ts_name.clone(),
+                        ));
+                    }
+                }
+            }
+        }
+        /* Integer fields declared before `field`: values an inline union's
+        variants may read from this struct (`["..", "n"]`). */
+        let outer_values: Vec<String> = fields
+            .iter()
+            .take_while(|f| f.name != field.name)
+            .filter(|f| {
+                matches!(
+                    f.field_type.kind,
+                    ResolvedTypeKind::Primitive {
+                        prim_type: crate::abi::types::PrimitiveType::Integral(_)
+                    }
+                )
+            })
+            .map(|f| f.name.clone())
+            .collect();
+        emit_struct_field_getter(
+            class_name,
+            &field.name,
+            &field.field_type,
+            *offset,
+            &context,
+            &outer_values,
+            output,
+        );
         emit_struct_field_setter(class_name, &field.name, &field.field_type, *offset, output);
         emit_struct_field_property_accessors(class_name, &field.name, &field.field_type, output);
     }
@@ -1037,26 +1100,34 @@ fn emit_dynamic_offset_helpers(class_name: &str, output: &mut String, has_dynami
     }
 }
 
-fn emit_derived_param_helpers(class_name: &str, output: &mut String) {
+/* Derived params (computed tags) come from the sequential layout scan; a
+constant-size struct has none (`has_layout` false), so readers evaluate the
+tag expression over the view instead. */
+fn emit_derived_param_helpers(class_name: &str, has_layout: bool, output: &mut String) {
     writeln!(
         output,
         "  private __tnEnsureDerivedParams(): Record<string, bigint> | null {{"
     )
     .unwrap();
-    writeln!(
-        output,
-        "    if (this.__tnDerivedParams) return this.__tnDerivedParams;"
-    )
-    .unwrap();
-    writeln!(
-        output,
-        "    const layout = {}.__tnComputeSequentialLayout(this.view, this.buffer);",
-        class_name
-    )
-    .unwrap();
-    writeln!(output, "    if (!layout || !layout.derived) return null;").unwrap();
-    writeln!(output, "    this.__tnDerivedParams = layout.derived;").unwrap();
-    writeln!(output, "    return this.__tnDerivedParams;\n  }}\n").unwrap();
+    if !has_layout {
+        writeln!(output, "    return null;\n  }}\n").unwrap();
+    }
+    if has_layout {
+        writeln!(
+            output,
+            "    if (this.__tnDerivedParams) return this.__tnDerivedParams;"
+        )
+        .unwrap();
+        writeln!(
+            output,
+            "    const layout = {}.__tnComputeSequentialLayout(this.view, this.buffer);",
+            class_name
+        )
+        .unwrap();
+        writeln!(output, "    if (!layout || !layout.derived) return null;").unwrap();
+        writeln!(output, "    this.__tnDerivedParams = layout.derived;").unwrap();
+        writeln!(output, "    return this.__tnDerivedParams;\n  }}\n").unwrap();
+    }
 
     writeln!(
         output,
@@ -1074,6 +1145,12 @@ fn emit_derived_param_helpers(class_name: &str, output: &mut String) {
     )
     .unwrap();
     writeln!(output, "  }}\n").unwrap();
+    /* The exact value (a derived tag past 2^53 stays distinct). */
+    writeln!(
+        output,
+        "  private __tnReadDerivedParamU64(key: string): bigint | null {{\n    const params = this.__tnEnsureDerivedParams();\n    const value = params ? params[key] : undefined;\n    return value === undefined ? null : value;\n  }}\n"
+    )
+    .unwrap();
 }
 
 fn emit_cursor_alignment(output: &mut String, align: u64) {
@@ -1093,6 +1170,8 @@ fn emit_struct_field_getter(
     field_name: &str,
     field_type: &ResolvedType,
     offset: Option<u64>,
+    context: &[(String, String)],
+    outer_values: &[String],
     output: &mut String,
 ) {
     let escaped_name = escape_ts_keyword(field_name);
@@ -1313,12 +1392,27 @@ fn emit_struct_field_getter(
                 write!(output, "  get_{}(): {} {{\n", escaped_name, target_name).unwrap();
                 write_ts_offset_binding(output, &offset_expr);
                 writeln!(output, "    const tail = this.buffer.subarray(offset);").unwrap();
-                writeln!(
-                    output,
-                    "    const validation = {}.validate(tail);",
-                    target_name
-                )
-                .unwrap();
+                if context.is_empty() {
+                    writeln!(
+                        output,
+                        "    const validation = {}.validate(tail);",
+                        target_name
+                    )
+                    .unwrap();
+                } else {
+                    let values: Vec<String> = context
+                        .iter()
+                        .map(|(target, own)| format!("{target}: this.__tnParams.{own}"))
+                        .collect();
+                    writeln!(
+                        output,
+                        "    const validation = {}.validate(tail, {{ params: {}.Params.fromValues({{ {} }}) }});",
+                        target_name,
+                        target_name,
+                        values.join(", ")
+                    )
+                    .unwrap();
+                }
                 writeln!(
                     output,
                     "    if (!validation.ok || validation.consumed === undefined) {{"
@@ -1347,6 +1441,31 @@ fn emit_struct_field_getter(
                 writeln!(output, "  }}\n").unwrap();
             }
         },
+        ResolvedTypeKind::Union { .. } => {
+            let inner = generated_type_ident(&field_type.name);
+            write!(output, "  get_{}(): {} {{\n", escaped_name, inner).unwrap();
+            write_ts_offset_binding(output, &offset_expr);
+            match field_type.size {
+                Size::Const(size) => writeln!(
+                    output,
+                    "    return {}.__tnCreateView(this.buffer.subarray(offset, offset + {}));",
+                    inner, size
+                )
+                .unwrap(),
+                Size::Variable(_) => writeln!(
+                    output,
+                    "    const ctx = {{ {} }};\n    const size = {inner}.__tnMeasure(this.buffer.subarray(offset), ctx);\n    if (size === null) throw new Error(\"{}: failed to read field '{}' (invalid union)\");\n    return {inner}.__tnCreateView(this.buffer.subarray(offset, offset + size), ctx);",
+                    outer_values
+                        .iter()
+                        .map(|name| format!("\"{name}\": __tnToBigInt(this.get_{}())", escape_ts_keyword(name)))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    struct_name, field_name
+                )
+                .unwrap(),
+            }
+            write!(output, "  }}\n\n").unwrap();
+        }
         _ => {}
     }
 }
@@ -1697,33 +1816,6 @@ fn emit_struct_field_property_accessors(
     }
 }
 
-/* Emit TypeScript class for a union */
-fn emit_union_class(
-    class_name: &str,
-    _variants: &[crate::abi::resolved::ResolvedField],
-    _resolved_type: &ResolvedType,
-    output: &mut String,
-) {
-    write!(output, "export class {} {{\n", class_name).unwrap();
-    write!(output, "  private view: DataView;\n\n").unwrap();
-
-    write!(
-        output,
-        "  private constructor(private buffer: Uint8Array) {{\n"
-    )
-    .unwrap();
-    write!(
-        output,
-        "    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);\n"
-    )
-    .unwrap();
-    write!(output, "  }}\n\n").unwrap();
-
-    write!(output, "  /* Union field accessors would go here */\n\n").unwrap();
-
-    write!(output, "}}\n\n").unwrap();
-}
-
 /* Emit TypeScript class for an enum */
 fn emit_enum_class(
     class_name: &str,
@@ -1770,6 +1862,51 @@ fn emit_enum_class(
     .unwrap();
     write!(output, "  }}\n\n").unwrap();
 
+    /* A view over an enum payload nested in another enum: its tag comes from
+    the field context (a plain tag reference), else no variant is known. */
+    let tag_key = match &_resolved_type.kind {
+        ResolvedTypeKind::Enum {
+            tag_expression: ExprKind::FieldRef(f),
+            ..
+        } => Some(f.path.join(".")),
+        _ => None,
+    };
+    writeln!(
+        output,
+        "  static __tnCreateView(buffer: Uint8Array, opts?: {{ fieldContext?: Record<string, number | bigint> }}): {} {{",
+        class_name
+    )
+    .unwrap();
+    writeln!(
+        output,
+        "    let descriptor: __TnVariantDescriptor | null = null;"
+    )
+    .unwrap();
+    if let Some(key) = &tag_key {
+        writeln!(output, "    const tag = opts?.fieldContext?.[\"{}\"];", key).unwrap();
+        writeln!(output, "    if (tag !== undefined) {{").unwrap();
+        for variant in _variants {
+            let size = match variant.variant_type.size {
+                Size::Const(n) => n.to_string(),
+                Size::Variable(_) => "null".to_string(),
+            };
+            let tag = super::helpers::ts_tag_literal(variant.tag_value);
+            writeln!(
+                output,
+                "      if (__tnTagEquals(tag, {tag})) descriptor = {{ name: \"{}\", tag: {tag}, payloadSize: {} }};",
+                variant.name, size
+            )
+            .unwrap();
+        }
+        writeln!(output, "    }}").unwrap();
+    }
+    writeln!(
+        output,
+        "    return new {}(new Uint8Array(buffer), descriptor, opts?.fieldContext);\n  }}\n",
+        class_name
+    )
+    .unwrap();
+
     write!(
         output,
         "  bytes(): Uint8Array {{\n    return new Uint8Array(this.buffer);\n  }}\n\n"
@@ -1783,12 +1920,30 @@ fn emit_enum_class(
 
     for variant in _variants {
         let method_name = escape_ts_keyword(&format!("as{}", to_camel_case(&variant.name)));
+        /* Primitive and array payloads have no view class: return the
+        value or the payload bytes. */
+        if matches!(
+            variant.variant_type.kind,
+            ResolvedTypeKind::Primitive { .. } | ResolvedTypeKind::Array { .. }
+        ) {
+            let view = super::union::variant_view(class_name, &variant.name, &variant.variant_type);
+            writeln!(output, "  {}(): {} | null {{", method_name, view.ts_type).unwrap();
+            writeln!(
+                output,
+                "    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, {})) return null;",
+                super::helpers::ts_tag_literal(variant.tag_value)
+            )
+            .unwrap();
+            writeln!(output, "    const bytes = this.buffer;").unwrap();
+            writeln!(output, "    return {};\n  }}\n", view.expr).unwrap();
+            continue;
+        }
         let variant_type = enum_variant_type_ident(&variant.variant_type);
         write!(output, "  {}(): {} | null {{\n", method_name, variant_type).unwrap();
         writeln!(
             output,
-            "    if (!this.descriptor || this.descriptor.tag !== {}) return null;",
-            variant.tag_value
+            "    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, {})) return null;",
+            super::helpers::ts_tag_literal(variant.tag_value)
         )
         .unwrap();
         // Pass field context to variant inner class for FAM field resolution
@@ -1823,7 +1978,12 @@ fn emit_struct_variant_descriptors(
                     let payload_label = variant.variant_type.name.replace('\"', "\\\"");
                     writeln!(output, "    {{").unwrap();
                     writeln!(output, "      name: \"{}\",", variant.name).unwrap();
-                    writeln!(output, "      tag: {},", variant.tag_value).unwrap();
+                    writeln!(
+                        output,
+                        "      tag: {},",
+                        super::helpers::ts_tag_literal(variant.tag_value)
+                    )
+                    .unwrap();
                     writeln!(output, "      payloadSize: {},", payload_size).unwrap();
                     writeln!(output, "      payloadType: \"{}\",", payload_label).unwrap();
                     if type_has_builder_entry(&variant.variant_type, builder_registry) {
@@ -1924,18 +2084,32 @@ fn emit_enum_reader_helper(
     parent_name: &str,
     parent_type: &ResolvedType,
     info: &EnumFieldInfo,
-    payload_offset: u64,
+    payload_offset: Option<u64>,
+    next_field_offset: Option<String>,
     type_lookup: &BTreeMap<String, ResolvedType>,
     parent_has_field_context: bool,
 ) -> EnumReaderHelper {
     let field = info.enum_field;
     let field_ident = escape_ts_keyword(&field.name);
-    let helper_class = generated_type_ident(&format!("{}::{}", parent_name, field.name));
+    /* The enum's own class; inside a nested class `parent_name` is the
+    `_Inner` view name, so prefer the resolved inline type name. */
+    let helper_class = if field.field_type.name.contains("::") {
+        generated_type_ident(&field.field_type.name)
+    } else {
+        generated_type_ident(&format!("{}::{}", parent_name, field.name))
+    };
     let descriptor_type = format!("typeof {}.{}[number]", parent_name, info.descriptor_prop);
-    let offset_const_name = format!(
-        "  private static readonly __tnFieldOffset_{} = {};\n",
-        field_ident, payload_offset
-    );
+    let offset_const_name = match payload_offset {
+        Some(offset) => format!(
+            "  private static readonly __tnFieldOffset_{} = {};\n",
+            field_ident, offset
+        ),
+        None => String::new(),
+    };
+    let offset_expr = match payload_offset {
+        Some(_) => format!("{}.__tnFieldOffset_{}", parent_name, field_ident),
+        None => format!("this.__tnGetDynamicOffset(\"{}\")", field.name),
+    };
     let variant_method = escape_ts_keyword(&format!("{}Variant", to_lower_camel_case(&field.name)));
     let accessor_method = field_ident.clone();
 
@@ -1975,22 +2149,43 @@ fn emit_enum_reader_helper(
         variant_method, descriptor_type
     )
     .unwrap();
-    if has_tag_field {
-        let tag_offset = info
-            .tag_offset
-            .expect("tag offset should exist when tag field present");
+    if let Some(tag_field) = info.tag_field {
+        /* Read through the tag field's own getter so tags of any primitive
+        width (and at dynamic offsets) are decoded correctly. */
         writeln!(
             methods,
-            "    const tag = this.view.getUint8({});",
-            tag_offset
+            "    const tag: number | bigint | null = this.get_{}();",
+            escape_ts_keyword(&tag_field.name)
         )
         .unwrap();
+    } else if let Some(expr) = info
+        .tag_expression
+        .as_ref()
+        .and_then(|expr| render_tag_expression_u64(expr))
+    {
+        /* The computed tag as an exact u64 (null on overflow): the value
+        the param scan derived, else evaluated from the fields. */
+        match &info.tag_param_ts_name {
+            Some(ts_name) => writeln!(
+                methods,
+                "    let tag: number | bigint | null = this.__tnReadDerivedParamU64(\"{ts_name}\");\n    if (tag === null) tag = {expr};"
+            )
+            .unwrap(),
+            None => writeln!(methods, "    const tag: number | bigint | null = {expr};").unwrap(),
+        }
     } else {
-        writeln!(methods, "    const tag = this.get_{}();", info.tag_ts_name).unwrap();
+        writeln!(
+            methods,
+            "    const tag: number | bigint | null = this.get_{}();",
+            info.tag_ts_name
+        )
+        .unwrap();
     }
+    /* Tags compare as exact u64 values (descriptor tags past 2^53 are
+    bigints). */
     writeln!(
         methods,
-        "    return {}.{}.find((variant) => variant.tag === tag) ?? null;",
+        "    return {}.{}.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;",
         parent_name, info.descriptor_prop
     )
     .unwrap();
@@ -2032,17 +2227,14 @@ fn emit_enum_reader_helper(
         parent_name, field.name
     )
     .unwrap();
-    writeln!(
-        methods,
-        "    const offset = {}.__tnFieldOffset_{};",
-        parent_name, field_ident
-    )
-    .unwrap();
-    writeln!(
-        methods,
-        "    const remaining = this.buffer.length - offset;"
-    )
-    .unwrap();
+    writeln!(methods, "    const offset = {};", offset_expr).unwrap();
+    /* A variable-size payload ends where the next field starts; only a tail
+    enum may run to the end of the buffer. */
+    let remaining_expr = match (&next_field_offset, info.is_tail) {
+        (Some(next), false) => format!("({}) - offset", next),
+        _ => "this.buffer.length - offset".to_string(),
+    };
+    writeln!(methods, "    const remaining = {};", remaining_expr).unwrap();
     writeln!(
         methods,
         "    const payloadLength = descriptor.payloadSize ?? remaining;"
@@ -2137,71 +2329,34 @@ fn enum_variant_type_ident(variant_type: &ResolvedType) -> String {
     }
 }
 
+/* A view's computed tag: checked u64 arithmetic over its fields, as a
+number (-1, no variant, on overflow). */
+/* A view's computed tag as an exact checked u64 (`bigint | null`). */
+fn render_tag_expression_u64(expr: &ExprKind) -> Option<String> {
+    render_tag_expression(expr)
+        .and_then(|number| number.strip_prefix("__tnTagNumber(").map(str::to_string))
+        .and_then(|inner| inner.strip_suffix(')').map(str::to_string))
+}
+
 fn render_tag_expression(expr: &ExprKind) -> Option<String> {
-    match expr {
-        ExprKind::Literal(lit) => Some(literal_to_string(lit)),
-        ExprKind::FieldRef(field_ref) => Some(format!(
-            "this.__tnResolveFieldRef(\"{}\")",
-            field_ref.path.join(".")
-        )),
-        ExprKind::Add(e) => Some(format!(
-            "({} + {})",
-            render_tag_expression(&e.left)?,
-            render_tag_expression(&e.right)?
-        )),
-        ExprKind::Sub(e) => Some(format!(
-            "({} - {})",
-            render_tag_expression(&e.left)?,
-            render_tag_expression(&e.right)?
-        )),
-        ExprKind::Mul(e) => Some(format!(
-            "({} * {})",
-            render_tag_expression(&e.left)?,
-            render_tag_expression(&e.right)?
-        )),
-        ExprKind::Div(e) => Some(format!(
-            "({} / {})",
-            render_tag_expression(&e.left)?,
-            render_tag_expression(&e.right)?
-        )),
-        ExprKind::Mod(e) => Some(format!(
-            "({} % {})",
-            render_tag_expression(&e.left)?,
-            render_tag_expression(&e.right)?
-        )),
-        ExprKind::BitAnd(e) => Some(format!(
-            "({} & {})",
-            render_tag_expression(&e.left)?,
-            render_tag_expression(&e.right)?
-        )),
-        ExprKind::BitOr(e) => Some(format!(
-            "({} | {})",
-            render_tag_expression(&e.left)?,
-            render_tag_expression(&e.right)?
-        )),
-        ExprKind::BitXor(e) => Some(format!(
-            "({} ^ {})",
-            render_tag_expression(&e.left)?,
-            render_tag_expression(&e.right)?
-        )),
-        ExprKind::LeftShift(e) => Some(format!(
-            "({} << {})",
-            render_tag_expression(&e.left)?,
-            render_tag_expression(&e.right)?
-        )),
-        ExprKind::RightShift(e) => Some(format!(
-            "({} >> {})",
-            render_tag_expression(&e.left)?,
-            render_tag_expression(&e.right)?
-        )),
-        ExprKind::BitNot(e) => Some(format!("(~({}))", render_tag_expression(&e.operand)?)),
-        ExprKind::Neg(e) => Some(format!("(-({}))", render_tag_expression(&e.operand)?)),
-        ExprKind::Popcount(e) => Some(format!(
-            "__tnPopcount({})",
-            render_tag_expression(&e.operand)?
-        )),
-        _ => None,
-    }
+    let mut resolver = |path: &[String]| -> Option<String> {
+        /* `..` names a field of an enclosing struct: the view's context. */
+        if path.first().map_or(false, |seg| seg == "..") {
+            let key = path
+                .iter()
+                .filter(|seg| *seg != "..")
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(".");
+            return Some(format!("this.__tnResolveContextU64(\"{key}\")"));
+        }
+        Some(format!(
+            "this.__tnResolveFieldRefU64(\"{}\")",
+            path.join(".")
+        ))
+    };
+    let checked = super::helpers::expr_to_ts_bigint_with_resolver(expr, &mut resolver)?;
+    Some(format!("__tnTagNumber({checked})"))
 }
 
 /// Emit TypeScript jagged array accessor methods for a field.

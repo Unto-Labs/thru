@@ -2,9 +2,9 @@
 #include <string.h>
 
 static void
-tsdk_sha256_core_ref( uint *        state,
-                    uchar const * block,
-                    ulong         block_cnt ) {
+tsdk_sha256_core_ref( uint        * state,
+                      uchar const * block,
+                      ulong         block_cnt ) {
 
   static uint const K[64] = {
     0x428a2f98U, 0x71374491U, 0xb5c0fbcfU, 0xe9b5dba5U, 0x3956c25bU, 0x59f111f1U, 0x923f82a4U, 0xab1c5ed5U,
@@ -17,14 +17,13 @@ tsdk_sha256_core_ref( uint *        state,
     0x748f82eeU, 0x78a5636fU, 0x84c87814U, 0x8cc70208U, 0x90befffaU, 0xa4506cebU, 0xbef9a3f7U, 0xc67178f2U,
   };
 
-# define Sigma0(x, res)  {__asm__("sha256sum0 %0,%1" : "=r" (res) : "r" (x));}
-# define Sigma1(x, res)  {__asm__("sha256sum1 %0,%1" : "=r" (res) : "r" (x));}
-# define sigma0(x, res)  {__asm__("sha256sig0 %0,%1" : "=r" (res) : "r" (x));}
-# define sigma1(x, res)  {__asm__("sha256sig1 %0,%1" : "=r" (res) : "r" (x));}
-# define Ch(x,y,z)  (((x) & (y)) ^ ((~(x)) & (z)))
-# define Maj(x,y,z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
+# define Sigma0( x, res )  {__asm__("sha256sum0 %0,%1" : "=r" (res) : "r" (x));}
+# define Sigma1( x, res )  {__asm__("sha256sum1 %0,%1" : "=r" (res) : "r" (x));}
+# define sigma0( x, res )  {__asm__("sha256sig0 %0,%1" : "=r" (res) : "r" (x));}
+# define sigma1( x, res )  {__asm__("sha256sig1 %0,%1" : "=r" (res) : "r" (x));}
+# define Ch( x, y, z )  (((x) & (y)) ^ ((~(x)) & (z)))
+# define Maj( x, y, z ) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
 
-  uint const * W = (uint const *)block;
   do {
     uint a = state[0];
     uint b = state[1];
@@ -38,13 +37,16 @@ tsdk_sha256_core_ref( uint *        state,
     uint X[16];
 
     ulong i;
-    for( i=0UL; i<16UL; i++ ) {
-      X[i] = __builtin_bswap32( W[i] );
+    for( i = 0UL; i < 16UL; i++ ) {
+      /* Source ranges and packed ABI payloads need not be word-aligned. */
+      uchar const * word = block + 4UL * i;
+      X[i] = ((uint)word[0] << 24 ) | ((uint)word[1] << 16 ) |
+             ((uint)word[2] << 8 ) | (uint)word[3];
       uint sum1_e, sum0_a;
-      Sigma1(e, sum1_e);
-      Sigma0(a, sum0_a);
-      uint T1 = X[i] + h + sum1_e + Ch(e, f, g) + K[i];
-      uint T2 = sum0_a + Maj(a, b, c);
+      Sigma1( e, sum1_e );
+      Sigma0( a, sum0_a );
+      uint T1 = X[i] + h + sum1_e + Ch( e, f, g ) + K[i];
+      uint T2 = sum0_a + Maj( a, b, c );
       h = g;
       g = f;
       f = e;
@@ -54,17 +56,17 @@ tsdk_sha256_core_ref( uint *        state,
       b = a;
       a = T1 + T2;
     }
-    for( ; i<64UL; i++ ) {
-      uint s0 = X[(i +  1UL) & 0x0fUL];
-      uint s1 = X[(i + 14UL) & 0x0fUL];
-      sigma0(s0, s0);
-      sigma1(s1, s1);
-      X[i & 0xfUL] += s0 + s1 + X[(i + 9UL) & 0xfUL];
+    for( ; i < 64UL; i++ ) {
+      uint s0 = X[( i +  1UL ) & 0x0fUL];
+      uint s1 = X[( i + 14UL ) & 0x0fUL];
+      sigma0( s0, s0 );
+      sigma1( s1, s1 );
+      X[i & 0xfUL] += s0 + s1 + X[( i + 9UL ) & 0xfUL];
       uint sum1_e2, sum0_a2;
-      Sigma1(e, sum1_e2);
-      Sigma0(a, sum0_a2);
-      uint T1 = X[i & 0xfUL ] + h + sum1_e2 + Ch(e, f, g) + K[i];
-      uint T2 = sum0_a2 + Maj(a, b, c);
+      Sigma1( e, sum1_e2 );
+      Sigma0( a, sum0_a2 );
+      uint T1 = X[i & 0xfUL ] + h + sum1_e2 + Ch( e, f, g ) + K[i];
+      uint T2 = sum0_a2 + Maj( a, b, c );
       h = g;
       g = f;
       f = e;
@@ -84,7 +86,7 @@ tsdk_sha256_core_ref( uint *        state,
     state[6] += g;
     state[7] += h;
 
-    W += 16UL;
+    block += 64UL;
   } while( --block_cnt );
 
 # undef sum0
@@ -103,14 +105,14 @@ tsdk_sha256_core_ref( uint *        state,
 void *
 tsdk_sha256_hash( void const * _data,
                   ulong        sz,
-                  void *       _hash ) {
+                  void       * _hash ) {
   uchar const * data = (uchar const *)_data;
 
   /* This is just the above streamlined to eliminate all the overheads
      to support incremental hashing. */
 
-  uchar buf[ TSDK_SHA256_PRIVATE_BUF_MAX ] __attribute__((aligned(128)));
-  uint  state[8] __attribute__((aligned(32)));
+  uchar buf[ TSDK_SHA256_PRIVATE_BUF_MAX ] __attribute__(( aligned( 128 )));
+  uint  state[ 8 ] __attribute__(( aligned( 32 )));
 
   state[0] = 0x6a09e667U;
   state[1] = 0xbb67ae85U;
@@ -124,20 +126,20 @@ tsdk_sha256_hash( void const * _data,
   ulong block_cnt = sz >> TSDK_SHA256_PRIVATE_LG_BUF_MAX;
   if( TSDK_LIKELY( block_cnt ) ) tsdk_sha256_core( state, data, block_cnt );
 
-  ulong buf_used = sz & (TSDK_SHA256_PRIVATE_BUF_MAX-1UL);
-  if( TSDK_UNLIKELY( buf_used ) ) memcpy( buf, data + (block_cnt << TSDK_SHA256_PRIVATE_LG_BUF_MAX), buf_used );
+  ulong buf_used = sz & ( TSDK_SHA256_PRIVATE_BUF_MAX - 1UL );
+  if( TSDK_UNLIKELY( buf_used ) ) memcpy( buf, data + ( block_cnt << TSDK_SHA256_PRIVATE_LG_BUF_MAX ), buf_used );
   buf[ buf_used ] = (uchar)0x80;
   buf_used++;
 
-  if( TSDK_UNLIKELY( buf_used > (TSDK_SHA256_PRIVATE_BUF_MAX-8UL) ) ) {
-    memset( buf + buf_used, 0, TSDK_SHA256_PRIVATE_BUF_MAX-buf_used );
+  if( TSDK_UNLIKELY( buf_used > ( TSDK_SHA256_PRIVATE_BUF_MAX - 8UL ) ) ) {
+    memset( buf + buf_used, 0, TSDK_SHA256_PRIVATE_BUF_MAX - buf_used );
     tsdk_sha256_core( state, buf, 1UL );
     buf_used = 0UL;
   }
 
   ulong bit_cnt = sz << 3;
-  memset( buf + buf_used, 0, TSDK_SHA256_PRIVATE_BUF_MAX-8UL-buf_used );
-  TSDK_STORE( ulong, buf+TSDK_SHA256_PRIVATE_BUF_MAX-8UL, __builtin_bswap64( bit_cnt ) );
+  memset( buf + buf_used, 0, TSDK_SHA256_PRIVATE_BUF_MAX - 8UL - buf_used );
+  TSDK_STORE( ulong, buf + TSDK_SHA256_PRIVATE_BUF_MAX - 8UL, __builtin_bswap64( bit_cnt ) );
   tsdk_sha256_core( state, buf, 1UL );
 
   state[0] = __builtin_bswap32( state[0] );
@@ -168,18 +170,18 @@ tsdk_sha256_init( tsdk_sha256_t * sha ) {
 
 tsdk_sha256_t *
 tsdk_sha256_append( tsdk_sha256_t * sha,
-                    void const *  _data,
-                    ulong         sz ) {
+                    void const    * _data,
+                    ulong           sz ) {
   if( TSDK_UNLIKELY( !sz ) ) return sha;
 
-  uint *  state    = sha->state;
+  uint  * state    = sha->state;
   uchar * buf      = sha->buf;
   ulong   buf_used = sha->buf_used;
   // ulong   bit_cnt  = sha->bit_cnt; // bit_cnt is updated directly in sha->bit_cnt
 
   uchar const * data = (uchar const *)_data;
 
-  sha->bit_cnt += (sz<<3);
+  sha->bit_cnt += ( sz << 3 );
 
   if( TSDK_UNLIKELY( buf_used ) ) {
     ulong buf_rem = TSDK_SHA256_PRIVATE_BUF_MAX - buf_used;
@@ -200,9 +202,9 @@ tsdk_sha256_append( tsdk_sha256_t * sha,
   ulong block_cnt = sz >> TSDK_SHA256_PRIVATE_LG_BUF_MAX;
   if( TSDK_LIKELY( block_cnt ) ) tsdk_sha256_core( state, data, block_cnt );
 
-  buf_used = sz & (TSDK_SHA256_PRIVATE_BUF_MAX-1UL);
+  buf_used = sz & ( TSDK_SHA256_PRIVATE_BUF_MAX - 1UL );
   if( TSDK_UNLIKELY( buf_used ) ) {
-    memcpy( buf, data + (block_cnt << TSDK_SHA256_PRIVATE_LG_BUF_MAX), buf_used );
+    memcpy( buf, data + ( block_cnt << TSDK_SHA256_PRIVATE_LG_BUF_MAX ), buf_used );
     sha->buf_used = buf_used;
   }
 
@@ -211,8 +213,8 @@ tsdk_sha256_append( tsdk_sha256_t * sha,
 
 void *
 tsdk_sha256_fini( tsdk_sha256_t * sha,
-                  void *        _hash ) {
-  uint *  state    = sha->state;
+                  void          * _hash ) {
+  uint  * state    = sha->state;
   uchar * buf      = sha->buf;
   ulong   buf_used = sha->buf_used;
   ulong   bit_cnt  = sha->bit_cnt;
@@ -220,14 +222,14 @@ tsdk_sha256_fini( tsdk_sha256_t * sha,
   buf[ buf_used ] = (uchar)0x80;
   buf_used++;
 
-  if( TSDK_UNLIKELY( buf_used > (TSDK_SHA256_PRIVATE_BUF_MAX-8UL) ) ) {
-    memset( buf + buf_used, 0, TSDK_SHA256_PRIVATE_BUF_MAX-buf_used );
+  if( TSDK_UNLIKELY( buf_used > ( TSDK_SHA256_PRIVATE_BUF_MAX - 8UL ) ) ) {
+    memset( buf + buf_used, 0, TSDK_SHA256_PRIVATE_BUF_MAX - buf_used );
     tsdk_sha256_core( state, buf, 1UL );
     buf_used = 0UL;
   }
 
-  memset( buf + buf_used, 0, TSDK_SHA256_PRIVATE_BUF_MAX-8UL-buf_used );
-  TSDK_STORE( ulong, buf+TSDK_SHA256_PRIVATE_BUF_MAX-8UL, __builtin_bswap64( bit_cnt ) );
+  memset( buf + buf_used, 0, TSDK_SHA256_PRIVATE_BUF_MAX - 8UL - buf_used );
+  TSDK_STORE( ulong, buf + TSDK_SHA256_PRIVATE_BUF_MAX - 8UL, __builtin_bswap64( bit_cnt ) );
   tsdk_sha256_core( state, buf, 1UL );
 
   state[0] = __builtin_bswap32( state[0] );
@@ -240,3 +242,4 @@ tsdk_sha256_fini( tsdk_sha256_t * sha,
   state[7] = __builtin_bswap32( state[7] );
   return memcpy( _hash, state, 32 );
 }
+

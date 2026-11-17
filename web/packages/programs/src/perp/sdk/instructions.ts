@@ -57,7 +57,7 @@ export type PerpInstructionSpec =
       quoteVault?: string;
       marketAuthority?: string;
       oracleFeed?: string;
-      /** Builder code (0.5.0): the fee seat paid and its rate, ppm; needs the seat. */
+      /** Builder code: the fee seat paid and its rate, ppm; needs the seat. */
       builderSeatIndex?: number;
       builderFeePpm?: number;
     }

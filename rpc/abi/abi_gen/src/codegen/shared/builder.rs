@@ -1,8 +1,10 @@
 use super::ir::*;
 use crate::abi::expr::{ExprKind, LiteralExpr};
 use crate::abi::layout_graph::{LayoutGraph, LayoutGraphError};
-use crate::abi::resolved::{ResolvedType, ResolvedTypeKind, Size, TypeResolver};
-use std::collections::{BTreeMap, BTreeSet};
+use crate::abi::resolved::{
+    ResolvedField, ResolvedType, ResolvedTypeKind, Size, TypeResolver, qualify_struct_path,
+};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use thiserror::Error;
 
 #[derive(Default)]
@@ -167,11 +169,122 @@ fn alternate_owner_aliases(stored_path: &str, normalized: &str) -> Vec<String> {
 /// Builds the shared Layout IR from resolved ABI types.
 pub struct IrBuilder<'a> {
     resolver: &'a TypeResolver,
+    /* TypeScript only: size values whose byte size their own bytes decide
+    (unions with variable-size variants) by a `payload_size` parameter. */
+    payload_size_params: bool,
 }
 
 impl<'a> IrBuilder<'a> {
     pub fn new(resolver: &'a TypeResolver) -> Self {
-        Self { resolver }
+        Self {
+            resolver,
+            payload_size_params: false,
+        }
+    }
+
+    /// IR for the TypeScript backend. A union with a variable-size variant
+    /// spans its largest variant over the same bytes, which no parameter of
+    /// its variants fixes: as a root it is sized by `<T>.payload_size`, and a
+    /// struct field holding one (inline or by type-ref) by
+    /// `<field>.payload_size`. Struct fields whose own bytes decide their
+    /// size (non-tail enums with such a variant, inline structs sized by their
+    /// own counts) and jagged arrays get `<field>.payload_size` too. The
+    /// other backends do not use these.
+    pub fn for_typescript(resolver: &'a TypeResolver) -> Self {
+        Self {
+            resolver,
+            payload_size_params: true,
+        }
+    }
+
+    /* Whether struct field `field` of `parent` is sized by `<field>.payload_size`. */
+    fn is_payload_field(&self, parent: &ResolvedType, field: &ResolvedField) -> bool {
+        if !self.payload_size_params {
+            return false;
+        }
+        let ty = &field.field_type;
+        match &ty.kind {
+            ResolvedTypeKind::Union { .. } => matches!(ty.size, Size::Variable(_)),
+            ResolvedTypeKind::TypeRef { target_name, .. } => self
+                .resolver
+                .get_type_info(target_name)
+                .map_or(false, |target| {
+                    matches!(target.kind, ResolvedTypeKind::Union { .. })
+                        && matches!(target.size, Size::Variable(_))
+                }),
+            ResolvedTypeKind::Enum { .. } => {
+                /* Tail enums already carry the resolver's `<field>.payload_size`. */
+                let has_resolver_payload = parent
+                    .dynamic_params
+                    .get(&field.name)
+                    .map_or(false, |refs| {
+                        refs.keys().any(|p| p.ends_with(".payload_size"))
+                    });
+                !has_resolver_payload && is_self_sized(ty)
+            }
+            /* An inline variable-size struct (`{ n, bytes[n], count }`, or one
+            sized by an enclosing field through `..`): its byte size. */
+            ResolvedTypeKind::Struct { .. } => matches!(ty.size, Size::Variable(_)),
+            /* Inline variable-size elements that are not an enum stride
+            (`{ tag, body: enum by tag }`): sized by their byte total. */
+            ResolvedTypeKind::Array { element_type, .. } => {
+                matches!(element_type.size, Size::Variable(_))
+                    && !matches!(element_type.kind, ResolvedTypeKind::TypeRef { .. })
+                    && !is_enum_stride(element_type)
+            }
+            _ => false,
+        }
+    }
+
+    /* Dynamic params of `ty` without those a payload field's size replaces:
+    everything owned by a union field, and an enum field's variant refs. */
+    fn root_dynamic_params(
+        &self,
+        ty: &ResolvedType,
+    ) -> BTreeMap<String, BTreeMap<String, crate::abi::types::PrimitiveType>> {
+        let ResolvedTypeKind::Struct { fields, .. } = &ty.kind else {
+            return ty.dynamic_params.clone();
+        };
+        let mut out = BTreeMap::new();
+        for (owner, refs) in &ty.dynamic_params {
+            let field = fields
+                .iter()
+                .find(|f| &f.name == owner && self.is_payload_field(ty, f));
+            let is_array = fields.iter().any(|f| {
+                &f.name == owner && matches!(f.field_type.kind, ResolvedTypeKind::Array { .. })
+            });
+            let kept: BTreeMap<_, _> = match field.map(|f| &f.field_type.kind) {
+                /* An array element's own references are read per element. */
+                None if self.payload_size_params && is_array => refs
+                    .iter()
+                    .filter(|(path, _)| {
+                        let local = path
+                            .strip_prefix(&format!("{owner}."))
+                            .unwrap_or(path.as_str());
+                        !local.starts_with("element.")
+                    })
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect(),
+                None => refs.clone(),
+                Some(ResolvedTypeKind::Enum { variants, .. }) => refs
+                    .iter()
+                    .filter(|(path, _)| {
+                        let local = path
+                            .strip_prefix(&format!("{owner}."))
+                            .unwrap_or(path.as_str());
+                        !variants
+                            .iter()
+                            .any(|v| local.starts_with(&format!("{}.", v.name)))
+                    })
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect(),
+                Some(_) => BTreeMap::new(),
+            };
+            if !kept.is_empty() {
+                out.insert(owner.clone(), kept);
+            }
+        }
+        out
     }
 
     /// Builds IR for every resolved type in dependency order.
@@ -192,9 +305,64 @@ impl<'a> IrBuilder<'a> {
 
     /// Builds IR for a single resolved type.
     pub fn build_type(&self, ty: &ResolvedType) -> Result<TypeIr, IrBuildError> {
-        let mut params = ParameterRegistry::from_dynamic(&ty.dynamic_params);
-        let root = self.node_from_resolved(ty, &mut params)?;
-        let parameters = filter_jagged_element_parameters(ty, params.into_parameters());
+        if self.payload_size_params
+            && matches!(ty.kind, ResolvedTypeKind::Union { .. })
+            && matches!(ty.size, Size::Variable(_))
+        {
+            let mut params = ParameterRegistry::default();
+            let name = params.add_synthetic(
+                &ty.name,
+                "__payload_size",
+                Some(format!("{}.payload_size", ty.name)),
+                Some("Byte size of the union: its largest variant over these bytes".into()),
+                false,
+            );
+            let root = Self::align_node(
+                IrNode::FieldRef(FieldRefNode {
+                    path: "payload_size".into(),
+                    parameter: Some(name),
+                    meta: NodeMetadata::default(),
+                }),
+                ty.alignment,
+            );
+            return Ok(TypeIr {
+                type_name: ty.name.clone(),
+                alignment: ty.alignment,
+                root,
+                parameters: params.into_parameters(),
+            });
+        }
+        let mut params = ParameterRegistry::from_dynamic(&self.root_dynamic_params(ty));
+        /* TypeScript: a top-level enum whose variants share one size still
+        takes its tag as a parameter, so validation checks it (as C, Rust and
+        Go do with the tag their callers pass). */
+        let root = match &ty.kind {
+            ResolvedTypeKind::Enum {
+                tag_expression: ExprKind::FieldRef(tag),
+                ..
+            } if self.payload_size_params && matches!(ty.size, Size::Const(_)) => {
+                params.ensure(
+                    &ty.name,
+                    &tag.path.join("."),
+                    Some("Enum tag the enclosing type stores".into()),
+                    false,
+                );
+                self.build_enum_node(ty, &mut params)?
+            }
+            _ => self.node_from_resolved(ty, &mut params)?,
+        };
+        let mut parameters = filter_jagged_element_parameters(ty, params.into_parameters());
+        /* TypeScript sizes a `__buffer_size` layout from params by that size. */
+        if self.payload_size_params
+            && reads_buffer_size(&root)
+            && !parameters.iter().any(|p| p.name == "__buffer_size")
+        {
+            parameters.push(IrParameter {
+                name: "__buffer_size".into(),
+                description: Some("Byte size of the buffer the value spans".into()),
+                derived: false,
+            });
+        }
         Ok(TypeIr {
             type_name: ty.name.clone(),
             alignment: ty.alignment,
@@ -242,6 +410,100 @@ impl<'a> IrBuilder<'a> {
                 Size::Const(_) => Self::const_node(ty),
                 Size::Variable(_) => self.build_size_discriminated_union_node(ty, params),
             },
+        }
+    }
+
+    /* The value of `sizeof(T)` / `alignof(T)` for a constant-size `T`. */
+    fn type_constant(&self, expr: &ExprKind) -> Option<u64> {
+        match expr {
+            ExprKind::Sizeof(e) => match self.resolver.get_type_info(&e.type_name)?.size {
+                Size::Const(size) => Some(size),
+                Size::Variable(_) => None,
+            },
+            ExprKind::Alignof(e) => Some(self.resolver.get_type_info(&e.type_name)?.alignment),
+            _ => None,
+        }
+    }
+
+    /* The element size of an array of inline enums whose variants all have a
+    constant size and whose tag is a plain reference outside the element. */
+    fn enum_stride_node(
+        &self,
+        element: &ResolvedType,
+        owner: &str,
+        params: &mut ParameterRegistry,
+    ) -> Option<IrNode> {
+        let ResolvedTypeKind::Enum {
+            tag_expression: ExprKind::FieldRef(tag),
+            variants,
+            ..
+        } = &element.kind
+        else {
+            return None;
+        };
+        if !matches!(element.size, Size::Variable(_)) {
+            return None;
+        }
+        let mut cases = Vec::new();
+        for variant in variants {
+            let Size::Const(size) = variant.variant_type.size else {
+                return None;
+            };
+            cases.push(SwitchCase {
+                tag_value: variant.tag_value,
+                node: Box::new(Self::const_or_zero(size, 1)),
+                parameters: Vec::new(),
+            });
+        }
+        let path = tag.path.join(".");
+        let idx = params.ensure(owner, &path, None, false);
+        Some(IrNode::Switch(SwitchNode {
+            tag: params.params[idx].name.clone(),
+            cases,
+            default: None,
+            meta: NodeMetadata::default(),
+        }))
+    }
+
+    /* TypeScript: a named type's own outside references (a top-level enum's
+    tag `kind`) name fields of the struct holding it; bind those call
+    arguments to `<field>.<path>` params read from the holder. */
+    fn bind_context_args(
+        &self,
+        parent: &ResolvedType,
+        field: &ResolvedField,
+        target_name: &str,
+        node: &mut IrNode,
+        params: &mut ParameterRegistry,
+    ) {
+        let (IrNode::CallNested(call), ResolvedTypeKind::Struct { fields, .. }) =
+            (node, &parent.kind)
+        else {
+            return;
+        };
+        let Some(target) = self.resolver.get_type_info(target_name) else {
+            return;
+        };
+        let Some(refs) = target.dynamic_params.get(target_name) else {
+            return;
+        };
+        for path in refs.keys() {
+            let head = path.split('.').next().unwrap_or("");
+            if !fields
+                .iter()
+                .any(|f| f.name == head && f.name != field.name)
+            {
+                continue;
+            }
+            let idx = params.ensure(&field.name, path, None, false);
+            let source = params.params[idx].name.clone();
+            let name = canonical_name(target_name, path);
+            for arg in call.arguments.iter_mut().filter(|arg| arg.name == name) {
+                arg.value = source.clone();
+            }
+            /* The callee-named parameter `collect_callee_arguments` added is
+            no longer read: keep it out of the params surface. */
+            params.mark_derived(target_name, path);
         }
     }
 
@@ -298,7 +560,7 @@ impl<'a> IrBuilder<'a> {
         ty: &ResolvedType,
         params: &mut ParameterRegistry,
     ) -> Result<IrNode, IrBuildError> {
-        let ResolvedTypeKind::Struct { fields, .. } = &ty.kind else {
+        let ResolvedTypeKind::Struct { fields, packed, .. } = &ty.kind else {
             return Err(IrBuildError::UnsupportedSize {
                 type_name: ty.name.clone(),
             });
@@ -307,6 +569,13 @@ impl<'a> IrBuilder<'a> {
         let mut nodes: Vec<IrNode> = Vec::new();
         let mut prefix_end = 0;
         for field in fields {
+            /* A packed struct places fields back to back, so a field's size
+            is not rounded up to its type's alignment. */
+            let field_align = if *packed {
+                1
+            } else {
+                field.field_type.alignment
+            };
             /* Preserve resolved padding through the first variable-sized field. */
             if let Some(offset) = field.offset {
                 if offset > prefix_end {
@@ -318,15 +587,69 @@ impl<'a> IrBuilder<'a> {
             }
             let mut extend_field_dynamic = true;
             let field_node = match &field.field_type.size {
-                Size::Const(value) => Self::const_or_zero(*value, field.field_type.alignment),
-                Size::Variable(_) => match &field.field_type.kind {
-                    ResolvedTypeKind::Array { .. } => self.build_array_node_with_prefix(
-                        &field.field_type,
-                        params,
+                Size::Variable(_) if self.is_payload_field(ty, field) => {
+                    extend_field_dynamic = false;
+                    let idx = params.ensure(
                         &field.name,
-                        "",
-                        &ty.name,
-                    )?,
+                        "payload_size",
+                        Some(format!("Byte size of field '{}'", field.name)),
+                        false,
+                    );
+                    let param = params.params[idx].name.clone();
+                    let node = match &field.field_type.kind {
+                        ResolvedTypeKind::TypeRef { target_name, .. } => {
+                            IrNode::CallNested(CallNestedNode {
+                                type_name: target_name.clone(),
+                                arguments: vec![IrArgument {
+                                    name: format!("{target_name}.payload_size"),
+                                    value: param,
+                                }],
+                                meta: NodeMetadata::aligned(field.field_type.alignment),
+                            })
+                        }
+                        _ => IrNode::FieldRef(FieldRefNode {
+                            path: format!("{}.payload_size", field.name),
+                            parameter: Some(param),
+                            meta: NodeMetadata::default(),
+                        }),
+                    };
+                    Self::align_node(node, field_align)
+                }
+                Size::Const(value) => Self::const_or_zero(*value, field_align),
+                Size::Variable(_) => match &field.field_type.kind {
+                    ResolvedTypeKind::Array {
+                        element_type,
+                        jagged,
+                        ..
+                    } => {
+                        /* An enum stride reads its tag from this struct; the
+                        element's own references are not parameters. */
+                        if self.payload_size_params && is_enum_stride(element_type) {
+                            extend_field_dynamic = false;
+                        }
+                        /* TypeScript sizes a jagged array from params by its
+                        byte total (`sumOverArray` reads `<field>.payload_size`
+                        when no buffer is given). */
+                        if self.payload_size_params
+                            && *jagged
+                            && matches!(element_type.size, Size::Variable(_))
+                            && matches!(element_type.kind, ResolvedTypeKind::TypeRef { .. })
+                        {
+                            params.ensure(
+                                &field.name,
+                                "payload_size",
+                                Some(format!("Byte size of jagged array '{}'", field.name)),
+                                false,
+                            );
+                        }
+                        self.build_array_node_with_prefix(
+                            &field.field_type,
+                            params,
+                            &field.name,
+                            "",
+                            &ty.name,
+                        )?
+                    }
                     ResolvedTypeKind::Enum { .. } => {
                         let owner_refs = ty.dynamic_params.get(&field.name);
                         let has_payload_param = owner_refs.map_or(false, |refs| {
@@ -355,17 +678,59 @@ impl<'a> IrBuilder<'a> {
                         } else {
                             self.build_enum_node(&field.field_type, params)?
                         };
-                        Self::align_node(node, field.field_type.alignment)
+                        Self::align_node(node, field_align)
                     }
                     ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
                         let node =
                             self.build_size_discriminated_union_node(&field.field_type, params)?;
-                        Self::align_node(node, field.field_type.alignment)
+                        Self::align_node(node, field_align)
                     }
-                    ResolvedTypeKind::TypeRef { .. } => {
+                    ResolvedTypeKind::TypeRef { target_name, .. } => {
                         extend_field_dynamic = false;
-                        let node = self.build_typeref_node(&field.field_type, params)?;
-                        Self::align_node(node, field.field_type.alignment)
+                        let mut node = self.build_typeref_node(&field.field_type, params)?;
+                        if self.payload_size_params {
+                            self.bind_context_args(ty, field, target_name, &mut node, params);
+                        }
+                        Self::align_node(node, field_align)
+                    }
+                    ResolvedTypeKind::Struct { .. } => {
+                        /* Its references are already parameters of this
+                        struct, under the names the inline build maps to. */
+                        extend_field_dynamic = false;
+                        let mut node = self.build_inline_struct_node(ty, field, params)?;
+                        /* Its `__buffer_size` is the bytes left for it: this
+                        struct's, less the bytes before the field. */
+                        if reads_buffer_size(&node) && !nodes.is_empty() {
+                            /* Each read gets its own copy of the bytes before
+                            the field, and a later sibling copies this one
+                            again, so the tree doubles per such sibling.
+                            Check the size the copies give before making
+                            them. */
+                            let copy = nodes
+                                .iter()
+                                .map(ir_node_count)
+                                .fold(nodes.len() + 3, usize::saturating_add);
+                            let grown = buffer_size_reads(&node)
+                                .saturating_mul(copy)
+                                .saturating_add(ir_node_count(&node));
+                            if grown > MAX_IR_NODES {
+                                return Err(IrBuildError::TooManyNodes {
+                                    type_name: ty.name.clone(),
+                                    limit: MAX_IR_NODES,
+                                });
+                            }
+                            let mut offset = self.combine_checked_add(nodes.clone(), &ty.name)?;
+                            if !*packed {
+                                offset = Self::align_node(offset, field.field_type.alignment);
+                            }
+                            let available = IrNode::SubChecked(BinaryOpNode {
+                                left: Box::new(Self::buffer_size_node()),
+                                right: Box::new(offset),
+                                meta: NodeMetadata::default(),
+                            });
+                            replace_buffer_size(&mut node, &available);
+                        }
+                        Self::align_node(node, field_align)
                     }
                     _ => {
                         let refs = ty.dynamic_params.get(&field.name).ok_or_else(|| {
@@ -387,6 +752,76 @@ impl<'a> IrBuilder<'a> {
 
         let acc = self.combine_checked_add(nodes, &ty.name)?;
         Ok(Self::align_node(acc, ty.alignment))
+    }
+
+    /* A variable-size inline struct is sized like a named one, from all of
+    its fields (fixed ones and array element widths included), but its
+    references are parameters of the struct holding it. The resolver names
+    each one there with `qualify_struct_path`, so the inline build's
+    parameter names are mapped to those; any other parameter the build adds
+    keeps a name of its own (see below). */
+    fn build_inline_struct_node(
+        &self,
+        parent: &ResolvedType,
+        field: &ResolvedField,
+        params: &mut ParameterRegistry,
+    ) -> Result<IrNode, IrBuildError> {
+        let inline = &field.field_type;
+        let mut inner = ParameterRegistry::from_dynamic(&inline.dynamic_params);
+        let mut node = self.build_variable_struct(inline, &mut inner)?;
+
+        let parent_fields: HashSet<String> = match &parent.kind {
+            ResolvedTypeKind::Struct { fields, .. } => {
+                fields.iter().map(|f| f.name.clone()).collect()
+            }
+            _ => HashSet::new(),
+        };
+        let mut renames: BTreeMap<String, String> = BTreeMap::new();
+        for (owner, refs) in &inline.dynamic_params {
+            for path in refs.keys() {
+                let Some(inner_name) = inner.lookup_name(owner, path) else {
+                    continue;
+                };
+                let outer_path = qualify_struct_path(&field.name, path, &parent_fields);
+                let idx = params.ensure(&field.name, &outer_path, None, false);
+                renames.insert(inner_name.to_string(), params.params[idx].name.clone());
+            }
+        }
+        /* Of the others, those named after a type inside this inline struct
+        (`Outer::inner::body.computed_tag`, `..payload_size`) keep their
+        names: the derived-tag lookup and parameter extraction find them by
+        those, and the type name already tells two inline structs apart. The
+        rest, such as a named child's inputs (`items.n`), are named after
+        fields, so they take this field's name (`left.items.n`) to stay
+        apart from those of a sibling inline struct. */
+        let qualified = format!("{}::", inline.name);
+        for param in &inner.params {
+            if !renames.contains_key(&param.name) {
+                let outer_name = if param.name.starts_with(&qualified) {
+                    param.name.clone()
+                } else {
+                    format!("{}.{}", field.name, param.name)
+                };
+                let name = params.add_synthetic(
+                    &field.name,
+                    &param.name,
+                    Some(outer_name),
+                    param.description.clone(),
+                    param.derived,
+                );
+                renames.insert(param.name.clone(), name);
+            }
+        }
+        /* A parameter the inline build derives is derived here too. */
+        for param in inner.params.iter().filter(|p| p.derived) {
+            if let Some(outer) = renames.get(&param.name) {
+                if let Some(target) = params.params.iter_mut().find(|p| &p.name == outer) {
+                    target.derived = true;
+                }
+            }
+        }
+        rename_ir_parameters(&mut node, &renames);
+        Ok(node)
     }
 
     fn build_array_node(
@@ -424,7 +859,47 @@ impl<'a> IrBuilder<'a> {
             }
         };
 
-        let count = self.build_expr_ir(size_expr, owner, params, type_name, path_prefix)?;
+        let count = match self.build_expr_ir(size_expr, owner, params, type_name, path_prefix) {
+            Ok(count) => count,
+            /* TypeScript: a count the IR cannot express (comparisons,
+            short-circuit `&&` / `||`) is a derived `<owner>.computed_size`
+            parameter that the TypeScript backend evaluates from the other
+            params (checked u64, short-circuit), like a computed enum tag. */
+            Err(IrBuildError::UnsupportedExpression { .. })
+                if self.payload_size_params
+                    && path_prefix.is_empty()
+                    && ts_can_evaluate(size_expr) =>
+            {
+                let name = params.add_synthetic(
+                    owner,
+                    "__computed_size",
+                    Some(format!("{owner}.computed_size")),
+                    Some("Computed element count".into()),
+                    true,
+                );
+                IrNode::FieldRef(FieldRefNode {
+                    path: format!("{owner}.computed_size"),
+                    parameter: Some(name),
+                    meta: NodeMetadata::default(),
+                })
+            }
+            Err(err) => return Err(err),
+        };
+
+        /* TypeScript: elements that are inline enums with constant-size
+        variants selected by an outside tag all have one size (the stride),
+        jagged or not, as in C and Rust: `count * switch(tag)`. */
+        if self.payload_size_params {
+            if let Some(stride) = self.enum_stride_node(element_type, owner, params) {
+                /* Elements are laid out back to back at the selected
+                variant's size (packed layout, as the measuring walk reads). */
+                return Ok(IrNode::MulChecked(BinaryOpNode {
+                    left: Box::new(count),
+                    right: Box::new(stride),
+                    meta: NodeMetadata::default(),
+                }));
+            }
+        }
 
         /* For jagged arrays with variable-size elements, use SumOverArray node */
         if jagged && matches!(element_type.size, Size::Variable(_)) {
@@ -501,12 +976,42 @@ impl<'a> IrBuilder<'a> {
             }
         };
 
+        /* TypeScript: a constant tag selects one variant for good. */
+        if self.payload_size_params {
+            if let Some(tag) = constant_tag(tag_expr) {
+                let variant = variants
+                    .iter()
+                    .find(|v| v.tag_value == tag)
+                    .ok_or_else(|| IrBuildError::UnsupportedExpression {
+                        type_name: ty.name.clone(),
+                    })?;
+                if let Size::Const(size) = variant.variant_type.size {
+                    return Ok(Self::const_or_zero(size, 1));
+                }
+            }
+        }
+
         let tag_name = self.enum_tag_parameter(tag_expr, &ty.name, params)?;
         let mut cases = Vec::new();
 
         for variant in variants {
+            /* TypeScript: variants are payloads read in place (packed); an
+            inline enum payload is sized by its own tag. */
+            let variant_align = if self.payload_size_params {
+                1
+            } else {
+                variant.variant_type.alignment
+            };
+            let stride = if self.payload_size_params {
+                self.enum_stride_node(&variant.variant_type, &variant.name, params)
+            } else {
+                None
+            };
             let node = match variant.variant_type.size {
-                Size::Const(value) => Self::const_or_zero(value, variant.variant_type.alignment),
+                Size::Const(value) => Self::const_or_zero(value, variant_align),
+                Size::Variable(_) if stride.is_some() => stride.unwrap_or(IrNode::ZeroSize {
+                    meta: NodeMetadata::default(),
+                }),
                 Size::Variable(_) => {
                     let refs = ty.dynamic_params.get(&variant.name).ok_or_else(|| {
                         IrBuildError::MissingDynamicRefs {
@@ -516,7 +1021,7 @@ impl<'a> IrBuilder<'a> {
                     let nodes =
                         self.build_field_ref_nodes(&variant.name, refs, params, &ty.name)?;
                     let acc = self.combine_checked_add(nodes, &ty.name)?;
-                    Self::align_node(acc, variant.variant_type.alignment)
+                    Self::align_node(acc, variant_align)
                 }
             };
 
@@ -747,6 +1252,16 @@ impl<'a> IrBuilder<'a> {
         type_name: &str,
         path_prefix: &str,
     ) -> Result<IrNode, IrBuildError> {
+        /* TypeScript: `sizeof` / `alignof` of a constant-size type are
+        constants. */
+        if self.payload_size_params {
+            if let Some(value) = self.type_constant(expr) {
+                return Ok(IrNode::Const(ConstNode {
+                    value,
+                    meta: NodeMetadata::default(),
+                }));
+            }
+        }
         match expr {
             ExprKind::Literal(lit) => {
                 let value =
@@ -761,11 +1276,7 @@ impl<'a> IrBuilder<'a> {
             ExprKind::FieldRef(field_ref) => {
                 let raw_path = field_ref.path.join(".");
                 if raw_path == "__buffer_size" {
-                    return Ok(IrNode::FieldRef(FieldRefNode {
-                        path: raw_path,
-                        parameter: None,
-                        meta: NodeMetadata::default(),
-                    }));
+                    return Ok(Self::buffer_size_node());
                 }
                 let path = Self::apply_path_prefix(path_prefix, &raw_path);
                 let param = params.lookup_name(owner, &path).ok_or_else(|| {
@@ -896,6 +1407,15 @@ impl<'a> IrBuilder<'a> {
         }))
     }
 
+    /* The bytes available to the value being sized (`__buffer_size`). */
+    fn buffer_size_node() -> IrNode {
+        IrNode::FieldRef(FieldRefNode {
+            path: "__buffer_size".into(),
+            parameter: None,
+            meta: NodeMetadata::default(),
+        })
+    }
+
     fn const_or_zero(value: u64, alignment: u64) -> IrNode {
         if value == 0 {
             IrNode::ZeroSize {
@@ -962,6 +1482,163 @@ impl<'a> IrBuilder<'a> {
                 type_name: ty.name.clone(),
             }),
         }
+    }
+}
+
+/// Most nodes a variable-size inline struct reading `__buffer_size` may give
+/// once its reads are replaced by the bytes before it (see
+/// `build_variable_struct`). Past it the type's IR fails to build with
+/// [`IrBuildError::TooManyNodes`]: the tree would double per such sibling.
+pub const MAX_IR_NODES: usize = 1 << 16;
+
+/* The number of nodes in `node`. */
+fn ir_node_count(node: &IrNode) -> usize {
+    let children = match node {
+        IrNode::ZeroSize { .. }
+        | IrNode::Const(_)
+        | IrNode::FieldRef(_)
+        | IrNode::CallNested(_) => 0,
+        IrNode::AlignUp(align) => ir_node_count(&align.node),
+        IrNode::Switch(switch) => switch
+            .cases
+            .iter()
+            .map(|case| ir_node_count(&case.node))
+            .chain(switch.default.as_deref().map(ir_node_count))
+            .fold(0, usize::saturating_add),
+        IrNode::AddChecked(op)
+        | IrNode::SubChecked(op)
+        | IrNode::MulChecked(op)
+        | IrNode::DivChecked(op)
+        | IrNode::ModChecked(op)
+        | IrNode::BitAnd(op)
+        | IrNode::BitOr(op)
+        | IrNode::BitXor(op)
+        | IrNode::LeftShift(op)
+        | IrNode::RightShift(op) => {
+            ir_node_count(&op.left).saturating_add(ir_node_count(&op.right))
+        }
+        IrNode::SumOverArray(sum) => ir_node_count(&sum.count),
+    };
+    children.saturating_add(1)
+}
+
+/* The number of `__buffer_size` reads in `node` that `replace_buffer_size`
+ * replaces. */
+fn buffer_size_reads(node: &IrNode) -> usize {
+    match node {
+        IrNode::FieldRef(field_ref) => usize::from(field_ref.path == "__buffer_size"),
+        IrNode::ZeroSize { .. } | IrNode::Const(_) | IrNode::CallNested(_) => 0,
+        IrNode::AlignUp(align) => buffer_size_reads(&align.node),
+        IrNode::Switch(switch) => switch
+            .cases
+            .iter()
+            .map(|case| buffer_size_reads(&case.node))
+            .chain(switch.default.as_deref().map(buffer_size_reads))
+            .fold(0, usize::saturating_add),
+        IrNode::AddChecked(op)
+        | IrNode::SubChecked(op)
+        | IrNode::MulChecked(op)
+        | IrNode::DivChecked(op)
+        | IrNode::ModChecked(op)
+        | IrNode::BitAnd(op)
+        | IrNode::BitOr(op)
+        | IrNode::BitXor(op)
+        | IrNode::LeftShift(op)
+        | IrNode::RightShift(op) => {
+            buffer_size_reads(&op.left).saturating_add(buffer_size_reads(&op.right))
+        }
+        IrNode::SumOverArray(sum) => buffer_size_reads(&sum.count),
+    }
+}
+
+/* Replaces every `__buffer_size` read in `node` (those `reads_buffer_size`
+ * finds) by `available`. */
+fn replace_buffer_size(node: &mut IrNode, available: &IrNode) {
+    match node {
+        IrNode::FieldRef(field_ref) if field_ref.path == "__buffer_size" => {
+            *node = available.clone();
+        }
+        IrNode::ZeroSize { .. } | IrNode::Const(_) | IrNode::FieldRef(_) => {}
+        IrNode::CallNested(_) => {}
+        IrNode::AlignUp(align) => replace_buffer_size(&mut align.node, available),
+        IrNode::Switch(switch) => {
+            for case in &mut switch.cases {
+                replace_buffer_size(&mut case.node, available);
+            }
+            if let Some(default) = switch.default.as_mut() {
+                replace_buffer_size(default, available);
+            }
+        }
+        IrNode::AddChecked(op)
+        | IrNode::SubChecked(op)
+        | IrNode::MulChecked(op)
+        | IrNode::DivChecked(op)
+        | IrNode::ModChecked(op)
+        | IrNode::BitAnd(op)
+        | IrNode::BitOr(op)
+        | IrNode::BitXor(op)
+        | IrNode::LeftShift(op)
+        | IrNode::RightShift(op) => {
+            replace_buffer_size(&mut op.left, available);
+            replace_buffer_size(&mut op.right, available);
+        }
+        IrNode::SumOverArray(sum) => replace_buffer_size(&mut sum.count, available),
+    }
+}
+
+/* Renames every parameter `node` reads (field references, switch tags,
+ * nested-call arguments and case parameters) by `renames`. */
+fn rename_ir_parameters(node: &mut IrNode, renames: &BTreeMap<String, String>) {
+    let rename = |name: &mut String| {
+        if let Some(new_name) = renames.get(name.as_str()) {
+            *name = new_name.clone();
+        }
+    };
+    match node {
+        IrNode::ZeroSize { .. } | IrNode::Const(_) => {}
+        IrNode::FieldRef(field_ref) => {
+            /* The path names the parameter too, qualified as it is. */
+            if let Some(new_name) = field_ref
+                .parameter
+                .as_deref()
+                .and_then(|parameter| renames.get(parameter))
+            {
+                field_ref.path = new_name.clone();
+                field_ref.parameter = Some(new_name.clone());
+            }
+        }
+        IrNode::AlignUp(align) => rename_ir_parameters(&mut align.node, renames),
+        IrNode::Switch(switch) => {
+            rename(&mut switch.tag);
+            for case in &mut switch.cases {
+                for parameter in &mut case.parameters {
+                    rename(&mut parameter.name);
+                }
+                rename_ir_parameters(&mut case.node, renames);
+            }
+            if let Some(default) = switch.default.as_mut() {
+                rename_ir_parameters(default, renames);
+            }
+        }
+        IrNode::CallNested(call) => {
+            for argument in &mut call.arguments {
+                rename(&mut argument.value);
+            }
+        }
+        IrNode::AddChecked(op)
+        | IrNode::SubChecked(op)
+        | IrNode::MulChecked(op)
+        | IrNode::DivChecked(op)
+        | IrNode::ModChecked(op)
+        | IrNode::BitAnd(op)
+        | IrNode::BitOr(op)
+        | IrNode::BitXor(op)
+        | IrNode::LeftShift(op)
+        | IrNode::RightShift(op) => {
+            rename_ir_parameters(&mut op.left, renames);
+            rename_ir_parameters(&mut op.right, renames);
+        }
+        IrNode::SumOverArray(sum) => rename_ir_parameters(&mut sum.count, renames),
     }
 }
 
@@ -1052,6 +1729,194 @@ fn literal_to_u64(literal: &LiteralExpr) -> Option<u64> {
     }
 }
 
+/// Whether `ty` is an inline enum whose variants all have a constant size
+/// and whose tag is a plain field reference: as an array element, every
+/// element has the size its tag selects (one stride).
+pub fn is_enum_stride(ty: &ResolvedType) -> bool {
+    match &ty.kind {
+        ResolvedTypeKind::Enum {
+            tag_expression: ExprKind::FieldRef(_),
+            variants,
+            ..
+        } => {
+            matches!(ty.size, Size::Variable(_))
+                && variants
+                    .iter()
+                    .all(|v| matches!(v.variant_type.size, Size::Const(_)))
+        }
+        _ => false,
+    }
+}
+
+/* The value of a tag expression without field references. */
+fn constant_tag(expr: &ExprKind) -> Option<u64> {
+    use crate::abi::expr::ConstantExpression;
+    if !expr.is_constant() {
+        return None;
+    }
+    expr.try_evaluate_constant()
+}
+
+/// Whether the TypeScript backend can evaluate `expr` as a derived
+/// parameter: everything but `__buffer_size`, which is not a parameter
+/// (`sizeof` / `alignof` are folded to constants first).
+pub fn ts_can_evaluate(expr: &ExprKind) -> bool {
+    match expr {
+        ExprKind::Literal(_) => true,
+        ExprKind::FieldRef(f) => f.path.join(".") != "__buffer_size",
+        /* The TypeScript backend folds these to constants. */
+        ExprKind::Sizeof(_) | ExprKind::Alignof(_) => true,
+        ExprKind::Add(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::Sub(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::Mul(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::Div(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::Mod(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::Pow(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::BitAnd(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::BitOr(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::BitXor(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::LeftShift(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::RightShift(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::Eq(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::Ne(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::Lt(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::Gt(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::Le(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::Ge(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::And(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::Or(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::Xor(e) => ts_can_evaluate(&e.left) && ts_can_evaluate(&e.right),
+        ExprKind::BitNot(e) => ts_can_evaluate(&e.operand),
+        ExprKind::Neg(e) => ts_can_evaluate(&e.operand),
+        ExprKind::Not(e) => ts_can_evaluate(&e.operand),
+        ExprKind::Popcount(e) => ts_can_evaluate(&e.operand),
+    }
+}
+
+/* Whether `node` reads `__buffer_size`. */
+fn reads_buffer_size(node: &IrNode) -> bool {
+    match node {
+        IrNode::FieldRef(f) => f.path == "__buffer_size",
+        IrNode::AlignUp(a) => reads_buffer_size(&a.node),
+        IrNode::Switch(sw) => {
+            sw.cases.iter().any(|c| reads_buffer_size(&c.node))
+                || sw.default.as_deref().map_or(false, reads_buffer_size)
+        }
+        IrNode::AddChecked(b)
+        | IrNode::SubChecked(b)
+        | IrNode::MulChecked(b)
+        | IrNode::DivChecked(b)
+        | IrNode::ModChecked(b)
+        | IrNode::BitAnd(b)
+        | IrNode::BitOr(b)
+        | IrNode::BitXor(b)
+        | IrNode::LeftShift(b)
+        | IrNode::RightShift(b) => reads_buffer_size(&b.left) || reads_buffer_size(&b.right),
+        IrNode::SumOverArray(n) => reads_buffer_size(&n.count),
+        _ => false,
+    }
+}
+
+/// Whether the byte size of `ty` depends on its own bytes: a union with a
+/// variable-size variant, a size-discriminated union, a variable-size named
+/// type, a jagged array, an array or struct sized by its own count fields,
+/// or an enum with such a variant.
+pub fn is_self_sized(ty: &ResolvedType) -> bool {
+    if !matches!(ty.size, Size::Variable(_)) {
+        return false;
+    }
+    match &ty.kind {
+        ResolvedTypeKind::Union { .. }
+        | ResolvedTypeKind::SizeDiscriminatedUnion { .. }
+        | ResolvedTypeKind::TypeRef { .. } => true,
+        ResolvedTypeKind::Array {
+            element_type,
+            jagged,
+            ..
+        } => *jagged || is_self_sized(element_type),
+        ResolvedTypeKind::Enum { variants, .. } => {
+            variants.iter().any(|v| is_self_sized(&v.variant_type))
+        }
+        ResolvedTypeKind::Struct { fields, .. } => fields.iter().enumerate().any(|(i, f)| {
+            is_self_sized(&f.field_type) || sized_by_earlier_field(&f.field_type, &fields[..i])
+        }),
+        ResolvedTypeKind::Primitive { .. } => false,
+    }
+}
+
+fn sized_by_earlier_field(ty: &ResolvedType, earlier: &[ResolvedField]) -> bool {
+    let expr = match &ty.kind {
+        ResolvedTypeKind::Array {
+            size_expression, ..
+        } if matches!(ty.size, Size::Variable(_)) => size_expression,
+        ResolvedTypeKind::Enum { tag_expression, .. } if matches!(ty.size, Size::Variable(_)) => {
+            tag_expression
+        }
+        _ => return false,
+    };
+    let mut paths = Vec::new();
+    collect_ref_heads(expr, &mut paths);
+    paths
+        .iter()
+        .any(|head| earlier.iter().any(|f| &f.name == head))
+}
+
+fn collect_ref_heads(expr: &ExprKind, out: &mut Vec<String>) {
+    match expr {
+        ExprKind::FieldRef(f) => {
+            /* `..` names an enclosing struct's field, never this one's. */
+            let mut segments = f
+                .path
+                .iter()
+                .flat_map(|s| s.split('/'))
+                .filter(|s| !s.is_empty() && *s != ".");
+            if let Some(head) = segments.next() {
+                if head != ".." {
+                    out.push(head.to_string());
+                }
+            }
+        }
+        ExprKind::Add(e) => {
+            collect_ref_heads(&e.left, out);
+            collect_ref_heads(&e.right, out);
+        }
+        ExprKind::Sub(e) => {
+            collect_ref_heads(&e.left, out);
+            collect_ref_heads(&e.right, out);
+        }
+        ExprKind::Mul(e) => {
+            collect_ref_heads(&e.left, out);
+            collect_ref_heads(&e.right, out);
+        }
+        ExprKind::Div(e) => {
+            collect_ref_heads(&e.left, out);
+            collect_ref_heads(&e.right, out);
+        }
+        ExprKind::Mod(e) => {
+            collect_ref_heads(&e.left, out);
+            collect_ref_heads(&e.right, out);
+        }
+        ExprKind::BitAnd(e) => {
+            collect_ref_heads(&e.left, out);
+            collect_ref_heads(&e.right, out);
+        }
+        ExprKind::BitOr(e) => {
+            collect_ref_heads(&e.left, out);
+            collect_ref_heads(&e.right, out);
+        }
+        ExprKind::LeftShift(e) => {
+            collect_ref_heads(&e.left, out);
+            collect_ref_heads(&e.right, out);
+        }
+        ExprKind::RightShift(e) => {
+            collect_ref_heads(&e.left, out);
+            collect_ref_heads(&e.right, out);
+        }
+        ExprKind::Popcount(e) => collect_ref_heads(&e.operand, out),
+        _ => {}
+    }
+}
+
 fn filter_jagged_element_parameters(
     root_type: &ResolvedType,
     parameters: Vec<IrParameter>,
@@ -1107,6 +1972,8 @@ pub enum IrBuildError {
     DependencyCycle { cycle: Vec<String> },
     #[error("type '{type_name}' referenced in IR builder but not found in resolver")]
     MissingType { type_name: String },
+    #[error("type '{type_name}' layout IR would exceed {limit} nodes")]
+    TooManyNodes { type_name: String, limit: usize },
 }
 
 #[cfg(test)]

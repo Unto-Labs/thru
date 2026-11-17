@@ -369,7 +369,7 @@ describe("BrowserSDK transaction signing scheme", () => {
       tokenAccountAddress: "ta_first_token_account",
       mintAddress: "ta_mint",
       tokenProgramAddress: "ta_token_program",
-      symbol: "THRUSD",
+      symbol: "UUSD",
       decimals: 6,
     };
     const secondDestination = {
@@ -506,7 +506,7 @@ describe("BrowserSDK transaction signing scheme", () => {
       };
       vi.spyOn(internals.provider, "prepareDeposit").mockImplementation(async () => ({
         network: internals.activeNetwork.id as ThruNetwork,
-        depositTarget: DepositTarget.THRUSD,
+        depositTarget: DepositTarget.UUSD,
         tokenAccountAddress: "ta_token_account",
         mintAddress: "ta_mint",
         tokenProgramAddress: "ta_token_program",
@@ -539,6 +539,22 @@ describe("BrowserSDK transaction signing scheme", () => {
         expect(internals.provider.deposit).not.toHaveBeenCalled();
       },
     );
+
+    it("lets the wallet select Bank even with a destination and Unifold configured", async () => {
+      internals.activeNetwork = {
+        id: ThruNetwork.Alphanet,
+        depositConfigured: true,
+        depositProviders: ["unifold"],
+      };
+      const destination = await sdk.deposits.prepare();
+
+      await expect(sdk.deposits.open({ method: "bank", destination })).resolves.toEqual({ status: "cancelled" });
+      expect(internals.provider.deposit).toHaveBeenCalledExactlyOnceWith({
+        method: "bank",
+        destination,
+        enabledProviders: ["unifold"],
+      });
+    });
 
     it("keeps the Unifold default for a prepared destination where configured", async () => {
       internals.activeNetwork = {

@@ -1,0 +1,27 @@
+abi:
+  package: "compliance.cross_package.child"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "A struct whose `count` follows variable-size data, for importers that size arrays by it"
+
+types:
+  # `count` follows `bytes`, so its offset is only known at run time.
+  - name: "CountChild"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "n"
+            field-type:
+              primitive: u8
+          - name: "bytes"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["n"]
+                element-type:
+                  primitive: u8
+          - name: "count"
+            field-type:
+              primitive: u8

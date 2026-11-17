@@ -42,7 +42,7 @@ type __TnIrNode =
   | {
       readonly op: "switch";
       readonly tag: string;
-      readonly cases: readonly { readonly value: number; readonly node: __TnIrNode }[];
+      readonly cases: readonly { readonly value: number | bigint; readonly node: __TnIrNode }[];
       readonly default?: __TnIrNode;
     }
   | {
@@ -55,6 +55,7 @@ type __TnIrNode =
       readonly count: __TnIrNode;
       readonly elementTypeName: string;
       readonly fieldName: string;
+      readonly payloadParam?: string;
     };
 
 type __TnIrContext = {
@@ -81,7 +82,8 @@ type __TnStructFieldInput =
   | { bytes?: () => Uint8Array };
 type __TnVariantDescriptor = {
   readonly name: string;
-  readonly tag: number;
+  /* A bigint for tags past 2^53 - 1, which a number cannot hold exactly. */
+  readonly tag: number | bigint;
   readonly payloadSize: number | null;
   readonly payloadType?: string;
   readonly createPayloadBuilder?: () => unknown | null;
@@ -122,6 +124,20 @@ function __tnWarnOnce(message: string): void {
     __tnWarnings.add(message);
     __tnLogWarn(message);
   }
+}
+
+/* Builders never return bytes their type's `validate` rejects. */
+function __tnBuilderValidateOrThrow(typeName: string, result: { ok: boolean; code?: string }): void {
+  if (!result.ok) throw new Error(`${typeName}Builder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
+}
+
+/* Packed params as a measuring walk's context: `T.kind` becomes `kind`. */
+function __tnParamsContext(record: Record<string, bigint>, prefix: string): Record<string, bigint> {
+  const ctx: Record<string, bigint> = Object.create(null);
+  for (const key of Object.keys(record)) {
+    ctx[key.startsWith(prefix) ? key.slice(prefix.length) : key] = record[key];
+  }
+  return ctx;
 }
 
 function __tnResolveBuilderInput(
@@ -289,11 +305,19 @@ function __tnBigIntGreaterThan(lhs: bigint, rhs: bigint): boolean {
   return (lhs as unknown as number) > (rhs as unknown as number);
 }
 
+/* Set bits of a u64 (a bigint is read as its low 64 bits; a number as
+   its low 32, as before). */
 function __tnPopcount(value: number | bigint): number {
-  let v =
-    typeof value === "bigint"
-      ? Number(value & BigInt(0xffffffff))
-      : Number(value) >>> 0;
+  if (typeof value === "bigint") {
+    let v = BigInt.asUintN(64, value);
+    let count = 0;
+    while (v !== BigInt(0)) {
+      v &= v - BigInt(1);
+      count++;
+    }
+    return count;
+  }
+  let v = Number(value) >>> 0;
   v = v - ((v >>> 1) & 0x55555555);
   v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
   return (((v + (v >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24;
@@ -308,10 +332,10 @@ function __tnRaiseIrError(code: string, message: string): never {
 function __tnCheckedAdd(lhs: bigint, rhs: bigint): bigint {
   if (__tnHasNativeBigInt) {
     const result = (lhs as bigint) + (rhs as bigint);
-    if (result < BigInt(0)) {
+    if (result < BigInt(0) || result > __tnU64(-BigInt(1))) {
       __tnRaiseIrError(
         "tn.ir.overflow",
-        "IR runtime detected negative size via addition"
+        "IR runtime detected an addition outside u64"
       );
     }
     return result;
@@ -360,10 +384,10 @@ function __tnCheckedSub(lhs: bigint, rhs: bigint): bigint {
 function __tnCheckedMul(lhs: bigint, rhs: bigint): bigint {
   if (__tnHasNativeBigInt) {
     const result = (lhs as bigint) * (rhs as bigint);
-    if (result < BigInt(0)) {
+    if (result < BigInt(0) || result > __tnU64(-BigInt(1))) {
       __tnRaiseIrError(
         "tn.ir.overflow",
-        "IR runtime detected negative size via multiplication"
+        "IR runtime detected a multiplication outside u64"
       );
     }
     return result;
@@ -437,13 +461,23 @@ function __tnCheckedShift(
   rhs: bigint,
   direction: "left" | "right"
 ): bigint {
+  /* As C and Rust: shifting 0, or shifting right by 64 or more, is 0;
+     shifting a non-zero value left by 64 or more overflows. */
+  if (__tnBigIntEquals(lhs, __tnToBigInt(0))) return lhs;
+  if (direction === "right" && __tnBigIntGreaterThan(rhs, __tnToBigInt(63))) {
+    return __tnToBigInt(0);
+  }
   const amount = __tnBigIntToNumber(rhs, "IR shift amount");
   if (amount < 0 || amount >= 64 || !Number.isInteger(amount)) {
     __tnRaiseIrError("tn.ir.overflow", "IR runtime invalid shift amount");
   }
   if (__tnHasNativeBigInt) {
     const shift = BigInt(amount);
-    return direction === "left" ? (lhs as bigint) << shift : (lhs as bigint) >> shift;
+    const shifted = direction === "left" ? (lhs as bigint) << shift : (lhs as bigint) >> shift;
+    if (shifted > __tnU64(-BigInt(1))) {
+      __tnRaiseIrError("tn.ir.overflow", "IR runtime shift overflows u64");
+    }
+    return shifted;
   }
   const value = lhs as unknown as number;
   const result = direction === "left" ? value * 2 ** amount : Math.floor(value / 2 ** amount);
@@ -451,6 +485,100 @@ function __tnCheckedShift(
     __tnWarnOnce("[thru-net] Precision loss while polyfilling BigInt shift");
   }
   return (result as unknown) as bigint;
+}
+
+/* 2^64: no u64 value, so no enum tag and no buffer size. */
+const __tnMeasureLimit = __tnHasNativeBigInt
+  ? BigInt(1) << BigInt(64)
+  : ((2 ** 64) as unknown as bigint);
+
+/* Checked u64 arithmetic for size, enum tag and derived-parameter expressions over
+   buffer values, as C and Rust evaluate them: operands are read as u64, and a
+   result outside u64 (an overflowing add/mul/pow/shift, a negative sub, a
+   shift of 64 or more of a non-zero value, a division by zero) is `null`,
+   which propagates. No operation builds a value wider than 128 bits. */
+function __tnU64(value: bigint): bigint {
+  return BigInt.asUintN(64, value);
+}
+
+function __tnU64Op(op: string, lhs: bigint | null, rhs: bigint | null): bigint | null {
+  if (lhs === null || rhs === null) return null;
+  const a = __tnU64(lhs);
+  const b = __tnU64(rhs);
+  const zero = BigInt(0);
+  const one = BigInt(1);
+  const max = __tnU64(-one);
+  let result: bigint;
+  switch (op) {
+    case "add": result = a + b; break;
+    case "sub": result = a - b; break;
+    case "mul": result = a * b; break;
+    case "div": if (b === zero) return null; result = a / b; break;
+    case "mod": if (b === zero) return null; result = a % b; break;
+    case "and": result = a & b; break;
+    case "or": result = a | b; break;
+    case "xor": result = a ^ b; break;
+    case "shl":
+      if (a === zero) return zero;
+      if (b > BigInt(63)) return null;
+      result = a << b;
+      break;
+    case "shr": result = b > BigInt(63) ? zero : a >> b; break;
+    case "pow": {
+      if (b === zero) return one;
+      if (a === zero || a === one) return a;
+      if (b > BigInt(64)) return null;
+      result = one;
+      for (let i = zero; i < b; i++) {
+        result *= a;
+        if (result > max) return null;
+      }
+      break;
+    }
+    case "eq": return a === b ? one : zero;
+    case "ne": return a !== b ? one : zero;
+    case "lt": return a < b ? one : zero;
+    case "gt": return a > b ? one : zero;
+    case "le": return a <= b ? one : zero;
+    case "ge": return a >= b ? one : zero;
+    case "land": return a !== zero && b !== zero ? one : zero;
+    case "lor": return a !== zero || b !== zero ? one : zero;
+    case "lxor": return (a !== zero) !== (b !== zero) ? one : zero;
+    default: return null;
+  }
+  return result < zero || result > max ? null : result;
+}
+
+function __tnU64Unary(op: string, operand: bigint | null): bigint | null {
+  if (operand === null) return null;
+  const a = __tnU64(operand);
+  const zero = BigInt(0);
+  switch (op) {
+    case "bitnot": return __tnU64(~a);
+    case "neg": return a === zero ? zero : null;
+    case "not": return a === zero ? BigInt(1) : zero;
+    case "popcount": return BigInt(__tnPopcount(a));
+    default: return null;
+  }
+}
+
+/* A checked count as a number (views read validated bytes: an overflow
+   means they changed since). */
+function __tnCountNumber(count: bigint | null): number {
+  if (count === null) throw new Error("array count overflows u64");
+  return __tnBigIntToNumber(count, "array count");
+}
+
+/* Whether two enum tags are the same u64 (numbers and bigints compared
+   exactly; a null tag equals nothing). */
+function __tnTagEquals(lhs: number | bigint | null, rhs: number | bigint): boolean {
+  if (lhs === null) return false;
+  return __tnToBigInt(lhs) === __tnToBigInt(rhs);
+}
+
+/* A checked tag as a number; an overflow (`null`) selects no variant. */
+function __tnTagNumber(tag: bigint | null): number {
+  return tag === null || tag > BigInt(Number.MAX_SAFE_INTEGER) ? -1 : Number(tag);
 }
 
 function __tnAlign(value: bigint, alignment: number): bigint {
@@ -740,6 +868,17 @@ function __tnValidateIrTree(
   return { ok: true, consumed: required };
 }
 
+/* A parameter as the u64 C and Rust evaluate: a value read from a signed
+   field is its two's complement (i8 -1 is 2^64-1); a derived value past
+   u64 (an overflowed computed count or tag) is an overflow. */
+function __tnIrU64(value: bigint, name: string): bigint {
+  if (!__tnHasNativeBigInt) return value;
+  if (value > __tnU64(-BigInt(1))) {
+    __tnRaiseIrError("tn.ir.overflow", `IR parameter '${name}' overflows u64`);
+  }
+  return __tnU64(value);
+}
+
 function __tnEvalIrNode(
   node: __TnIrNode,
   ctx: __TnIrContext,
@@ -762,7 +901,7 @@ function __tnEvalIrNode(
           `${prefix}Missing IR parameter '${node.param}'`
         );
       }
-      return val;
+      return __tnIrU64(val, node.param);
     }
     case "add":
       {
@@ -779,11 +918,13 @@ function __tnEvalIrNode(
         __tnEvalIrNode(node.left, ctx, baseOffset),
         __tnEvalIrNode(node.right, ctx, baseOffset)
       );
-    case "mul":
-      return __tnCheckedMul(
-        __tnEvalIrNode(node.left, ctx, baseOffset),
-        __tnEvalIrNode(node.right, ctx, baseOffset)
-      );
+    case "mul": {
+      /* `count * element`: no elements select no variant (an unknown tag
+         with a zero count is valid), so a zero left side ends here. */
+      const left = __tnEvalIrNode(node.left, ctx, baseOffset);
+      if (__tnBigIntEquals(left, __tnToBigInt(0))) return left;
+      return __tnCheckedMul(left, __tnEvalIrNode(node.right, ctx, baseOffset));
+    }
     case "div":
       return __tnCheckedDiv(
         __tnEvalIrNode(node.left, ctx, baseOffset),
@@ -827,7 +968,8 @@ function __tnEvalIrNode(
     case "align":
       return __tnAlign(__tnEvalIrNode(node.node, ctx, baseOffset), node.alignment);
     case "switch": {
-      const tagVal = ctx.params[node.tag];
+      const rawTag = ctx.params[node.tag];
+      const tagVal = rawTag === undefined ? rawTag : __tnIrU64(rawTag, node.tag);
       if (tagVal === undefined) {
         const prefix = ctx.typeName ? `${ctx.typeName}: ` : "";
         __tnRaiseIrError(
@@ -835,16 +977,16 @@ function __tnEvalIrNode(
           `${prefix}Missing IR switch tag '${node.tag}'`
         );
       }
-      const tagNumber = Number(tagVal);
+      /* Case values past 2^53 - 1 are bigints: compare exact u64s. */
       for (const caseNode of node.cases) {
-        if (caseNode.value === tagNumber) {
+        if (__tnTagEquals(tagVal, caseNode.value)) {
           return __tnEvalIrNode(caseNode.node, ctx, baseOffset);
         }
       }
       if (node.default) return __tnEvalIrNode(node.default, ctx, baseOffset);
       __tnRaiseIrError(
         "tn.ir.invalid_tag",
-        `Unhandled IR switch value ${tagNumber} for '${node.tag}'`
+        `Unhandled IR switch value ${tagVal} for '${node.tag}'`
       );
     }
     case "call": {
@@ -885,6 +1027,11 @@ function __tnEvalIrNode(
       return __tnInvokeFootprint(node.typeName, nestedParams);
     }
     case "sumOverArray": {
+      if (!ctx.buffer && node.payloadParam !== undefined) {
+        /* Sizing from params: the array's byte total is a parameter. */
+        const total = ctx.params[node.payloadParam];
+        if (total !== undefined) return total;
+      }
       if (!ctx.buffer) {
         __tnRaiseIrError(
           "tn.ir.missing_buffer",
@@ -1338,11 +1485,14 @@ export class AmmAddLiquidityInstructionBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("AmmAddLiquidityInstruction", AmmAddLiquidityInstruction.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("AmmAddLiquidityInstruction", AmmAddLiquidityInstruction.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -1478,11 +1628,14 @@ export class AmmErrorBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("AmmError", AmmError.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("AmmError", AmmError.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -1835,11 +1988,14 @@ export class AmmSwapInstructionBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("AmmSwapInstruction", AmmSwapInstruction.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("AmmSwapInstruction", AmmSwapInstruction.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -2241,11 +2397,14 @@ export class AmmWithdrawLiquidityInstructionBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("AmmWithdrawLiquidityInstruction", AmmWithdrawLiquidityInstruction.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("AmmWithdrawLiquidityInstruction", AmmWithdrawLiquidityInstruction.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -2598,11 +2757,14 @@ export class SwapEventDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("SwapEventData", SwapEventData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("SwapEventData", SwapEventData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -2779,11 +2941,14 @@ export class SyncEventDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("SyncEventData", SyncEventData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("SyncEventData", SyncEventData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -2803,7 +2968,7 @@ __tnRegisterDynamicValidate("SyncEventData", (buffer) => { const result = SyncEv
 
 const __tn_ir_AmmInitPoolInstruction = {
   typeName: "AmmInitPoolInstruction",
-  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "align", alignment: 2, node: { op: "const", value: 2n } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 8, node: { op: "const", value: 8n } } }, right: { op: "align", alignment: 8, node: { op: "const", value: 8n } } }, right: { op: "align", alignment: 8, node: { op: "const", value: 8n } } }, right: { op: "align", alignment: 8, node: { op: "const", value: 8n } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "field", param: "pool_proof.pool_proof_size" }, right: { op: "const", value: 1n } } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "field", param: "lp_mint_proof.lp_mint_proof_size" }, right: { op: "const", value: 1n } } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "field", param: "vault_one_proof.vault_one_proof_size" }, right: { op: "const", value: 1n } } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "field", param: "vault_two_proof.vault_two_proof_size" }, right: { op: "const", value: 1n } } } } }
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 2n } }, right: { op: "align", alignment: 1, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 8n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 8n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 8n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 8n } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "field", param: "pool_proof.pool_proof_size" }, right: { op: "const", value: 1n } } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "field", param: "lp_mint_proof.lp_mint_proof_size" }, right: { op: "const", value: 1n } } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "field", param: "vault_one_proof.vault_one_proof_size" }, right: { op: "const", value: 1n } } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "field", param: "vault_two_proof.vault_two_proof_size" }, right: { op: "const", value: 1n } } } } }
 } as const;
 
 export class AmmInitPoolInstruction {
@@ -2847,18 +3012,32 @@ export class AmmInitPoolInstruction {
     return this;
   }
 
-  private __tnResolveFieldRef(path: string): number {
+  private __tnResolveFieldRefRaw(path: string): number | bigint {
     const getterName = `get_${path.replace(/[.]/g, '_')}`;
     const getter = (this as any)[getterName];
     if (typeof getter === "function") {
       const value = getter.call(this);
-      return typeof value === "bigint" ? __tnBigIntToNumber(value, "AmmInitPoolInstruction::__tnResolveFieldRef") : value;
+      return value;
     }
     if (this.__tnFieldContext && Object.prototype.hasOwnProperty.call(this.__tnFieldContext, path)) {
       const contextValue = this.__tnFieldContext[path];
-      return typeof contextValue === "bigint" ? __tnBigIntToNumber(contextValue, "AmmInitPoolInstruction::__tnResolveFieldRef") : contextValue;
+      return contextValue;
     }
     throw new Error("AmmInitPoolInstruction: field reference '" + path + "' is not available; provide fieldContext when creating this view");
+  }
+
+  private __tnResolveFieldRef(path: string): number {
+    const value = this.__tnResolveFieldRefRaw(path);
+    return typeof value === "bigint" ? __tnBigIntToNumber(value, "AmmInitPoolInstruction::__tnResolveFieldRef") : value;
+  }
+
+  private __tnResolveFieldRefU64(path: string): bigint {
+    return __tnU64(__tnToBigInt(this.__tnResolveFieldRefRaw(path)));
+  }
+
+  private __tnResolveContextU64(path: string): bigint {
+    if (this.__tnFieldContext && Object.prototype.hasOwnProperty.call(this.__tnFieldContext, path)) return __tnU64(__tnToBigInt(this.__tnFieldContext[path]));
+    throw new Error("AmmInitPoolInstruction: enclosing field '" + path + "' is not available; provide fieldContext when creating this view");
   }
 
   static builder(): AmmInitPoolInstructionBuilder {
@@ -2950,29 +3129,37 @@ export class AmmInitPoolInstruction {
     __tnFieldValue_vault_two_proof_size = __tnRead_vault_two_proof_size;
     __tnCursorMutable += 8;
     if (__tnFieldValue_pool_proof_size === null) return null;
-    const __tnArrayCount_pool_proof = Math.trunc(Number(__tnFieldValue_pool_proof_size));
-    if (!Number.isFinite(__tnArrayCount_pool_proof) || __tnArrayCount_pool_proof < 0) return null;
-    const __tnArrayBytes_pool_proof = __tnArrayCount_pool_proof * 1;
+    const __tnArrayCount_pool_proof = __tnU64(__tnToBigInt(__tnFieldValue_pool_proof_size as number | bigint));
+    if (__tnArrayCount_pool_proof === null) return null;
+    const __tnArrayBytesBig_pool_proof = __tnArrayCount_pool_proof * BigInt(1);
+    if (BigInt(__tnCursorMutable) + __tnArrayBytesBig_pool_proof > BigInt(__tnLength)) return null;
+    const __tnArrayBytes_pool_proof = Number(__tnArrayBytesBig_pool_proof);
     if (__tnCursorMutable + __tnArrayBytes_pool_proof > __tnLength) return null;
     __tnCursorMutable += __tnArrayBytes_pool_proof;
     if (__tnFieldValue_lp_mint_proof_size === null) return null;
-    const __tnArrayCount_lp_mint_proof = Math.trunc(Number(__tnFieldValue_lp_mint_proof_size));
-    if (!Number.isFinite(__tnArrayCount_lp_mint_proof) || __tnArrayCount_lp_mint_proof < 0) return null;
-    const __tnArrayBytes_lp_mint_proof = __tnArrayCount_lp_mint_proof * 1;
+    const __tnArrayCount_lp_mint_proof = __tnU64(__tnToBigInt(__tnFieldValue_lp_mint_proof_size as number | bigint));
+    if (__tnArrayCount_lp_mint_proof === null) return null;
+    const __tnArrayBytesBig_lp_mint_proof = __tnArrayCount_lp_mint_proof * BigInt(1);
+    if (BigInt(__tnCursorMutable) + __tnArrayBytesBig_lp_mint_proof > BigInt(__tnLength)) return null;
+    const __tnArrayBytes_lp_mint_proof = Number(__tnArrayBytesBig_lp_mint_proof);
     offsets["lp_mint_proof"] = __tnCursorMutable;
     if (__tnCursorMutable + __tnArrayBytes_lp_mint_proof > __tnLength) return null;
     __tnCursorMutable += __tnArrayBytes_lp_mint_proof;
     if (__tnFieldValue_vault_one_proof_size === null) return null;
-    const __tnArrayCount_vault_one_proof = Math.trunc(Number(__tnFieldValue_vault_one_proof_size));
-    if (!Number.isFinite(__tnArrayCount_vault_one_proof) || __tnArrayCount_vault_one_proof < 0) return null;
-    const __tnArrayBytes_vault_one_proof = __tnArrayCount_vault_one_proof * 1;
+    const __tnArrayCount_vault_one_proof = __tnU64(__tnToBigInt(__tnFieldValue_vault_one_proof_size as number | bigint));
+    if (__tnArrayCount_vault_one_proof === null) return null;
+    const __tnArrayBytesBig_vault_one_proof = __tnArrayCount_vault_one_proof * BigInt(1);
+    if (BigInt(__tnCursorMutable) + __tnArrayBytesBig_vault_one_proof > BigInt(__tnLength)) return null;
+    const __tnArrayBytes_vault_one_proof = Number(__tnArrayBytesBig_vault_one_proof);
     offsets["vault_one_proof"] = __tnCursorMutable;
     if (__tnCursorMutable + __tnArrayBytes_vault_one_proof > __tnLength) return null;
     __tnCursorMutable += __tnArrayBytes_vault_one_proof;
     if (__tnFieldValue_vault_two_proof_size === null) return null;
-    const __tnArrayCount_vault_two_proof = Math.trunc(Number(__tnFieldValue_vault_two_proof_size));
-    if (!Number.isFinite(__tnArrayCount_vault_two_proof) || __tnArrayCount_vault_two_proof < 0) return null;
-    const __tnArrayBytes_vault_two_proof = __tnArrayCount_vault_two_proof * 1;
+    const __tnArrayCount_vault_two_proof = __tnU64(__tnToBigInt(__tnFieldValue_vault_two_proof_size as number | bigint));
+    if (__tnArrayCount_vault_two_proof === null) return null;
+    const __tnArrayBytesBig_vault_two_proof = __tnArrayCount_vault_two_proof * BigInt(1);
+    if (BigInt(__tnCursorMutable) + __tnArrayBytesBig_vault_two_proof > BigInt(__tnLength)) return null;
+    const __tnArrayBytes_vault_two_proof = Number(__tnArrayBytesBig_vault_two_proof);
     offsets["vault_two_proof"] = __tnCursorMutable;
     if (__tnCursorMutable + __tnArrayBytes_vault_two_proof > __tnLength) return null;
     __tnCursorMutable += __tnArrayBytes_vault_two_proof;
@@ -3282,7 +3469,7 @@ export class AmmInitPoolInstruction {
   }
 
   get_pool_proof_length(): number {
-    return this.__tnResolveFieldRef("pool_proof_size");
+    return __tnCountNumber(this.__tnResolveFieldRefU64("pool_proof_size"));
   }
 
   get_pool_proof_at(index: number): number {
@@ -3320,7 +3507,7 @@ export class AmmInitPoolInstruction {
   }
 
   get_lp_mint_proof_length(): number {
-    return this.__tnResolveFieldRef("lp_mint_proof_size");
+    return __tnCountNumber(this.__tnResolveFieldRefU64("lp_mint_proof_size"));
   }
 
   get_lp_mint_proof_at(index: number): number {
@@ -3358,7 +3545,7 @@ export class AmmInitPoolInstruction {
   }
 
   get_vault_one_proof_length(): number {
-    return this.__tnResolveFieldRef("vault_one_proof_size");
+    return __tnCountNumber(this.__tnResolveFieldRefU64("vault_one_proof_size"));
   }
 
   get_vault_one_proof_at(index: number): number {
@@ -3396,7 +3583,7 @@ export class AmmInitPoolInstruction {
   }
 
   get_vault_two_proof_length(): number {
-    return this.__tnResolveFieldRef("vault_two_proof_size");
+    return __tnCountNumber(this.__tnResolveFieldRefU64("vault_two_proof_size"));
   }
 
   get_vault_two_proof_at(index: number): number {
@@ -3836,7 +4023,7 @@ __tnRegisterDynamicValidate("AmmInitPoolInstruction", (buffer) => { const result
 
 const __tn_ir_AmmInstruction = {
   typeName: "AmmInstruction",
-  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 4, node: { op: "const", value: 4n } }, right: { op: "align", alignment: 1, node: { op: "field", param: "payload.payload_size" } } } }
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 4n } }, right: { op: "align", alignment: 1, node: { op: "field", param: "payload.payload_size" } } } }
 } as const;
 
 export class AmmInstruction_payload_Inner {
@@ -3851,6 +4038,18 @@ export class AmmInstruction_payload_Inner {
     return new AmmInstruction_payload_Inner(new Uint8Array(payload), descriptor, fieldContext);
   }
 
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmInstruction_payload_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["discriminant"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 0)) descriptor = { name: "init_pool", tag: 0, payloadSize: null };
+      if (__tnTagEquals(tag, 1)) descriptor = { name: "add_liquidity", tag: 1, payloadSize: 42 };
+      if (__tnTagEquals(tag, 2)) descriptor = { name: "withdraw_liquidity", tag: 2, payloadSize: 42 };
+      if (__tnTagEquals(tag, 3)) descriptor = { name: "swap", tag: 3, payloadSize: 32 };
+    }
+    return new AmmInstruction_payload_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
   bytes(): Uint8Array {
     return new Uint8Array(this.buffer);
   }
@@ -3860,22 +4059,22 @@ export class AmmInstruction_payload_Inner {
   }
 
   asInitPool(): AmmInitPoolInstruction | null {
-    if (!this.descriptor || this.descriptor.tag !== 0) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 0)) return null;
     return AmmInitPoolInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asAddLiquidity(): AmmAddLiquidityInstruction | null {
-    if (!this.descriptor || this.descriptor.tag !== 1) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1)) return null;
     return AmmAddLiquidityInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asWithdrawLiquidity(): AmmWithdrawLiquidityInstruction | null {
-    if (!this.descriptor || this.descriptor.tag !== 2) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2)) return null;
     return AmmWithdrawLiquidityInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asSwap(): AmmSwapInstruction | null {
-    if (!this.descriptor || this.descriptor.tag !== 3) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 3)) return null;
     return AmmSwapInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
@@ -3969,11 +4168,11 @@ export class AmmInstruction {
     const __tnEnumTagValue_payload = __tnFieldValue_discriminant;
     if (__tnEnumTagValue_payload === null) return null;
     let __tnEnumSize_payload = 0;
-    switch (Number(__tnEnumTagValue_payload)) {
-      case 0: break;
-      case 1: break;
-      case 2: break;
-      case 3: break;
+    switch (__tnToBigInt(__tnEnumTagValue_payload)) {
+      case 0n: break;
+      case 1n: break;
+      case 2n: break;
+      case 3n: break;
       default: return null;
     }
     if (__tnCursorMutable > __tnLength) return null;
@@ -4022,8 +4221,8 @@ export class AmmInstruction {
   }
 
   payloadVariant(): typeof AmmInstruction.payloadVariantDescriptors[number] | null {
-    const tag = this.view.getUint8(0);
-    return AmmInstruction.payloadVariantDescriptors.find((variant) => variant.tag === tag) ?? null;
+    const tag: number | bigint | null = this.get_discriminant();
+    return AmmInstruction.payloadVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
   }
 
   payload(): AmmInstruction_payload_Inner {
@@ -4098,6 +4297,13 @@ export class AmmInstruction {
       const extracted = this.__tnExtractParams(view, buffer);
       if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
       params = extracted.params;
+    } else {
+      const extracted = this.__tnExtractParams(view, buffer);
+      if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
+      const supplied = params as unknown as Record<string, bigint>;
+      for (const [key, value] of Object.entries(extracted.params as unknown as Record<string, bigint>)) {
+        if (supplied[key] === undefined || __tnToBigInt(supplied[key]) !== __tnToBigInt(value)) return { ok: false, code: "tn.param_mismatch" };
+      }
     }
     const __tnParamsRec = this.__tnPackParams(params);
     const irResult = this.__tnValidateInternal(buffer, __tnParamsRec);
@@ -4105,7 +4311,50 @@ export class AmmInstruction {
       return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'AmmInstruction::validate') : undefined, params };
     }
     const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'AmmInstruction::validate') : undefined;
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed, params };
+  }
+
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 4 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getUint32(c, true))); c += 4;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 0n: t3 = ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s4 = c;
+if (c + 2 > b.length) return null; const x5 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 2 > b.length) return null; const x6 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 2 > b.length) return null; const x7 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 2 > b.length) return null; const x8 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 2 > b.length) return null; const x9 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 2 > b.length) return null; const x10 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 2 > b.length) return null; const x11 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 2 > b.length) return null; const x12 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 2 > b.length) return null; const x13 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 32 > b.length) return null; c += 32;
+if (c + 8 > b.length) return null; const x14 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+if (c + 8 > b.length) return null; const x15 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+if (c + 8 > b.length) return null; const x16 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+if (c + 8 > b.length) return null; const x17 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+const n18 = x14; if (n18 === null || n18 < 0n) return null;
+if (BigInt(c) + n18 * 1n > BigInt(b.length)) return null; c += Number(n18 * 1n);
+const n19 = x15; if (n19 === null || n19 < 0n) return null;
+if (BigInt(c) + n19 * 1n > BigInt(b.length)) return null; c += Number(n19 * 1n);
+const n20 = x16; if (n20 === null || n20 < 0n) return null;
+if (BigInt(c) + n20 * 1n > BigInt(b.length)) return null; c += Number(n20 * 1n);
+const n21 = x17; if (n21 === null || n21 < 0n) return null;
+if (BigInt(c) + n21 * 1n > BigInt(b.length)) return null; c += Number(n21 * 1n);
+void s4;
+return c; })(b.subarray(c)); break;
+  case 1n: t3 = 42; break;
+  case 2n: t3 = 42; break;
+  case 3n: t3 = 32; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array, opts?: { params?: AmmInstruction.Params }): AmmInstruction | null {
@@ -4604,11 +4853,14 @@ export class AmmPoolMetadataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("AmmPoolMetadata", AmmPoolMetadata.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("AmmPoolMetadata", AmmPoolMetadata.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -4623,6 +4875,220 @@ export class AmmPoolMetadataBuilder {
 __tnRegisterFootprint("AmmPoolMetadata", (params) => AmmPoolMetadata.__tnInvokeFootprint(params));
 __tnRegisterValidate("AmmPoolMetadata", (buffer, params) => AmmPoolMetadata.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("AmmPoolMetadata", (buffer) => { const result = AmmPoolMetadata.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR AmmProgramAccount ----- */
+
+const __tn_ir_AmmProgramAccount = {
+  typeName: "AmmProgramAccount",
+  root: { op: "const", value: 204n }
+} as const;
+
+export class AmmProgramAccount_payload_Inner {
+  private view: DataView;
+  private __tnFieldContext: Record<string, number | bigint> | null = null;
+  private constructor(private buffer: Uint8Array, private descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    this.__tnFieldContext = fieldContext ?? null;
+  }
+
+  static __tnCreate(payload: Uint8Array, descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>): AmmProgramAccount_payload_Inner {
+    return new AmmProgramAccount_payload_Inner(new Uint8Array(payload), descriptor, fieldContext);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmProgramAccount_payload_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["account_type"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 1)) descriptor = { name: "pool_v1", tag: 1, payloadSize: 203 };
+    }
+    return new AmmProgramAccount_payload_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
+  bytes(): Uint8Array {
+    return new Uint8Array(this.buffer);
+  }
+
+  variant(): __TnVariantDescriptor | null {
+    return this.descriptor;
+  }
+
+  asPoolV1(): AmmPoolMetadata | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1)) return null;
+    return AmmPoolMetadata.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+}
+
+export class AmmProgramAccount {
+  private view: DataView;
+  private static readonly __tnFieldOffset_payload = 1;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmProgramAccount {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmProgramAccount.__tnCreateView requires a Uint8Array");
+    return new AmmProgramAccount(new Uint8Array(buffer));
+  }
+
+  static builder(): AmmProgramAccountBuilder {
+    return new AmmProgramAccountBuilder();
+  }
+
+  static fromBuilder(builder: AmmProgramAccountBuilder): AmmProgramAccount | null {
+    const buffer = builder.build();
+    return AmmProgramAccount.from_array(buffer);
+  }
+
+  static readonly payloadVariantDescriptors = Object.freeze([
+    {
+      name: "pool_v1",
+      tag: 1,
+      payloadSize: 203,
+      payloadType: "AmmProgramAccount::payload::pool_v1",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(AmmPoolMetadata),
+    },
+  ] as const);
+
+  get_account_type(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_account_type(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get account_type(): number {
+    return this.get_account_type();
+  }
+
+  set account_type(value: number) {
+    this.set_account_type(value);
+  }
+
+  payloadVariant(): typeof AmmProgramAccount.payloadVariantDescriptors[number] | null {
+    const tag: number | bigint | null = this.get_account_type();
+    return AmmProgramAccount.payloadVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
+  }
+
+  payload(): AmmProgramAccount_payload_Inner {
+    const descriptor = this.payloadVariant();
+    if (!descriptor) throw new Error("AmmProgramAccount: unknown payload variant");
+    const offset = AmmProgramAccount.__tnFieldOffset_payload;
+    const remaining = this.buffer.length - offset;
+    const payloadLength = descriptor.payloadSize ?? remaining;
+    if (payloadLength < 0 || offset + payloadLength > this.buffer.length) throw new Error("AmmProgramAccount: payload exceeds buffer bounds");
+    const slice = this.buffer.subarray(offset, offset + payloadLength);
+    return AmmProgramAccount_payload_Inner.__tnCreate(slice, descriptor, undefined);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_AmmProgramAccount.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_AmmProgramAccount, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for AmmProgramAccount');
+    }
+    return __tnBigIntToNumber(irResult, 'AmmProgramAccount::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 204) return { ok: false, code: "tn.buffer_too_small", consumed: 204 };
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
+    return { ok: true, consumed: 204 };
+  }
+
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 1 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getUint8(c))); c += 1;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 1n: t3 = 203; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
+  }
+
+  static from_array(buffer: Uint8Array): AmmProgramAccount | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new AmmProgramAccount(buffer);
+  }
+
+}
+
+export class AmmProgramAccountBuilder {
+  private tag: number | null = null;
+  private payload: Uint8Array | null = null;
+
+  constructor() {}
+
+  select_pool_v1(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 203) throw new Error("select_pool_v1 expects 203 bytes");
+    this.tag = 1;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  build(): Uint8Array {
+    if (this.tag === null || !this.payload) throw new Error("AmmProgramAccount builder missing variant");
+    const buffer = new Uint8Array(1 + this.payload.length);
+    buffer[0] = this.tag;
+    buffer.set(this.payload, 1);
+    __tnBuilderValidateOrThrow("AmmProgramAccount", AmmProgramAccount.validate(buffer));
+    return buffer;
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    const bytes = this.build();
+    if (target.length - offset < bytes.length) throw new Error("target buffer too small");
+    target.set(bytes, offset);
+    return target;
+  }
+
+  finish(): AmmProgramAccount {
+    const view = AmmProgramAccount.from_array(this.build());
+    if (!view) throw new Error("failed to build AmmProgramAccount");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("AmmProgramAccount", (params) => AmmProgramAccount.__tnInvokeFootprint(params));
+__tnRegisterValidate("AmmProgramAccount", (buffer, params) => AmmProgramAccount.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("AmmProgramAccount", (buffer) => { const result = AmmProgramAccount.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR BurnEventData ----- */
 
@@ -4887,11 +5353,14 @@ export class BurnEventDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("BurnEventData", BurnEventData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("BurnEventData", BurnEventData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -5143,11 +5612,14 @@ export class MintEventDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("MintEventData", MintEventData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("MintEventData", MintEventData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -5434,11 +5906,14 @@ export class PoolInitEventDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("PoolInitEventData", PoolInitEventData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("PoolInitEventData", PoolInitEventData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -5473,6 +5948,19 @@ export class AmmEvent_payload_Inner {
     return new AmmEvent_payload_Inner(new Uint8Array(payload), descriptor, fieldContext);
   }
 
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmEvent_payload_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["event_type"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 0)) descriptor = { name: "pool_init", tag: 0, payloadSize: 194 };
+      if (__tnTagEquals(tag, 1)) descriptor = { name: "mint", tag: 1, payloadSize: 96 };
+      if (__tnTagEquals(tag, 2)) descriptor = { name: "burn", tag: 2, payloadSize: 128 };
+      if (__tnTagEquals(tag, 3)) descriptor = { name: "swap", tag: 3, payloadSize: 113 };
+      if (__tnTagEquals(tag, 4)) descriptor = { name: "sync", tag: 4, payloadSize: 48 };
+    }
+    return new AmmEvent_payload_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
   bytes(): Uint8Array {
     return new Uint8Array(this.buffer);
   }
@@ -5482,27 +5970,27 @@ export class AmmEvent_payload_Inner {
   }
 
   asPoolInit(): PoolInitEventData | null {
-    if (!this.descriptor || this.descriptor.tag !== 0) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 0)) return null;
     return PoolInitEventData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asMint(): MintEventData | null {
-    if (!this.descriptor || this.descriptor.tag !== 1) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1)) return null;
     return MintEventData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asBurn(): BurnEventData | null {
-    if (!this.descriptor || this.descriptor.tag !== 2) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2)) return null;
     return BurnEventData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asSwap(): SwapEventData | null {
-    if (!this.descriptor || this.descriptor.tag !== 3) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 3)) return null;
     return SwapEventData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asSync(): SyncEventData | null {
-    if (!this.descriptor || this.descriptor.tag !== 4) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4)) return null;
     return SyncEventData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
@@ -5621,8 +6109,8 @@ export class AmmEvent {
   }
 
   payloadVariant(): typeof AmmEvent.payloadVariantDescriptors[number] | null {
-    const tag = this.view.getUint8(0);
-    return AmmEvent.payloadVariantDescriptors.find((variant) => variant.tag === tag) ?? null;
+    const tag: number | bigint | null = this.get_event_type();
+    return AmmEvent.payloadVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
   }
 
   payload(): AmmEvent_payload_Inner {
@@ -5703,7 +6191,27 @@ export class AmmEvent {
       return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'AmmEvent::validate') : undefined, params };
     }
     const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'AmmEvent::validate') : undefined;
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed, params };
+  }
+
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 1 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getUint8(c))); c += 1;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 0n: t3 = 194; break;
+  case 1n: t3 = 96; break;
+  case 2n: t3 = 128; break;
+  case 3n: t3 = 113; break;
+  case 4n: t3 = 48; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array, opts?: { params?: AmmEvent.Params }): AmmEvent | null {

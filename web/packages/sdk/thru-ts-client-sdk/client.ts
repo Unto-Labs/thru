@@ -19,6 +19,12 @@ export {
     resolveThruApiKey,
     thruApiKeyHeader,
 } from "./core/api-key";
+export {
+    THRU_DEFAULT_GET_KEY_URL,
+    ThruRateLimitError,
+    isThruRateLimitError,
+    toThruRateLimitError,
+} from "./core/rate-limit";
 
 export function createThruClient(config: ThruClientConfig = {}): Thru {
     const ctx = createThruClientContext(config);

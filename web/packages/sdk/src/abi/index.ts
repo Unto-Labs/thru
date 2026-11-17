@@ -19,6 +19,7 @@ export {
 export type { FormatOptions, Manifest, ManifestPackageInfo, WasmConfig } from "./wasmBridge";
 export type { FormattedReflection, FormattedValue, FormattedValueWithByteRange, ByteRange } from "./types";
 export {
+  MAX_NESTED_INSTRUCTION_DECODES,
   MAX_NESTED_INSTRUCTION_DEPTH,
   resolveNestedInstructionData,
 } from "./nestedInstructionData";

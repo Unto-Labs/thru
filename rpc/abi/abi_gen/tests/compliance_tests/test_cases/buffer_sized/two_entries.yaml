@@ -1,0 +1,7 @@
+test-case:
+  name: "buffer_sized_two_entries"
+  abi-file: "../../abi_definitions/buffer_sized.abi.yaml"
+  type: "BufferSizedEntries"
+  description: "entries count = (__buffer_size - 4) / 8 = 2"
+  tags: ["arrays", "buffer-size", "sub", "div"]
+  binary-hex: "01000000 1111111111111111 2222222222222222"

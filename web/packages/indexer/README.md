@@ -31,7 +31,7 @@ import { FilterSchema, FilterParamValueSchema, type Event } from "@thru/replay";
 import { TokenEvent } from "../abi/token";
 
 // Fresh bootstrap default; use the configured deployment for another network.
-const TOKEN_PROGRAM = process.env.TOKEN_PROGRAM ?? "taTOKENKRgcl3vO0yVhftATDbXuhgWcfaaxv9xpEEdMdUE";
+const TOKEN_PROGRAM = process.env.TOKEN_PROGRAM ?? "taTOKEN7TE2HRGzqz7EjLibc6ieCwuXys5Bhb2-Sq8ZZ_1";
 
 const transfers = defineEventStream({
   name: "transfers",
@@ -94,17 +94,18 @@ export default transfers;
 // src/account-streams/token-accounts.ts
 import { decodeAddress, encodeAddress } from "@thru/sdk/helpers";
 import { defineAccountStream, t } from "@thru/indexer";
-import { TokenAccount } from "../abi/token";
+import { TokenProgramAccount } from "../abi/token";
 
 // Fresh bootstrap default; use the configured deployment for another network.
-const TOKEN_PROGRAM = process.env.TOKEN_PROGRAM ?? "taTOKENKRgcl3vO0yVhftATDbXuhgWcfaaxv9xpEEdMdUE";
+const TOKEN_PROGRAM = process.env.TOKEN_PROGRAM ?? "taTOKEN7TE2HRGzqz7EjLibc6ieCwuXys5Bhb2-Sq8ZZ_1";
 
 const tokenAccounts = defineAccountStream({
   name: "token-accounts",
   description: "Token account balances",
 
   ownerProgramFactory: () => new Uint8Array(decodeAddress(TOKEN_PROGRAM)),
-  expectedSize: 73,
+  // Size is only a server-side prefilter; parse checks the account type.
+  expectedSize: 74,
 
   schema: {
     address: t.text().primaryKey(),
@@ -117,9 +118,10 @@ const tokenAccounts = defineAccountStream({
   },
 
   parse: (account) => {
-    if (account.data.length !== 73) return null;
-
-    const parsed = TokenAccount.from_array(account.data);
+    /* Byte 0 is the account type; asTokenAccountV1() is null for a mint. */
+    const parsed = TokenProgramAccount.from_array(account.data)
+      ?.payload()
+      .asTokenAccountV1();
     if (!parsed) return null;
 
     return {

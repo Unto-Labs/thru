@@ -1,0 +1,45 @@
+abi:
+  package: "compliance.trailing_padding"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Variable-size aligned structs whose size ends in trailing padding"
+
+types:
+  - name: "PadTail"
+    kind:
+      struct:
+        packed: false
+        fields:
+          - name: "count"
+            field-type:
+              primitive: u8
+          - name: "kind"
+            field-type:
+              primitive: u16
+          - name: "values"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  primitive: u16
+          - name: "tail"
+            field-type:
+              primitive: u8
+  - name: "PadWide"
+    kind:
+      struct:
+        packed: false
+        fields:
+          - name: "count"
+            field-type:
+              primitive: u64
+          - name: "data"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  primitive: u8

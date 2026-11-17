@@ -3,6 +3,7 @@ import { GrpcWebTransportOptions, createGrpcWebTransport } from "@connectrpc/con
 
 import { DEFAULT_HOST } from "../defaults";
 import { thruApiKeyHeader } from "./api-key";
+import { withThruRateLimitErrors } from "./rate-limit";
 import {
     resolveTransactionSigningScheme,
     TransactionSigningScheme,
@@ -57,12 +58,16 @@ export function createThruClientContext(config: ThruClientConfig = {}): ThruClie
             interceptors: mergedInterceptors.length > 0 ? mergedInterceptors : undefined,
     });
 
+    // Both the SDK-built and a caller-supplied transport go through this
+    // wrapper, so a rate-limit denial always surfaces as ThruRateLimitError.
+    const clientTransport = withThruRateLimitErrors(transport);
+
     return {
         baseUrl,
         transport,
-        query: createClient(QueryService, transport),
-        command: createClient(CommandService, transport),
-        streaming: createClient(StreamingService, transport),
+        query: createClient(QueryService, clientTransport),
+        command: createClient(CommandService, clientTransport),
+        streaming: createClient(StreamingService, clientTransport),
         callOptions: withApiKey(config.callOptions, config.apiKey),
         transactionSigningScheme: resolveTransactionSigningScheme(
             config.transactionSigningScheme,

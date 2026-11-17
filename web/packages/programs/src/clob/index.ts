@@ -2,6 +2,7 @@ import { Pubkey, deriveProgramAddress } from '@thru/sdk';
 import type { Account } from '@thru/sdk';
 import { BOOTSTRAP_PROGRAM_ADDRESSES } from '../bootstrap-addresses';
 import { accountData, accountIndex } from '../utils/helpers';
+import { decodeAccountRoot } from '../utils/account-root';
 import {
   CLIENT_ID_SIZE,
   EVENT_REMOVE_REASON_EVICTED,
@@ -44,24 +45,21 @@ import {
 } from '../utils/orderbook';
 import {
   ArenaHeader,
-  CbookAccount,
-  CbookHeader,
   ClobEvent,
   ClobInstructionBuilder,
+  ClobProgramAccount,
   CreateOrderEntryInstructionBuilder,
   CreateSeatlessOrderEntryInstructionBuilder,
   ExchangeInitializeInstructionBuilder,
   ExchangeRecoverAdminInstructionBuilder,
   ExchangeSetAdminInstructionBuilder,
   ExchangeSetStatusInstructionBuilder,
-  ExchangeMetaAccount,
   MarketAccount as MarketAccountView,
   MarketCreateInstructionBuilder,
   MarketRecordInstructionBuilder,
   MarketSetStatusInstructionBuilder,
   MarketSetExchangeStatusInstructionBuilder,
   ModifyOrderEntryInstructionBuilder,
-  OrderArenaAccount,
   OrderEntry as OrderEntryView,
   SeatArenaAccount,
   SeatCreateInstructionBuilder,
@@ -209,12 +207,15 @@ export const CLOB_MODIFY_FLAG_FAIL_IF_OUT_OF_RANGE = 1 << 0;
 export const CLOB_MODIFY_FLAG_HAS_CLIENT_ID = 1 << 1;
 export const CLOB_MODIFY_FLAG_HAS_ORDER_ID = 1 << 2;
 
-export const CLOB_MARKET_MAGIC = 0x77;
+/** Account discriminators: byte 0 of every account the CLOB program owns.
+    Values are never reused; a new layout takes the next value. */
+export const CLOB_ACCOUNT_TYPE_EXCHANGE_META_V1 = 1;
+export const CLOB_ACCOUNT_TYPE_MARKET_V1 = 2;
+export const CLOB_ACCOUNT_TYPE_ORDER_ARENA_V1 = 3;
+export const CLOB_ACCOUNT_TYPE_CBOOK_V1 = 4;
 export const CLOB_MARKET_ACCOUNT_SIZE = 224;
 export const CLOB_SEAT_MANAGER_RESERVED_SIZE = 256;
-export const CLOB_EXCHANGE_META_ACCOUNT_SIZE = 96;
-export const CLOB_EXCHANGE_META_MAGIC = 0xF17EDA2CC10B0078n;
-export const CLOB_EXCHANGE_META_VERSION = 1;
+export const CLOB_EXCHANGE_META_ACCOUNT_SIZE = 88;
 export const CLOB_EXCHANGE_META_SEED = fixedSeed('exchange_meta');
 export const CLOB_ARENA_HEADER_SIZE = 64;
 export const CLOB_SEAT_ARENA_ENTRIES_OFFSET = CLOB_SEAT_MANAGER_RESERVED_SIZE + CLOB_ARENA_HEADER_SIZE;
@@ -364,7 +365,6 @@ export interface MarketSetStatusArgs {
 }
 
 export interface ClobMarket {
-  magic: number;
   statusFlags: number;
   exchangeStatusFlags: number;
   lotSize: bigint;
@@ -379,8 +379,6 @@ export interface ClobMarket {
 }
 
 export interface ClobExchangeMeta {
-  magic: bigint;
-  version: number;
   statusFlags: number;
   tokenProgram: string;
   exchangeAdmin: string;
@@ -684,7 +682,7 @@ export function createMarketRecordInstruction(args: MarketRecordArgs): Instructi
     ceil((64 + data_sz) / 4096) per new account, and market_create creates six:
     the seat arena (64320 bytes: 16), the order arena (64072 bytes: 16), the
     bids and asks cbooks (96 bytes: 1 each) and the base and quote vault token
-    accounts (73 bytes: 1 each). Requesting fewer fails with SU_EXHAUSTED. */
+    accounts (74 bytes: 1 each). Requesting fewer fails with SU_EXHAUSTED. */
 export const CLOB_MARKET_CREATE_STATE_UNITS = 36;
 
 export function createMarketCreateInstruction(args: MarketCreateArgs): InstructionData {
@@ -816,23 +814,21 @@ export function createMarketSetExchangeStatusInstruction(args: MarketSetExchange
   };
 }
 
+/**
+ * Decodes CLOB program account data through its account root. Byte 0 is the
+ * account type; returns null for an unknown type or a buffer too short for it.
+ * Fixed-size kinds (exchange metadata) must match their size exactly.
+ */
+export function decodeClobProgramAccount(data: Uint8Array): ClobProgramAccount | null {
+  return decodeAccountRoot(data, (bytes) => ClobProgramAccount.from_array(bytes));
+}
+
 export function parseExchangeMetaAccount(accountOrData: Account | Uint8Array): ClobExchangeMeta {
   const data = accountData(accountOrData, 'CLOB exchange metadata account');
-  if (data.length !== CLOB_EXCHANGE_META_ACCOUNT_SIZE) {
-    throw new Error("CLOB exchange metadata account must be " + CLOB_EXCHANGE_META_ACCOUNT_SIZE + " bytes");
-  }
-  const parsed = ExchangeMetaAccount.from_array(data);
-  if (!parsed) throw new Error('CLOB exchange metadata account data is malformed');
-  if (parsed.get_magic() !== CLOB_EXCHANGE_META_MAGIC) {
-    throw new Error('CLOB exchange metadata account has an invalid magic value');
-  }
-  if (parsed.get_version() !== CLOB_EXCHANGE_META_VERSION) {
-    throw new Error('CLOB exchange metadata account has an unsupported version');
-  }
+  const parsed = decodeClobProgramAccount(data)?.payload().asExchangeMetaV1();
+  if (!parsed) throw new Error('Account data is not a CLOB exchange metadata account');
   assertStatusFlags(parsed.get_status_flags());
   return {
-    magic: parsed.get_magic(),
-    version: parsed.get_version(),
     statusFlags: parsed.get_status_flags(),
     tokenProgram: pubkeyViewToAddress(parsed.get_token_program_pubkey()),
     exchangeAdmin: pubkeyViewToAddress(parsed.get_exchange_admin_pubkey()),
@@ -840,18 +836,17 @@ export function parseExchangeMetaAccount(accountOrData: Account | Uint8Array): C
 }
 
 export function parseClobProgramAccount(accountOrData: Account | Uint8Array): ClobMarket {
-  const data = accountData(accountOrData, 'CLOB program account');
-  if (data[0] !== CLOB_MARKET_MAGIC) throw new Error('CLOB program account is not a market account');
-  const parsed = MarketAccountView.from_array(data);
-  if (!parsed) throw new Error('CLOB program account data is malformed');
-  return marketFromView(parsed);
+  return marketFromView(decodeSeatArena(accountData(accountOrData, 'CLOB program account')).get_market());
 }
 
 export function parseMarketAccount(accountOrData: Account | Uint8Array): ClobMarket {
-  const data = accountData(accountOrData, 'CLOB market account');
-  const parsed = MarketAccountView.from_array(data);
-  if (!parsed) throw new Error('CLOB market account data is malformed');
-  return marketFromView(parsed);
+  return marketFromView(decodeSeatArena(accountData(accountOrData, 'CLOB market account')).get_market());
+}
+
+function decodeSeatArena(data: Uint8Array): SeatArenaAccount {
+  const parsed = decodeClobProgramAccount(data)?.payload().asMarketV1();
+  if (!parsed) throw new Error('Account data is not a CLOB market account');
+  return parsed;
 }
 
 export function parseSeatArenaAccount(accountOrData: Account | Uint8Array): {
@@ -861,9 +856,7 @@ export function parseSeatArenaAccount(accountOrData: Account | Uint8Array): {
   seats: ClobSeatEntry[];
   seatlessSeat: ClobArenaSlot<ClobSeatEntry> | null;
 } {
-  const data = accountData(accountOrData, 'CLOB seat arena account');
-  const parsed = SeatArenaAccount.from_array(data);
-  if (!parsed) throw new Error('CLOB seat arena account data is malformed');
+  const parsed = decodeSeatArena(accountData(accountOrData, 'CLOB seat arena account'));
   const slots = parsed.get_entries().map((entry, idx) => {
     const arenaIndex = idx + 1;
     return {
@@ -890,8 +883,8 @@ export function parseOrderArenaAccount(accountOrData: Account | Uint8Array): {
   orders: ClobOrderEntry[];
 } {
   const data = accountData(accountOrData, 'CLOB order arena account');
-  const parsed = OrderArenaAccount.from_array(data);
-  if (!parsed) throw new Error('CLOB order arena account data is malformed');
+  const parsed = decodeClobProgramAccount(data)?.payload().asOrderArenaV1();
+  if (!parsed) throw new Error('Account data is not a CLOB order arena account');
   const slots = parsed.get_entries().map((entry, idx) => {
     const arenaIndex = idx + 1;
     return {
@@ -909,8 +902,8 @@ export function parseOrderArenaAccount(accountOrData: Account | Uint8Array): {
 
 export function parseCbookAccount(accountOrData: Account | Uint8Array): ClobCbook {
   const data = accountData(accountOrData, 'CLOB cbook account');
-  const parsed = CbookAccount.from_array(data);
-  if (!parsed) throw new Error('CLOB cbook account data is malformed');
+  const parsed = decodeClobProgramAccount(data)?.payload().asCbookV1();
+  if (!parsed) throw new Error('Account data is not a CLOB cbook account');
   const header = parsed.get_header();
   return {
     bestLevelIndex: header.get_best_level_idx(),
@@ -1186,7 +1179,6 @@ function buildClobInstruction(variant: ClobInstructionVariant, payload: Uint8Arr
 
 function marketFromView(view: MarketAccountView): ClobMarket {
   return {
-    magic: view.get_magic(),
     statusFlags: view.get_status_flags(),
     exchangeStatusFlags: view.get_exchange_status_flags(),
     lotSize: view.get_lot_size(),

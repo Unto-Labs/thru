@@ -53,6 +53,7 @@ export function defineAccountStream<TSchema extends SchemaDefinition>(
     table,
     c: table as any,
     parse: definition.parse,
+    isClosed: definition.isClosed,
     api: definition.api,
   };
 }

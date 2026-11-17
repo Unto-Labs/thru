@@ -1,0 +1,145 @@
+/* Also holds the theme-switch animation that `useColorScheme` drives through
+   `data-theme-transition` on <html>. */
+
+.uds-theme-toggle {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 36.75px;
+  height: 36.75px;
+  padding: 0;
+  margin: 0;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-none);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.uds-theme-toggle:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface-card);
+  border-color: var(--color-border-strong);
+}
+
+.uds-theme-toggle:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+}
+
+.uds-theme-toggle svg {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+}
+
+.uds-theme-toggle__icon {
+  opacity: 0;
+  transform: scale(0.72) rotate(-24deg);
+  transition:
+    opacity 500ms var(--ease-standard),
+    transform 700ms var(--ease-standard);
+}
+
+.uds-theme-toggle__icon--active {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .uds-theme-toggle__icon {
+    transform: none;
+    transition: opacity var(--duration-fast) var(--ease-standard);
+  }
+}
+
+/* `gif-mask` reveals the new theme through the wing GIF mask via the View
+   Transition API; `retokenize` is the no-VT fallback. Surfaces extend the
+   retokenize selector list below with their own app-local classes. */
+html[data-theme-transition="gif-mask"]::view-transition-old(root),
+html[data-theme-transition="gif-mask"]::view-transition-new(root) {
+  animation-duration: 1180ms;
+  animation-fill-mode: both;
+  animation-timing-function: var(--ease-standard);
+  mix-blend-mode: normal;
+  pointer-events: none;
+}
+
+html[data-theme-transition="gif-mask"]::view-transition,
+html[data-theme-transition="gif-mask"]::view-transition-group(root),
+html[data-theme-transition="gif-mask"]::view-transition-image-pair(root) {
+  pointer-events: none;
+}
+
+html[data-theme-transition="gif-mask"]::view-transition-old(root) {
+  animation-name: tn-theme-mask-hold;
+  z-index: 0;
+}
+
+html[data-theme-transition="gif-mask"]::view-transition-new(root) {
+  animation-name: tn-theme-mask-hold;
+  mask-image: var(--theme-transition-mask-image);
+  mask-mode: alpha;
+  mask-repeat: no-repeat;
+  mask-position: center center;
+  mask-size: max(120vw, 120vh);
+  -webkit-mask-image: var(--theme-transition-mask-image);
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center center;
+  -webkit-mask-size: max(120vw, 120vh);
+  z-index: 1;
+}
+
+@keyframes tn-theme-mask-hold {
+  from,
+  to {
+    opacity: 1;
+  }
+}
+
+html[data-theme-transition="retokenize"] body,
+html[data-theme-transition="retokenize"] .uds-navbar,
+html[data-theme-transition="retokenize"] .uds-navbar__tag,
+html[data-theme-transition="retokenize"] .uds-navbar__status,
+html[data-theme-transition="retokenize"] .uds-navbar__drawer,
+html[data-theme-transition="retokenize"] .uds-tag,
+html[data-theme-transition="retokenize"] .uds-banner,
+html[data-theme-transition="retokenize"] .uds-theme-toggle,
+html[data-theme-transition="retokenize"] .uds-card,
+html[data-theme-transition="retokenize"] .uds-input-wrap,
+html[data-theme-transition="retokenize"] .uds-select-trigger {
+  transition-property: background-color, border-color, color, box-shadow, text-decoration-color;
+  transition-duration: 280ms;
+  transition-timing-function: var(--ease-standard);
+}
+
+html[data-theme-transition="retokenize"] .uds-card,
+html[data-theme-transition="retokenize"] .uds-input-wrap,
+html[data-theme-transition="retokenize"] .uds-select-trigger {
+  transition-delay: 70ms;
+  transition-duration: 360ms;
+}
+
+html[data-theme-transition="retokenize"] .uds-navbar__wordmark,
+html[data-theme-transition="retokenize"] .uds-input,
+html[data-theme-transition="retokenize"] .uds-field__label,
+html[data-theme-transition="retokenize"] .uds-detail__label,
+html[data-theme-transition="retokenize"] .uds-detail__value {
+  transition-property: color, background-color, border-color, text-decoration-color;
+  transition-delay: 150ms;
+  transition-duration: 420ms;
+  transition-timing-function: var(--ease-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme-transition="retokenize"] *,
+  html[data-theme-transition="retokenize"] *::before,
+  html[data-theme-transition="retokenize"] *::after {
+    transition: none !important;
+  }
+}

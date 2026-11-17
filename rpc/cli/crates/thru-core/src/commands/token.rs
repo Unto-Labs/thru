@@ -9,48 +9,30 @@ use crate::cli::TokenCommands;
 use crate::commands::state_proof::make_state_proof;
 use crate::config::Config;
 use crate::error::CliError;
+use crate::keys::LoadedKey;
 use crate::utils::{format_vm_error, parse_seed_bytes, validate_address_or_hex};
 use abi_gen::abi::resolved::TypeResolver;
 use abi_loader::AbiFile;
 use abi_reflect::{ReflectedValue, Reflector, Value};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use thru_base::crypto_utils::derive_program_address;
 use thru_base::rpc_types::ProofType;
 use thru_base::tn_public_address::tn_pubkey_to_address_string;
-use thru_base::tn_tools::{KeyPair, Pubkey};
-use thru_base::txn_tools::TransactionBuilder;
+use thru_base::tn_tools::Pubkey;
+use thru_base::txn_tools::{TOKEN_TICKER_MAX_LEN, TransactionBuilder};
 use thru_client::{Client, ClientBuilder, TransactionDetails, VersionContext};
-
-/// Helper function to resolve fee payer keypair from configuration
-fn resolve_fee_payer_keypair(
-    config: &Config,
-    fee_payer: Option<&str>,
-) -> Result<KeyPair, CliError> {
-    let fee_payer_private_key = if let Some(fee_payer_name) = fee_payer {
-        config.keys.get_key(fee_payer_name).map_err(|_| {
-            CliError::Validation(format!(
-                "Fee payer key '{}' not found in configuration",
-                fee_payer_name
-            ))
-        })?
-    } else {
-        config.keys.get_key("default")?
-    };
-
-    KeyPair::from_hex_private_key(fee_payer.unwrap_or("default"), fee_payer_private_key)
-        .map_err(|e| CliError::Crypto(format!("Failed to create fee payer keypair: {}", e)))
-}
 
 /// Resolve an on-chain actor that must have authorized the transaction.
 /// Thru transactions currently carry only the fee payer signature, so the
 /// supplied actor must be the fee payer's public key.
 fn resolve_authorized_actor(
+    config: &Config,
     actor: &str,
     label: &str,
-    fee_payer_keypair: &KeyPair,
+    fee_payer_keypair: &LoadedKey,
 ) -> Result<[u8; 32], CliError> {
-    let actor_pubkey = validate_address_or_hex(actor)?;
+    let actor_pubkey = config.keys.resolve_public_key(actor)?;
     if actor_pubkey != fee_payer_keypair.public_key {
         let fee_payer_address = &fee_payer_keypair.address_string;
         return Err(CliError::Validation(format!(
@@ -195,7 +177,12 @@ fn derive_mint_account_pubkey(
         .map_err(|e| CliError::Crypto(format!("Failed to derive mint address: {}", e)))
 }
 
-/// Helper function to check transaction execution results and return appropriate errors
+/// Helper function to check transaction execution results and return appropriate errors.
+///
+/// In JSON mode the failure object printed here is the command's whole error
+/// output, so the returned error tells the entry point not to print another.
+/// The object carries the `type` and `message` the entry point would print
+/// for the same error, next to the execution details.
 pub(crate) fn check_transaction_result(
     transaction_details: &TransactionDetails,
     json_format: bool,
@@ -225,6 +212,7 @@ pub(crate) fn check_transaction_result(
         if json_format {
             let error_response = serde_json::json!({
                 "error": {
+                    "type": "transaction_submission",
                     "message": error_msg,
                     "execution_result": signed_execution_result,
                     "vm_error": transaction_details.vm_error,
@@ -234,6 +222,7 @@ pub(crate) fn check_transaction_result(
                 }
             });
             crate::output::print_output(error_response, true);
+            return Err(CliError::Reported);
         }
 
         return Err(CliError::TransactionSubmission(error_msg));
@@ -241,20 +230,47 @@ pub(crate) fn check_transaction_result(
     Ok(())
 }
 
-/// Helper function to handle AccountNotFound errors with JSON output
-fn handle_account_not_found_error(error: CliError, operation: &str, json_format: bool) -> CliError {
-    if let CliError::AccountNotFound(msg) = &error {
-        if json_format {
-            let error_response = serde_json::json!({
-                operation: {
-                    "status": "failed",
-                    "error": msg
-                }
-            });
-            crate::output::print_output(error_response, true);
+/// The JSON report of a token command that failed without a transaction
+/// result. `operation` is the command's key in its JSON output. `error` is
+/// the error this report stands in for: `error_type` is the `type` the entry
+/// point would have printed for it, so the single report keeps the
+/// classification.
+fn token_failure_json(operation: &str, error_msg: &str, error: &CliError) -> serde_json::Value {
+    let error_type = crate::format_error_json(error)["error"]["type"].clone();
+    serde_json::json!({
+        operation: {
+            "status": "failed",
+            "error": error_msg,
+            "error_type": error_type
         }
+    })
+}
+
+/// Report a token command that was refused before anything was signed or
+/// sent. In JSON mode the failure object printed here is the command's
+/// whole error output, so the returned error tells the entry point not to
+/// print another. In text mode the entry point prints the returned error.
+fn refuse_token_operation(operation: &str, error_msg: &str, json_format: bool) -> CliError {
+    let error = CliError::Validation(error_msg.to_string());
+    if json_format {
+        crate::output::print_output(token_failure_json(operation, error_msg, &error), true);
+        CliError::Reported
+    } else {
+        error
     }
-    error
+}
+
+/// Helper function to handle AccountNotFound errors with JSON output. In
+/// JSON mode the command's failure object replaces the error; every other
+/// error, and text mode, pass through.
+fn handle_account_not_found_error(error: CliError, operation: &str, json_format: bool) -> CliError {
+    match &error {
+        CliError::AccountNotFound(msg) if json_format => {
+            crate::output::print_output(token_failure_json(operation, msg, &error), true);
+            CliError::Reported
+        }
+        _ => error,
+    }
 }
 
 /// Create RPC client from configuration
@@ -275,7 +291,7 @@ fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
 
 /// Common transaction execution context
 struct TransactionContext {
-    pub fee_payer_keypair: KeyPair,
+    pub fee_payer_keypair: Arc<LoadedKey>,
     pub token_program_bytes: [u8; 32],
     pub client: Client,
     pub nonce: u64,
@@ -288,7 +304,7 @@ struct TransactionContext {
 async fn setup_transaction_context(
     config: &Config,
     client: Client,
-    fee_payer_keypair: KeyPair,
+    fee_payer_keypair: Arc<LoadedKey>,
     token_program_bytes: [u8; 32],
 ) -> Result<TransactionContext, CliError> {
     // Get current nonce and block height
@@ -312,9 +328,10 @@ async fn setup_transaction_context(
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
 
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
 
     Ok(TransactionContext {
         fee_payer_keypair,
@@ -416,7 +433,32 @@ pub async fn handle_token_command(
             amount,
             fee_payer,
             token_program,
+            unchecked,
+            via,
         } => {
+            // A multisig proposal carries the plain Transfer: the proposal
+            // builder and decoder know only that instruction. `--unchecked`
+            // cannot be combined with `--via-multisig`, so `unchecked` is
+            // false here. The note goes to text output only: callers of the
+            // JSON output may read stderr together with stdout.
+            if via.via_multisig.is_some() {
+                if !json_format {
+                    eprintln!(
+                        "Note: a --via-multisig proposal carries the plain Transfer instruction, not TransferChecked."
+                    );
+                }
+                return crate::commands::multisig::via::token_transfer(
+                    config,
+                    &via,
+                    fee_payer.as_deref(),
+                    &from,
+                    &to,
+                    amount,
+                    token_program.as_deref(),
+                    json_format,
+                )
+                .await;
+            }
             transfer(
                 config,
                 &from,
@@ -424,6 +466,7 @@ pub async fn handle_token_command(
                 amount,
                 fee_payer.as_deref(),
                 token_program.as_deref(),
+                unchecked,
                 json_format,
             )
             .await
@@ -435,7 +478,22 @@ pub async fn handle_token_command(
             amount,
             fee_payer,
             token_program,
+            via,
         } => {
+            if via.via_multisig.is_some() {
+                return crate::commands::multisig::via::token_mint_to(
+                    config,
+                    &via,
+                    fee_payer.as_deref(),
+                    &mint,
+                    &to,
+                    &authority,
+                    amount,
+                    token_program.as_deref(),
+                    json_format,
+                )
+                .await;
+            }
             mint_to(
                 config,
                 &mint,
@@ -455,7 +513,22 @@ pub async fn handle_token_command(
             amount,
             fee_payer,
             token_program,
+            via,
         } => {
+            if via.via_multisig.is_some() {
+                return crate::commands::multisig::via::token_burn(
+                    config,
+                    &via,
+                    fee_payer.as_deref(),
+                    &account,
+                    &mint,
+                    &authority,
+                    amount,
+                    token_program.as_deref(),
+                    json_format,
+                )
+                .await;
+            }
             burn(
                 config,
                 &account,
@@ -474,7 +547,21 @@ pub async fn handle_token_command(
             authority,
             fee_payer,
             token_program,
+            via,
         } => {
+            if via.via_multisig.is_some() {
+                return crate::commands::multisig::via::token_close_account(
+                    config,
+                    &via,
+                    fee_payer.as_deref(),
+                    &account,
+                    &destination,
+                    &authority,
+                    token_program.as_deref(),
+                    json_format,
+                )
+                .await;
+            }
             close_account(
                 config,
                 &account,
@@ -492,7 +579,22 @@ pub async fn handle_token_command(
             authority,
             fee_payer,
             token_program,
+            via,
         } => {
+            if via.via_multisig.is_some() {
+                return crate::commands::multisig::via::token_freeze_thaw(
+                    config,
+                    &via,
+                    fee_payer.as_deref(),
+                    &account,
+                    &mint,
+                    &authority,
+                    true,
+                    token_program.as_deref(),
+                    json_format,
+                )
+                .await;
+            }
             freeze_account(
                 config,
                 &account,
@@ -510,7 +612,22 @@ pub async fn handle_token_command(
             authority,
             fee_payer,
             token_program,
+            via,
         } => {
+            if via.via_multisig.is_some() {
+                return crate::commands::multisig::via::token_freeze_thaw(
+                    config,
+                    &via,
+                    fee_payer.as_deref(),
+                    &account,
+                    &mint,
+                    &authority,
+                    false,
+                    token_program.as_deref(),
+                    json_format,
+                )
+                .await;
+            }
             thaw_account(
                 config,
                 &account,
@@ -631,13 +748,13 @@ async fn initialize_mint(
     // Resolve the token program and the only transaction signer first so the
     // creator authorization can be validated before deriving or submitting.
     let (token_program_pubkey, token_program_bytes) = resolve_token_program(config, token_program)?;
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer)?;
 
     // The creator is an authorized actor and must therefore be the fee payer.
-    let creator_pubkey = resolve_authorized_actor(creator, "Creator", &fee_payer_keypair)?;
-    let mint_authority_pubkey = validate_address_or_hex(mint_authority_str)?;
+    let creator_pubkey = resolve_authorized_actor(config, creator, "Creator", &fee_payer_keypair)?;
+    let mint_authority_pubkey = config.keys.resolve_public_key(mint_authority_str)?;
     let freeze_authority_pubkey = match freeze_authority {
-        Some(addr) => Some(validate_address_or_hex(addr)?),
+        Some(addr) => Some(config.keys.resolve_public_key(addr)?),
         None => None,
     };
 
@@ -801,7 +918,7 @@ async fn initialize_account(
     let owner_pubkey = validate_address_or_hex(owner)?;
 
     // Resolve fee payer
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer)?;
 
     // Create RPC client
     let client = create_rpc_client(config)?;
@@ -942,7 +1059,190 @@ async fn initialize_account(
     Ok(())
 }
 
-/// Transfer tokens between accounts
+/// What `TransferChecked` carries beyond the two token accounts and the
+/// amount: the mint of the source account and the decimals and ticker stored
+/// in that mint.
+#[derive(Debug, PartialEq, Eq)]
+struct CheckedTransferInputs {
+    mint: [u8; 32],
+    decimals: u8,
+    /// The stored ticker: the first `ticker_len` bytes of the mint's ticker
+    /// field.
+    ticker: Vec<u8>,
+}
+
+impl CheckedTransferInputs {
+    /// The ticker for display, escaped like a byte string literal: printable
+    /// ASCII as it is, a backslash before `\`, `'` and `"`, every other byte
+    /// escaped (`\x1b`, `\n`, `\xff`). The bytes come from the chain, so
+    /// they must not reach the terminal as control sequences, and two
+    /// different tickers must not look the same. The instruction carries the
+    /// raw bytes.
+    fn ticker_text(&self) -> String {
+        self.ticker.escape_ascii().to_string()
+    }
+}
+
+/// Appended to a refusal that a plain `Transfer` avoids: `Transfer` does not
+/// read the mint account.
+const UNCHECKED_HINT: &str =
+    "Pass --unchecked to send a plain Transfer, which does not check the mint";
+
+/// Owner and data of an account that exists on chain.
+#[derive(Debug)]
+struct FetchedAccount {
+    owner: [u8; 32],
+    data: Vec<u8>,
+}
+
+/// Read an account's owner and data at the current version. `None` when the
+/// account does not exist.
+async fn fetch_account(
+    client: &Client,
+    account: &[u8; 32],
+) -> Result<Option<FetchedAccount>, CliError> {
+    let info = client
+        .get_account_info(
+            &Pubkey::from_bytes(account),
+            None,
+            Some(VersionContext::Current),
+        )
+        .await?;
+    let Some(info) = info.filter(|info| !info.is_deleted) else {
+        return Ok(None);
+    };
+
+    let address = tn_pubkey_to_address_string(account);
+    let owner = info.owner.to_bytes().map_err(|e| {
+        CliError::Rpc(format!(
+            "account {address}: the owner could not be decoded: {e}"
+        ))
+    })?;
+    let data = base64::Engine::decode(
+        &base64::engine::general_purpose::STANDARD,
+        info.data.unwrap_or_default(),
+    )
+    .map_err(|e| {
+        CliError::Rpc(format!(
+            "account {address}: the data could not be decoded: {e}"
+        ))
+    })?;
+    Ok(Some(FetchedAccount { owner, data }))
+}
+
+/// The account, if it exists and `token_program` owns it. The token program
+/// rejects every other account with `AccountNotOwnedByProgram`.
+fn owned_by_token_program<'a>(
+    account: Option<&'a FetchedAccount>,
+    token_program: &[u8; 32],
+) -> Result<&'a FetchedAccount, String> {
+    let account = account.ok_or_else(|| "the account was not found on chain".to_string())?;
+    if &account.owner != token_program {
+        return Err(format!(
+            "the account is owned by {}, not by the token program {}",
+            tn_pubkey_to_address_string(&account.owner),
+            tn_pubkey_to_address_string(token_program)
+        ));
+    }
+    Ok(account)
+}
+
+/// Mint of the source token account. Tokens can only move out of an open
+/// token account that `token_program` owns.
+fn source_account_mint(
+    source: Option<&FetchedAccount>,
+    token_program: &[u8; 32],
+) -> Result<[u8; 32], String> {
+    let source = owned_by_token_program(source, token_program)?;
+    let decoded = decode_token_account_blob(&source.data)?;
+    if decoded.is_closed {
+        return Err("the account is closed".to_string());
+    }
+    Ok(decoded.mint)
+}
+
+/// The `TransferChecked` inputs for `mint`, from the mint account. The token
+/// program rejects a mint it does not own, and it can only match a ticker
+/// field in canonical form.
+fn checked_transfer_inputs(
+    mint: [u8; 32],
+    mint_account: Option<&FetchedAccount>,
+    token_program: &[u8; 32],
+) -> Result<CheckedTransferInputs, String> {
+    let mint_account = owned_by_token_program(mint_account, token_program)?;
+    let decoded = decode_mint_account_blob(&mint_account.data)?;
+    let ticker = decoded.canonical_ticker().ok_or_else(|| {
+        format!(
+            "the stored ticker cannot be matched by TransferChecked (length {}, bytes 0x{})",
+            decoded.ticker_len,
+            hex::encode(decoded.ticker_bytes)
+        )
+    })?;
+    Ok(CheckedTransferInputs {
+        mint,
+        decimals: decoded.decimals,
+        ticker: ticker.to_vec(),
+    })
+}
+
+/// Refusal for a source account that no transfer can move tokens out of.
+/// A plain `Transfer` fails on it too, so the message does not suggest one.
+fn source_refusal_message(source: &[u8; 32], why: &str) -> String {
+    format!(
+        "Cannot build TransferChecked: source token account {}: {}",
+        tn_pubkey_to_address_string(source),
+        why
+    )
+}
+
+/// Refusal for a mint that `TransferChecked` cannot name. A plain `Transfer`
+/// does not read the mint, so the message says how to send one.
+fn mint_refusal_message(mint: &[u8; 32], why: &str) -> String {
+    format!(
+        "Cannot build TransferChecked: mint {}: {}. {}",
+        tn_pubkey_to_address_string(mint),
+        why,
+        UNCHECKED_HINT
+    )
+}
+
+/// Read what `TransferChecked` needs for a transfer out of `source`: the
+/// source token account gives the mint, the mint account gives the decimals
+/// and the ticker. A transfer that cannot be built is reported here, before
+/// anything is signed; a failed read is returned as the RPC error it is.
+///
+/// The values are those of the current version. The token program has no
+/// instruction that changes a mint's decimals or ticker after
+/// `InitializeMint`; if they did differ at execution, the program would
+/// reject the transfer.
+async fn read_checked_transfer_inputs(
+    client: &Client,
+    source: &[u8; 32],
+    token_program: &[u8; 32],
+    json_format: bool,
+) -> Result<CheckedTransferInputs, CliError> {
+    let source_account = fetch_account(client, source).await?;
+    let mint = source_account_mint(source_account.as_ref(), token_program)
+        .map_err(|why| refuse_token_transfer(&source_refusal_message(source, &why), json_format))?;
+
+    let mint_account = fetch_account(client, &mint).await?;
+    checked_transfer_inputs(mint, mint_account.as_ref(), token_program)
+        .map_err(|why| refuse_token_transfer(&mint_refusal_message(&mint, &why), json_format))
+}
+
+/// Report a transfer that was refused before anything was signed or sent.
+fn refuse_token_transfer(error_msg: &str, json_format: bool) -> CliError {
+    refuse_token_operation("token_transfer", error_msg, json_format)
+}
+
+/// Transfer tokens between accounts.
+///
+/// Sends `TransferChecked` unless `unchecked` is set: the instruction names
+/// the mint of the source account and carries the decimals and ticker stored
+/// in that mint, and the token program reverts unless they match. With
+/// `unchecked` it sends the plain `Transfer`, which names only the two token
+/// accounts.
+#[allow(clippy::too_many_arguments)]
 async fn transfer(
     config: &Config,
     from: &str,
@@ -950,21 +1250,15 @@ async fn transfer(
     amount: u64,
     fee_payer: Option<&str>,
     token_program: Option<&str>,
+    unchecked: bool,
     json_format: bool,
 ) -> Result<(), CliError> {
     // Validate inputs
     if amount == 0 {
-        let error_msg = "Transfer amount must be greater than 0";
-        if json_format {
-            let error_response = serde_json::json!({
-                "token_transfer": {
-                    "status": "failed",
-                    "error": error_msg
-                }
-            });
-            crate::output::print_output(error_response, true);
-        }
-        return Err(CliError::Validation(error_msg.to_string()));
+        return Err(refuse_token_transfer(
+            "Transfer amount must be greater than 0",
+            json_format,
+        ));
     }
 
     if !json_format {
@@ -979,7 +1273,7 @@ async fn transfer(
     let to_pubkey = validate_address_or_hex(to)?;
 
     // Resolve local transaction inputs before making RPC requests.
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer)?;
 
     // The source token account's owner is the token program that manages it
     let client = create_rpc_client(config)?;
@@ -993,6 +1287,24 @@ async fn transfer(
     )
     .await?;
 
+    // TransferChecked names the mint and carries its decimals and ticker
+    let checked = if unchecked {
+        None
+    } else {
+        let inputs =
+            read_checked_transfer_inputs(&client, &from_pubkey, &token_program_bytes, json_format)
+                .await?;
+        if !json_format {
+            println!(
+                "  Mint: {} (ticker {}, {} decimals)",
+                tn_pubkey_to_address_string(&inputs.mint),
+                inputs.ticker_text(),
+                inputs.decimals
+            );
+        }
+        Some(inputs)
+    };
+
     // Setup transaction context
     let context = setup_transaction_context(config, client, fee_payer_keypair, token_program_bytes)
         .await
@@ -1000,34 +1312,54 @@ async fn transfer(
 
     // Build transaction using TransactionBuilder
     // For transfers, the fee payer acts as the authority (source account owner)
-    let transaction = TransactionBuilder::build_token_transfer(
-        context.fee_payer_keypair.public_key,
-        context.token_program_bytes,
-        from_pubkey,
-        to_pubkey,
-        context.fee_payer_keypair.public_key, // Use fee payer as authority
-        amount,
-        TOKEN_PROGRAM_FEE,
-        context.nonce,
-        context.start_slot,
-    )
+    let transaction = match &checked {
+        Some(inputs) => TransactionBuilder::build_token_transfer_checked(
+            context.fee_payer_keypair.public_key,
+            context.token_program_bytes,
+            from_pubkey,
+            to_pubkey,
+            inputs.mint,
+            amount,
+            inputs.decimals,
+            &inputs.ticker,
+            TOKEN_PROGRAM_FEE,
+            context.nonce,
+            context.start_slot,
+        ),
+        None => TransactionBuilder::build_token_transfer(
+            context.fee_payer_keypair.public_key,
+            context.token_program_bytes,
+            from_pubkey,
+            to_pubkey,
+            context.fee_payer_keypair.public_key, // Use fee payer as authority
+            amount,
+            TOKEN_PROGRAM_FEE,
+            context.nonce,
+            context.start_slot,
+        ),
+    }
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?;
 
     // Execute transaction
     let transaction_details = execute_transaction(transaction, &context, json_format).await?;
 
     if json_format {
-        let response = serde_json::json!({
-            "token_transfer": {
-                "status": "success",
-                "from": from,
-                "to": to,
-                "amount": amount,
-                "signature": transaction_details.signature.as_str(),
-                "slot": transaction_details.slot,
-                "compute_units_consumed": transaction_details.compute_units_consumed
-            }
+        let mut token_transfer = serde_json::json!({
+            "status": "success",
+            "from": from,
+            "to": to,
+            "amount": amount,
+            "instruction": if checked.is_some() { "transfer_checked" } else { "transfer" },
+            "signature": transaction_details.signature.as_str(),
+            "slot": transaction_details.slot,
+            "compute_units_consumed": transaction_details.compute_units_consumed
         });
+        if let Some(inputs) = &checked {
+            token_transfer["mint"] = serde_json::json!(tn_pubkey_to_address_string(&inputs.mint));
+            token_transfer["decimals"] = serde_json::json!(inputs.decimals);
+            token_transfer["ticker"] = serde_json::json!(inputs.ticker_text());
+        }
+        let response = serde_json::json!({ "token_transfer": token_transfer });
         crate::output::print_output(response, true);
     } else {
         println!("Transfer completed successfully!");
@@ -1051,17 +1383,11 @@ async fn mint_to(
 ) -> Result<(), CliError> {
     // Validate inputs
     if amount == 0 {
-        let error_msg = "Mint amount must be greater than 0";
-        if json_format {
-            let error_response = serde_json::json!({
-                "token_mint_to": {
-                    "status": "failed",
-                    "error": error_msg
-                }
-            });
-            crate::output::print_output(error_response, true);
-        }
-        return Err(CliError::Validation(error_msg.to_string()));
+        return Err(refuse_token_operation(
+            "token_mint_to",
+            "Mint amount must be greater than 0",
+            json_format,
+        ));
     }
 
     if !json_format {
@@ -1077,9 +1403,9 @@ async fn mint_to(
     let to_pubkey = validate_address_or_hex(to)?;
 
     // Resolve and validate every local transaction input before making RPC requests.
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer)?;
     let authority_pubkey =
-        resolve_authorized_actor(authority, "Mint authority", &fee_payer_keypair)?;
+        resolve_authorized_actor(config, authority, "Mint authority", &fee_payer_keypair)?;
     // The mint's owner is the token program that manages it
     let client = create_rpc_client(config)?;
     let (_token_program_pubkey, token_program_bytes) = resolve_token_program_for_account(
@@ -1150,17 +1476,11 @@ async fn burn(
 ) -> Result<(), CliError> {
     // Validate inputs
     if amount == 0 {
-        let error_msg = "Burn amount must be greater than 0";
-        if json_format {
-            let error_response = serde_json::json!({
-                "token_burn": {
-                    "status": "failed",
-                    "error": error_msg
-                }
-            });
-            crate::output::print_output(error_response, true);
-        }
-        return Err(CliError::Validation(error_msg.to_string()));
+        return Err(refuse_token_operation(
+            "token_burn",
+            "Burn amount must be greater than 0",
+            json_format,
+        ));
     }
 
     if !json_format {
@@ -1176,9 +1496,9 @@ async fn burn(
     let mint_pubkey = validate_address_or_hex(mint)?;
 
     // Resolve configuration
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer)?;
     let authority_pubkey =
-        resolve_authorized_actor(authority, "Burn authority", &fee_payer_keypair)?;
+        resolve_authorized_actor(config, authority, "Burn authority", &fee_payer_keypair)?;
 
     // Create RPC client
     let client = create_rpc_client(config)?;
@@ -1298,9 +1618,9 @@ async fn close_account(
     let destination_pubkey = validate_address_or_hex(destination)?;
 
     // Resolve configuration
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer)?;
     let authority_pubkey =
-        resolve_authorized_actor(authority, "Close authority", &fee_payer_keypair)?;
+        resolve_authorized_actor(config, authority, "Close authority", &fee_payer_keypair)?;
 
     // Create RPC client
     let client = create_rpc_client(config)?;
@@ -1417,9 +1737,9 @@ async fn freeze_account(
     let mint_pubkey = validate_address_or_hex(mint)?;
 
     // Resolve configuration
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer)?;
     let authority_pubkey =
-        resolve_authorized_actor(authority, "Freeze authority", &fee_payer_keypair)?;
+        resolve_authorized_actor(config, authority, "Freeze authority", &fee_payer_keypair)?;
 
     // Create RPC client
     let client = create_rpc_client(config)?;
@@ -1536,9 +1856,9 @@ async fn thaw_account(
     let mint_pubkey = validate_address_or_hex(mint)?;
 
     // Resolve configuration
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer)?;
     let authority_pubkey =
-        resolve_authorized_actor(authority, "Thaw authority", &fee_payer_keypair)?;
+        resolve_authorized_actor(config, authority, "Thaw authority", &fee_payer_keypair)?;
 
     // Create RPC client
     let client = create_rpc_client(config)?;
@@ -1638,13 +1958,14 @@ async fn thaw_account(
 /// hardcoded here, so the ABI is the single source of truth for the wire
 /// format. Keep this vendored copy inside `thru-core` so crates.io package
 /// verification can build the crate without the surrounding monorepo.
-static TOKEN_ABI_YAML: &str =
-    include_str!("../../abi/tn_token_program_flat.abi.yaml");
+static TOKEN_ABI_YAML: &str = include_str!("../../abi/tn_token_program.abi.yaml");
 
-/// Account-root type in the token ABI: a size-discriminated union whose
-/// variants are `token_account` (the holder) and `mint_account`.
+/// Account-root type in the token ABI: `account_type` (byte 0) then a
+/// `payload` enum keyed on it, with the variants `mint_v1` and
+/// `token_account_v1`.
 const TOKEN_PROGRAM_ACCOUNT_TYPE: &str = "TokenProgramAccount";
-const TOKEN_ACCOUNT_VARIANT: &str = "token_account";
+const TOKEN_ACCOUNT_VARIANT: &str = "token_account_v1";
+const TOKEN_MINT_VARIANT: &str = "mint_v1";
 
 /// Lazily-built, process-wide reflector over the embedded token ABI.
 fn token_reflector() -> Result<&'static Reflector, String> {
@@ -1660,31 +1981,36 @@ fn token_reflector() -> Result<&'static Reflector, String> {
             resolver
                 .resolve_all()
                 .map_err(|e| format!("Failed to resolve token ABI types: {:?}", e))?;
-            Reflector::new(resolver)
-                .map_err(|e| format!("Failed to build token reflector: {}", e))
+            Reflector::new(resolver).map_err(|e| format!("Failed to build token reflector: {}", e))
         })
         .as_ref()
         .map_err(|e| e.clone())
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct DecodedTokenAccount {
-    mint: [u8; 32],
-    owner: [u8; 32],
-    amount: u64,
-    is_frozen: bool,
-    /// `close_account` zeroes the body in place
-    /// (programs/rust/examples/token_program/process.rs:621-626).
-    /// All-zero mint+owner+amount with !is_frozen is the unambiguous sentinel.
-    is_closed: bool,
+pub(crate) struct DecodedTokenAccount {
+    pub(crate) mint: [u8; 32],
+    pub(crate) owner: [u8; 32],
+    pub(crate) amount: u64,
+    pub(crate) is_frozen: bool,
+    /// `close_account` zeroes the whole account in place, including the
+    /// `account_type` byte (programs/rust/examples/token_program/process.rs),
+    /// so a closed account no longer decodes; an all-zero account is reported
+    /// as closed instead.
+    pub(crate) is_closed: bool,
 }
 
 /// Strip TypeRef / union wrappers to reach the underlying value.
 fn unwrap_reflected(v: &ReflectedValue) -> &ReflectedValue {
     match &v.value {
         Value::TypeRef { value, .. } => unwrap_reflected(value),
-        Value::Union { variant_value, .. } => unwrap_reflected(variant_value),
+        /* Every union variant views the same bytes; the first is the one
+         * this reader expects. */
+        Value::Union { variants } => variants
+            .first()
+            .map_or(v, |(_, variant)| unwrap_reflected(variant)),
         Value::SizeDiscriminatedUnion { variant_value, .. } => unwrap_reflected(variant_value),
+        Value::Enum { variant_value, .. } => unwrap_reflected(variant_value),
         _ => v,
     }
 }
@@ -1698,45 +2024,157 @@ fn reflected_u64(v: &ReflectedValue) -> Option<u64> {
     }
 }
 
-/// A `Pubkey` reflects as a struct with a single 32-byte `bytes` array.
-fn reflected_pubkey(v: &ReflectedValue) -> Option<[u8; 32]> {
-    let s = unwrap_reflected(v);
-    let bytes = s.get_struct_field("bytes")?;
-    let elements = match &bytes.value {
+/// Read a primitive (possibly behind a TypeRef) as u8.
+fn reflected_u8(v: &ReflectedValue) -> Option<u8> {
+    u8::try_from(reflected_u64(v)?).ok()
+}
+
+/// Read an array of exactly `N` bytes.
+fn reflected_byte_array<const N: usize>(v: &ReflectedValue) -> Option<[u8; N]> {
+    let elements = match &v.value {
         Value::Array { elements } => elements,
         _ => return None,
     };
-    if elements.len() != 32 {
+    if elements.len() != N {
         return None;
     }
-    let mut out = [0u8; 32];
+    let mut out = [0u8; N];
     for (i, e) in elements.iter().enumerate() {
-        out[i] = u8::try_from(reflected_u64(e)?).ok()?;
+        out[i] = reflected_u8(e)?;
     }
     Some(out)
 }
 
-fn decode_token_account_blob(data: &[u8]) -> Result<DecodedTokenAccount, String> {
-    let reflector = token_reflector()?;
+/// A `Pubkey` reflects as a struct with a single 32-byte `bytes` array.
+fn reflected_pubkey(v: &ReflectedValue) -> Option<[u8; 32]> {
+    let s = unwrap_reflected(v);
+    reflected_byte_array(s.get_struct_field("bytes")?)
+}
 
-    /* Reflect against the account-root union so the 73-vs-115 byte size
-     * discriminates token vs. mint accounts purely from the ABI; no hardcoded
-     * length or field offsets live here. */
-    let reflected = reflector
+/// Owner of a token account (decoded with the token ABI).
+pub(crate) fn token_account_owner(data: &[u8]) -> Result<[u8; 32], String> {
+    decode_token_account_blob(data).map(|t| t.owner)
+}
+
+/// Reflect account data against the account root. The `account_type` byte
+/// selects the layout purely from the ABI; no hardcoded length or field
+/// offsets live here.
+fn reflect_token_program_account(data: &[u8]) -> Result<ReflectedValue, String> {
+    token_reflector()?
         .reflect(data, TOKEN_PROGRAM_ACCOUNT_TYPE)
-        .map_err(|e| format!("Failed to decode token account: {}", e))?;
+        .map_err(|e| e.to_string())
+}
 
-    let data_field = reflected
-        .get_struct_field("data")
-        .ok_or_else(|| "token ABI: missing 'data' field".to_string())?;
+/// Variant name and body of a reflected account root. The token program
+/// loads its accounts at their exact size, so the data must be exactly the
+/// `account_type` byte plus the selected payload.
+fn token_program_account_variant(
+    reflected: &ReflectedValue,
+    data_len: usize,
+) -> Result<(&str, &ReflectedValue), String> {
+    let payload = reflected
+        .get_struct_field("payload")
+        .ok_or_else(|| "token ABI: missing 'payload' field".to_string())?;
 
-    let (variant, body) = match &data_field.value {
-        Value::SizeDiscriminatedUnion {
-            variant_name,
-            variant_value,
-        } => (variant_name.as_str(), variant_value.as_ref()),
-        _ => return Err("token ABI: 'data' is not a size-discriminated union".to_string()),
+    let Value::Enum {
+        variant_name,
+        variant_value,
+        ..
+    } = &payload.value
+    else {
+        return Err("token ABI: 'payload' is not an enum".to_string());
     };
+    let payload_size = variant_value
+        .type_info
+        .size
+        .ok_or_else(|| format!("token ABI: '{variant_name}' has no fixed size"))?;
+    let expected = 1 + usize::try_from(payload_size)
+        .map_err(|_| format!("token ABI: '{variant_name}' size does not fit"))?;
+    if data_len != expected {
+        return Err(format!(
+            "{variant_name} account data is {data_len} bytes (expected {expected})"
+        ));
+    }
+    Ok((variant_name.as_str(), variant_value.as_ref()))
+}
+
+/// The fields of a mint account that `TransferChecked` must reproduce.
+#[derive(Debug, PartialEq, Eq)]
+struct DecodedMintAccount {
+    decimals: u8,
+    /// The stored ticker field: its length byte and all eight bytes.
+    /// `initialize_mint` stores both as given
+    /// (programs/rust/examples/token_program/process.rs:59-60), so the length
+    /// can exceed eight and the bytes after it can be non-zero.
+    ticker_len: u8,
+    ticker_bytes: [u8; TOKEN_TICKER_MAX_LEN],
+}
+
+impl DecodedMintAccount {
+    /// The stored ticker, if the field is canonical: at most
+    /// `TOKEN_TICKER_MAX_LEN` bytes, followed only by zero bytes.
+    /// `TransferChecked` rejects any other expected ticker, so it can never
+    /// match a mint that stores one.
+    fn canonical_ticker(&self) -> Option<&[u8]> {
+        let (ticker, padding) = self
+            .ticker_bytes
+            .split_at_checked(usize::from(self.ticker_len))?;
+        padding.iter().all(|b| *b == 0).then_some(ticker)
+    }
+}
+
+fn decode_mint_account_blob(data: &[u8]) -> Result<DecodedMintAccount, String> {
+    let reflected = reflect_token_program_account(data)
+        .map_err(|e| format!("Failed to decode mint account: {e}"))?;
+    let (variant, body) = token_program_account_variant(&reflected, data.len())?;
+
+    if variant != TOKEN_MINT_VARIANT {
+        return Err(format!(
+            "account is not a mint account (ABI variant: {variant})"
+        ));
+    }
+
+    let mint = unwrap_reflected(body);
+    let decimals = mint
+        .get_struct_field("decimals")
+        .and_then(reflected_u8)
+        .ok_or_else(|| "token ABI: missing/invalid 'decimals'".to_string())?;
+    let ticker = mint
+        .get_struct_field("ticker")
+        .map(unwrap_reflected)
+        .ok_or_else(|| "token ABI: missing 'ticker'".to_string())?;
+    let ticker_len = ticker
+        .get_struct_field("length")
+        .and_then(reflected_u8)
+        .ok_or_else(|| "token ABI: missing/invalid ticker 'length'".to_string())?;
+    let ticker_bytes = ticker
+        .get_struct_field("bytes")
+        .and_then(reflected_byte_array)
+        .ok_or_else(|| "token ABI: missing/invalid ticker 'bytes'".to_string())?;
+
+    Ok(DecodedMintAccount {
+        decimals,
+        ticker_len,
+        ticker_bytes,
+    })
+}
+
+/// Decode a token account through the token ABI's account root.
+pub(crate) fn decode_token_account_blob(data: &[u8]) -> Result<DecodedTokenAccount, String> {
+    /* close_account zeroes the whole account; the invalid account_type 0
+     * never decodes, so recognise the closed state before reflecting. */
+    if !data.is_empty() && data.iter().all(|b| *b == 0) {
+        return Ok(DecodedTokenAccount {
+            mint: [0u8; 32],
+            owner: [0u8; 32],
+            amount: 0,
+            is_frozen: false,
+            is_closed: true,
+        });
+    }
+    let reflected = reflect_token_program_account(data)
+        .map_err(|e| format!("Failed to decode token account: {e}"))?;
+    let (variant, body) = token_program_account_variant(&reflected, data.len())?;
 
     if variant != TOKEN_ACCOUNT_VARIANT {
         return Err(format!(
@@ -1764,14 +2202,12 @@ fn decode_token_account_blob(data: &[u8]) -> Result<DecodedTokenAccount, String>
         .ok_or_else(|| "token ABI: missing/invalid 'is_frozen'".to_string())?
         != 0;
 
-    let is_closed = mint == [0u8; 32] && owner == [0u8; 32] && amount == 0 && !is_frozen;
-
     Ok(DecodedTokenAccount {
         mint,
         owner,
         amount,
         is_frozen,
-        is_closed,
+        is_closed: false,
     })
 }
 
@@ -1845,20 +2281,17 @@ async fn token_balance(
     };
 
     let data_b64 = account.data.unwrap_or_default();
-    let data_bytes =
-        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &data_b64).map_err(
-            |e| {
-                emit_token_balance_failure(
-                    &token_account_address,
-                    &format!("Failed to decode account data: {}", e),
-                    json_format,
-                )
-            },
-        )?;
+    let data_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &data_b64)
+        .map_err(|e| {
+            emit_token_balance_failure(
+                &token_account_address,
+                &format!("Failed to decode account data: {}", e),
+                json_format,
+            )
+        })?;
 
-    let decoded = decode_token_account_blob(&data_bytes).map_err(|msg| {
-        emit_token_balance_failure(&token_account_address, &msg, json_format)
-    })?;
+    let decoded = decode_token_account_blob(&data_bytes)
+        .map_err(|msg| emit_token_balance_failure(&token_account_address, &msg, json_format))?;
 
     let owning_program_bytes = account.owner.to_bytes().map_err(|e| {
         emit_token_balance_failure(
@@ -1886,7 +2319,11 @@ async fn token_balance(
     let owner_address = tn_pubkey_to_address_string(&decoded.owner);
     let owning_program_address = tn_pubkey_to_address_string(&owning_program_bytes);
 
-    let status = if decoded.is_closed { "closed" } else { "success" };
+    let status = if decoded.is_closed {
+        "closed"
+    } else {
+        "success"
+    };
 
     if json_format {
         let resp = serde_json::json!({
@@ -2076,35 +2513,64 @@ async fn derive_mint_account(
 mod tests {
     use super::*;
 
-    /* On-the-wire size of a token account body (mint+owner+amount+is_frozen).
-     * Declared locally in the tests as the fixture contract; production code
-     * derives the size from the ABI via reflection, not this constant. */
-    const TOKEN_ACCOUNT_WIRE_LEN: usize = 32 + 32 + 8 + 1;
+    #[test]
+    fn packaged_token_abi_is_standalone() {
+        let abi: AbiFile = serde_yml::from_str(TOKEN_ABI_YAML).expect("packaged generated ABI");
+        assert!(!abi.types.is_empty());
+        token_reflector().expect("all reflected types resolve inside the package");
+    }
+
+    /* On-the-wire size of a token account (account_type, mint, owner,
+     * amount, is_frozen). Declared locally in the tests as the fixture
+     * contract; production code derives the size from the ABI via
+     * reflection, not this constant. */
+    const TOKEN_ACCOUNT_WIRE_LEN: usize = 1 + 32 + 32 + 8 + 1;
+    /* Account discriminators (programs/rust/examples/token_program/types.rs). */
+    const ACCOUNT_TYPE_MINT_V1: u8 = 1;
+    const ACCOUNT_TYPE_TOKEN_ACCOUNT_V1: u8 = 2;
+    use thru_base::tn_tools::KeyPair;
 
     #[test]
     fn authorized_actor_must_match_fee_payer() {
-        let signer = KeyPair::from_hex_private_key("signer", hex::encode([1u8; 32])).unwrap();
+        let (_guard, keys) = crate::keys::KeyManager::test_fixture(&[("signer", [1; 32])]);
+        let signer = keys.load_key("signer").unwrap();
         let other = KeyPair::from_hex_private_key("other", hex::encode([2u8; 32])).unwrap();
+        let config = Config {
+            keys,
+            ..Config::default()
+        };
 
-        let actor =
-            resolve_authorized_actor(signer.address_string.as_str(), "Authority", &signer).unwrap();
+        let actor = resolve_authorized_actor(
+            &config,
+            signer.address_string.as_str(),
+            "Authority",
+            &signer,
+        )
+        .unwrap();
         assert_eq!(actor, signer.public_key);
+        assert_eq!(
+            resolve_authorized_actor(&config, "signer", "Authority", &signer).unwrap(),
+            signer.public_key
+        );
+        let reference = config.keys.get_entry("signer").unwrap().reference();
+        assert_eq!(
+            resolve_authorized_actor(&config, &reference, "Authority", &signer).unwrap(),
+            signer.public_key
+        );
 
-        let error = resolve_authorized_actor(other.address_string.as_str(), "Authority", &signer)
+        let error = resolve_authorized_actor(&config, other.address_string.as_str(), "Authority", &signer)
             .expect_err("a separately supplied token authority cannot sign the transaction");
         assert!(error.to_string().contains("must match the fee payer"));
     }
 
     #[tokio::test]
     async fn mint_to_rejects_mismatched_authority_before_rpc_setup() {
-        let mut config = Config {
+        let (_guard, keys) = crate::keys::KeyManager::test_fixture(&[("default", [1; 32])]);
+        let config = Config {
             rpc_base_url: "not a valid RPC URL".to_string(),
+            keys,
             ..Config::default()
         };
-        config
-            .keys
-            .add_key("default", &hex::encode([1u8; 32]), true)
-            .unwrap();
 
         let signer = KeyPair::from_hex_private_key("signer", hex::encode([1u8; 32])).unwrap();
         let other = KeyPair::from_hex_private_key("other", hex::encode([2u8; 32])).unwrap();
@@ -2174,6 +2640,7 @@ mod tests {
         is_frozen: bool,
     ) -> Vec<u8> {
         let mut buf = Vec::with_capacity(TOKEN_ACCOUNT_WIRE_LEN);
+        buf.push(ACCOUNT_TYPE_TOKEN_ACCOUNT_V1);
         buf.extend_from_slice(&mint);
         buf.extend_from_slice(&owner);
         buf.extend_from_slice(&amount.to_le_bytes());
@@ -2204,15 +2671,19 @@ mod tests {
     #[test]
     fn token_account_decode_little_endian_amount() {
         let mut blob = build_token_account_blob([1u8; 32], [2u8; 32], 0, false);
-        blob[64..72].copy_from_slice(&0x0102_0304_0506_0708u64.to_le_bytes());
+        blob[65..73].copy_from_slice(&0x0102_0304_0506_0708u64.to_le_bytes());
         let decoded = decode_token_account_blob(&blob).expect("decode");
         assert_eq!(decoded.amount, 0x0102_0304_0506_0708);
     }
 
+    /* close_account zeroes the whole account, account_type included. */
+    fn closed_token_account_blob() -> Vec<u8> {
+        vec![0u8; TOKEN_ACCOUNT_WIRE_LEN]
+    }
+
     #[test]
     fn token_account_decode_closed_sentinel() {
-        let blob = build_token_account_blob([0u8; 32], [0u8; 32], 0, false);
-        let decoded = decode_token_account_blob(&blob).expect("decode");
+        let decoded = decode_token_account_blob(&closed_token_account_blob()).expect("decode");
         assert!(decoded.is_closed);
         assert_eq!(decoded.amount, 0);
         assert!(!decoded.is_frozen);
@@ -2220,20 +2691,406 @@ mod tests {
 
     #[test]
     fn token_account_decode_wrong_length() {
-        let short = vec![0u8; TOKEN_ACCOUNT_WIRE_LEN - 1];
-        assert!(decode_token_account_blob(&short).is_err());
-        let long = vec![0u8; TOKEN_ACCOUNT_WIRE_LEN + 1];
+        let blob = build_token_account_blob([1u8; 32], [2u8; 32], 5, false);
+        assert!(decode_token_account_blob(&blob[..TOKEN_ACCOUNT_WIRE_LEN - 1]).is_err());
+        let mut long = blob;
+        long.push(0);
         assert!(decode_token_account_blob(&long).is_err());
     }
 
     #[test]
-    fn test_resolve_fee_payer_keypair_with_nonexistent_key() {
-        let config = Config::default();
-        let result = resolve_fee_payer_keypair(&config, Some("nonexistent"));
-        assert!(result.is_err(), "Should fail for nonexistent fee payer key");
+    fn token_account_decode_checks_the_account_type() {
+        let mut blob = build_token_account_blob([1u8; 32], [2u8; 32], 5, false);
+        for account_type in [0u8, ACCOUNT_TYPE_MINT_V1, 3, 0xff] {
+            blob[0] = account_type;
+            assert!(
+                decode_token_account_blob(&blob).is_err(),
+                "account_type {account_type}"
+            );
+        }
+    }
 
-        let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("nonexistent"));
+    /* On-the-wire size of a mint account (account_type, decimals, supply,
+     * creator, mint authority, freeze authority, has_freeze_authority, ticker
+     * length, ticker bytes). A fixture contract, like TOKEN_ACCOUNT_WIRE_LEN. */
+    const MINT_ACCOUNT_WIRE_LEN: usize = 1 + 1 + 8 + 32 + 32 + 32 + 1 + 1 + 8;
+
+    const TOKEN_PROGRAM: [u8; 32] = [0x70; 32];
+    const MINT: [u8; 32] = [0x31; 32];
+
+    /* Every field before the ticker holds a value that differs from the
+     * decimals and the ticker length, so a decoder that reads a neighbouring
+     * byte is caught. */
+    fn build_mint_account_blob(decimals: u8, ticker_len: u8, ticker_bytes: [u8; 8]) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(MINT_ACCOUNT_WIRE_LEN);
+        buf.push(ACCOUNT_TYPE_MINT_V1);
+        buf.push(decimals);
+        buf.extend_from_slice(&0x1112_1314_1516_1718u64.to_le_bytes());
+        buf.extend_from_slice(&[0xc1; 32]);
+        buf.extend_from_slice(&[0xa2; 32]);
+        buf.extend_from_slice(&[0xf3; 32]);
+        buf.push(1);
+        buf.push(ticker_len);
+        buf.extend_from_slice(&ticker_bytes);
+        assert_eq!(buf.len(), MINT_ACCOUNT_WIRE_LEN);
+        buf
+    }
+
+    fn ticker_field(ticker: &[u8]) -> [u8; 8] {
+        let mut field = [0u8; 8];
+        field[..ticker.len()].copy_from_slice(ticker);
+        field
+    }
+
+    #[test]
+    fn mint_account_decode_reads_decimals_and_the_ticker_field() {
+        let blob = build_mint_account_blob(6, 4, ticker_field(b"USDC"));
+        assert_eq!(
+            decode_mint_account_blob(&blob).expect("decode"),
+            DecodedMintAccount {
+                decimals: 6,
+                ticker_len: 4,
+                ticker_bytes: *b"USDC\0\0\0\0",
+            }
+        );
+    }
+
+    #[test]
+    fn mint_account_decode_keeps_the_ticker_field_as_stored() {
+        let stored = [0xde, 0xad, 0xbe, 0xef, 0x00, 0x01, 0x02, 0xff];
+        let blob = build_mint_account_blob(255, 200, stored);
+        assert_eq!(
+            decode_mint_account_blob(&blob).expect("decode"),
+            DecodedMintAccount {
+                decimals: 255,
+                ticker_len: 200,
+                ticker_bytes: stored,
+            }
+        );
+    }
+
+    #[test]
+    fn mint_and_token_accounts_are_told_apart() {
+        let mint_blob = build_mint_account_blob(6, 4, ticker_field(b"USDC"));
+        let token_blob = build_token_account_blob(MINT, [9u8; 32], 5, false);
+
+        let error = decode_mint_account_blob(&token_blob).unwrap_err();
+        assert!(error.contains("not a mint account"), "{error}");
+        let error = decode_token_account_blob(&mint_blob).unwrap_err();
+        assert!(error.contains("not a token account"), "{error}");
+
+        assert!(decode_mint_account_blob(&mint_blob[..MINT_ACCOUNT_WIRE_LEN - 1]).is_err());
+        let mut long = mint_blob;
+        long.push(0);
+        assert!(decode_mint_account_blob(&long).is_err());
+    }
+
+    #[test]
+    fn canonical_ticker_is_at_most_eight_bytes_then_zeros() {
+        let mint = |ticker_len: u8, ticker_bytes: [u8; 8]| DecodedMintAccount {
+            decimals: 0,
+            ticker_len,
+            ticker_bytes,
+        };
+
+        assert_eq!(
+            mint(4, ticker_field(b"USDC")).canonical_ticker(),
+            Some(&b"USDC"[..])
+        );
+        assert_eq!(mint(0, [0; 8]).canonical_ticker(), Some(&b""[..]));
+        assert_eq!(
+            mint(8, *b"EIGHTCHR").canonical_ticker(),
+            Some(&b"EIGHTCHR"[..])
+        );
+        /* A zero byte inside the stated length is part of the ticker. */
+        assert_eq!(
+            mint(8, *b"EVECOIN\0").canonical_ticker(),
+            Some(&b"EVECOIN\0"[..])
+        );
+
+        /* Non-zero bytes after the length. */
+        assert_eq!(mint(4, *b"USDCoin\0").canonical_ticker(), None);
+        assert_eq!(mint(0, *b"\0\0\0\0\0\0\0x").canonical_ticker(), None);
+        /* A length above eight. */
+        assert_eq!(mint(9, ticker_field(b"USDC")).canonical_ticker(), None);
+        assert_eq!(mint(255, [0; 8]).canonical_ticker(), None);
+    }
+
+    /* An account as read from chain, owned by the token program. */
+    fn owned(data: Vec<u8>) -> FetchedAccount {
+        FetchedAccount {
+            owner: TOKEN_PROGRAM,
+            data,
+        }
+    }
+
+    const OTHER_PROGRAM: [u8; 32] = [0x71; 32];
+
+    #[test]
+    fn source_account_mint_needs_an_open_token_account_of_the_program() {
+        let open = owned(build_token_account_blob(MINT, [9u8; 32], 5, false));
+        assert_eq!(source_account_mint(Some(&open), &TOKEN_PROGRAM), Ok(MINT));
+
+        let error = source_account_mint(None, &TOKEN_PROGRAM).unwrap_err();
+        assert!(error.contains("not found"), "{error}");
+
+        /* A token account of another token program decodes, but the selected
+         * program rejects it (reachable with an explicit --token-program). */
+        let error = source_account_mint(Some(&open), &OTHER_PROGRAM).unwrap_err();
+        assert!(error.contains("is owned by"), "{error}");
+
+        let closed = owned(closed_token_account_blob());
+        let error = source_account_mint(Some(&closed), &TOKEN_PROGRAM).unwrap_err();
+        assert!(error.contains("closed"), "{error}");
+
+        let mint_blob = owned(build_mint_account_blob(6, 4, ticker_field(b"USDC")));
+        let error = source_account_mint(Some(&mint_blob), &TOKEN_PROGRAM).unwrap_err();
+        assert!(error.contains("not a token account"), "{error}");
+    }
+
+    #[test]
+    fn checked_transfer_inputs_carry_the_mint_decimals_and_stored_ticker() {
+        let mint_account = owned(build_mint_account_blob(6, 4, ticker_field(b"USDC")));
+        let inputs = checked_transfer_inputs(MINT, Some(&mint_account), &TOKEN_PROGRAM)
+            .expect("a canonical mint of this token program");
+        assert_eq!(
+            inputs,
+            CheckedTransferInputs {
+                mint: MINT,
+                decimals: 6,
+                ticker: b"USDC".to_vec(),
+            }
+        );
+        assert_eq!(inputs.ticker_text(), "USDC");
+    }
+
+    #[test]
+    fn checked_transfer_inputs_refuse_a_mint_the_program_would_reject() {
+        let canonical = owned(build_mint_account_blob(6, 4, ticker_field(b"USDC")));
+
+        let error = checked_transfer_inputs(MINT, None, &TOKEN_PROGRAM).unwrap_err();
+        assert!(error.contains("not found"), "{error}");
+
+        let error = checked_transfer_inputs(MINT, Some(&canonical), &OTHER_PROGRAM).unwrap_err();
+        assert!(error.contains("is owned by"), "{error}");
+
+        for (ticker_len, ticker_bytes) in [(9, ticker_field(b"USDC")), (4, *b"USDCoin\0")] {
+            let mint_account = owned(build_mint_account_blob(6, ticker_len, ticker_bytes));
+            let error =
+                checked_transfer_inputs(MINT, Some(&mint_account), &TOKEN_PROGRAM).unwrap_err();
+            assert!(error.contains("cannot be matched"), "{error}");
+            assert!(error.contains(&hex::encode(ticker_bytes)), "{error}");
+        }
+
+        let token_account = owned(build_token_account_blob(MINT, [9u8; 32], 5, false));
+        let error =
+            checked_transfer_inputs(MINT, Some(&token_account), &TOKEN_PROGRAM).unwrap_err();
+        assert!(error.contains("not a mint account"), "{error}");
+    }
+
+    /* The instruction must repeat the stored ticker field byte for byte: the
+     * program compares the length and all eight bytes. */
+    #[test]
+    fn checked_transfer_repeats_the_stored_mint_fields_in_the_instruction() {
+        let stored = *b"EVECOIN\0";
+        let blob = build_mint_account_blob(9, 8, stored);
+        let inputs = checked_transfer_inputs(MINT, Some(&owned(blob.clone())), &TOKEN_PROGRAM)
+            .expect("a canonical mint of this token program");
+
+        let (fee_payer, source, destination) = ([0x01; 32], [0x51; 32], [0x52; 32]);
+        let transaction = TransactionBuilder::build_token_transfer_checked(
+            fee_payer,
+            TOKEN_PROGRAM,
+            source,
+            destination,
+            inputs.mint,
+            250_000,
+            inputs.decimals,
+            &inputs.ticker,
+            TOKEN_PROGRAM_FEE,
+            7,
+            100,
+        )
+        .expect("build");
+
+        assert_eq!(transaction.rw_accs, Some(vec![source, destination]));
+        assert_eq!(transaction.r_accs, Some(vec![MINT]));
+        let instruction = transaction.instructions.expect("instruction data");
+        assert_eq!(instruction.len(), 25);
+        assert_eq!(instruction[0], 8);
+        /* decimals, ticker length, ticker bytes: the tail of the mint blob. */
+        assert_eq!(instruction[15], blob[1]);
+        assert_eq!(instruction[16..], blob[MINT_ACCOUNT_WIRE_LEN - 9..]);
+    }
+
+    /* The ticker bytes come from the chain. Shown raw, a ticker could send
+     * control sequences to the terminal, and different tickers could look
+     * the same. */
+    #[test]
+    fn ticker_text_escapes_every_byte_that_is_not_printable_ascii() {
+        let text = |ticker: &[u8]| {
+            CheckedTransferInputs {
+                mint: MINT,
+                decimals: 0,
+                ticker: ticker.to_vec(),
+            }
+            .ticker_text()
+        };
+
+        assert_eq!(text(b"USDC"), "USDC");
+        assert_eq!(text(b""), "");
+        assert_eq!(text(b"EVECOIN\0"), "EVECOIN\\x00");
+        /* ESC [ 2 J: clear the screen. */
+        assert_eq!(text(b"\x1b[2J"), "\\x1b[2J");
+        assert_eq!(text(b"A\nB\rC"), "A\\nB\\rC");
+        assert_eq!(text(b"A\\B"), "A\\\\B");
+        /* Bytes that are not UTF-8 stay distinct, and so does UTF-8. */
+        assert_eq!(text(&[0xff]), "\\xff");
+        assert_eq!(text(&[0xfe]), "\\xfe");
+        assert_eq!(text("€".as_bytes()), "\\xe2\\x82\\xac");
+
+        for ticker in [&b"\x1b[2J"[..], b"\x07\x08\x7f", &[0x9b, 0x80]] {
+            assert!(
+                text(ticker).bytes().all(|b| (0x20..0x7f).contains(&b)),
+                "{ticker:?}"
+            );
+        }
+    }
+
+    /* A plain Transfer does not read the mint, so only a mint refusal says
+     * how to send one. It fails on a bad source account all the same. */
+    #[test]
+    fn only_a_mint_refusal_suggests_the_plain_transfer() {
+        let source = source_refusal_message(&[0x51; 32], "the account is closed");
+        assert!(source.starts_with("Cannot build TransferChecked: source token account ta"));
+        assert!(source.ends_with(": the account is closed"), "{source}");
+        assert!(!source.contains("--unchecked"), "{source}");
+
+        let mint = mint_refusal_message(&MINT, "the account was not found on chain");
+        assert!(mint.starts_with("Cannot build TransferChecked: mint ta"));
+        assert!(
+            mint.contains(": the account was not found on chain. "),
+            "{mint}"
+        );
+        assert!(mint.ends_with(UNCHECKED_HINT), "{mint}");
+    }
+
+    /* In JSON mode the failure object is the command's whole error output.
+     * Any error variant but `Reported` makes the entry point print a second
+     * JSON document on stdout. In text mode the entry point prints the
+     * returned error, once. */
+    #[test]
+    fn refused_token_operation_is_reported_once() {
+        let error = refuse_token_operation("token_burn", "why", true);
+        assert!(matches!(error, CliError::Reported), "{error:?}");
+        let error = refuse_token_operation("token_burn", "why", false);
+        assert!(
+            matches!(&error, CliError::Validation(msg) if msg == "why"),
+            "{error:?}"
+        );
+
+        let error = refuse_token_transfer("Cannot build TransferChecked: why", true);
+        assert!(matches!(error, CliError::Reported), "{error:?}");
+
+        /* The report keeps the classification of the error it replaces. */
+        assert_eq!(
+            token_failure_json(
+                "token_transfer",
+                "why",
+                &CliError::Validation("why".to_string())
+            ),
+            serde_json::json!({
+                "token_transfer": { "status": "failed", "error": "why", "error_type": "validation" }
+            })
+        );
+        assert_eq!(
+            token_failure_json(
+                "token_mint_to",
+                "no such account",
+                &CliError::AccountNotFound("no such account".to_string())
+            ),
+            serde_json::json!({
+                "token_mint_to": {
+                    "status": "failed",
+                    "error": "no such account",
+                    "error_type": "account_not_found"
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn account_not_found_is_reported_once() {
+        let not_found = || CliError::AccountNotFound("no such account".to_string());
+
+        let error = handle_account_not_found_error(not_found(), "token_transfer", true);
+        assert!(matches!(error, CliError::Reported), "{error:?}");
+
+        /* Text mode, and every other error, pass through unchanged. */
+        let error = handle_account_not_found_error(not_found(), "token_transfer", false);
+        assert!(
+            matches!(&error, CliError::AccountNotFound(msg) if msg == "no such account"),
+            "{error:?}"
+        );
+        let error = handle_account_not_found_error(
+            CliError::Rpc("down".to_string()),
+            "token_transfer",
+            true,
+        );
+        assert!(
+            matches!(&error, CliError::Rpc(msg) if msg == "down"),
+            "{error:?}"
+        );
+    }
+
+    /* A zero amount is refused before any key or RPC use, and reported once
+     * like the other refusals. */
+    #[tokio::test]
+    async fn zero_amount_is_refused_before_rpc_setup() {
+        let config = Config {
+            rpc_base_url: "not a valid RPC URL".to_string(),
+            ..Config::default()
+        };
+
+        for json_format in [true, false] {
+            let errors = [
+                transfer(&config, "from", "to", 0, None, None, false, json_format).await,
+                transfer(&config, "from", "to", 0, None, None, true, json_format).await,
+                mint_to(
+                    &config,
+                    "mint",
+                    "to",
+                    "authority",
+                    0,
+                    None,
+                    None,
+                    json_format,
+                )
+                .await,
+                burn(
+                    &config,
+                    "account",
+                    "mint",
+                    "authority",
+                    0,
+                    None,
+                    None,
+                    json_format,
+                )
+                .await,
+            ];
+            for result in errors {
+                let error = result.expect_err("a zero amount must be refused");
+                if json_format {
+                    assert!(matches!(error, CliError::Reported), "{error:?}");
+                } else {
+                    assert!(
+                        matches!(&error, CliError::Validation(msg) if msg.ends_with("amount must be greater than 0")),
+                        "{error:?}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
@@ -2302,6 +3159,29 @@ mod tests {
 
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("VM error: 100"));
+    }
+
+    /* In JSON mode the helper prints the failure object itself. Any error
+     * variant but `Reported` makes the entry point print a second JSON
+     * document. */
+    #[test]
+    fn failed_transaction_is_reported_once_in_json_mode() {
+        let transaction_details = TransactionDetails {
+            vm_error: 100,
+            user_error_code: 23,
+            execution_result: 1,
+            signature: thru_base::tn_tools::Signature::from_bytes(&[1u8; 64]),
+            ..Default::default()
+        };
+
+        let error = check_transaction_result(&transaction_details, true).unwrap_err();
+        assert!(matches!(error, CliError::Reported), "{error:?}");
+
+        let error = check_transaction_result(&transaction_details, false).unwrap_err();
+        assert!(
+            matches!(&error, CliError::TransactionSubmission(msg) if msg.contains("TokenError: 23")),
+            "{error:?}"
+        );
     }
 
     #[test]

@@ -1,0 +1,103 @@
+abi:
+  package: "test.nested_union_validation"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Unions whose variants carry enum tags that validation must check"
+
+types:
+  # A fixed-size struct with an internal tag; both variants are 4 bytes, so
+  # only the tag check rejects an undeclared tag.
+  - name: "Tagged"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "tag"
+            field-type:
+              primitive: u8
+          - name: "value"
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  field-ref:
+                    path: ["tag"]
+                variants:
+                  - name: "A"
+                    tag-value: 0
+                    variant-type:
+                      primitive: u32
+                  - name: "B"
+                    tag-value: 1
+                    variant-type:
+                      primitive: u32
+
+  # A union is valid when every variant validates over its bytes.
+  - name: "Choice"
+    kind:
+      union:
+        packed: true
+        variants:
+          - name: "tagged"
+            variant-type:
+              type-ref:
+                name: "Tagged"
+          - name: "raw"
+            variant-type:
+              array:
+                size:
+                  literal:
+                    u32: 5
+                element-type:
+                  primitive: u8
+
+  # The same check through an inline struct variant.
+  - name: "InlineChoice"
+    kind:
+      union:
+        packed: true
+        variants:
+          - name: "word"
+            variant-type:
+              primitive: u32
+          - name: "tagged"
+            variant-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "kind"
+                    field-type:
+                      primitive: u8
+                  - name: "body"
+                    field-type:
+                      enum:
+                        packed: true
+                        tag-ref:
+                          field-ref:
+                            path: ["kind"]
+                        variants:
+                          - name: "Lo"
+                            tag-value: 2
+                            variant-type:
+                              primitive: u16
+                          - name: "Hi"
+                            tag-value: 3
+                            variant-type:
+                              primitive: u16
+
+  - name: "Holder"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "x"
+            field-type:
+              primitive: u8
+          - name: "choice"
+            field-type:
+              type-ref:
+                name: "Choice"
+          - name: "inline"
+            field-type:
+              type-ref:
+                name: "InlineChoice"

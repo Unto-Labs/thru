@@ -175,20 +175,22 @@ async function makeHarness(
   function permanentAccounts(final: boolean): Map<string, Account> {
     const version = upgrade && final ? 6n : upgrade ? 5n : 0n;
     const revision = upgrade && final ? 3n : upgrade ? 2n : 0n;
-    const managerData = new Uint8Array(73);
-    managerData.set(publicKey);
-    new DataView(managerData.buffer).setBigUint64(64, version, true);
+    const managerData = new Uint8Array(74);
+    managerData[0] = 1;
+    managerData.set(publicKey, 1);
+    new DataView(managerData.buffer).setBigUint64(65, version, true);
 
     const abiMetaData = new Uint8Array(100);
     abiMetaData[0] = 1;
     abiMetaData.set(Pubkey.from(program.programAccountAddress).toBytes(), 4);
 
     const abiBytes = final ? ABI_BYTES : oldABI;
-    const abiData = new Uint8Array(45 + abiBytes.length);
-    abiData.set(Pubkey.from(abi.abiMetaAccountAddress).toBytes());
-    new DataView(abiData.buffer).setBigUint64(32, revision, true);
-    new DataView(abiData.buffer).setUint32(41, abiBytes.length, true);
-    abiData.set(abiBytes, 45);
+    const abiData = new Uint8Array(46 + abiBytes.length);
+    abiData[0] = 2;
+    abiData.set(Pubkey.from(abi.abiMetaAccountAddress).toBytes(), 1);
+    new DataView(abiData.buffer).setBigUint64(33, revision, true);
+    new DataView(abiData.buffer).setUint32(42, abiBytes.length, true);
+    abiData.set(abiBytes, 46);
 
     const programBytes = final
       ? state.wrongProgramReadback
@@ -305,33 +307,22 @@ describe("deployment workflows", () => {
 
   const rootManager = Pubkey.from(Uint8Array.from([...new Uint8Array(31), 1])).toThruFmt();
 
-  it.each([false, true])("supports root-managed binary operations (upgrade=%s)", async (upgrade) => {
+  it.each([false, true])("refuses the Public encoder for Core-managed binaries (upgrade=%s)", async (upgrade) => {
     const harness = await makeHarness(upgrade, rootManager);
     const operation = upgrade ? upgradeProgram : deployProgram;
-    const result = await operation({
+    await expect(operation({
       seed: "workflow", managerProgramAddress: rootManager,
       signer: harness.signer, client: harness.client, program: image(0x33),
-    });
-    expect(result.programAccountAddress).toBe(harness.program.programAccountAddress);
-    expect(result.programMetaAccountAddress).toBe(harness.program.programMetaAccountAddress);
-    expect(result.programVersion).toBe(upgrade ? 6n : 0n);
-    expect(mocks.submitTransaction).toHaveBeenCalledOnce();
-    expect(harness.state.transaction?.program).toBe(rootManager);
-    expect(harness.state.encoded?.[0]).toBe(upgrade ? 2 : 0);
-    await expect(inspectProgramDeployment({
-      client: harness.client, seed: "workflow", managerProgramAddress: rootManager,
-      authorityAddress: harness.signer.address, expectedProgramBytes: image(0x33),
-    })).resolves.toMatchObject({
-      programAccountAddress: harness.program.programAccountAddress,
-      program: { status: "present", bytesMatch: true, version: upgrade ? 6n : 0n },
-    });
+    })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect(mocks.uploadArtifact).not.toHaveBeenCalled();
+    expect(mocks.submitTransaction).not.toHaveBeenCalled();
   });
 
   it("rejects another Manager's ownership even with the expected authority", async () => {
-    const harness = await makeHarness(true, rootManager);
-    harness.state.ownerOverride = MANAGER_PROGRAM_ADDRESS;
+    const harness = await makeHarness(true);
+    harness.state.ownerOverride = rootManager;
     const request = {
-      seed: "workflow", managerProgramAddress: rootManager,
+      seed: "workflow", manager: "public" as const,
       signer: harness.signer, client: harness.client, program: image(0x33),
     };
     await expect(upgradeProgram(request)).rejects.toMatchObject({ code: "VERIFICATION_FAILED" });
@@ -341,7 +332,7 @@ describe("deployment workflows", () => {
   });
 
   it.each([deployProgram, upgradeProgram, deployProgramABI, upgradeProgramABI])(
-    "rejects unsupported official ABI operations under root before uploading",
+    "requires the governed ABI workflow for Core instead of legacy Public encoding",
     async (operation) => {
       const harness = await makeHarness(true, rootManager);
       await expect(operation({

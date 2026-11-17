@@ -74,6 +74,7 @@ export async function submitTransaction(
   let rawTransaction: Uint8Array;
   let signature: string | undefined;
   try {
+    const instructionData = transaction.instructionData;
     const signed = await client.transactions.buildAndSign({
       feePayer: {
         publicKey: signer.publicKey,
@@ -91,7 +92,9 @@ export async function submitTransaction(
         readWrite: transaction.readWrite,
         readOnly: transaction.readOnly,
       },
-      instructionData: transaction.instructionData,
+      instructionData: typeof instructionData === "function"
+        ? async (context) => instructionData(context)
+        : instructionData,
     });
     rawTransaction = signed.rawTransaction;
     signature = signed.signature.toThruFmt();

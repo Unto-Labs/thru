@@ -1,0 +1,216 @@
+{
+  "abi": "rpc/abi/type-library/tn_block_producer_program.abi.yaml",
+  "account_root": "BlockProducerAccount",
+  "values": {
+    "1": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "signer_pubkey",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "bond_authority",
+                    "offset": 32,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "wthru_token_account",
+                    "offset": 64,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "active_bond",
+                    "offset": 96,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "staged_amount",
+                    "offset": 104,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "unlock_slot",
+                    "offset": 112,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "last_change_slot",
+                    "offset": 120,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 128
+          },
+          "ref": "BondAccount"
+        },
+        "size": 128
+      },
+      "variant": "bond_v1"
+    }
+  }
+}

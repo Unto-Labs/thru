@@ -1,0 +1,21 @@
+.uds-otp {
+  display: inline-flex;
+  gap: var(--space-2);
+}
+
+.uds-otp__in {
+  width: 36px;
+  height: 42px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-higher);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-none);
+}
+.uds-otp__in:focus {
+  outline: none;
+  border-color: var(--brick-400);
+  box-shadow: inset 0 0 0 1px var(--brick-400);
+}

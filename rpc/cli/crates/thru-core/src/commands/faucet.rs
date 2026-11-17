@@ -6,8 +6,10 @@ use std::time::Duration;
 use crate::cli::{FaucetCommands, FaucetWithdrawCommands};
 use crate::config::Config;
 use crate::error::CliError;
+use crate::keys::LoadedKey;
 use crate::utils::{format_vm_error, validate_address_or_hex};
-use thru_base::tn_tools::{KeyPair, Pubkey};
+use std::sync::Arc;
+use thru_base::tn_tools::Pubkey;
 use thru_base::txn_tools::{EOA_PROGRAM, FAUCET_PROGRAM, TransactionBuilder};
 use thru_client::{Client, ClientBuilder, TransactionDetails};
 
@@ -16,26 +18,6 @@ const FAUCET_PROGRAM_FEE: u64 = 0;
 
 /// Program-owned vault created and explicitly funded by bootstrap, not genesis.
 const FAUCET_ACCOUNT_ADDRESS: &str = thru_base::bootstrap_addresses::FAUCET_VAULT_ADDRESS;
-
-/// Helper function to resolve fee payer keypair from configuration
-fn resolve_fee_payer_keypair(
-    config: &Config,
-    fee_payer: Option<&str>,
-) -> Result<KeyPair, CliError> {
-    let fee_payer_private_key = if let Some(fee_payer_name) = fee_payer {
-        config.keys.get_key(fee_payer_name).map_err(|_| {
-            CliError::Validation(format!(
-                "Fee payer key '{}' not found in configuration",
-                fee_payer_name
-            ))
-        })?
-    } else {
-        config.keys.get_key("default")?
-    };
-
-    KeyPair::from_hex_private_key(fee_payer.unwrap_or("default"), fee_payer_private_key)
-        .map_err(|e| CliError::Crypto(format!("Failed to create fee payer keypair: {}", e)))
-}
 
 /// Create RPC client from configuration
 fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
@@ -55,7 +37,7 @@ fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
 
 /// Common transaction execution context
 struct TransactionContext {
-    pub fee_payer_keypair: KeyPair,
+    pub fee_payer_keypair: Arc<LoadedKey>,
     pub faucet_program_bytes: [u8; 32],
     pub faucet_account_bytes: [u8; 32],
     pub client: Client,
@@ -72,7 +54,7 @@ async fn setup_transaction_context(
 ) -> Result<TransactionContext, CliError> {
     let faucet_program_bytes = FAUCET_PROGRAM;
     let faucet_account_bytes = validate_address_or_hex(FAUCET_ACCOUNT_ADDRESS)?;
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer)?;
     let client = create_rpc_client(config)?;
 
     // Get current nonce and block height
@@ -205,7 +187,7 @@ pub async fn handle_faucet_command(
             FaucetWithdrawCommands::Thru { account, amount } => {
                 super::developers::fund_thru(config, &account, amount, json_format).await
             }
-            FaucetWithdrawCommands::Thrusd { account, amount } => {
+            FaucetWithdrawCommands::Uusd { account, amount } => {
                 super::developers::fund(config, &account, &amount, json_format).await
             }
         },
@@ -235,28 +217,9 @@ async fn deposit(
         return Err(CliError::Validation(error_msg.to_string()));
     }
 
-    // Resolve depositor account either from explicit address or key name
-    let direct_account_input =
-        (account.starts_with("ta") && account.len() == 46) || account.len() == 64;
-    let (depositor_account_bytes, depositor_address_display) = if direct_account_input {
-        let bytes = validate_address_or_hex(account)?;
-        let display = if account.starts_with("ta") && account.len() == 46 {
-            account.to_string()
-        } else {
-            Pubkey::from_bytes(&bytes).to_string()
-        };
-        (bytes, display)
-    } else {
-        let depositor_private_key = config.keys.get_key(account).map_err(|_| {
-            CliError::Validation(format!("Key '{}' not found in configuration", account))
-        })?;
-        let depositor_keypair = KeyPair::from_hex_private_key(account, depositor_private_key)
-            .map_err(|e| CliError::Crypto(format!("Failed to create depositor keypair: {}", e)))?;
-        (
-            depositor_keypair.public_key,
-            depositor_keypair.address_string.to_string(),
-        )
-    };
+    // Registered aliases resolve using public metadata only.
+    let depositor_account_bytes = config.keys.resolve_public_key(account)?;
+    let depositor_address_display = Pubkey::from_bytes(&depositor_account_bytes).to_string();
 
     if !json_format {
         println!("Deposit to faucet:");

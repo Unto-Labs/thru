@@ -2,20 +2,17 @@ abi:
   package: thru.program.uploader
   name: "Uploader Program"
   abi-version: 1
-  package-version: "0.1.0"
+  package-version: "0.2.0"
   description: ABI for temporary bulk-data uploads used by Thru programs.
   imports:
     # thru_primitives
-    - type: onchain
-      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
-      target: abi
-      network: mainnet
-      revision: latest
+    - type: path
+      path: thru_primitives.abi.yaml
   options:
     program-metadata:
       root-types:
         instruction-root: "UploaderInstruction"
-        account-root: "UploaderProgramMeta"
+        account-root: "UploaderProgramAccount"
         errors: "UploaderError"
 
 types:
@@ -145,6 +142,33 @@ types:
                 type-ref:
                   name: FinalizeArgs
 
+# Account root for meta accounts. Byte 0 is account_type. Values are never
+# reused; a new layout takes the next unused value. Buffer accounts hold
+# opaque uploaded bytes and carry no discriminator.
+- name: UploaderProgramAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: account_type
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - account_type
+            variants:
+            - name: meta_v1
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: UploaderProgramMeta
+
+# Meta payload (65 bytes after account_type).
 - name: UploaderProgramMeta
   kind:
     struct:

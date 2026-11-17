@@ -1,0 +1,15 @@
+abi:
+  package: "a_b.c"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Package a_b.c (alias tnp_a_b_c)"
+
+types:
+  - name: "Y"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "v"
+            field-type:
+              primitive: u8

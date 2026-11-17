@@ -121,7 +121,7 @@
 .tds-dep__panel {
   overflow: hidden;
   height: var(--collapsible-panel-height);
-  transition: height 280ms var(--ease-standard);
+  transition: height 320ms cubic-bezier(0.2, 0, 0, 1);
 }
 .tds-dep__panel[data-starting-style],
 .tds-dep__panel[data-ending-style] {
@@ -566,4 +566,185 @@
 .tds-dep__contact-error {
   font-size: 12px;
   color: var(--color-text-danger);
+}
+
+.tds-dep__agreement .tds-dep__field {
+  gap: var(--space-1);
+}
+.tds-dep__agreement-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.tds-dep__agreement-box {
+  height: 240px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-higher);
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+.tds-dep__agree {
+  display: flex;
+  min-height: 34px;
+}
+@media (max-width: 640px) {
+  .tds-dep__agree {
+    min-height: 44px;
+  }
+}
+
+.tds-dep__kyc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.tds-dep__kyc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}
+.tds-dep__kyc-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.tds-dep__kyc-address {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.tds-dep__kyc-address legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
+}
+.tds-dep__kyc-locality {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, .9fr);
+  gap: 0 var(--space-3);
+  align-items: start;
+}
+.tds-dep__kyc-footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.tds-dep__kyc-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+@media (min-width: 641px) {
+  .tds-dep__kyc-contact {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  }
+  .tds-dep__kyc-identity {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.tds-dep__pending-progress {
+  display: flex;
+  justify-content: center;
+}
+
+.tds-dep__list {
+  border: 1px solid var(--color-border-tertiary);
+}
+.tds-dep__list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 var(--space-3);
+  padding: var(--space-2) 0;
+}
+.tds-dep__list-row + .tds-dep__list-row {
+  border-top: 1px solid var(--color-border-tertiary);
+}
+.tds-dep__list-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tds-dep__list-mono {
+  font-family: var(--font-mono);
+}
+.tds-dep__list-sub {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+.tds-copy-icon.tds-dep__list-copy {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-right: calc(-1 * var(--space-2));
+}
+@media (max-width: 640px) {
+  /* A 44px target that reaches the list's edge, the icon still on the text column's edge. */
+  .tds-copy-icon.tds-dep__list-copy {
+    width: 44px;
+    height: 44px;
+    justify-content: flex-end;
+    margin-right: calc(-1 * var(--space-3));
+    padding-right: var(--space-3);
+  }
+  /* A 44px target for each transfer method's tab. */
+  .tds-dep__bank-tab {
+    min-height: 44px;
+  }
+  /* The outline button keeps the small label of the flow's other buttons. */
+  .tds-dep__activity .tds-wsheet__cta {
+    font-size: 13px;
+  }
+}
+.tds-dep__sr-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* One transfer method's panel: its rows, then how long it takes. */
+.tds-tabs__panel.tds-dep__bank-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) 0 0;
+}
+.tds-dep__bank-panel .tds-dep__list {
+  align-self: stretch;
+}
+
+.tds-dep__activity-detail,
+.tds-dep__activity-amount {
+  font-family: var(--font-mono);
+}
+/* Wraps, so a long return reason shows in full. */
+.tds-dep__activity-detail {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+.tds-dep__activity-amount {
+  flex: none;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.tds-dep__activity-amount--failed {
+  color: var(--color-text-secondary);
 }

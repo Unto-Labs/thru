@@ -32,6 +32,6 @@ export * from "./loading/MarkDrawOn";
 export * from "./loading/SlotTicker";
 export * from "./loading/ThroughputMeter";
 
-export { ThruUsdLogo, type ThruUsdLogoProps } from "./ThruUsdLogo";
+export { UusdLogo, type UusdLogoProps } from "./UusdLogo";
 export { ChainLogo, CoinLogo, type ChainLogoProps, type Coin, type CoinLogoProps } from "./CoinLogo";
-export { isThruUsdSymbol } from "../../tokens/src/thrusd";
+export { isUusdSymbol } from "../../tokens/src/uusd";

@@ -1,0 +1,693 @@
+{
+  "abi": "bridges/smart-contracts/thru/abi/tn_bridge.abi.yaml",
+  "account_root": "BridgeProgramAccount",
+  "values": {
+    "1": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "admin",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 32
+          },
+          "ref": "BridgeProgramAdmin"
+        },
+        "size": 32
+      },
+      "variant": "admin_v1"
+    },
+    "2": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "chain_id",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 2,
+                      "kind": {
+                        "primitive": "Integral(U16)"
+                      },
+                      "size": 2
+                    }
+                  },
+                  {
+                    "name": "reserved",
+                    "offset": 2,
+                    "type": {
+                      "alignment": 2,
+                      "kind": {
+                        "primitive": "Integral(U16)"
+                      },
+                      "size": 2
+                    }
+                  },
+                  {
+                    "name": "admin",
+                    "offset": 4,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "deposit_sequence",
+                    "offset": 36,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "expected_vaa_sequence",
+                    "offset": 44,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "deposits_paused",
+                    "offset": 52,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  },
+                  {
+                    "name": "intents_paused",
+                    "offset": 53,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  },
+                  {
+                    "name": "emergency_stopped",
+                    "offset": 54,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  },
+                  {
+                    "name": "ring",
+                    "offset": 55,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "layout": {
+                                "alignment": 1,
+                                "kind": {
+                                  "struct": {
+                                    "aligned": null,
+                                    "fields": [
+                                      {
+                                        "name": "sequence",
+                                        "offset": 0,
+                                        "type": {
+                                          "alignment": 8,
+                                          "kind": {
+                                            "primitive": "Integral(U64)"
+                                          },
+                                          "size": 8
+                                        }
+                                      },
+                                      {
+                                        "name": "token_mint",
+                                        "offset": 8,
+                                        "type": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "layout": {
+                                              "alignment": 1,
+                                              "kind": {
+                                                "struct": {
+                                                  "aligned": null,
+                                                  "fields": [
+                                                    {
+                                                      "name": "bytes",
+                                                      "offset": 0,
+                                                      "type": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "array": {
+                                                            "element": {
+                                                              "alignment": 1,
+                                                              "kind": {
+                                                                "primitive": "Integral(U8)"
+                                                              },
+                                                              "size": 1
+                                                            },
+                                                            "jagged": false,
+                                                            "size": {
+                                                              "literal": {
+                                                                "u64": 32
+                                                              }
+                                                            }
+                                                          }
+                                                        },
+                                                        "size": 32
+                                                      }
+                                                    }
+                                                  ],
+                                                  "packed": true
+                                                }
+                                              },
+                                              "size": 32
+                                            },
+                                            "ref": "Pubkey"
+                                          },
+                                          "size": 32
+                                        }
+                                      },
+                                      {
+                                        "name": "recipient",
+                                        "offset": 40,
+                                        "type": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "layout": {
+                                              "alignment": 1,
+                                              "kind": {
+                                                "struct": {
+                                                  "aligned": null,
+                                                  "fields": [
+                                                    {
+                                                      "name": "bytes",
+                                                      "offset": 0,
+                                                      "type": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "array": {
+                                                            "element": {
+                                                              "alignment": 1,
+                                                              "kind": {
+                                                                "primitive": "Integral(U8)"
+                                                              },
+                                                              "size": 1
+                                                            },
+                                                            "jagged": false,
+                                                            "size": {
+                                                              "literal": {
+                                                                "u64": 32
+                                                              }
+                                                            }
+                                                          }
+                                                        },
+                                                        "size": 32
+                                                      }
+                                                    }
+                                                  ],
+                                                  "packed": true
+                                                }
+                                              },
+                                              "size": 32
+                                            },
+                                            "ref": "Pubkey"
+                                          },
+                                          "size": 32
+                                        }
+                                      },
+                                      {
+                                        "name": "amount",
+                                        "offset": 72,
+                                        "type": {
+                                          "alignment": 8,
+                                          "kind": {
+                                            "primitive": "Integral(U64)"
+                                          },
+                                          "size": 8
+                                        }
+                                      },
+                                      {
+                                        "name": "timestamp",
+                                        "offset": 80,
+                                        "type": {
+                                          "alignment": 8,
+                                          "kind": {
+                                            "primitive": "Integral(U64)"
+                                          },
+                                          "size": 8
+                                        }
+                                      },
+                                      {
+                                        "name": "source_chain_id",
+                                        "offset": 88,
+                                        "type": {
+                                          "alignment": 2,
+                                          "kind": {
+                                            "primitive": "Integral(U16)"
+                                          },
+                                          "size": 2
+                                        }
+                                      }
+                                    ],
+                                    "packed": true
+                                  }
+                                },
+                                "size": 90
+                              },
+                              "ref": "RingSlot"
+                            },
+                            "size": 90
+                          },
+                          "jagged": false,
+                          "size": {
+                            "literal": {
+                              "u64": 256
+                            }
+                          }
+                        }
+                      },
+                      "size": 23040
+                    }
+                  },
+                  {
+                    "name": "fee_config",
+                    "offset": 23095,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "incoming_fee_bps",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 2,
+                                    "kind": {
+                                      "primitive": "Integral(U16)"
+                                    },
+                                    "size": 2
+                                  }
+                                },
+                                {
+                                  "name": "outgoing_fee_bps",
+                                  "offset": 2,
+                                  "type": {
+                                    "alignment": 2,
+                                    "kind": {
+                                      "primitive": "Integral(U16)"
+                                    },
+                                    "size": 2
+                                  }
+                                },
+                                {
+                                  "name": "fee_collector",
+                                  "offset": 4,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "layout": {
+                                        "alignment": 1,
+                                        "kind": {
+                                          "struct": {
+                                            "aligned": null,
+                                            "fields": [
+                                              {
+                                                "name": "bytes",
+                                                "offset": 0,
+                                                "type": {
+                                                  "alignment": 1,
+                                                  "kind": {
+                                                    "array": {
+                                                      "element": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "primitive": "Integral(U8)"
+                                                        },
+                                                        "size": 1
+                                                      },
+                                                      "jagged": false,
+                                                      "size": {
+                                                        "literal": {
+                                                          "u64": 32
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "size": 32
+                                                }
+                                              }
+                                            ],
+                                            "packed": true
+                                          }
+                                        },
+                                        "size": 32
+                                      },
+                                      "ref": "Pubkey"
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 36
+                        },
+                        "ref": "FeeConfig"
+                      },
+                      "size": 36
+                    }
+                  },
+                  {
+                    "name": "program_config",
+                    "offset": 23131,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "guardian_program",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "layout": {
+                                        "alignment": 1,
+                                        "kind": {
+                                          "struct": {
+                                            "aligned": null,
+                                            "fields": [
+                                              {
+                                                "name": "bytes",
+                                                "offset": 0,
+                                                "type": {
+                                                  "alignment": 1,
+                                                  "kind": {
+                                                    "array": {
+                                                      "element": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "primitive": "Integral(U8)"
+                                                        },
+                                                        "size": 1
+                                                      },
+                                                      "jagged": false,
+                                                      "size": {
+                                                        "literal": {
+                                                          "u64": 32
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "size": 32
+                                                }
+                                              }
+                                            ],
+                                            "packed": true
+                                          }
+                                        },
+                                        "size": 32
+                                      },
+                                      "ref": "Pubkey"
+                                    },
+                                    "size": 32
+                                  }
+                                },
+                                {
+                                  "name": "token_program",
+                                  "offset": 32,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "layout": {
+                                        "alignment": 1,
+                                        "kind": {
+                                          "struct": {
+                                            "aligned": null,
+                                            "fields": [
+                                              {
+                                                "name": "bytes",
+                                                "offset": 0,
+                                                "type": {
+                                                  "alignment": 1,
+                                                  "kind": {
+                                                    "array": {
+                                                      "element": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "primitive": "Integral(U8)"
+                                                        },
+                                                        "size": 1
+                                                      },
+                                                      "jagged": false,
+                                                      "size": {
+                                                        "literal": {
+                                                          "u64": 32
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "size": 32
+                                                }
+                                              }
+                                            ],
+                                            "packed": true
+                                          }
+                                        },
+                                        "size": 32
+                                      },
+                                      "ref": "Pubkey"
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 64
+                        },
+                        "ref": "ProgramConfig"
+                      },
+                      "size": 64
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 23195
+          },
+          "ref": "BridgeAccount"
+        },
+        "size": 23195
+      },
+      "variant": "bridge_v1"
+    },
+    "3": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "origin_chain_id",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 2,
+                      "kind": {
+                        "primitive": "Integral(U16)"
+                      },
+                      "size": 2
+                    }
+                  },
+                  {
+                    "name": "origin_token_address",
+                    "offset": 2,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "ForeignAddress"
+                      },
+                      "size": 32
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 34
+          },
+          "ref": "BridgeMintMetadata"
+        },
+        "size": 34
+      },
+      "variant": "mint_metadata_v1"
+    }
+  }
+}

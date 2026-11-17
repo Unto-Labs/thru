@@ -2,7 +2,7 @@ abi:
   package: thru.program.thru_registrar
   name: "Thru Registrar"
   abi-version: 1
-  package-version: "0.1.0"
+  package-version: "0.2.0"
   description: ABI for the Thru registrar program instruction envelopes and account state
   imports: []
   options:
@@ -99,26 +99,36 @@ types:
       - name: lease_end_time
         field-type:
           primitive: u64
+# Account root: byte 0 is the account discriminator (account_type), one value
+# per (account kind, layout). Values are never reused; a new layout or a new
+# kind takes the next unused value.
 - name: ThruRegistrarAccount
   kind:
     struct:
       packed: true
       fields:
-      - name: data
+      - name: account_type
         field-type:
-          size-discriminated-union:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
             packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - account_type
             variants:
-            - name: lease
-              expected-size: 148
-              variant-type:
-                type-ref:
-                  name: Lease
-            - name: config
-              expected-size: 244
+            - name: config_v1
+              tag-value: 1
               variant-type:
                 type-ref:
                   name: Config
+            - name: lease_v1
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: Lease
 - name: InitializeRegistryArgs
   kind:
     struct:

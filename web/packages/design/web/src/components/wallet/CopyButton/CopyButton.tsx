@@ -115,6 +115,8 @@ export interface CopyButtonProps {
   variant?: ButtonProps["variant"];
   size?: ButtonProps["size"];
   className?: string;
+  /** Called once the value is on the clipboard. */
+  onCopied?: () => void;
 }
 
 function isStateful(label: CopyButtonProps["label"]): label is StatefulLabel {
@@ -135,8 +137,13 @@ export function CopyButton({
   size = "sm",
   className,
   "aria-label": ariaLabel = "Copy to clipboard",
+  onCopied,
 }: CopyButtonProps) {
   const { copy, notifying } = useCopy();
+  const run = () =>
+    void copy(value).then((copied) => {
+      if (copied) onCopied?.();
+    });
   const lbl = isStateful(label) ? (notifying ? label.copied : label.normal) : label;
   const iconNode = notifying
     ? (copiedIcon ?? <CheckIcon width={14} height={14} />)
@@ -149,7 +156,7 @@ export function CopyButton({
         className={["tds-copy-icon", className].filter(Boolean).join(" ")}
         onClick={(e) => {
           e.stopPropagation();
-          void copy(value);
+          run();
         }}
         aria-label={ariaLabel}
         title={notifying ? "Copied!" : ariaLabel}
@@ -164,7 +171,7 @@ export function CopyButton({
       <button
         type="button"
         className={["tds-copy-text", className].filter(Boolean).join(" ")}
-        onClick={() => void copy(value)}
+        onClick={run}
       >
         {lbl}
         {iconNode}
@@ -172,7 +179,7 @@ export function CopyButton({
     );
   }
   return (
-    <Button variant={variant} size={size} className={className} onClick={() => void copy(value)}>
+    <Button variant={variant} size={size} className={className} onClick={run}>
       {lbl}
       {iconNode}
     </Button>

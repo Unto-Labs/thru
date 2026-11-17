@@ -46,7 +46,7 @@ types:
                                     u64: 6
                                 element-type:
                                   primitive: u8
-                  - name: "TaggedUnionWithFAM::data"
+                  - name: "TaggedVariant"
                     expected-size: 8
                     variant-type:
                       enum:

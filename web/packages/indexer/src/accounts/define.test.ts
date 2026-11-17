@@ -168,11 +168,11 @@ describe("defineAccountStream", () => {
         name: "test",
         schema: testSchema,
         ownerProgram: mockOwnerProgram,
-        expectedSize: 73,
+        expectedSize: 74,
         parse: mockParse,
       });
 
-      expect(stream.expectedSize).toBe(73);
+      expect(stream.expectedSize).toBe(74);
     });
 
     it("preserves dataSizes array", () => {
@@ -180,11 +180,11 @@ describe("defineAccountStream", () => {
         name: "test",
         schema: testSchema,
         ownerProgram: mockOwnerProgram,
-        dataSizes: [73, 165],
+        dataSizes: [74, 116],
         parse: mockParse,
       });
 
-      expect(stream.dataSizes).toEqual([73, 165]);
+      expect(stream.dataSizes).toEqual([74, 116]);
     });
 
     it("allows both expectedSize and dataSizes", () => {
@@ -192,13 +192,13 @@ describe("defineAccountStream", () => {
         name: "test",
         schema: testSchema,
         ownerProgram: mockOwnerProgram,
-        expectedSize: 73,
-        dataSizes: [165, 200],
+        expectedSize: 74,
+        dataSizes: [116, 200],
         parse: mockParse,
       });
 
-      expect(stream.expectedSize).toBe(73);
-      expect(stream.dataSizes).toEqual([165, 200]);
+      expect(stream.expectedSize).toBe(74);
+      expect(stream.dataSizes).toEqual([116, 200]);
     });
 
     it("allows omitting size constraints", () => {
@@ -315,7 +315,7 @@ describe("defineAccountStream", () => {
         description: "SPL Token account state",
         schema: tokenAccountSchema,
         ownerProgram: tokenProgramId,
-        expectedSize: 73,
+        expectedSize: 74,
         parse: (account: any) => ({
           address: account.address,
           mint: account.mint,
@@ -335,7 +335,7 @@ describe("defineAccountStream", () => {
       expect(stream.name).toBe("token-accounts");
       expect(stream.description).toBe("SPL Token account state");
       expect(getTableName(stream.table)).toBe("token_accounts");
-      expect(stream.expectedSize).toBe(73);
+      expect(stream.expectedSize).toBe(74);
 
       const columns = getTableColumns(stream.table);
       expect(Object.keys(columns)).toHaveLength(8);

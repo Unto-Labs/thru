@@ -1,0 +1,7 @@
+test-case:
+  name: "account_root_same_size_gauge"
+  abi-file: "../../abi_definitions/account_root.abi.yaml"
+  type: "SameSizeAccount"
+  description: "Same-size variants: gauge_v1"
+  tags: ["enums", "tagged", "account-root"]
+  binary-hex: "02 07 00 00 00 00 00 00 00"

@@ -7,12 +7,31 @@ const Check = (p: React.SVGProps<SVGSVGElement>) => (
     <path d="M3 8.5l3.5 3.5L13 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
+const Cross = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 16 16" fill="none" aria-hidden {...p}>
+    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);
 
 export type StepStatus = "done" | "active" | "pending";
 
 export interface StepItem {
   label: React.ReactNode;
   status: StepStatus;
+  /** A trailing note on the row, e.g. "Creating". */
+  detail?: React.ReactNode;
+}
+
+/** The 16px status mark of a step row, for other lists that show the same states. Only those lists have a failed row. */
+export function StepGlyph({ status }: { status: StepStatus | "failed" }) {
+  return (
+    <span className="tds-steps__glyph">
+      {status === "done" && <Check width={13} height={13} className="tds-steps__check" />}
+      {status === "failed" && <Cross width={13} height={13} className="tds-steps__cross" />}
+      {status === "active" && <span className="tds-steps__spin" />}
+      {status === "pending" && <span className="tds-steps__dot" />}
+    </span>
+  );
 }
 
 export interface StepsProps {
@@ -35,12 +54,9 @@ export function Steps({ items, className }: StepsProps) {
           className={cn("tds-steps__row", `tds-steps__row--${item.status}`)}
           aria-current={item.status === "active" ? "step" : undefined}
         >
-          <span className="tds-steps__glyph">
-            {item.status === "done" && <Check width={13} height={13} className="tds-steps__check" />}
-            {item.status === "active" && <span className="tds-steps__spin" />}
-            {item.status === "pending" && <span className="tds-steps__dot" />}
-          </span>
+          <StepGlyph status={item.status} />
           {item.label}
+          {item.detail != null && <span className="tds-steps__detail">{item.detail}</span>}
         </div>
       ))}
     </div>

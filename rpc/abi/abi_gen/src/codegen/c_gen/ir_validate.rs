@@ -13,6 +13,8 @@ pub struct IrValidateEmitter<'a> {
     type_ir: &'a TypeIr,
     output: String,
     temp_idx: usize,
+    /* C prefix of a type's helpers (default: its sanitized name). */
+    prefix: Option<&'a dyn Fn(&str) -> String>,
 }
 
 impl<'a> IrValidateEmitter<'a> {
@@ -21,11 +23,26 @@ impl<'a> IrValidateEmitter<'a> {
             type_ir,
             output: String::new(),
             temp_idx: 0,
+            prefix: None,
+        }
+    }
+
+    /// Names `<prefix( T )>_validate_ir` / `_footprint_ir` instead of the
+    /// sanitized type name.
+    pub fn with_prefix(mut self, prefix: &'a dyn Fn(&str) -> String) -> Self {
+        self.prefix = Some(prefix);
+        self
+    }
+
+    fn symbol(&self, type_name: &str, suffix: &str) -> String {
+        match self.prefix {
+            Some(prefix) => format!("{}{suffix}", prefix(type_name)),
+            None => sanitize_symbol(&format!("{type_name}{suffix}")),
         }
     }
 
     pub fn emit(mut self) -> Result<String, IrValidateError> {
-        let fn_name = sanitize_symbol(&format!("{}_validate_ir", self.type_ir.type_name));
+        let fn_name = self.symbol(&self.type_ir.type_name, "_validate_ir");
         let mut params = format_ir_parameter_list(self.type_ir);
         let signature = if params == "void" {
             format!(
@@ -41,6 +58,15 @@ impl<'a> IrValidateEmitter<'a> {
         };
 
         writeln!(&mut self.output, "{} {{", signature).unwrap();
+        /* IR parameter lists can carry aliases the tree never reads. */
+        for param in &self.type_ir.parameters {
+            writeln!(
+                &mut self.output,
+                "  (void){};",
+                sanitize_symbol(&param.name.replace('.', "_"))
+            )
+            .unwrap();
+        }
         let result_var = self.emit_node(&self.type_ir.root, 1)?;
         writeln!(
             &mut self.output,
@@ -276,10 +302,10 @@ impl<'a> IrValidateEmitter<'a> {
         node: &CallNestedNode,
         indent_lv: usize,
     ) -> Result<String, IrValidateError> {
-        let fn_name = sanitize_symbol(&format!("{}_footprint_ir", node.type_name));
+        let fn_name = self.symbol(&node.type_name, "_footprint_ir");
         let mut args = String::new();
-        for (idx, arg) in node.arguments.iter().enumerate() {
-            if idx > 0 {
+        for arg in node.arguments.iter() {
+            if !args.is_empty() {
                 args.push_str(", ");
             }
             args.push_str(&sanitize_symbol(&arg.value.replace('.', "_")));
@@ -297,6 +323,14 @@ impl<'a> IrValidateEmitter<'a> {
             Self::indent(indent_lv),
             var,
             call
+        )
+        .unwrap();
+        /* Nested footprints report overflow or invalid input as UINT64_MAX. */
+        writeln!(
+            &mut self.output,
+            "{}if( {} == UINT64_MAX ) return 3;",
+            Self::indent(indent_lv),
+            var
         )
         .unwrap();
         Ok(var)
@@ -326,7 +360,7 @@ impl<'a> IrValidateEmitter<'a> {
         for case in &node.cases {
             writeln!(
                 &mut self.output,
-                "{}  case {}: {{",
+                "{}  case {}ULL: {{",
                 Self::indent(indent_lv),
                 case.tag_value
             )

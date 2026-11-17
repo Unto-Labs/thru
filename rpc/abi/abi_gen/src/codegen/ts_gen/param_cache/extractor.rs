@@ -1,18 +1,20 @@
 use crate::abi::expr::ExprKind;
 use crate::abi::resolved::{ResolvedField, ResolvedType, ResolvedTypeKind, Size};
 use crate::abi::types::{IntegralType, PrimitiveType};
+use crate::codegen::shared::builder::is_self_sized;
 use crate::codegen::shared::ir::TypeIr;
 use crate::codegen::ts_gen::enum_utils::{enum_field_info_by_name, enum_field_infos};
 use crate::codegen::ts_gen::helpers::{
     collect_field_ref_paths, collect_field_value_refs, escape_ts_keyword,
-    expr_to_ts_bigint_with_resolver, expr_to_ts_with_resolver, needs_endianness_arg,
-    primitive_size, primitive_to_dataview_getter, primitive_to_ts_return_type,
-    sequential_size_expression, struct_field_const_offset,
+    expr_to_ts_bigint_with_resolver, expr_to_ts_with_resolver, generated_type_ident,
+    needs_endianness_arg, primitive_size, primitive_to_dataview_getter,
+    primitive_to_ts_return_type, sequential_size_expression, struct_field_const_offset,
 };
 use crate::codegen::ts_gen::ir_helpers::{
     TsParamBinding, collect_dynamic_param_bindings, deduplicated_ts_parameter_bindings,
-    normalize_binding_path, resolve_param_binding, sanitize_param_name,
+    normalize_binding_path, referenced_field_prim_type, resolve_param_binding, sanitize_param_name,
 };
+use crate::codegen::ts_gen::measure::{measure_fn, measure_fn_scoped, measure_values_fn};
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Write;
 
@@ -41,6 +43,16 @@ pub(crate) enum SequentialBindingKind {
     },
     EnumTail {
         field_index: usize,
+    },
+    /* `<field>.payload_size`: the byte size of a field whose own bytes decide it. */
+    PayloadSize {
+        field_index: usize,
+    },
+    /* A primitive at `key` inside struct field `field_index`, after
+    variable-size data there. */
+    NestedValue {
+        field_index: usize,
+        key: String,
     },
 }
 
@@ -226,6 +238,84 @@ pub(crate) fn build_param_extractor_plan(
             continue;
         }
 
+        /* The buffer the value spans: its whole length. */
+        if binding.canonical == "__buffer_size" {
+            let value_ident = format!("__tnParam_{}", binding.ts_name);
+            direct_bindings.push(DirectBinding {
+                value_ident: value_ident.clone(),
+                getter: String::new(),
+                offset: 0,
+                needs_le: false,
+                range_check: 0,
+            });
+            value_vars.push(ParamValue {
+                ts_name: binding.ts_name.clone(),
+                value_ident,
+                source: ParamValueSource::Direct,
+                path: None,
+            });
+            continue;
+        }
+
+        /* `<field>.payload_size` of a field sized by its own bytes (see
+        `IrBuilder::for_typescript`): measured while scanning. */
+        if let Some(field_index) = payload_size_field(resolved_type, type_lookup, binding) {
+            let seq_ident = format!("__tnParamSeq_{}", binding.ts_name);
+            sequential_bindings.push(SequentialBinding {
+                ts_name: binding.ts_name.clone(),
+                value_ident: seq_ident.clone(),
+                kind: SequentialBindingKind::PayloadSize { field_index },
+            });
+            value_vars.push(ParamValue {
+                ts_name: binding.ts_name.clone(),
+                value_ident: seq_ident,
+                source: ParamValueSource::Sequential,
+                path: None,
+            });
+            continue;
+        }
+
+        /* `<field>.<path>`: a named type's outside reference (a top-level
+        enum's tag) bound to a field `<path>` of this struct. */
+        if let Some(path) = context_arg_path(resolved_type, binding) {
+            if let Some(offset) = resolve_primitive_offset(resolved_type, &path, type_lookup) {
+                if let Some(prim) = referenced_field_prim_type(resolved_type, &path) {
+                    let value_ident = format!("__tnParam_{}", binding.ts_name);
+                    direct_bindings.push(DirectBinding {
+                        value_ident: value_ident.clone(),
+                        getter: primitive_to_dataview_getter(prim).to_string(),
+                        offset,
+                        needs_le: needs_endianness_arg(prim),
+                        range_check: offset + primitive_size(prim),
+                    });
+                    value_vars.push(ParamValue {
+                        ts_name: binding.ts_name.clone(),
+                        value_ident,
+                        source: ParamValueSource::Direct,
+                        path: Some(path),
+                    });
+                    continue;
+                }
+            }
+            if let Some(SequentialFieldTarget::Primitive { field_index }) =
+                resolve_sequential_field(resolved_type, &path)
+            {
+                let seq_ident = format!("__tnParamSeq_{}", binding.ts_name);
+                sequential_bindings.push(SequentialBinding {
+                    ts_name: binding.ts_name.clone(),
+                    value_ident: seq_ident.clone(),
+                    kind: SequentialBindingKind::Primitive { field_index },
+                });
+                value_vars.push(ParamValue {
+                    ts_name: binding.ts_name.clone(),
+                    value_ident: seq_ident,
+                    source: ParamValueSource::Sequential,
+                    path: None,
+                });
+                continue;
+            }
+        }
+
         /* Try to resolve the binding. If it is not available in the root table, it may
         belong to a nested type-ref payload that must be extracted while scanning. */
         let matched_key = match resolve_param_binding(&binding.ts_name, &available) {
@@ -319,6 +409,24 @@ pub(crate) fn build_param_extractor_plan(
             continue;
         }
 
+        if let Some((field_index, key)) =
+            resolve_nested_value(resolved_type, &normalized_path, type_lookup)
+        {
+            let seq_ident = format!("__tnParamSeq_{}", binding.ts_name);
+            sequential_bindings.push(SequentialBinding {
+                ts_name: binding.ts_name.clone(),
+                value_ident: seq_ident.clone(),
+                kind: SequentialBindingKind::NestedValue { field_index, key },
+            });
+            value_vars.push(ParamValue {
+                ts_name: binding.ts_name.clone(),
+                value_ident: seq_ident,
+                source: ParamValueSource::Sequential,
+                path: None,
+            });
+            continue;
+        }
+
         panic!(
             "ts_gen: unable to derive offset for '{}' ({}) in type '{}'",
             normalized_path, binding.canonical, resolved_type.name
@@ -352,6 +460,15 @@ pub(crate) fn emit_param_extractor(
     .unwrap();
 
     for direct in &plan.direct_bindings {
+        if direct.getter.is_empty() {
+            writeln!(
+                out,
+                "    const {} = __tnToBigInt(buffer.length);",
+                direct.value_ident
+            )
+            .unwrap();
+            continue;
+        }
         writeln!(out, "    if (buffer.length < {}) {{", direct.range_check).unwrap();
         writeln!(out, "      return null;").unwrap();
         writeln!(out, "    }}").unwrap();
@@ -437,6 +554,106 @@ pub(crate) fn emit_param_extractor(
     .unwrap();
     writeln!(out, "  }}\n").unwrap();
     out
+}
+
+/* For `<field>.<path>` where `field` is a type-ref and `path` names another
+field of the struct (see `IrBuilder::bind_context_args`), the path. */
+fn context_arg_path(resolved_type: &ResolvedType, binding: &TsParamBinding) -> Option<String> {
+    let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind else {
+        return None;
+    };
+    let (head, path) = binding.canonical.split_once('.')?;
+    let field = fields.iter().find(|f| f.name == head)?;
+    /* Also an array whose elements are enums tagged by this struct's field. */
+    if !matches!(
+        field.field_type.kind,
+        ResolvedTypeKind::TypeRef { .. } | ResolvedTypeKind::Array { .. }
+    ) {
+        return None;
+    }
+    let first = path.split('.').next()?;
+    fields
+        .iter()
+        .any(|f| f.name == first && f.name != head)
+        .then(|| path.to_string())
+}
+
+/* The struct field whose `payload_size` parameter `binding` is, when the
+scan measures that field (see `payload_field_kind`). */
+fn payload_size_field(
+    resolved_type: &ResolvedType,
+    type_lookup: &BTreeMap<String, ResolvedType>,
+    binding: &TsParamBinding,
+) -> Option<usize> {
+    let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind else {
+        return None;
+    };
+    let field_name = binding.canonical.strip_suffix(".payload_size")?;
+    let (idx, field) = fields
+        .iter()
+        .enumerate()
+        .find(|(_, f)| f.name == field_name)?;
+    is_measured_payload_field(resolved_type, field, type_lookup).then_some(idx)
+}
+
+/* Fields whose `<field>.payload_size` the TypeScript IR carries
+(`IrBuilder::for_typescript`) and the scan measures: unions with a
+variable-size variant (inline or by type-ref), non-tail enums with a variant
+sized by its own bytes, and jagged arrays. */
+pub(crate) fn is_measured_payload_field(
+    parent: &ResolvedType,
+    field: &ResolvedField,
+    type_lookup: &BTreeMap<String, ResolvedType>,
+) -> bool {
+    let ty = &field.field_type;
+    let variable_union = |t: &ResolvedType| {
+        matches!(t.kind, ResolvedTypeKind::Union { .. }) && matches!(t.size, Size::Variable(_))
+    };
+    match &ty.kind {
+        ResolvedTypeKind::Union { .. } => variable_union(ty),
+        ResolvedTypeKind::TypeRef { target_name, .. } => {
+            type_lookup.get(target_name).map_or(false, variable_union)
+        }
+        ResolvedTypeKind::Enum { .. } => {
+            let has_resolver_payload = parent
+                .dynamic_params
+                .get(&field.name)
+                .map_or(false, |refs| {
+                    refs.keys().any(|p| p.ends_with(".payload_size"))
+                });
+            !has_resolver_payload && is_self_sized(ty)
+        }
+        ResolvedTypeKind::Array {
+            element_type,
+            jagged,
+            ..
+        } => *jagged && matches!(element_type.size, Size::Variable(_)),
+        ResolvedTypeKind::Struct { .. } => matches!(ty.size, Size::Variable(_)),
+        _ => false,
+    }
+}
+
+/* A primitive read through struct field `field` (inline or a named struct)
+whose offset inside it is only known at run time: (field index, its path
+inside the field). The scan reads it while measuring the field. */
+fn resolve_nested_value(
+    resolved_type: &ResolvedType,
+    path: &str,
+    type_lookup: &BTreeMap<String, ResolvedType>,
+) -> Option<(usize, String)> {
+    let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind else {
+        return None;
+    };
+    let (head, rest) = path.split_once('.')?;
+    let (idx, field) = fields.iter().enumerate().find(|(_, f)| f.name == head)?;
+    let is_struct = match &field.field_type.kind {
+        ResolvedTypeKind::Struct { .. } => true,
+        ResolvedTypeKind::TypeRef { target_name, .. } => type_lookup
+            .get(target_name)
+            .map_or(false, |t| matches!(t.kind, ResolvedTypeKind::Struct { .. })),
+        _ => false,
+    };
+    (is_struct && !rest.is_empty()).then(|| (idx, rest.to_string()))
 }
 
 fn collect_derived_bindings(
@@ -836,6 +1053,8 @@ fn emit_sequential_scan(
             SequentialBindingKind::TypeRefDynamicParam { field_index, .. } => Some(*field_index),
             SequentialBindingKind::SizeDiscriminatedUnion { field_index, .. } => Some(*field_index),
             SequentialBindingKind::EnumTail { field_index } => Some(*field_index),
+            SequentialBindingKind::PayloadSize { field_index } => Some(*field_index),
+            SequentialBindingKind::NestedValue { field_index, .. } => Some(*field_index),
         })
         .max();
     let max_derived_index = derived_bindings
@@ -871,6 +1090,148 @@ fn emit_sequential_scan(
     emit_field_ref_prelude(class_name, field_ref_plans, &mut header);
     header.push_str(&body);
     out.push_str(&header);
+}
+
+/* Measure struct field `index` (inline or named) at the cursor, assigning its
+`NestedValue` and `PayloadSize` bindings, and advance past it. Returns false
+when the field cannot be measured. */
+fn emit_measured_struct_field(
+    out: &mut String,
+    field: &ResolvedField,
+    bindings: &[SequentialBinding],
+    index: usize,
+    type_lookup: &BTreeMap<String, ResolvedType>,
+    outer: BTreeMap<String, String>,
+) -> bool {
+    let nested: Vec<(&SequentialBinding, &String)> = bindings
+        .iter()
+        .filter_map(|binding| match &binding.kind {
+            SequentialBindingKind::NestedValue { field_index, key } if *field_index == index => {
+                Some((binding, key))
+            }
+            _ => None,
+        })
+        .collect();
+    let keys: Vec<String> = nested.iter().map(|(_, key)| (*key).clone()).collect();
+    let Some(f) = measure_values_fn(&field.field_type, type_lookup, &keys, outer) else {
+        return false;
+    };
+    let ident = format!("__tnNested_{}", escape_ts_keyword(&field.name));
+    writeln!(
+        out,
+        "    const {ident} = {f}(buffer.subarray(__tnCursorMutable));"
+    )
+    .unwrap();
+    writeln!(out, "    if ({ident} === null) return null;").unwrap();
+    for (binding, key) in nested {
+        writeln!(
+            out,
+            "    {} = {ident}.values[\"{}\"] ?? null;",
+            binding.value_ident, key
+        )
+        .unwrap();
+    }
+    emit_payload_bindings(out, bindings, index, &format!("{ident}.size"));
+    writeln!(out, "    __tnCursorMutable += {ident}.size;").unwrap();
+    true
+}
+
+/* The struct's primitive fields as the scan caches them, for measuring
+functions that reference them. */
+fn root_value_scope(resolved_type: &ResolvedType) -> BTreeMap<String, String> {
+    let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind else {
+        return BTreeMap::new();
+    };
+    let mut scope = BTreeMap::new();
+    for field in fields {
+        match &field.field_type.kind {
+            /* Integers only: they are what size and tag expressions read. */
+            ResolvedTypeKind::Primitive {
+                prim_type: PrimitiveType::Integral(_),
+            } => {
+                scope.insert(
+                    field.name.clone(),
+                    format!(
+                        "__tnU64(__tnToBigInt(__tnFieldValue_{} ?? 0))",
+                        escape_ts_keyword(&field.name)
+                    ),
+                );
+            }
+            /* Integers of inline structs at constant offsets (`first.count`). */
+            ResolvedTypeKind::Struct { .. } => {
+                if let Some(base) = field.offset {
+                    nested_value_scope(&field.field_type, &field.name, base, &mut scope);
+                }
+            }
+            _ => {}
+        }
+    }
+    scope
+}
+
+fn nested_value_scope(
+    ty: &ResolvedType,
+    prefix: &str,
+    base: u64,
+    scope: &mut BTreeMap<String, String>,
+) {
+    let ResolvedTypeKind::Struct { fields, .. } = &ty.kind else {
+        return;
+    };
+    for field in fields {
+        let Some(offset) = field.offset else {
+            return;
+        };
+        let key = format!("{prefix}.{}", field.name);
+        match &field.field_type.kind {
+            ResolvedTypeKind::Primitive {
+                prim_type: prim @ PrimitiveType::Integral(_),
+            } => {
+                let le = if needs_endianness_arg(prim) {
+                    ", true"
+                } else {
+                    ""
+                };
+                scope.insert(
+                    key,
+                    format!(
+                        "__tnU64(__tnToBigInt(view.{}({}{le})))",
+                        primitive_to_dataview_getter(prim),
+                        base + offset
+                    ),
+                );
+            }
+            ResolvedTypeKind::Struct { .. } => {
+                nested_value_scope(&field.field_type, &key, base + offset, scope)
+            }
+            _ => {}
+        }
+    }
+}
+
+/* Tags are switched on as exact u64 bigints (`case 9007199254740993n`): a
+JavaScript number rounds tags past 2^53. */
+
+/* Assign every `PayloadSize` binding of field `index` from `size_expr`. */
+fn emit_payload_bindings(
+    out: &mut String,
+    bindings: &[SequentialBinding],
+    index: usize,
+    size_expr: &str,
+) {
+    for binding in bindings.iter().filter(|binding| {
+        matches!(
+            &binding.kind,
+            SequentialBindingKind::PayloadSize { field_index } if *field_index == index
+        )
+    }) {
+        writeln!(
+            out,
+            "    {} = __tnToBigInt({});",
+            binding.value_ident, size_expr
+        )
+        .unwrap();
+    }
 }
 
 fn emit_sequential_field(
@@ -985,7 +1346,6 @@ fn emit_sequential_field(
                     .unwrap();
                 }
                 let mut derived_ref_vars = BTreeMap::new();
-                let mut has_bigint_refs = false;
                 for path in collect_field_ref_paths(&binding.expr) {
                     if path.len() <= 1 {
                         continue;
@@ -993,19 +1353,14 @@ fn emit_sequential_field(
                     if let Some(var) =
                         ensure_field_ref_plan(field_ref_plans, resolved_type, &path, type_lookup)
                     {
-                        // Check if this field ref returns bigint
-                        let key = path.join(".");
-                        if let Some(plan) = field_ref_plans.get(&key) {
-                            if plan.returns_bigint {
-                                has_bigint_refs = true;
-                            }
-                        }
-                        derived_ref_vars.insert(key, var);
+                        derived_ref_vars.insert(path.join("."), var);
                     } else {
                         writeln!(out, "    return null;").unwrap();
                         return;
                     }
                 }
+                /* Checked u64 arithmetic over bigints: an overflow (null) is
+                rejected, as C and Rust reject it, and never allocates. */
                 let mut resolver = |segments: &[String]| -> Option<String> {
                     if segments.is_empty() {
                         return None;
@@ -1015,40 +1370,37 @@ fn emit_sequential_field(
                             return None;
                         }
                         let ident = escape_ts_keyword(&segments[0]);
-                        return Some(format!("__tnFieldValue_{}", ident));
+                        return Some(format!(
+                            "__tnU64(__tnToBigInt(__tnFieldValue_{} as number | bigint))",
+                            ident
+                        ));
                     }
                     let key = segments.join(".");
-                    derived_ref_vars.get(&key).cloned()
+                    derived_ref_vars
+                        .get(&key)
+                        .map(|var| format!("__tnU64(__tnToBigInt({var}))"))
                 };
-                // Use bigint-aware expression generation when any field ref returns bigint.
-                // This is necessary because JavaScript's bitwise operators on Number are
-                // limited to 32 bits, which would truncate 64-bit field values.
-                let expr_ts = if has_bigint_refs {
-                    expr_to_ts_bigint_with_resolver(&binding.expr, &mut resolver)
-                } else {
-                    expr_to_ts_with_resolver(&binding.expr, &mut resolver)
-                };
-                let Some(expr_ts) = expr_ts else {
+                let Some(expr_ts) = expr_to_ts_bigint_with_resolver(&binding.expr, &mut resolver)
+                else {
                     writeln!(out, "    return null;").unwrap();
                     return;
                 };
-                // For bigint expressions, use Number() to convert the result to a number
-                // suitable for Math.trunc and the switch statement.
-                let expr_wrapped = if has_bigint_refs {
-                    format!("Number({})", expr_ts)
-                } else {
-                    expr_ts
-                };
                 writeln!(
                     out,
-                    "    const __tnEnumTagValue_{} = Math.trunc({});",
-                    field_ident, expr_wrapped
+                    "    const __tnEnumTagChecked_{} = {};",
+                    field_ident, expr_ts
                 )
                 .unwrap();
                 writeln!(
                     out,
-                    "    if (!Number.isFinite(__tnEnumTagValue_{})) return null;",
+                    "    if (__tnEnumTagChecked_{} === null) return null;",
                     field_ident
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "    const __tnEnumTagValue_{} = __tnEnumTagChecked_{};",
+                    field_ident, field_ident
                 )
                 .unwrap();
             } else {
@@ -1063,7 +1415,7 @@ fn emit_sequential_field(
             if all_const {
                 writeln!(
                     out,
-                    "    switch (Number(__tnEnumTagValue_{})) {{",
+                    "    switch (__tnToBigInt(__tnEnumTagValue_{})) {{",
                     field_ident
                 )
                 .unwrap();
@@ -1073,26 +1425,58 @@ fn emit_sequential_field(
                     };
                     writeln!(
                         out,
-                        "      case {}: __tnEnumSize_{} = {}; break;",
+                        "      case {}n: __tnEnumSize_{} = {}; break;",
                         variant.tag_value, field_ident, sz
                     )
                     .unwrap();
                 }
                 writeln!(out, "      default: return null;").unwrap();
                 writeln!(out, "    }}").unwrap();
-            } else {
-                if !enum_info.is_tail {
-                    writeln!(out, "    return null;").unwrap();
-                    return;
+            } else if !enum_info.is_tail {
+                /* Measure the active variant at the payload offset. */
+                let mut cases = String::new();
+                for variant in enum_info.variants {
+                    let size = match variant.variant_type.size {
+                        Size::Const(sz) => sz.to_string(),
+                        Size::Variable(_) => {
+                            let Some(f) = measure_fn_scoped(
+                                &variant.variant_type,
+                                type_lookup,
+                                root_value_scope(resolved_type),
+                            ) else {
+                                panic!(
+                                    "TypeScript codegen cannot measure field '{}' of '{}'",
+                                    field.name, resolved_type.name
+                                );
+                            };
+                            format!("{f}(buffer.subarray(__tnCursorMutable))")
+                        }
+                    };
+                    writeln!(
+                        cases,
+                        "      case {}n: {{ const size = {size}; if (size === null) return null; __tnEnumSize_{} = size; break; }}",
+                        variant.tag_value, field_ident
+                    )
+                    .unwrap();
                 }
                 writeln!(
                     out,
-                    "    switch (Number(__tnEnumTagValue_{})) {{",
+                    "    switch (__tnToBigInt(__tnEnumTagValue_{})) {{",
+                    field_ident
+                )
+                .unwrap();
+                out.push_str(&cases);
+                writeln!(out, "      default: return null;").unwrap();
+                writeln!(out, "    }}").unwrap();
+            } else {
+                writeln!(
+                    out,
+                    "    switch (__tnToBigInt(__tnEnumTagValue_{})) {{",
                     field_ident
                 )
                 .unwrap();
                 for variant in enum_info.variants {
-                    writeln!(out, "      case {}: break;", variant.tag_value).unwrap();
+                    writeln!(out, "      case {}n: break;", variant.tag_value).unwrap();
                 }
                 writeln!(out, "      default: return null;").unwrap();
                 writeln!(out, "    }}").unwrap();
@@ -1111,7 +1495,7 @@ fn emit_sequential_field(
             if needs_offset {
                 writeln!(out, "    offsets[\"{}\"] = __tnCursorMutable;", field.name).unwrap();
             }
-            if all_const {
+            if all_const || !enum_info.is_tail {
                 writeln!(
                     out,
                     "    if (__tnCursorMutable + __tnEnumSize_{} > __tnLength) return null;",
@@ -1155,6 +1539,12 @@ fn emit_sequential_field(
                 )
                 .unwrap();
             }
+            emit_payload_bindings(
+                out,
+                bindings,
+                index,
+                &format!("__tnEnumSize_{}", field_ident),
+            );
         }
         ResolvedTypeKind::Array {
             element_type,
@@ -1185,12 +1575,26 @@ fn emit_sequential_field(
                 writeln!(out, "    __tnCursorMutable += {};", sz).unwrap();
             }
             Size::Variable(_) => {
-                let Some(element_size) = (match element_type.size {
-                    Size::Const(val) => Some(val),
-                    _ => None,
-                }) else {
-                    writeln!(out, "    return null;").unwrap();
-                    return;
+                /* Variable-size elements (jagged arrays) are measured one by one. */
+                let element_measure = match element_type.size {
+                    Size::Const(_) => None,
+                    Size::Variable(_) => match measure_fn_scoped(
+                        element_type,
+                        type_lookup,
+                        root_value_scope(resolved_type),
+                    ) {
+                        Some(f) => Some(f),
+                        None => {
+                            panic!(
+                                "TypeScript codegen cannot measure field '{}' of '{}'",
+                                field.name, resolved_type.name
+                            );
+                        }
+                    },
+                };
+                let element_size = match element_type.size {
+                    Size::Const(val) => val,
+                    Size::Variable(_) => 0,
                 };
                 if !packed {
                     let align = field.field_type.alignment.max(1);
@@ -1205,6 +1609,11 @@ fn emit_sequential_field(
                 }
                 let references = collect_field_value_refs(size_expression);
                 for reference in &references {
+                    /* Nested paths (e.g. hdr.count) are read through field-ref
+                    plans below; only direct primitive fields are cached. */
+                    if !struct_has_primitive_field(resolved_type, reference) {
+                        continue;
+                    }
                     let ident = escape_ts_keyword(reference);
                     writeln!(
                         out,
@@ -1213,29 +1622,103 @@ fn emit_sequential_field(
                     )
                     .unwrap();
                 }
-                let Some(count_expr) = sequential_size_expression(size_expression) else {
+                let mut nested_ref_vars = BTreeMap::new();
+                for path in collect_field_ref_paths(size_expression) {
+                    if path.len() <= 1 {
+                        continue;
+                    }
+                    let var =
+                        ensure_field_ref_plan(field_ref_plans, resolved_type, &path, type_lookup)
+                            .or_else(|| {
+                                /* A value after variable-size data in an earlier struct
+                                field, read when the scan measured that field. */
+                                let (field_index, key) = resolve_nested_value(
+                                    resolved_type,
+                                    &path.join("."),
+                                    type_lookup,
+                                )?;
+                                let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind
+                                else {
+                                    return None;
+                                };
+                                let measured = bindings.iter().any(|binding| {
+                                matches!(
+                                    &binding.kind,
+                                    SequentialBindingKind::NestedValue { field_index: i, key: k }
+                                        if *i == field_index && *k == key
+                                )
+                            });
+                                (measured && field_index < index).then(|| {
+                                    format!(
+                                        "__tnNested_{}.values[\"{}\"]",
+                                        escape_ts_keyword(&fields[field_index].name),
+                                        key
+                                    )
+                                })
+                            });
+                    let Some(var) = var else {
+                        writeln!(out, "    return null;").unwrap();
+                        return;
+                    };
+                    nested_ref_vars.insert(path.join("."), var);
+                }
+                /* The count in checked u64 (as C and Rust: signed fields read
+                as their two's complement, `&&` / `||` short-circuit, distinct
+                values past 2^53 stay distinct); only byte totals that fit
+                the buffer become numbers. */
+                let mut resolver = |segments: &[String]| -> Option<String> {
+                    match segments {
+                        [] => None,
+                        [head] if head == "__buffer_size" => {
+                            Some("__tnToBigInt(__tnLength)".to_string())
+                        }
+                        [head] => Some(format!(
+                            "__tnU64(__tnToBigInt(__tnFieldValue_{} as number | bigint))",
+                            escape_ts_keyword(head)
+                        )),
+                        _ => nested_ref_vars
+                            .get(&segments.join("."))
+                            .map(|var| format!("__tnU64(__tnToBigInt({var}))")),
+                    }
+                };
+                let Some(count_expr) =
+                    expr_to_ts_bigint_with_resolver(size_expression, &mut resolver)
+                else {
                     writeln!(out, "    return null;").unwrap();
                     return;
                 };
                 let array_ident = format!("__tnArrayCount_{}", field_ident);
-                writeln!(
+                writeln!(out, "    const {array_ident} = {count_expr};").unwrap();
+                writeln!(out, "    if ({array_ident} === null) return null;").unwrap();
+                if let Some(f) = &element_measure {
+                    writeln!(
+                        out,
+                        "    let __tnArrayBytes_{field_ident} = 0;\n    {{\n      const measure = {f};\n      for (let i = BigInt(0); i < {array_ident}; i++) {{\n        const size = measure(buffer.subarray(__tnCursorMutable + __tnArrayBytes_{field_ident}));\n        if (size === null) return null;\n        if (size === 0) break; /* zero-byte elements: one stands for all */\n        __tnArrayBytes_{field_ident} += size;\n      }}\n    }}"
+                    )
+                    .unwrap();
+                } else {
+                    writeln!(
+                        out,
+                        "    const __tnArrayBytesBig_{field_ident} = {array_ident} * BigInt({element_size});"
+                    )
+                    .unwrap();
+                    writeln!(
+                        out,
+                        "    if (BigInt(__tnCursorMutable) + __tnArrayBytesBig_{field_ident} > BigInt(__tnLength)) return null;"
+                    )
+                    .unwrap();
+                    writeln!(
+                        out,
+                        "    const __tnArrayBytes_{field_ident} = Number(__tnArrayBytesBig_{field_ident});"
+                    )
+                    .unwrap();
+                }
+                emit_payload_bindings(
                     out,
-                    "    const {} = Math.trunc({});",
-                    array_ident, count_expr
-                )
-                .unwrap();
-                writeln!(
-                    out,
-                    "    if (!Number.isFinite({}) || {} < 0) return null;",
-                    array_ident, array_ident
-                )
-                .unwrap();
-                writeln!(
-                    out,
-                    "    const __tnArrayBytes_{} = {} * {};",
-                    field_ident, array_ident, element_size
-                )
-                .unwrap();
+                    bindings,
+                    index,
+                    &format!("__tnArrayBytes_{}", field_ident),
+                );
                 if needs_offset {
                     writeln!(out, "    offsets[\"{}\"] = __tnCursorMutable;", field.name).unwrap();
                 }
@@ -1345,6 +1828,33 @@ fn emit_sequential_field(
                         .unwrap();
                     }
                 }
+                emit_payload_bindings(
+                    out,
+                    bindings,
+                    index,
+                    &format!("__tnTyperefResult_{}.consumed", field_ident),
+                );
+                if bindings.iter().any(|binding| {
+                    matches!(
+                        &binding.kind,
+                        SequentialBindingKind::NestedValue { field_index, .. } if *field_index == index
+                    )
+                }) {
+                    /* Values after variable-size data inside the named type. */
+                    let start = format!("__tnTyperefStart_{}", field_ident);
+                    writeln!(out, "    const {start} = __tnCursorMutable;").unwrap();
+                    if !emit_measured_struct_field(
+                out,
+                field,
+                bindings,
+                index,
+                type_lookup,
+                root_value_scope(resolved_type),
+            ) {
+                        panic!("TypeScript codegen cannot measure field '{}' of '{}'", field.name, resolved_type.name);
+                    }
+                    writeln!(out, "    __tnCursorMutable = {start};").unwrap();
+                }
                 writeln!(
                     out,
                     "    __tnCursorMutable += __tnBigIntToNumber(__tnTyperefResult_{}.consumed, \"{}::{}\");",
@@ -1419,6 +1929,83 @@ fn emit_sequential_field(
             }
             writeln!(out, "    __tnCursorMutable += __tnSduSize_{};", field_ident).unwrap();
         }
+        ResolvedTypeKind::Struct { .. } if matches!(field.field_type.size, Size::Variable(_)) => {
+            if !packed {
+                let align = field.field_type.alignment.max(1);
+                if align > 1 {
+                    writeln!(
+                        out,
+                        "    if ((__tnCursorMutable % {}) !== 0) {{ __tnCursorMutable += {} - (__tnCursorMutable % {}); }}",
+                        align, align, align
+                    )
+                    .unwrap();
+                }
+            }
+            if needs_offset {
+                writeln!(out, "    offsets[\"{}\"] = __tnCursorMutable;", field.name).unwrap();
+            }
+            if !emit_measured_struct_field(
+                out,
+                field,
+                bindings,
+                index,
+                type_lookup,
+                root_value_scope(resolved_type),
+            ) {
+                panic!(
+                    "TypeScript codegen cannot measure field '{}' of '{}'",
+                    field.name, resolved_type.name
+                );
+            }
+        }
+        ResolvedTypeKind::Union { .. } if matches!(field.field_type.size, Size::Variable(_)) => {
+            if !packed {
+                let align = field.field_type.alignment.max(1);
+                if align > 1 {
+                    writeln!(
+                        out,
+                        "    if ((__tnCursorMutable % {}) !== 0) {{ __tnCursorMutable += {} - (__tnCursorMutable % {}); }}",
+                        align, align, align
+                    )
+                    .unwrap();
+                }
+            }
+            if needs_offset {
+                writeln!(out, "    offsets[\"{}\"] = __tnCursorMutable;", field.name).unwrap();
+            }
+            /* The struct's integers the union's variants may read (`..`). */
+            let ctx = root_value_scope(resolved_type)
+                .iter()
+                .map(|(key, value)| format!("\"{key}\": {value}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            writeln!(
+                out,
+                "    const __tnUnionSize_{} = {}.__tnMeasure(buffer.subarray(__tnCursorMutable), {{ {} }});",
+                field_ident,
+                generated_type_ident(&field.field_type.name),
+                ctx
+            )
+            .unwrap();
+            writeln!(
+                out,
+                "    if (__tnUnionSize_{} === null) return null;",
+                field_ident
+            )
+            .unwrap();
+            emit_payload_bindings(
+                out,
+                bindings,
+                index,
+                &format!("__tnUnionSize_{}", field_ident),
+            );
+            writeln!(
+                out,
+                "    __tnCursorMutable += __tnUnionSize_{};",
+                field_ident
+            )
+            .unwrap();
+        }
         _ => {
             if let Size::Const(sz) = field.field_type.size {
                 if !packed {
@@ -1443,7 +2030,10 @@ fn emit_sequential_field(
                 .unwrap();
                 writeln!(out, "    __tnCursorMutable += {};", sz).unwrap();
             } else {
-                writeln!(out, "    return null;").unwrap();
+                panic!(
+                    "TypeScript codegen cannot measure field '{}' of '{}'",
+                    field.name, resolved_type.name
+                );
             }
         }
     }

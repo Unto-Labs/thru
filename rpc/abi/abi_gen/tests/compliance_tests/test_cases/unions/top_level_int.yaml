@@ -1,0 +1,7 @@
+test-case:
+  name: "unions_top_level_int"
+  abi-file: "../../abi_definitions/unions.abi.yaml"
+  type: "SimpleUnion"
+  description: "Top-level 4-byte union holding i32 42"
+  tags: ["unions", "top-level"]
+  binary-hex: "2a000000"

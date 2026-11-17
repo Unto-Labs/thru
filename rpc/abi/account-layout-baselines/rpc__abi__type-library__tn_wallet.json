@@ -1,0 +1,238 @@
+{
+  "abi": "rpc/abi/type-library/tn_wallet.abi.yaml",
+  "account_root": "WalletProgramAccount",
+  "values": {
+    "1": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "num_auth",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  },
+                  {
+                    "name": "nonce",
+                    "offset": 1,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "authorities",
+                    "offset": 9,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "layout": {
+                                "alignment": 1,
+                                "kind": {
+                                  "struct": {
+                                    "aligned": null,
+                                    "fields": [
+                                      {
+                                        "name": "authority",
+                                        "offset": 0,
+                                        "type": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "layout": {
+                                              "alignment": 1,
+                                              "kind": {
+                                                "struct": {
+                                                  "aligned": null,
+                                                  "fields": [
+                                                    {
+                                                      "name": "tag",
+                                                      "offset": 0,
+                                                      "type": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "primitive": "Integral(U8)"
+                                                        },
+                                                        "size": 1
+                                                      }
+                                                    },
+                                                    {
+                                                      "name": "data",
+                                                      "offset": 1,
+                                                      "type": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "array": {
+                                                            "element": {
+                                                              "alignment": 1,
+                                                              "kind": {
+                                                                "primitive": "Integral(U8)"
+                                                              },
+                                                              "size": 1
+                                                            },
+                                                            "jagged": false,
+                                                            "size": {
+                                                              "literal": {
+                                                                "u64": 64
+                                                              }
+                                                            }
+                                                          }
+                                                        },
+                                                        "size": 64
+                                                      }
+                                                    }
+                                                  ],
+                                                  "packed": true
+                                                }
+                                              },
+                                              "size": 65
+                                            },
+                                            "ref": "Authority"
+                                          },
+                                          "size": 65
+                                        }
+                                      },
+                                      {
+                                        "name": "expires_at_block_time_seconds",
+                                        "offset": 65,
+                                        "type": {
+                                          "alignment": 8,
+                                          "kind": {
+                                            "primitive": "Integral(U64)"
+                                          },
+                                          "size": 8
+                                        }
+                                      }
+                                    ],
+                                    "packed": true
+                                  }
+                                },
+                                "size": 73
+                              },
+                              "ref": "AuthorityRecord"
+                            },
+                            "size": 73
+                          },
+                          "jagged": false,
+                          "size": {
+                            "add": {
+                              "left": {
+                                "field-ref": {
+                                  "path": [
+                                    "num_auth"
+                                  ]
+                                }
+                              },
+                              "right": {
+                                "literal": {
+                                  "u64": 1
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "size": "variable"
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": "variable"
+          },
+          "ref": "WalletAccount"
+        },
+        "size": "variable"
+      },
+      "variant": "wallet_v1"
+    },
+    "2": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "wallet",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 32
+          },
+          "ref": "CredentialLookup"
+        },
+        "size": 32
+      },
+      "variant": "credential_lookup_v1"
+    }
+  }
+}

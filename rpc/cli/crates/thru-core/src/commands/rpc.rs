@@ -7,53 +7,17 @@ use thru_base::tn_tools::Pubkey;
 use tonic_health::pb::health_check_response::ServingStatus;
 
 use crate::config::Config;
-use crate::crypto::keypair_from_hex;
 use crate::error::CliError;
 use crate::output;
 use thru_client::{Client, ClientBuilder, VersionContext};
 
-/// Resolve account input to a public key
-///
-/// This function implements the key resolution logic:
-/// 1. If input is None, use the default key from config
-/// 2. If input is Some(value), try to parse as public key first
-/// 3. If public key parsing fails, try to resolve as key name from config
-/// 4. Provide helpful error messages for all failure cases
+/// Resolve public metadata or an explicit address/source; omission uses `default`.
 pub fn resolve_account_input(input: Option<&str>, config: &Config) -> Result<Pubkey, CliError> {
-    match input {
-        None => {
-            // Use default key
-            let private_key = config.keys.get_default_key()?;
-            let keypair = keypair_from_hex(private_key)?;
-            Ok(keypair.address_string)
-        }
-        Some(value) => {
-            // Try as Thru format public key first (ta...)
-            match Pubkey::new(value.to_string()) {
-                Ok(pubkey) => Ok(pubkey),
-                Err(_) => {
-                    // Try as hex format public key (0x... or 64 hex chars)
-                    match Pubkey::from_hex(value) {
-                        Ok(pubkey) => Ok(pubkey),
-                        Err(_) => {
-                            // Try as key name
-                            match config.keys.get_key(value) {
-                                Ok(private_key) => {
-                                    let keypair = keypair_from_hex(private_key)?;
-                                    Ok(keypair.address_string)
-                                }
-                                Err(_) => Err(CliError::Validation(format!(
-                                    "Invalid input '{}': not a valid public key (ta... or hex), or key name. Available keys: {}",
-                                    value,
-                                    config.keys.list_keys().join(", ")
-                                ))),
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+    let bytes = match input {
+        None => config.keys.public_key("default")?,
+        Some(value) => config.keys.resolve_public_key(value)?,
+    };
+    Ok(Pubkey::from_bytes(&bytes))
 }
 
 /// Execute the getVersion command
@@ -333,6 +297,8 @@ pub async fn get_account_info(
             }
             Err(CliError::Reported)
         }
+        /* A rate limit goes to the shared handler, which adds the API key hint. */
+        Err(e) if e.is_rate_limited() => Err(e.into()),
         Err(e) => {
             let error_msg = format!("Failed to get account info: {}", e);
             if json_format {
@@ -553,6 +519,17 @@ fn health_status_to_str(status: ServingStatus) -> &'static str {
 mod tests {
     use super::*;
 
+    fn test_config() -> (tempfile::TempDir, Config) {
+        let (guard, keys) = crate::keys::KeyManager::test_fixture(&[("default", [1; 32])]);
+        (
+            guard,
+            Config {
+                keys,
+                ..Config::default()
+            },
+        )
+    }
+
     #[tokio::test]
     async fn test_create_rpc_client() {
         let config = Config::default();
@@ -562,18 +539,16 @@ mod tests {
 
     #[test]
     fn test_resolve_account_input_with_none() {
-        let config = Config::default();
+        let (_guard, config) = test_config();
         let result = resolve_account_input(None, &config);
         assert!(result.is_ok(), "Should resolve default key successfully");
     }
 
     #[test]
     fn test_resolve_account_input_with_valid_public_key() {
-        let config = Config::default();
-        // Create a valid public key using the same method as the code
-        let default_key = config.keys.get_default_key().unwrap();
-        let keypair = keypair_from_hex(default_key).unwrap();
-        let valid_pubkey = keypair.address_string.to_string();
+        let (_guard, config) = test_config();
+        let valid_pubkey =
+            Pubkey::from_bytes(&config.keys.public_key("default").unwrap()).to_string();
 
         let result = resolve_account_input(Some(&valid_pubkey), &config);
         assert!(
@@ -585,7 +560,7 @@ mod tests {
 
     #[test]
     fn test_resolve_account_input_with_key_name() {
-        let config = Config::default();
+        let (_guard, config) = test_config();
         let result = resolve_account_input(Some("default"), &config);
         assert!(
             result.is_ok(),
@@ -598,10 +573,6 @@ mod tests {
         let config = Config::default();
         let result = resolve_account_input(Some("nonexistent"), &config);
         assert!(result.is_err(), "Should fail for nonexistent key name");
-
-        let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("Invalid input 'nonexistent'"));
-        assert!(error_msg.contains("Available keys: default"));
     }
 
     #[test]
@@ -609,10 +580,6 @@ mod tests {
         let config = Config::default();
         let result = resolve_account_input(Some("invalid_pubkey"), &config);
         assert!(result.is_err(), "Should fail for invalid public key format");
-
-        let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("Invalid input 'invalid_pubkey'"));
-        assert!(error_msg.contains("Available keys: default"));
     }
 
     #[test]

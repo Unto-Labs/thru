@@ -7,9 +7,9 @@ import { Pubkey } from '@thru/sdk';
    indexer, createPerpsClient) starts from one. */
 
 export interface PerpDeploymentQuoteMint {
-  /** Ticker, e.g. THRUSD. Markets reference it through `quoteSymbol`. */
+  /** Ticker, e.g. UUSD. Markets reference it through `quoteSymbol`. */
   symbol: string;
-  /** Display name, e.g. "Thru USD". */
+  /** Display name, e.g. "Unto USD". */
   name: string;
   /** Currency glyph for the UI, e.g. "$". */
   glyph: string;
@@ -25,7 +25,7 @@ export interface PerpDeploymentQuoteMint {
 }
 
 export interface PerpDeploymentMarket {
-  /** e.g. BTC-THRUSD */
+  /** e.g. BTC-UUSD */
   symbol: string;
   baseSymbol: string;
   quoteSymbol: string;

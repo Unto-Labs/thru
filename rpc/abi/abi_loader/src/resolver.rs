@@ -1,8 +1,17 @@
-use abi_types::TypeDef;
-use std::collections::HashSet;
+use abi_types::{TypeDef, TypeKind};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 
 use crate::file::{AbiFile, ImportSource};
+
+/// A declaration is identified by its canonical source and position, not its layout.
+#[derive(Debug, Clone)]
+pub struct Declaration {
+    pub package: String,
+    pub name: String,
+    pub source: PathBuf,
+    pub ordinal: usize,
+}
 
 /* Import resolver for loading and merging imported ABI files */
 pub struct ImportResolver {
@@ -18,8 +27,9 @@ pub struct ImportResolver {
     /* All loaded ABI files */
     all_files: Vec<AbiFile>,
 
-    /* Map from package name to list of types in that package */
-    package_types: std::collections::HashMap<String, Vec<String>>,
+    /* Provenance stays aligned with all_types, including through diamond imports. */
+    declarations: Vec<Declaration>,
+    package_types: BTreeMap<String, Vec<String>>,
 }
 
 impl ImportResolver {
@@ -30,7 +40,8 @@ impl ImportResolver {
             include_dirs,
             all_types: Vec::new(),
             all_files: Vec::new(),
-            package_types: std::collections::HashMap::new(),
+            declarations: Vec::new(),
+            package_types: BTreeMap::new(),
         }
     }
 
@@ -160,6 +171,18 @@ impl ImportResolver {
             .collect();
 
         self.all_types.extend(abi_file.get_types().to_vec());
+        self.declarations.extend(
+            abi_file
+                .get_types()
+                .iter()
+                .enumerate()
+                .map(|(ordinal, ty)| Declaration {
+                    package: package_name.clone(),
+                    name: ty.name.clone(),
+                    source: canonical_path.clone(),
+                    ordinal,
+                }),
+        );
 
         /* Register types with their package */
         self.package_types
@@ -175,7 +198,7 @@ impl ImportResolver {
             .iter()
             .any(|i| !matches!(i, ImportSource::Path { .. }));
         if has_remote_imports && !skip_remote {
-            let needed_packages = Self::extract_referenced_packages(&contents, &package_name);
+            let needed_packages = Self::extract_referenced_packages(&abi_file);
             if !needed_packages.is_empty() {
                 let unresolved: Vec<String> = needed_packages
                     .iter()
@@ -191,7 +214,9 @@ impl ImportResolver {
                         );
                     }
 
-                    /* Build a map of package → file path from sibling directories */
+                    /* Gather every matching canonical source before loading any.
+                    Never choose a package by directory iteration's first winner. */
+                    let mut candidates: BTreeMap<String, BTreeSet<PathBuf>> = BTreeMap::new();
                     let mut scan_dirs: Vec<PathBuf> = Vec::new();
                     if let Some(parent) = file_path.parent() {
                         scan_dirs.push(parent.to_path_buf());
@@ -231,37 +256,24 @@ impl ImportResolver {
                                     None => continue,
                                 };
 
-                                /* Check against both the original unresolved set and the
-                                live package_types (a sibling loaded earlier in this scan
-                                may have already provided this package). */
-                                if !unresolved.contains(&sibling_package)
-                                    || self.package_types.contains_key(&sibling_package)
-                                {
-                                    continue;
-                                }
-
-                                if verbose {
-                                    println!(
-                                        "    [~] Auto-loading sibling {} for package '{}'",
-                                        path.display(),
-                                        sibling_package
-                                    );
-                                }
-
-                                if let Err(e) = self.load_file_with_imports_internal(
-                                    &path, verbose,
-                                    true, /* skip_remote to prevent cascading */
-                                ) {
-                                    if verbose {
-                                        println!(
-                                            "    [~] Skipping sibling {}: {}",
-                                            path.display(),
-                                            e
-                                        );
-                                    }
+                                if unresolved.contains(&sibling_package) {
+                                    candidates
+                                        .entry(sibling_package)
+                                        .or_default()
+                                        .insert(path.canonicalize()?);
                                 }
                             }
                         }
+                    }
+                    for (package, paths) in candidates {
+                        if paths.len() != 1 {
+                            anyhow::bail!("Ambiguous local sources for package '{}'", package);
+                        }
+                        self.load_file_with_imports_internal(
+                            paths.iter().next().unwrap(),
+                            verbose,
+                            true,
+                        )?;
                     }
                 }
             }
@@ -290,65 +302,151 @@ impl ImportResolver {
         self.loaded_files.len()
     }
 
-    /* Resolve a type name which may be FQDN or simple name */
-    pub fn resolve_type_name(&self, type_name: &str) -> Option<String> {
-        /* If it contains a dot, it's potentially an FQDN */
-        if type_name.contains('.') {
-            /* Try to find the type by FQDN */
-            /* Format: package.name.TypeName or just TypeName */
-            let parts: Vec<&str> = type_name.split('.').collect();
-            if parts.len() < 2 {
-                /* Not a valid FQDN, return as-is */
-                return Some(type_name.to_string());
+    /// Resolve exact package/type identity. None means no local declaration.
+    pub fn resolve_type_reference(
+        &self,
+        name: &str,
+        package: Option<&str>,
+    ) -> anyhow::Result<Option<String>> {
+        let (dotted_package, simple) = match name.rsplit_once('.') {
+            Some((qualifier, simple)) => (Some(qualifier), simple),
+            None => (None, name),
+        };
+        if let (Some(dotted), Some(separate)) = (dotted_package, package) {
+            if dotted != separate {
+                anyhow::bail!(
+                    "Conflicting qualifiers '{}' and '{}' for '{}'",
+                    dotted,
+                    separate,
+                    name
+                );
             }
+        }
+        let qualifier = package.or(dotted_package);
+        let mut matches = self
+            .declarations
+            .iter()
+            .filter(|decl| decl.name == simple && qualifier.map_or(true, |q| q == decl.package));
+        let first = matches.next();
+        if matches.next().is_some() {
+            anyhow::bail!("Ambiguous type reference '{}'", name);
+        }
+        Ok(first.map(|decl| decl.name.clone()))
+    }
 
-            /* The last part is the type name */
-            let simple_name = parts[parts.len() - 1];
+    pub fn resolve_type_name(&self, name: &str) -> anyhow::Result<Option<String>> {
+        self.resolve_type_reference(name, None)
+    }
 
-            /* Try to match package prefixes */
-            for (package, types) in &self.package_types {
-                if type_name.starts_with(package) && types.contains(&simple_name.to_string()) {
-                    return Some(simple_name.to_string());
+    /// Reject distinct declarations before any qualification is erased.
+    pub fn validate_flattened_names(&self) -> anyhow::Result<()> {
+        let mut names: BTreeMap<&str, Vec<&Declaration>> = BTreeMap::new();
+        for decl in &self.declarations {
+            names.entry(&decl.name).or_default().push(decl);
+        }
+        for (name, declarations) in names {
+            if declarations.len() > 1 {
+                // Relative canonical provenance distinguishes same-basename files
+                // without leaking a checkout-specific absolute prefix.
+                let mut common = declarations[0].source.parent().unwrap_or(Path::new("/"));
+                for declaration in &declarations {
+                    while !declaration.source.starts_with(common) {
+                        common = common.parent().unwrap_or(Path::new("/"));
+                    }
                 }
+                let mut identities: Vec<_> = declarations
+                    .iter()
+                    .map(|decl| {
+                        format!(
+                            "{}.{} ({} declaration {})",
+                            decl.package,
+                            decl.name,
+                            decl.source.strip_prefix(common).unwrap().display(),
+                            decl.ordinal,
+                        )
+                    })
+                    .collect();
+                identities.sort();
+                anyhow::bail!(
+                    "Conflicting declarations for simple name '{}': {}",
+                    name,
+                    identities.join(", ")
+                );
             }
-
-            /* Not found by FQDN, maybe it's just a simple name with dots */
-            Some(type_name.to_string())
-        } else {
-            /* Simple name, return as-is */
-            Some(type_name.to_string())
         }
+        Ok(())
     }
 
-    /* Get the package name for a given type */
+    pub fn declarations(&self) -> &[Declaration] {
+        &self.declarations
+    }
+
+    pub fn has_local_qualifier(&self, qualifier: &str) -> bool {
+        self.package_types.contains_key(qualifier)
+    }
+
+    /* A name without exactly one declaration has no unique package. */
     pub fn get_package_for_type(&self, type_name: &str) -> Option<String> {
-        for (package, types) in &self.package_types {
-            if types.contains(&type_name.to_string()) {
-                return Some(package.clone());
-            }
-        }
-        None
+        self.package_for_type(type_name).map(str::to_owned)
     }
 
-    /* Get all packages */
+    pub(crate) fn package_for_type(&self, type_name: &str) -> Option<&str> {
+        let mut matches = self
+            .declarations
+            .iter()
+            .filter(|decl| decl.name == type_name);
+        let first = matches.next()?;
+        if matches.next().is_some() {
+            return None;
+        }
+        Some(&first.package)
+    }
+
     pub fn get_packages(&self) -> Vec<String> {
         self.package_types.keys().cloned().collect()
     }
 
-    /* Extract packages referenced by type-refs in the raw YAML content.
-    Scans for `package:` lines (used in type-ref definitions) and returns
-    unique package names excluding the file's own package. */
-    fn extract_referenced_packages(contents: &str, own_package: &str) -> Vec<String> {
-        let mut packages = HashSet::new();
-        for line in contents.lines() {
-            let trimmed = line.trim();
-            if let Some(rest) = trimmed.strip_prefix("package:") {
-                let value = rest.trim().trim_matches('"').trim_matches('\'');
-                if !value.is_empty() && value != own_package {
-                    packages.insert(value.to_string());
+    fn extract_referenced_packages(file: &AbiFile) -> Vec<String> {
+        fn visit(kind: &TypeKind, packages: &mut BTreeSet<String>) {
+            match kind {
+                TypeKind::TypeRef(reference) => {
+                    if let Some(package) = reference
+                        .package
+                        .as_deref()
+                        .or_else(|| reference.name.rsplit_once('.').map(|(package, _)| package))
+                    {
+                        packages.insert(package.to_owned());
+                    }
                 }
+                TypeKind::Struct(value) => {
+                    for field in &value.fields {
+                        visit(&field.field_type, packages);
+                    }
+                }
+                TypeKind::Union(value) => {
+                    for variant in &value.variants {
+                        visit(&variant.variant_type, packages);
+                    }
+                }
+                TypeKind::Enum(value) => {
+                    for variant in &value.variants {
+                        visit(&variant.variant_type, packages);
+                    }
+                }
+                TypeKind::SizeDiscriminatedUnion(value) => {
+                    for variant in &value.variants {
+                        visit(&variant.variant_type, packages);
+                    }
+                }
+                TypeKind::Array(value) => visit(&value.element_type, packages),
+                TypeKind::Primitive(_) => {}
             }
         }
+        let mut packages = BTreeSet::new();
+        for ty in file.get_types() {
+            visit(&ty.kind, &mut packages);
+        }
+        packages.remove(file.package());
         packages.into_iter().collect()
     }
 

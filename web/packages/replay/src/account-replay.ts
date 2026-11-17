@@ -323,7 +323,7 @@ export interface AccountsByOwnerReplayOptions {
   /** Account view for GetAccount calls (default: FULL for complete data) */
   view?: AccountView;
 
-  /** Optional data sizes to filter (e.g., [73, 115] for TokenAccount and MintAccount) */
+  /** Optional data sizes to prefilter (e.g., [74, 116] for token accounts and mints). Size does not identify an account kind; decode byte 0 (the account type) through the program's ABI root. */
   dataSizes?: number[];
 
   /** Minimum last_updated_slot for resumable backfill (resume from checkpoint) */
@@ -499,7 +499,7 @@ function buildListAccountsOwnerFilter(
  * for await (const event of createAccountsByOwnerReplay({
  *   client,
  *   owner: TOKEN_PROGRAM_ID,
- *   dataSizes: [73, 115], // TokenAccount, MintAccount
+ *   dataSizes: [74, 116], // token accounts, mints
  *   minUpdatedSlot: checkpoint.lastProcessedSlot, // Resume from checkpoint
  *   onBackfillComplete: (slot) => console.log(`Backfill queue drained at slot ${slot}`),
  * })) {

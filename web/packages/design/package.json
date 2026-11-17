@@ -12,7 +12,6 @@
       "types": "./tokens/src/index.ts",
       "import": "./tokens/src/index.ts"
     },
-    "./assets/thrusd.svg": "./assets/thrusd.svg",
     "./tokens/css": "./tokens/src/all.css",
     "./tokens/neutral.css": "./tokens/src/neutral.css",
     "./tokens/tokens.css": "./tokens/src/tokens.css",
@@ -37,11 +36,12 @@
     "tokens/src",
     "web/src",
     "mobile/src",
-    "assets/thrusd.svg",
     "assets/brand",
     "fonts"
   ],
   "scripts": {
+    "test": "vitest run --dir web/src",
+    "test:run": "vitest run --dir web/src",
     "typecheck": "tsc --noEmit && tsc --noEmit -p mobile/tsconfig.json"
   },
   "dependencies": {

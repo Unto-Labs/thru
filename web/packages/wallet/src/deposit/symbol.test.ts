@@ -11,9 +11,9 @@ import { DepositTarget, ThruNetwork } from "../protocol/postMessage";
 
 describe("deposit symbol normalization", () => {
   it("prefixes dollar amounts while preserving signs, precision, and other tokens", () => {
-    expect(formatTokenAmountLabel("1,250.00", "THRUSD")).toBe("$1,250.00");
+    expect(formatTokenAmountLabel("1,250.00", "UUSD")).toBe("$1,250.00");
     expect(formatTokenAmountLabel("+25.00", "$")).toBe("+$25.00");
-    expect(formatTokenAmountLabel("-0.50", "ThruUSD")).toBe("-$0.50");
+    expect(formatTokenAmountLabel("-0.50", "UUSD")).toBe("-$0.50");
     expect(formatTokenAmountLabel("<0.000001", "$")).toBe("<$0.000001");
     expect(formatTokenAmountLabel("2.5", "THRU")).toBe("2.5 THRU");
   });
@@ -21,7 +21,7 @@ describe("deposit symbol normalization", () => {
     expect(normalizeDepositSymbol(LEGACY_DEPOSIT_SYMBOL)).toBe(DEFAULT_DEPOSIT_SYMBOL);
     expect(normalizeDepositSymbol(undefined)).toBe(DEFAULT_DEPOSIT_SYMBOL);
     expect(normalizeDepositSymbol("")).toBe(DEFAULT_DEPOSIT_SYMBOL);
-    for (const legacy of ["THRUSD", "ThruUSD", "Thru USD", "thrusd", "$"]) {
+    for (const legacy of ["UUSD", "THRUSD", "ThruUSD", "Thru USD", "Unto USD", "uusd", "thrusd", "$"]) {
       expect(normalizeDepositSymbol(legacy)).toBe("$");
     }
     expect(normalizeDepositSymbol("OTHER")).toBe("OTHER");
@@ -30,7 +30,7 @@ describe("deposit symbol normalization", () => {
   it("accepts a previously prepared destination that still says CREDITS", () => {
     const expected = {
       network: ThruNetwork.Alphanet,
-      depositTarget: DepositTarget.THRUSD,
+      depositTarget: DepositTarget.UUSD,
       tokenAccountAddress: "ta_token_account",
       mintAddress: "ta_mint",
       tokenProgramAddress: "ta_token_program",
@@ -40,7 +40,7 @@ describe("deposit symbol normalization", () => {
     expect(
       getValidatedDepositDestination({ ...expected, symbol: "CREDITS" }, expected),
     ).toEqual(expected);
-    for (const legacy of ["CREDITS", "THRUSD", "ThruUSD", "Thru USD"]) {
+    for (const legacy of ["CREDITS", "UUSD", "THRUSD", "ThruUSD", "Thru USD", "Unto USD"]) {
       const snapshot = { ...expected, symbol: legacy };
       expect(getValidatedDepositDestination(snapshot, snapshot)).toEqual(expected);
       expect(getValidatedDepositDestination(expected, snapshot)).toEqual(expected);

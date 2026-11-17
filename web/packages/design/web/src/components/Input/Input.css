@@ -85,3 +85,8 @@
   background: var(--color-surface-primary);
   border-color: var(--color-border-secondary);
 }
+
+.tds-input-wrap + .tds-field__error {
+  font-family: var(--font-sans);
+  font-size: 12px;
+}

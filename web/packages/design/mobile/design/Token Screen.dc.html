@@ -32,7 +32,7 @@ a:hover{text-decoration:underline;text-underline-offset:3px;}
 
   <sc-if value="{{ isFound }}" hint-placeholder-val="{{ true }}">
     <div style="display:flex;align-items:center;gap:14px;padding:{{ headPad }};flex:none">
-      <sc-if value="{{ isThrusd }}" hint-placeholder-val="{{ true }}"><img src="assets/thrusd/00-current.svg" alt="" aria-hidden="true" style="width:48px;height:48px;display:block;flex:none;border-radius:50%"></sc-if>
+      <sc-if value="{{ isUusd }}" hint-placeholder-val="{{ true }}"><span aria-hidden="true" style="width:48px;height:48px;display:block;flex:none;border-radius:50%;background:#6b7280;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center">$</span></sc-if>
       <sc-if value="{{ isMark }}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="width:48px;height:48px;border-radius:50%;background:var(--m-fg);color:var(--m-bg);display:grid;place-items:center;flex:none;font-family:{{ glyphFont }};font-size:{{ glyphSize }};font-weight:600">{{ glyph }}</span></sc-if>
       <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
         <h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-0.3px;line-height:26px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ticker }}</h1>
@@ -65,7 +65,7 @@ a:hover{text-decoration:underline;text-underline-offset:3px;}
     <sc-if value="{{ hasNote }}" hint-placeholder-val="{{ false }}">
       <div role="note" style="margin:16px 16px 0;display:flex;gap:12px;align-items:flex-start;padding:12px 14px;background:var(--m-bg-muted);flex:none">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true" style="flex:none;margin-top:2px;color:var(--m-fg)"><path d="M12 3v13M7 11l5 5 5-5M4 20h16"></path></svg>
-        <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:13px;line-height:19px;text-wrap:pretty"><span style="font-weight:600;color:var(--m-fg)">Arrives in your wallet as THRUSD</span><span style="color:var(--m-fg-muted)">{{ noteBody }}</span></span>
+        <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:13px;line-height:19px;text-wrap:pretty"><span style="font-weight:600;color:var(--m-fg)">Arrives in your wallet as UUSD</span><span style="color:var(--m-fg-muted)">{{ noteBody }}</span></span>
       </div>
     </sc-if>
 
@@ -91,11 +91,11 @@ a:hover{text-decoration:underline;text-underline-offset:3px;}
   <sc-if value="{{ isPhone }}" hint-placeholder-val="{{ true }}"><div style="height:34px;flex:none"></div></sc-if>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;token&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;cool&quot;,&quot;options&quot;:[&quot;thrusd&quot;,&quot;cool&quot;,&quot;zero&quot;,&quot;frozen&quot;,&quot;unsupported&quot;,&quot;eth&quot;,&quot;btc&quot;,&quot;notfound&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;explainerOpen&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;layout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;phone&quot;,&quot;options&quot;:[&quot;phone&quot;,&quot;column&quot;],&quot;tsType&quot;:&quot;'phone' | 'column'&quot;},&quot;network&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Alphanet&quot;,&quot;options&quot;:[&quot;Alphanet&quot;,&quot;Betanet&quot;],&quot;tsType&quot;:&quot;'Alphanet' | 'Betanet'&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;token&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;cool&quot;,&quot;options&quot;:[&quot;uusd&quot;,&quot;cool&quot;,&quot;zero&quot;,&quot;frozen&quot;,&quot;unsupported&quot;,&quot;eth&quot;,&quot;btc&quot;,&quot;notfound&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;explainerOpen&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;layout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;phone&quot;,&quot;options&quot;:[&quot;phone&quot;,&quot;column&quot;],&quot;tsType&quot;:&quot;'phone' | 'column'&quot;},&quot;network&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Alphanet&quot;,&quot;options&quot;:[&quot;Alphanet&quot;,&quot;Betanet&quot;],&quot;tsType&quot;:&quot;'Alphanet' | 'Betanet'&quot;}}">
 const FILL = 'k8mN4pQ7rT1vW9xZ3bC6eF0hJ5kL2nP8qR4tV7';
 const MINT = (a, b) => a + FILL.slice(0, 46 - a.length - b.length) + b;
 const TOKENS = {
-  thrusd: { ticker: 'THRUSD', name: 'Dollars on Thru', mint: 'ta2uSdK8mN4pQ7rT1vW9xZ3bC6eF0hJ5kL2nP84tV7sD91', spendable: '$56.00', unit: '', decimals: '6', receive: 'deposit' },
+  uusd: { ticker: 'UUSD', name: 'Dollars on Thru', mint: 'ta2uSdK8mN4pQ7rT1vW9xZ3bC6eF0hJ5kL2nP84tV7sD91', spendable: '$56.00', unit: '', decimals: '6', receive: 'deposit' },
   cool: { ticker: 'COOL', name: 'Token on Thru', mint: MINT('taZt', '9Kq2'), spendable: '1,250.5', unit: 'COOL', other: '+ 120.5 in other accounts', otherBody: '120.5 COOL sits in other token accounts you own on Thru. Move it into this account to send it.', decimals: '9', receive: 'thru' },
   zero: { ticker: 'WBTC', name: 'Token on Thru', mint: MINT('taBt', 'c4Hn'), spendable: '0', unit: 'WBTC', decimals: '8', receive: 'thru', sendReason: 'Nothing to send' },
   frozen: { ticker: 'ICE', name: 'Token on Thru', mint: MINT('taIc', 'e3Fz'), spendable: '42', unit: 'ICE', decimals: '9', receive: 'thru', sendReason: 'This token is frozen' },
@@ -111,7 +111,7 @@ class Component extends DCLogic {
     const notFound = key === 'notfound';
     const t = TOKENS[key] || TOKENS.cool;
     const layout = p.layout ?? 'phone';
-    const isThrusd = key === 'thrusd';
+    const isUusd = key === 'uusd';
     const glyph = t.ticker === 'Unknown token' ? '?' : t.ticker.slice(0, 2).toUpperCase();
     const explainerOpen = this.state.explainerOpen ?? !!p.explainerOpen;
     const disabled = !!t.sendReason;
@@ -120,14 +120,14 @@ class Component extends DCLogic {
       isPhone: layout === 'phone', headPad: layout === 'phone' ? '20px 16px 0' : '32px 16px 0',
       navTitle: notFound ? 'Token' : t.ticker,
       isFound: !notFound, isNotFound: notFound,
-      isThrusd, isMark: !isThrusd, glyph, glyphSize: glyph.length === 1 ? '22px' : '16px', glyphFont: glyph.length === 1 ? "'Inter Tight',system-ui,sans-serif" : "'JetBrains Mono',ui-monospace,monospace",
+      isUusd, isMark: !isUusd, glyph, glyphSize: glyph.length === 1 ? '22px' : '16px', glyphFont: glyph.length === 1 ? "'Inter Tight',system-ui,sans-serif" : "'JetBrains Mono',ui-monospace,monospace",
       ticker: t.ticker, name: t.name, mint: t.mint,
       spendable: t.spendable, hasUnit: !!t.unit, unit: t.unit,
       hasOther: !!t.other, other: t.other || '', otherBody: t.otherBody || '',
       explainerOpen, toggleExplainer: () => this.setState({ explainerOpen: !explainerOpen }),
       sendDisabled: disabled, sendReason: t.sendReason || '', sendOpacity: disabled ? 0.4 : 1, sendCursor: disabled ? 'not-allowed' : 'pointer',
       hasNote: !!t.note, noteBody: t.note || '',
-      details: [{ label: 'Decimals', value: t.decimals }, { label: 'Network', value: 'thru-' + network.toLowerCase() }, { label: 'Receive via', value: t.receive === 'deposit' ? (isThrusd ? 'Deposit \u00b7 USDC on Solana' : 'Deposit \u00b7 ' + t.ticker + ' on ' + (t.ticker === 'ETH' ? 'Ethereum' : 'Bitcoin')) : 'Thru ' + network }],
+      details: [{ label: 'Decimals', value: t.decimals }, { label: 'Network', value: 'thru-' + network.toLowerCase() }, { label: 'Receive via', value: t.receive === 'deposit' ? (isUusd ? 'Deposit \u00b7 USDC on Solana' : 'Deposit \u00b7 ' + t.ticker + ' on ' + (t.ticker === 'ETH' ? 'Ethereum' : 'Bitcoin')) : 'Thru ' + network }],
     };
   }
 }

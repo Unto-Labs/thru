@@ -1,9 +1,9 @@
 /* Common utilities shared between analyze and codegen commands */
 
-use crate::abi::file::ImportResolver;
 use crate::abi::resolved::TypeResolver;
 use crate::abi::types::TypeDef;
 use crate::dependency::DependencyAnalyzer;
+use abi_loader::AbiFile;
 
 // Re-export normalize_type_refs from abi_loader
 pub use abi_loader::normalize_type_refs;
@@ -116,4 +116,82 @@ pub fn analyze_and_resolve_types(
     }
 
     Ok(resolver)
+}
+
+/// Validate prepared publication bytes using the same semantic machinery as
+/// analysis and code generation. Callers retain and publish their original bytes.
+pub fn validate_closed_abi(abi: &AbiFile) -> anyhow::Result<()> {
+    if !abi.imports().is_empty() {
+        anyhow::bail!("Prepared ABI must not contain imports");
+    }
+    let mut names = std::collections::BTreeSet::new();
+    for ty in &abi.types {
+        if !names.insert(&ty.name) {
+            anyhow::bail!("Duplicate type declaration '{}'", ty.name);
+        }
+    }
+    abi_loader::validate_root_types(abi)?;
+    let resolver = analyze_and_resolve_types(&abi.types, false)?;
+    crate::codegen::shared::builder::IrBuilder::new(&resolver)
+        .build_all()
+        .map_err(|error| anyhow::anyhow!("Invalid ABI layout: {:?}", error))?;
+    Ok(())
+}
+
+/// Shared CLI publication boundary: preparation never fetches remote imports.
+/// Closed outputs also pass the complete existing resolver/layout validation;
+/// retained remote dependencies defer that validation until semantic resolution.
+pub fn prepare_for_publish(
+    file_path: &std::path::Path,
+    include_dirs: &[std::path::PathBuf],
+    target_network: &str,
+    verbose: bool,
+) -> anyhow::Result<String> {
+    let yaml = abi_loader::prepare_for_publish(file_path, include_dirs, target_network, verbose)?;
+    let prepared: AbiFile = serde_yml::from_str(&yaml)?;
+    if prepared.imports().is_empty() {
+        validate_closed_abi(&prepared)?;
+    }
+    Ok(yaml)
+}
+
+#[cfg(test)]
+mod publication_tests {
+    use super::*;
+
+    fn abi(types: &str, roots: &str) -> AbiFile {
+        serde_yml::from_str(&format!(
+            "abi:\n  package: test.publication\n  abi-version: 1\n  package-version: 1.0.0\n  description: test\n  imports: []\n  options:\n    program-metadata:\n      root-types: {roots}\ntypes: {types}\n"
+        )).unwrap()
+    }
+
+    #[test]
+    fn publication_validates_all_declared_roots() {
+        let types = "[{name: Root, kind: {primitive: u8}}]";
+        for role in ["instruction-root", "account-root", "errors", "events"] {
+            let missing = abi(types, &format!("{{{role}: Missing}}"));
+            let error = validate_closed_abi(&missing).unwrap_err().to_string();
+            assert!(error.contains(&format!("Unresolved declared {role} root 'Missing'")));
+            validate_closed_abi(&abi(types, &format!("{{{role}: Root}}"))).unwrap();
+        }
+    }
+
+    #[test]
+    fn publication_rejects_duplicate_and_recursive_declarations() {
+        let duplicate = abi(
+            "[{name: Root, kind: {primitive: u8}}, {name: Root, kind: {primitive: u8}}]",
+            "{instruction-root: Root}",
+        );
+        assert!(
+            validate_closed_abi(&duplicate)
+                .unwrap_err()
+                .to_string()
+                .contains("Duplicate type")
+        );
+        let recursive = abi(
+            "[{name: Root, kind: {type-ref: {name: Root}}}]",
+            "{instruction-root: Root}",
+        );
+        assert!(validate_closed_abi(&recursive).is_err());
+    }
 }

@@ -5,11 +5,8 @@ abi:
   description: "State proof structures for Merkle tree verification"
   imports:
     # thru_primitives
-    - type: onchain
-      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
-      target: abi
-      network: mainnet
-      revision: latest
+    - type: path
+      path: thru_primitives.abi.yaml
 
 types:
   - name: "StateProofHeader"
@@ -66,27 +63,223 @@ types:
                                     left:
                                       add:
                                         left:
-                                          popcount:
-                                            operand:
-                                              field-ref:
-                                                path: ["hdr", "path_bitset", "bytes", 0]
+                                          add:
+                                            left:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 0]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 1]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 2]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 3]
+                                            right:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 4]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 5]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 6]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 7]
                                         right:
-                                          popcount:
-                                            operand:
-                                              field-ref:
-                                                path: ["hdr", "path_bitset", "bytes", 1]
+                                          add:
+                                            left:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 8]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 9]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 10]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 11]
+                                            right:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 12]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 13]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 14]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 15]
                                     right:
                                       add:
                                         left:
-                                          popcount:
-                                            operand:
-                                              field-ref:
-                                                path: ["hdr", "path_bitset", "bytes", 2]
+                                          add:
+                                            left:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 16]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 17]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 18]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 19]
+                                            right:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 20]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 21]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 22]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 23]
                                         right:
-                                          popcount:
-                                            operand:
-                                              field-ref:
-                                                path: ["hdr", "path_bitset", "bytes", 3]
+                                          add:
+                                            left:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 24]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 25]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 26]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 27]
+                                            right:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 28]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 29]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 30]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 31]
                                 element-type:
                                   type-ref:
                                     name: "Hash"
@@ -110,27 +303,223 @@ types:
                                     left:
                                       add:
                                         left:
-                                          popcount:
-                                            operand:
-                                              field-ref:
-                                                path: ["hdr", "path_bitset", "bytes", 0]
+                                          add:
+                                            left:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 0]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 1]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 2]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 3]
+                                            right:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 4]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 5]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 6]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 7]
                                         right:
-                                          popcount:
-                                            operand:
-                                              field-ref:
-                                                path: ["hdr", "path_bitset", "bytes", 1]
+                                          add:
+                                            left:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 8]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 9]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 10]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 11]
+                                            right:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 12]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 13]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 14]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 15]
                                     right:
                                       add:
                                         left:
-                                          popcount:
-                                            operand:
-                                              field-ref:
-                                                path: ["hdr", "path_bitset", "bytes", 2]
+                                          add:
+                                            left:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 16]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 17]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 18]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 19]
+                                            right:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 20]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 21]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 22]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 23]
                                         right:
-                                          popcount:
-                                            operand:
-                                              field-ref:
-                                                path: ["hdr", "path_bitset", "bytes", 3]
+                                          add:
+                                            left:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 24]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 25]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 26]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 27]
+                                            right:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 28]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 29]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 30]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 31]
                                 element-type:
                                   type-ref:
                                     name: "Hash"
@@ -159,27 +548,223 @@ types:
                                     left:
                                       add:
                                         left:
-                                          popcount:
-                                            operand:
-                                              field-ref:
-                                                path: ["hdr", "path_bitset", "bytes", 0]
+                                          add:
+                                            left:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 0]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 1]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 2]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 3]
+                                            right:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 4]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 5]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 6]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 7]
                                         right:
-                                          popcount:
-                                            operand:
-                                              field-ref:
-                                                path: ["hdr", "path_bitset", "bytes", 1]
+                                          add:
+                                            left:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 8]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 9]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 10]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 11]
+                                            right:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 12]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 13]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 14]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 15]
                                     right:
                                       add:
                                         left:
-                                          popcount:
-                                            operand:
-                                              field-ref:
-                                                path: ["hdr", "path_bitset", "bytes", 2]
+                                          add:
+                                            left:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 16]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 17]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 18]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 19]
+                                            right:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 20]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 21]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 22]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 23]
                                         right:
-                                          popcount:
-                                            operand:
-                                              field-ref:
-                                                path: ["hdr", "path_bitset", "bytes", 3]
+                                          add:
+                                            left:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 24]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 25]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 26]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 27]
+                                            right:
+                                              add:
+                                                left:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 28]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 29]
+                                                right:
+                                                  add:
+                                                    left:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 30]
+                                                    right:
+                                                      popcount:
+                                                        operand:
+                                                          field-ref:
+                                                            path: ["hdr", "path_bitset", "bytes", 31]
                                 element-type:
                                   type-ref:
                                     name: "Hash"

@@ -95,13 +95,20 @@ fn build_enum_field_info<'a>(
                 None,
             )
         }
-        EnumTagSource::Computed(expr) => (
-            None,
-            escape_ts_keyword(&format!("{}_computed_tag", enum_field.name)),
-            None,
-            Some(expr.clone()),
-            Some(format!("{}.computed_tag", enum_field.field_type.name)),
-        ),
+        EnumTagSource::Computed(expr) => {
+            /* A constant tag (no field references) has no derived
+            parameter: the TypeScript IR folds it to its variant. */
+            use crate::abi::expr::ConstantExpression;
+            let parameter = (!expr.is_constant())
+                .then(|| format!("{}.computed_tag", enum_field.field_type.name));
+            (
+                None,
+                escape_ts_keyword(&format!("{}_computed_tag", enum_field.name)),
+                None,
+                Some(expr.clone()),
+                parameter,
+            )
+        }
     };
 
     let payload_offset = enum_field

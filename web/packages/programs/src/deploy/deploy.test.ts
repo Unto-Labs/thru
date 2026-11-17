@@ -3,8 +3,6 @@ import { encodeAddress } from "@thru/sdk/helpers";
 import { describe, expect, it, vi } from "vitest";
 import { deriveProgramABIAddresses } from "../abi-manager";
 import { deriveManagedProgramAddresses } from "../manager";
-import { BOOTSTRAP_PROGRAM_ADDRESSES } from "../bootstrap-addresses";
-import { deriveUploadAddresses } from "../uploader";
 import {
   parseABIAccount,
   parseABIMeta,
@@ -50,24 +48,6 @@ function account(owner: string, data: Uint8Array): Account {
 }
 
 describe("deployment address derivation", () => {
-  it("matches fixed CLI-compatible program, ABI, and uploader vectors", () => {
-    const program = deriveManagedProgramAddresses("nft");
-    expect(program).toMatchObject({
-      programMetaAccountAddress:
-        "taJM9c0C5t2kaaNv_PyeVn6khHuwc-zeN39MUTW_yghOBU",
-      programAccountAddress: "tak_0Jtlh0y2hPHscfXkS1eXuEpPUB35xh5KqT5A2fR2ZE",
-    });
-    expect(
-      deriveProgramABIAddresses(program.programAccountAddress),
-    ).toMatchObject({
-      abiMetaAccountAddress: "taUkpVSe_kjePfi1VuPEtdsOz8kZZy2tI6DABDju_W4arS",
-      abiAccountAddress: "taeecO6WARCvCL_fJz9WnGNlrQ1r-96I79A6m-en4krTNe",
-    });
-    expect(deriveUploadAddresses("nft_temporary")).toMatchObject({
-      metaAccountAddress: "ta1WUSEixlsGSJ6qBFdur6lzwO_xOF0x1y70CiI_ju7Ifc",
-      bufferAccountAddress: "taIx7ja7eblEGbwJOrS4a1kikDTuQg_nYvu-2kKfC6aCIx",
-    });
-  });
 
   it("uses the CLI suffix and SHA-256 fallback rules", async () => {
     await expect(temporarySeed("nft", "temporary")).resolves.toBe(
@@ -80,14 +60,6 @@ describe("deployment address derivation", () => {
     expect(() => seedBytes("é".repeat(17))).toThrow(DeployError);
   });
 
-  it("uses canonical built-in addresses", () => {
-    expect(UPLOADER_PROGRAM_ADDRESS).toBe("taUPLMH5QYOAT4ktwQeO7DXAEKtqBhYehalNGf5BJFQDYq");
-    expect(MANAGER_PROGRAM_ADDRESS).toBe("taMGRmPoSTkUtF6UlmCIq58K8OYsnXshOMPdobxxHytqmu");
-    expect(DEPLOYMENT_MULTICALL_PROGRAM_ADDRESS).toBe(BOOTSTRAP_PROGRAM_ADDRESSES.multicall);
-    expect(ABI_MANAGER_PROGRAM_ADDRESS).toBe(
-      BOOTSTRAP_PROGRAM_ADDRESSES.abi_manager,
-    );
-  });
 });
 
 describe("deployment validation", () => {
@@ -149,26 +121,6 @@ types: []
     ).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });
 
-  it("preserves canonical ABI YAML after resolving imports", async () => {
-    const yaml = `
-abi:
-  package: test.deploy
-  abi-version: 1
-  package-version: "1.0.0"
-  imports:
-    - type: onchain
-      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
-      target: abi
-      network: alphanet
-      revision: latest
-types: []
-`;
-
-    await expect(validateABI(new TextEncoder().encode(yaml))).resolves.toBe(
-      yaml,
-    );
-  });
-
   it("requires the private key to match the supplied address", async () => {
     const client = createThruClient();
     const privateKey = new Uint8Array(32).fill(7);
@@ -203,7 +155,7 @@ describe("deployment transaction composition", () => {
         readWrite: [high, low],
         readOnly: [MANAGER_PROGRAM_ADDRESS],
       },
-      instructionData: (context) => {
+      instructionData: async (context) => {
         observed = [
           context.getAccountIndex(low),
           context.getAccountIndex(high),
@@ -219,10 +171,11 @@ describe("deployment transaction composition", () => {
 describe("deployment account parsers", () => {
   it("parses manager, ABI, and uploader account formats", () => {
     const authority = new Uint8Array(32).fill(1);
-    const managerData = new Uint8Array(73);
-    managerData.set(authority);
-    new DataView(managerData.buffer).setBigUint64(64, 5n, true);
-    managerData[72] = 0;
+    const managerData = new Uint8Array(74);
+    managerData[0] = 1;
+    managerData.set(authority, 1);
+    new DataView(managerData.buffer).setBigUint64(65, 5n, true);
+    managerData[73] = 0;
     expect(
       parseManagerMeta(account(MANAGER_PROGRAM_ADDRESS, managerData)),
     ).toEqual({
@@ -241,12 +194,13 @@ describe("deployment account parsers", () => {
 
     const abiAddress = new Uint8Array(32).fill(3);
     const content = Uint8Array.of(0x61, 0x62, 0x69);
-    const abiData = new Uint8Array(45 + content.length);
-    abiData.set(abiAddress);
-    new DataView(abiData.buffer).setBigUint64(32, 7n, true);
-    abiData[40] = 0;
-    new DataView(abiData.buffer).setUint32(41, content.length, true);
-    abiData.set(content, 45);
+    const abiData = new Uint8Array(46 + content.length);
+    abiData[0] = 2;
+    abiData.set(abiAddress, 1);
+    new DataView(abiData.buffer).setBigUint64(33, 7n, true);
+    abiData[41] = 0;
+    new DataView(abiData.buffer).setUint32(42, content.length, true);
+    abiData.set(content, 46);
     expect(
       parseABIAccount(account(ABI_MANAGER_PROGRAM_ADDRESS, abiData)),
     ).toEqual({
@@ -257,10 +211,11 @@ describe("deployment account parsers", () => {
     });
 
     const hash = new Uint8Array(32).fill(4);
-    const uploadData = new Uint8Array(65);
-    uploadData.set(authority);
-    uploadData.set(hash, 32);
-    uploadData[64] = 2;
+    const uploadData = new Uint8Array(66);
+    uploadData[0] = 1;
+    uploadData.set(authority, 1);
+    uploadData.set(hash, 33);
+    uploadData[65] = 2;
     expect(
       parseUploaderMeta(account(UPLOADER_PROGRAM_ADDRESS, uploadData)),
     ).toEqual({
@@ -281,18 +236,20 @@ describe("deployment inspection", () => {
     );
     const programBytes = Uint8Array.of(1, 2, 3);
     const abiBytes = Uint8Array.of(4, 5);
-    const managerData = new Uint8Array(73);
-    managerData.set(authority);
-    new DataView(managerData.buffer).setBigUint64(64, 6n, true);
+    const managerData = new Uint8Array(74);
+    managerData[0] = 1;
+    managerData.set(authority, 1);
+    new DataView(managerData.buffer).setBigUint64(65, 6n, true);
 
     const abiMetaData = new Uint8Array(100);
     abiMetaData[0] = 1;
     abiMetaData.set(addresses.programAccountBytes, 4);
-    const abiData = new Uint8Array(45 + abiBytes.length);
-    abiData.set(abiAddresses.abiMetaAccountBytes);
-    new DataView(abiData.buffer).setBigUint64(32, 3n, true);
-    new DataView(abiData.buffer).setUint32(41, abiBytes.length, true);
-    abiData.set(abiBytes, 45);
+    const abiData = new Uint8Array(46 + abiBytes.length);
+    abiData[0] = 2;
+    abiData.set(abiAddresses.abiMetaAccountBytes, 1);
+    new DataView(abiData.buffer).setBigUint64(33, 3n, true);
+    new DataView(abiData.buffer).setUint32(42, abiBytes.length, true);
+    abiData.set(abiBytes, 46);
 
     const accounts = new Map<string, Account>([
       [

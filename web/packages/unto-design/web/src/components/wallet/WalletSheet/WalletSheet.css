@@ -1,0 +1,223 @@
+.uds-wsheet__cta {
+  width: 100%;
+  /* A CTA sits straight in a flex column; never let it squeeze below the
+     button's own height - the body scrolls instead. */
+  flex: none;
+}
+
+/* Loading escalation (8 s): copy swaps and Retry / Cancel appear. */
+.uds-wsheet__escalation {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  animation: uds-wsheet-in 0.3s var(--ease-standard) both;
+}
+.uds-wsheet__escalation-text {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  text-align: center;
+  text-wrap: pretty;
+}
+.uds-wsheet__escalation-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+@keyframes uds-wsheet-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .uds-wsheet__escalation {
+    animation-duration: var(--duration-fast);
+  }
+}
+
+.uds-wsheet__account {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 54px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-tertiary);
+  background: var(--color-surface-higher);
+}
+.uds-wsheet__account-main {
+  flex: 1;
+  min-width: 0;
+}
+.uds-wsheet__account-addr {
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+.uds-wsheet__account-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.uds-wsheet__account-bal {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  flex: none;
+  white-space: nowrap;
+}
+
+.uds-wsheet__tx > .uds-screen__body {
+  padding: var(--space-3);
+  max-height: 480px;
+}
+.uds-wsheet__tx-actions {
+  padding: var(--space-3);
+}
+.uds-wsheet__summary {
+  gap: 6px;
+}
+.uds-wsheet__srow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 20px;
+  min-width: 0;
+}
+.uds-wsheet__srow-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uds-wsheet__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  flex: none;
+}
+.uds-wsheet__mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-primary);
+}
+.uds-wsheet__advanced {
+  background: var(--color-surface-primary);
+  width: 100%;
+}
+.uds-wsheet__advanced-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  justify-content: center;
+  width: 100%;
+  height: 34px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+.uds-wsheet__advanced-trigger:hover {
+  color: var(--color-text-primary);
+}
+.uds-wsheet__advanced-chev {
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+.uds-wsheet__advanced-trigger[data-panel-open] .uds-wsheet__advanced-chev {
+  transform: rotate(180deg);
+}
+.uds-wsheet__advanced-panel {
+  overflow: hidden;
+  height: var(--collapsible-panel-height);
+  transition: height var(--duration-med) var(--ease-standard);
+}
+.uds-wsheet__advanced-panel[data-starting-style],
+.uds-wsheet__advanced-panel[data-ending-style] {
+  height: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .uds-wsheet__advanced-chev,
+  .uds-wsheet__advanced-panel {
+    transition: none;
+  }
+}
+.uds-wsheet__advanced-body {
+  padding: 0 var(--space-2) var(--space-2);
+}
+/* Scrolls sideways rather than wrapping; host utilities that wrap or break
+   text are overridden. */
+.uds-txtree__section--root > .uds-txtree__panel > .uds-txtree__body:has(> .uds-wsheet__ixdecode) {
+  padding: 0;
+  gap: 0;
+}
+.uds-wsheet__ixdecode {
+  border-top: 1px solid var(--color-border-tertiary);
+  padding: var(--space-2) var(--space-2) var(--space-2) 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--color-text-primary);
+  max-height: 220px;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-secondary) transparent;
+}
+.uds-wsheet__ixdecode > * {
+  width: max-content;
+  min-width: 100%;
+}
+.uds-wsheet__ixdecode,
+.uds-wsheet__ixdecode * {
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+  flex-wrap: nowrap;
+}
+
+.uds-wsheet__sigrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-primary);
+  font-size: 13px;
+}
+.uds-wsheet__siglabel {
+  color: var(--color-text-tertiary);
+}
+
+@media (max-width: 640px) {
+  .uds-wsheet__advanced-trigger {
+    min-height: 44px;
+  }
+
+  .uds-wsheet__cta {
+    height: 48px;
+    padding: 0 20px;
+    font-size: 17px;
+  }
+
+  /* Ghost CTAs are the quiet alternatives; they keep the small label. */
+  .uds-wsheet__cta.uds-btn--ghost {
+    font-size: 13px;
+  }
+
+  .uds-dep__crypto .uds-wsheet__cta {
+    font-family: var(--font-mono);
+    font-weight: var(--fw-semibold);
+    font-size: 15px;
+  }
+
+  /* A ghost CTA ending the sheet over the network status (Frame.css): the
+     status moves up to its label, half of the 48px less the 15px label. */
+  .uds-frame--network:has(.uds-screen:not([hidden] *) > .uds-screen__body:last-child > .uds-wsheet__cta.uds-btn--ghost:last-child):not(:has(.uds-powered)) .uds-frame__network {
+    margin-top: calc((15px - 48px) / 2);
+  }
+}

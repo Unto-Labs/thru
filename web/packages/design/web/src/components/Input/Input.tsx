@@ -1,10 +1,13 @@
 import * as React from "react";
 import { Field } from "@base-ui/react/field";
 import { cn } from "../../utils";
+import "../Field/Field.css";
 import "./Input.css";
 
 export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "size"> {
   error?: boolean;
+  errorMessage?: string;
+  trailing?: React.ReactNode;
   label?: string;
   wrapperClassName?: string;
   /**
@@ -30,27 +33,31 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     {
       className,
       error,
+      errorMessage,
+      trailing,
       label,
       id,
       wrapperClassName,
       disabled,
       size = "md",
       text = "ui",
+      "aria-describedby": describedBy,
       ...props
     },
     ref,
   ) {
     const innerRef = React.useRef<HTMLInputElement>(null);
+    const errorId = React.useId();
     React.useImperativeHandle(ref, () => innerRef.current as HTMLInputElement, []);
 
     return (
       <Field.Root className="tds-field" disabled={disabled}>
-        {label && <Field.Label className="tds-field__label">{label}</Field.Label>}
+        {label && <Field.Label {...(id ? { htmlFor: id } : {})} className="tds-field__label">{label}</Field.Label>}
         <div
           className={cn("tds-input-wrap", `tds-input-wrap--${size}`, wrapperClassName)}
-          data-error={error || undefined}
+          data-error={error || !!errorMessage || undefined}
           onMouseDown={(e) => {
-            if (e.target !== innerRef.current) {
+            if (e.target !== innerRef.current && !(e.target instanceof Element && e.target.closest("button"))) {
               e.preventDefault();
               innerRef.current?.focus();
             }
@@ -59,12 +66,17 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           <Field.Control
             ref={innerRef}
             id={id}
+            /* Base UI registers explicit IDs after hydration; keep SSR references valid too. */
+            render={id ? (controlProps) => <input {...controlProps} id={id} /> : undefined}
             disabled={disabled}
-            aria-invalid={error || undefined}
+            aria-invalid={error || !!errorMessage || undefined}
             className={cn("tds-input", `tds-input--${text}`, className)}
+            aria-describedby={[describedBy, errorMessage && errorId].filter(Boolean).join(" ") || undefined}
             {...props}
           />
+          {trailing}
         </div>
+        {errorMessage && <Field.Error id={errorId} match className="tds-field__error">{errorMessage}</Field.Error>}
       </Field.Root>
     );
   },

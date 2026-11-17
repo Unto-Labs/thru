@@ -1,25 +1,46 @@
 import { encodeAddress } from '@thru/sdk/helpers';
-import { LONG_LIVED_AUTHORITY_EXPIRY_SECONDS } from './constants';
 import {
-  CredentialLookup,
   WalletAccount,
+  WalletProgramAccount,
 } from './abi/thru/program/wallet/types';
-
-const LEGACY_WALLET_HEADER_BYTES = 9;
-const LEGACY_AUTHORITY_BYTES = 65;
-const AUTHORITY_DATA_BYTES = 64;
+import { decodeAccountRoot } from '../utils/account-root';
 
 /**
- * Parse wallet account data to extract nonce.
+ * Decodes Wallet Program account data through its account root. Byte 0 is the
+ * account type (wallet or credential lookup); returns null for any other
+ * type, a credential lookup of the wrong size, or data too short for its
+ * type.
+ */
+export function decodeWalletProgramAccount(data: Uint8Array): WalletProgramAccount | null {
+  return decodeAccountRoot(data, (bytes) => WalletProgramAccount.from_array(bytes));
+}
+
+/**
+ * Decodes a wallet account: the account type must be wallet and the data must
+ * hold the header and every authority record. Returns null otherwise.
+ */
+export function decodeWalletAccount(data: Uint8Array): WalletAccount | null {
+  const payload = decodeWalletProgramAccount(data)?.payload();
+  const wallet = payload?.asWalletV1();
+  if (!payload || !wallet) return null;
+  /* The program accepts trailing bytes after the last authority record. */
+  if (!WalletAccount.validate(payload.bytes()).ok) return null;
+  return wallet;
+}
+
+/**
+ * Parse wallet account data to extract nonce. Throws when the data is not a
+ * wallet account.
  */
 export function parseWalletNonce(data: Uint8Array): bigint {
-  const account = WalletAccount.from_array(data);
-  if (!account) return parseLegacyWalletNonce(data) ?? 0n;
+  const account = decodeWalletAccount(data);
+  if (!account) throw new Error('Account data is not a wallet account');
   return account.get_nonce();
 }
 
 /**
- * Fetch wallet nonce from the chain.
+ * Fetch wallet nonce from the chain. A wallet that does not exist yet (no
+ * data) has nonce 0.
  * Takes an SDK-like object with accounts.get() method.
  */
 export async function fetchWalletNonce(
@@ -61,7 +82,8 @@ export type ParsedAuthority =
 export interface WalletAuthorities {
   nonce: bigint;
   authorities: ParsedAuthority[];
-  layout: 'authorityRecord' | 'legacyAuthority';
+  /** The wallet layout: only the discriminated (wallet_v1) layout decodes. */
+  layout: 'authorityRecord';
 }
 
 /**
@@ -69,12 +91,8 @@ export interface WalletAuthorities {
  * authority list using the generated ABI view.
  */
 export function parseWalletAuthorities(data: Uint8Array): WalletAuthorities {
-  const account = WalletAccount.from_array(data);
-  if (!account) {
-    const legacy = parseLegacyWalletAuthorities(data);
-    if (legacy) return legacy;
-    throw new Error('Wallet data truncated');
-  }
+  const account = decodeWalletAccount(data);
+  if (!account) throw new Error('Account data is not a wallet account');
 
   const authorities: ParsedAuthority[] = [];
   account.get_authorities().forEach((record, idx) => {
@@ -111,57 +129,6 @@ export function parseWalletAuthorities(data: Uint8Array): WalletAuthorities {
   return { nonce: account.get_nonce(), authorities, layout: 'authorityRecord' };
 }
 
-function parseLegacyWalletNonce(data: Uint8Array): bigint | null {
-  if (data.length < LEGACY_WALLET_HEADER_BYTES) return null;
-  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  return view.getBigUint64(1, true);
-}
-
-function parseLegacyWalletAuthorities(data: Uint8Array): WalletAuthorities | null {
-  if (data.length < LEGACY_WALLET_HEADER_BYTES) return null;
-
-  const numAuth = data[0];
-  const authorityCount = numAuth + 1;
-  const requiredLength = LEGACY_WALLET_HEADER_BYTES + authorityCount * LEGACY_AUTHORITY_BYTES;
-  if (data.length < requiredLength) return null;
-
-  const nonce = parseLegacyWalletNonce(data);
-  if (nonce === null) return null;
-
-  const authorities: ParsedAuthority[] = [];
-  for (let idx = 0; idx < authorityCount; idx += 1) {
-    const offset = LEGACY_WALLET_HEADER_BYTES + idx * LEGACY_AUTHORITY_BYTES;
-    const tag = data[offset];
-    const payload = data.slice(offset + 1, offset + 1 + AUTHORITY_DATA_BYTES);
-    const expiresAtBlockTimeSeconds = LONG_LIVED_AUTHORITY_EXPIRY_SECONDS;
-
-    if (tag === 1) {
-      authorities.push({
-        idx,
-        expiresAtBlockTimeSeconds,
-        kind: 'passkey',
-        x: payload.slice(0, 32),
-        y: payload.slice(32, 64),
-      });
-      continue;
-    }
-
-    if (tag === 2) {
-      authorities.push({
-        idx,
-        expiresAtBlockTimeSeconds,
-        kind: 'pubkey',
-        pubkey: payload.slice(0, 32),
-      });
-      continue;
-    }
-
-    authorities.push({ idx, expiresAtBlockTimeSeconds, kind: 'unknown', tag, data: payload });
-  }
-
-  return { nonce, authorities, layout: 'legacyAuthority' };
-}
-
 /**
  * Encode a 32-byte pubkey to its base58 wallet address representation.
  */
@@ -170,12 +137,11 @@ export function formatAuthorityPubkey(pubkey: Uint8Array): string {
 }
 
 /**
- * Parse a CredentialLookup account and return the wallet account pubkey
- * stored inside it.
+ * Parse a credential lookup account and return the wallet account pubkey
+ * stored inside it, or null when the data is not a credential lookup.
  */
 export function parseCredentialLookupWallet(data: Uint8Array): Uint8Array | null {
-  const lookup = CredentialLookup.from_array(data);
+  const lookup = decodeWalletProgramAccount(data)?.payload().asCredentialLookupV1();
   if (!lookup) return null;
-  const wallet = lookup.get_wallet() as unknown as { buffer?: Uint8Array };
-  return wallet.buffer ? wallet.buffer.slice() : null;
+  return Uint8Array.from(lookup.get_wallet().get_bytes());
 }

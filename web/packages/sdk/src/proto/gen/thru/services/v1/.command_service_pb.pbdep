@@ -1,7 +1,7 @@
 libprotoc 35.0
 proto/thru/common/v1/consensus.proto TRSggA12/hVGjwsmP1pdFOG3BA/duJQq7GsHliXRDfY=
 proto/thru/common/v1/primitives.proto 7yHiC/ZU+OD48BI/hxM65nNYhy3otIBola4hhun5K9c=
-proto/thru/core/v1/transaction.proto JI8i+Jg+CoESjUyVGlb7fGEbKick4WSiLye5gCu7jtI=
+proto/thru/core/v1/transaction.proto F/xC8bLbi2lnsmEPfoM5f80eg8mARYsBgQWpptn6+Q0=
 proto/thru/core/v1/types.proto JgjfD6WYMteMJ7Mch78NWx+wz3rchH1eGHUXsoiUGh4=
 proto/thru/services/v1/command_service.proto 8k7OdJB8FrUQFLyokcMRGAO8vIOg0KVa+AHWDiNgXKo=
 web/packages/proto-toolchain/package.json YzDLTH4AVsA+JhVcxDSHyK1euWy6ZEVNRu2yywY1P2Q=

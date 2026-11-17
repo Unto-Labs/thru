@@ -6,13 +6,13 @@ mod storage;
 mod tests;
 
 use crate::{
-    cli::AuthCommands,
+    cli::{AuthCommands, AuthKeysCommands},
     config::{Config, ProvisionedApiKey, ProvisionedKeySource},
     error::CliError,
     output,
 };
-use cli_key::{KeyMetadata, KeyStore, SecretLocation, valid_api_key, valid_key_id, valid_text};
-use reqwest::{Client, Response};
+use cli_key::{KeyMetadata, KeyStore, valid_api_key, valid_key_id, valid_text};
+use reqwest::{Client, Method, Response};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
@@ -57,6 +57,93 @@ struct DeviceCode {
     expires_in: u64,
     interval: u64,
 }
+/// A validated device authorization, before polling.
+struct DeviceAuthorization {
+    device_code: String,
+    user_code: String,
+    /// Approval URL on the configured origin, with `ref=cli`.
+    verification: Url,
+    expires_in: u64,
+    interval: u64,
+    /// Whether the login requested `keys:cli` (see [`LEGACY_SCOPE`]).
+    key_scope: bool,
+}
+
+/// A device authorization saved by `thru auth login --no-wait` for
+/// `--resume`. The device code is a short-lived credential, so the file is
+/// owner-only and removed once the code is spent or expired.
+#[derive(Serialize, Deserialize)]
+struct PendingLogin {
+    origin: String,
+    device_code: String,
+    user_code: String,
+    verification_uri_complete: String,
+    interval: u64,
+    /// Unix seconds.
+    expires_at: u64,
+    key_scope: bool,
+}
+impl PendingLogin {
+    /// The `--no-wait` output. Never includes the device code.
+    fn to_json(&self) -> Value {
+        json!({"auth":{
+            "status":"pending",
+            "verification_uri_complete":self.verification_uri_complete,
+            "user_code":self.user_code,
+            "expires_in":self.expires_at.saturating_sub(now()),
+            "next":"thru auth login --resume",
+        }})
+    }
+}
+
+fn valid_user_code(code: &str) -> bool {
+    code.len() == 8
+        && code
+            .bytes()
+            .all(|b| b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789".contains(&b))
+}
+fn valid_interval(interval: u64) -> bool {
+    (1..=300).contains(&interval)
+}
+
+/// `url` with `ref=cli` (replacing any `ref`), so dev.thru.org attributes a
+/// sign-up through the approval link to the CLI.
+fn with_cli_ref(mut url: Url) -> Url {
+    let pairs: Vec<(String, String)> = url
+        .query_pairs()
+        .into_owned()
+        .filter(|(name, _)| name != "ref")
+        .collect();
+    url.query_pairs_mut()
+        .clear()
+        .extend_pairs(pairs)
+        .append_pair("ref", "cli");
+    url
+}
+
+fn pending_expired() -> CliError {
+    failure(
+        "expired_token",
+        "The pending login expired. Run `thru auth login --no-wait` again.",
+        None,
+    )
+}
+
+/// Whether a failed `--resume` poll leaves the saved device code unusable:
+/// any answer from the token endpoint except a server error or rate limit,
+/// and local expiry. A network error keeps it for another `--resume`.
+fn spends_pending_login(error: &CliError) -> bool {
+    match error {
+        CliError::Developers { code, status, .. } => {
+            matches!(
+                code.as_str(),
+                "expired_token" | "access_denied" | "invalid_grant"
+            ) || matches!(status, Some(status) if *status < 500 && *status != 429)
+        }
+        _ => true,
+    }
+}
+
 /// `POST /api/cli/keys` 201 body. `plaintext` is never printed or logged.
 #[derive(Deserialize)]
 struct ProvisionedKeyResponse {
@@ -71,6 +158,74 @@ struct ProvisionedKeyInfo {
     prefix: String,
     organization_id: String,
     organization_name: String,
+}
+
+/// Rate limits as dev.thru.org reports them; printed in snake_case.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all(deserialize = "camelCase"))]
+struct RateLimits {
+    weighted_rps: serde_json::Number,
+    bytes_per_sec: serde_json::Number,
+}
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct Organization {
+    id: String,
+    name: String,
+}
+impl Organization {
+    fn valid(&self) -> bool {
+        valid_text(&self.id) && valid_text(&self.name)
+    }
+}
+/// An organization API key as `/api/cli/org/keys` reports it (never the
+/// secret); printed in snake_case.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all(deserialize = "camelCase"))]
+struct OrgKey {
+    id: String,
+    name: String,
+    prefix: String,
+    #[serde(default)]
+    origin_allowlist: Option<Vec<String>>,
+    #[serde(default)]
+    cli_machine: Option<String>,
+    /// The key's own limits, only when an operator cap holds it below the
+    /// organization's; otherwise the organization limits apply.
+    #[serde(default)]
+    limits: Option<RateLimits>,
+    created_at: String,
+    #[serde(default)]
+    last_used_at: Option<String>,
+}
+impl OrgKey {
+    /// Ids are path segments and text is printed, so both are checked.
+    fn valid(&self) -> bool {
+        valid_key_id(&self.id)
+            && [&self.name, &self.prefix, &self.created_at]
+                .into_iter()
+                .chain(self.cli_machine.as_ref())
+                .chain(self.last_used_at.as_ref())
+                .chain(self.origin_allowlist.iter().flatten())
+                .all(|text| valid_text(text))
+    }
+}
+/// `GET /api/cli/org/keys` 200 body.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OrgKeys {
+    organization: Organization,
+    #[serde(default)]
+    organization_limits: Option<RateLimits>,
+    keys: Vec<OrgKey>,
+}
+/// `POST /api/cli/org/keys` 201 body. `plaintext` is printed once, never
+/// logged or stored.
+#[derive(Deserialize)]
+struct CreatedOrgKey {
+    #[serde(default)]
+    organization: Option<Organization>,
+    key: OrgKey,
+    plaintext: String,
 }
 
 /// Result of provisioning the per-machine API key during login. Login never
@@ -107,11 +262,6 @@ impl KeyProvisioning {
                     eprintln!("{line}");
                 } else {
                     println!("{line}");
-                }
-                if key.location == SecretLocation::File {
-                    eprintln!(
-                        "note: the OS keychain was unavailable or disabled; the API key is stored in an owner-only file under ~/.thru/cli/auth."
-                    );
                 }
             }
             Self::Unavailable => eprintln!(
@@ -176,8 +326,7 @@ fn unrevoked_key_warning(key: &KeyMetadata, error: &CliError) -> String {
     )
 }
 
-/// Runs a blocking key-store operation off the async workers. On Linux the
-/// secret-service backend deadlocks if called on a tokio worker thread.
+/// Runs a blocking key-store (file) operation off the async workers.
 async fn blocking<T: Send + 'static>(
     keys: &KeyStore,
     operation: impl FnOnce(&KeyStore) -> Result<T, CliError> + Send + 'static,
@@ -430,6 +579,18 @@ impl Developers {
             "FUNDING_STATUS_UNKNOWN" => {
                 "Funding result is unknown. Check your account balance/history before retrying; no automatic retry was performed."
             }
+            "AUTH_REQUIRED" if !funding => {
+                "Your CLI login is invalid or expired. Run `thru auth login`."
+            }
+            "SCOPE_REQUIRED" => {
+                "This CLI login cannot manage API keys. Run `thru auth login` again to grant it."
+            }
+            "NO_ORGANIZATION" => {
+                "Your account has no organization in which you can manage API keys. Create one, or ask an organization owner or admin for access, on Thru Developers."
+            }
+            "KEY_NOT_FOUND" => {
+                "No API key with that id is available in your organization. Run `thru auth keys list` to see key ids."
+            }
             _ if funding && status >= 500 => {
                 "Funding result is unknown. Check your account balance/history before retrying; no automatic retry was performed."
             }
@@ -597,6 +758,175 @@ impl Developers {
             )
         })
     }
+    /// Sends one request with the CLI access token. A 2xx answer yields its
+    /// JSON body; anything else a [`CliError::Developers`]. A non-JSON 404
+    /// means the server predates the route.
+    async fn send_authorized(
+        &self,
+        bearer: &str,
+        method: Method,
+        path: &str,
+        body: Option<&Value>,
+    ) -> Result<(u16, Value), CliError> {
+        let mut request = self
+            .client
+            .request(method, self.endpoint(path))
+            .bearer_auth(bearer);
+        if let Some(body) = body {
+            request = request.json(body);
+        }
+        let response = request
+            .send()
+            .await
+            .map_err(|_| Self::network_error(false))?;
+        let route_missing = response.status() == reqwest::StatusCode::NOT_FOUND;
+        let (status, retry_after, value) = match Self::body(response, false).await {
+            Err(CliError::Developers { code, .. })
+                if route_missing && code == "INVALID_RESPONSE" =>
+            {
+                return Err(failure(
+                    "UNSUPPORTED",
+                    "This Developers server does not support managing API keys from the CLI.",
+                    Some(404),
+                ));
+            }
+            result => result?,
+        };
+        if !(200..300).contains(&status) {
+            let mut error = Self::protocol_error(status, retry_after, &value, false);
+            // A validation failure's own message says what to fix; it is shown
+            // only when it is plain, bounded text.
+            if status == 400
+                && let (Some(text), CliError::Developers { message, .. }) = (
+                    value
+                        .pointer("/error/message")
+                        .and_then(Value::as_str)
+                        .filter(|text| valid_text(text)),
+                    &mut error,
+                )
+            {
+                *message = text.to_owned();
+            }
+            return Err(error);
+        }
+        Ok((status, value))
+    }
+
+    /// [`Self::send_authorized`] with the saved CLI login, under the store
+    /// lock: the access token is refreshed when near expiry, and once more
+    /// when the server rejects it with 401 (a rejected request had no effect,
+    /// so repeating it is safe).
+    async fn authorized(
+        &self,
+        store: &Store,
+        method: Method,
+        path: &str,
+        body: Option<&Value>,
+    ) -> Result<(u16, Value), CliError> {
+        let _guard = store.lock().await?;
+        let saved = self.access(store).await?;
+        match self
+            .send_authorized(&saved.access_token, method.clone(), path, body)
+            .await
+        {
+            Err(CliError::Developers {
+                status: Some(401), ..
+            }) => {
+                let refreshed = self.refresh(store, &saved).await?;
+                self.send_authorized(&refreshed.access_token, method, path, body)
+                    .await
+            }
+            result => result,
+        }
+    }
+
+    /// The organization the CLI login manages keys in, its limits and keys.
+    async fn org_keys(&self, store: &Store) -> Result<OrgKeys, CliError> {
+        let (status, value) = self
+            .authorized(store, Method::GET, "/api/cli/org/keys", None)
+            .await?;
+        serde_json::from_value::<OrgKeys>(value)
+            .ok()
+            .filter(|list| list.organization.valid() && list.keys.iter().all(OrgKey::valid))
+            .ok_or_else(|| {
+                failure(
+                    "INVALID_RESPONSE",
+                    "Invalid Developers API key list",
+                    Some(status),
+                )
+            })
+    }
+
+    /// Creates a named organization key. The plaintext is returned for
+    /// printing once; it is never stored.
+    async fn create_org_key(
+        &self,
+        store: &Store,
+        name: &str,
+        origins: &[String],
+    ) -> Result<CreatedOrgKey, CliError> {
+        let mut body = json!({ "name": name });
+        if !origins.is_empty() {
+            body["originAllowlist"] = json!(origins);
+        }
+        let (status, value) = self
+            .authorized(store, Method::POST, "/api/cli/org/keys", Some(&body))
+            .await?;
+        let id = value
+            .pointer("/key/id")
+            .and_then(Value::as_str)
+            .filter(|id| valid_key_id(id))
+            .map(str::to_owned);
+        let created = serde_json::from_value::<CreatedOrgKey>(value)
+            .ok()
+            .filter(|created| {
+                valid_api_key(&created.plaintext)
+                    && created.key.valid()
+                    && created
+                        .organization
+                        .as_ref()
+                        .is_none_or(Organization::valid)
+            });
+        match created {
+            Some(created) => Ok(created),
+            None => {
+                // A key that cannot be shown is useless; revoke it.
+                let revoked = match &id {
+                    Some(id) => self.revoke_org_key(store, id).await.is_ok(),
+                    None => false,
+                };
+                Err(failure(
+                    "INVALID_RESPONSE",
+                    if revoked {
+                        "Developers returned an invalid API key response; the key was revoked"
+                    } else {
+                        "Developers returned an invalid API key response; check `thru auth keys list` for an unused key"
+                    },
+                    Some(status),
+                ))
+            }
+        }
+    }
+
+    /// Revokes an organization key by id.
+    async fn revoke_org_key(&self, store: &Store, id: &str) -> Result<(), CliError> {
+        if !valid_key_id(id) {
+            return Err(failure(
+                "INVALID_KEY_ID",
+                "Invalid API key id. Run `thru auth keys list` to see key ids.",
+                None,
+            ));
+        }
+        self.authorized(
+            store,
+            Method::POST,
+            &format!("/api/cli/org/keys/{id}/revoke"),
+            Some(&json!({})),
+        )
+        .await
+        .map(|_| ())
+    }
+
     async fn revoke(&self, refresh_token: &str) -> Result<(), CliError> {
         let response = self
             .client
@@ -648,6 +978,130 @@ impl Developers {
         let _guard = store.lock().await?;
         let previous = store.load().await?;
         let (credentials, key_scope) = self.authorize(no_browser, json_format).await?;
+        self.complete_login(
+            store,
+            keys,
+            machine,
+            previous,
+            credentials,
+            key_scope,
+            json_format,
+        )
+        .await
+    }
+
+    /// Starts a device authorization for `thru auth login --no-wait` and saves
+    /// it (owner-only, beside the credentials) for [`Self::resume_login`].
+    /// Never opens a browser and never waits.
+    async fn start_pending_login(&self, store: &Store) -> Result<PendingLogin, CliError> {
+        let _guard = store.lock().await?;
+        let device = self.request_device_authorization().await?;
+        let pending = PendingLogin {
+            origin: self.origin(),
+            device_code: device.device_code,
+            user_code: device.user_code,
+            verification_uri_complete: device.verification.to_string(),
+            interval: device.interval,
+            expires_at: now().saturating_add(device.expires_in),
+            key_scope: device.key_scope,
+        };
+        let raw = serde_json::to_vec(&pending)
+            .map_err(|_| storage_error("Could not serialize the pending login"))?;
+        store.save_pending_login(&raw)?;
+        Ok(pending)
+    }
+
+    /// The pending login saved by `--no-wait`, if it is valid, for this origin
+    /// and not expired. An invalid or expired file is removed.
+    fn load_pending_login(&self, store: &Store) -> Result<PendingLogin, CliError> {
+        let pending = store.load_pending_login()?.ok_or_else(|| {
+            failure(
+                "NO_PENDING_LOGIN",
+                "No pending login to resume. Run `thru auth login --no-wait` again.",
+                None,
+            )
+        })?;
+        let pending = serde_json::from_str::<PendingLogin>(&pending)
+            .ok()
+            .filter(|pending| {
+                pending.origin == self.origin()
+                    && valid_token(&pending.device_code)
+                    && valid_user_code(&pending.user_code)
+                    && valid_interval(pending.interval)
+                    && Url::parse(&pending.verification_uri_complete)
+                        .is_ok_and(|url| self.own_approval_url(&url))
+            });
+        let Some(pending) = pending else {
+            let _ = store.clear_pending_login();
+            return Err(failure(
+                "NO_PENDING_LOGIN",
+                "The saved pending login is invalid. Run `thru auth login --no-wait` again.",
+                None,
+            ));
+        };
+        if pending.expires_at <= now() {
+            let _ = store.clear_pending_login();
+            return Err(pending_expired());
+        }
+        Ok(pending)
+    }
+
+    /// `thru auth login --resume`: polls the code saved by `--no-wait` for
+    /// its remaining lifetime, then finishes the login as [`Self::login`]
+    /// does. The saved code is removed once it is spent (approval), expired or
+    /// rejected; it is kept after a network or server error so `--resume` can
+    /// be run again.
+    async fn resume_login(
+        &self,
+        store: &Store,
+        keys: &KeyStore,
+        machine: &str,
+        json_format: bool,
+    ) -> Result<(Account, KeyProvisioning), CliError> {
+        let _guard = store.lock().await?;
+        let pending = self.load_pending_login(store)?;
+        let previous = store.load().await?;
+        eprintln!(
+            "Waiting for approval at {}\nCode: {}",
+            pending.verification_uri_complete, pending.user_code
+        );
+        let remaining = Duration::from_secs(pending.expires_at.saturating_sub(now()));
+        let result = self
+            .poll_device_token(&pending.device_code, pending.interval, remaining)
+            .await;
+        if result.as_ref().map_or_else(spends_pending_login, |_| true) {
+            let _ = store.clear_pending_login();
+        }
+        let credentials = result.map_err(|error| match error {
+            CliError::Developers { code, .. } if code == "expired_token" => pending_expired(),
+            error => error,
+        })?;
+        self.complete_login(
+            store,
+            keys,
+            machine,
+            previous,
+            credentials,
+            pending.key_scope,
+            json_format,
+        )
+        .await
+    }
+
+    /// Verifies and saves freshly authorized credentials, provisions this
+    /// machine's API key and revokes the previous installation. Caller holds
+    /// the store lock and passes the credentials saved before authorizing.
+    #[allow(clippy::too_many_arguments)]
+    async fn complete_login(
+        &self,
+        store: &Store,
+        keys: &KeyStore,
+        machine: &str,
+        previous: Option<Credentials>,
+        credentials: Credentials,
+        key_scope: bool,
+        json_format: bool,
+    ) -> Result<(Account, KeyProvisioning), CliError> {
         let account = match self.account(&credentials.access_token).await {
             Ok(account) => account,
             Err(error) => {
@@ -819,7 +1273,6 @@ impl Developers {
             prefix: key.prefix,
             organization_id: key.organization_id,
             organization_name: key.organization_name,
-            location: SecretLocation::Keychain,
         };
         let id = metadata.id.clone();
         match blocking(keys, move |keys| keys.save(metadata, &plaintext)).await {
@@ -901,7 +1354,7 @@ impl Developers {
         };
         if blocking(keys, |keys| keys.clear()).await.is_err() {
             eprintln!(
-                "warning: could not remove the local API key; remove the thru-cli entry from the OS keychain or the cli-key files under ~/.thru/cli/auth."
+                "warning: could not remove the local API key; remove the cli-key files under ~/.thru/cli/auth."
             );
         }
         outcome
@@ -924,16 +1377,45 @@ impl Developers {
         Self::body(response, false).await
     }
 
-    /// Runs the device grant. The flag is whether the login carries
-    /// `keys:cli`: a Developers deployment that predates it rejects the
-    /// request (400 `invalid_request`, or `invalid_scope`), so the request is
-    /// retried once with [`LEGACY_SCOPE`].
+    /// Runs the device grant: [`Self::request_device_authorization`], then
+    /// [`Self::poll_device_token`] for the code's lifetime. The flag is whether
+    /// the login carries `keys:cli`.
     async fn authorize(
         &self,
         no_browser: bool,
         json_format: bool,
     ) -> Result<(Credentials, bool), CliError> {
-        let origin = self.origin();
+        let device = self.request_device_authorization().await?;
+        if json_format {
+            eprintln!(
+                "Approve at {}\nCode: {}",
+                device.verification, device.user_code
+            );
+        } else {
+            println!(
+                "Approve at {}\nCode: {}",
+                device.verification, device.user_code
+            );
+        }
+        if !no_browser && open_browser(device.verification.as_str()).is_err() {
+            eprintln!("Could not open a browser. Open the approval URL shown above.");
+        }
+        let credentials = self
+            .poll_device_token(
+                &device.device_code,
+                device.interval,
+                Duration::from_secs(device.expires_in),
+            )
+            .await?;
+        Ok((credentials, device.key_scope))
+    }
+
+    /// Requests a device code and validates it. A Developers deployment that
+    /// predates `keys:cli` rejects the request (400 `invalid_request`, or
+    /// `invalid_scope`), so the request is retried once with [`LEGACY_SCOPE`].
+    /// The approval URL must belong to the configured origin; it gets
+    /// `ref=cli` so a sign-up through it is attributed to the CLI.
+    async fn request_device_authorization(&self) -> Result<DeviceAuthorization, CliError> {
         let mut key_scope = true;
         let (mut status, mut retry_after, mut value) = self.device_code(SCOPE).await?;
         if status == 400
@@ -956,15 +1438,10 @@ impl Developers {
             )
         })?;
         if !valid_token(&code.device_code)
-            || code.user_code.len() != 8
-            || !code
-                .user_code
-                .bytes()
-                .all(|b| b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789".contains(&b))
+            || !valid_user_code(&code.user_code)
             || code.expires_in == 0
             || code.expires_in > 3600
-            || code.interval == 0
-            || code.interval > 300
+            || !valid_interval(code.interval)
         {
             return Err(failure(
                 "INVALID_RESPONSE",
@@ -984,26 +1461,42 @@ impl Developers {
                 Some(status),
             )
         })?;
-        if verification.origin() != self.origin.origin()
-            || !verification.username().is_empty()
-            || verification.password().is_some()
-        {
+        if !self.own_approval_url(&verification) {
             return Err(failure(
                 "INVALID_RESPONSE",
                 "Browser approval URL must belong to the configured Developers origin",
                 Some(status),
             ));
         }
-        if json_format {
-            eprintln!("Approve at {verification}\nCode: {}", code.user_code);
-        } else {
-            println!("Approve at {verification}\nCode: {}", code.user_code);
-        }
-        if !no_browser && open_browser(verification.as_str()).is_err() {
-            eprintln!("Could not open a browser. Open the approval URL shown above.");
-        }
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(code.expires_in);
-        let mut interval = Duration::from_secs(code.interval);
+        Ok(DeviceAuthorization {
+            device_code: code.device_code,
+            user_code: code.user_code,
+            verification: with_cli_ref(verification),
+            expires_in: code.expires_in,
+            interval: code.interval,
+            key_scope,
+        })
+    }
+
+    /// Whether `url` is a browser approval URL on the configured origin.
+    fn own_approval_url(&self, url: &Url) -> bool {
+        url.origin() == self.origin.origin()
+            && url.username().is_empty()
+            && url.password().is_none()
+    }
+
+    /// Polls the token endpoint for `device_code` every `interval` seconds
+    /// (plus 5 s per `slow_down`) until approval, a terminal error, or
+    /// `lifetime` elapses (`expired_token`).
+    async fn poll_device_token(
+        &self,
+        device_code: &str,
+        interval: u64,
+        lifetime: Duration,
+    ) -> Result<Credentials, CliError> {
+        let origin = self.origin();
+        let deadline = tokio::time::Instant::now() + lifetime;
+        let mut interval = Duration::from_secs(interval);
         loop {
             tokio::time::sleep(
                 interval.min(deadline.saturating_duration_since(tokio::time::Instant::now())),
@@ -1020,12 +1513,12 @@ impl Developers {
                 .token(&[
                     ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
                     ("client_id", CLIENT_ID),
-                    ("device_code", &code.device_code),
+                    ("device_code", device_code),
                     ("resource", &origin),
                 ])
                 .await;
             match result {
-                Ok(credentials) => return Ok((credentials, key_scope)),
+                Ok(credentials) => return Ok(credentials),
                 Err(CliError::Developers { code, .. }) if code == "authorization_pending" => {}
                 Err(CliError::Developers { code, .. }) if code == "slow_down" => {
                     interval = interval.saturating_add(Duration::from_secs(5))
@@ -1080,40 +1573,51 @@ fn api_key() -> Result<Option<String>, CliError> {
     }
 }
 
-pub async fn handle_auth(command: AuthCommands, json_format: bool) -> Result<(), CliError> {
+/// Runs a `thru auth` command. `rpc` is the user's RPC configuration, used
+/// only by `status` to say whether RPC calls carry an API key; the other
+/// commands ignore it.
+pub async fn handle_auth(
+    command: AuthCommands,
+    json_format: bool,
+    rpc: &Config,
+) -> Result<(), CliError> {
     let developers = Developers::configured()?;
     let origin = developers.origin();
     match command {
-        AuthCommands::Login { no_browser } => {
+        AuthCommands::Login { no_wait: true, .. } => {
+            let pending = developers
+                .start_pending_login(&Store::configured(&origin)?)
+                .await?;
+            output::print_output(pending.to_json(), json_format);
+        }
+        AuthCommands::Login {
+            no_browser, resume, ..
+        } => {
             let store = Store::configured(&origin)?;
             let keys = KeyStore::configured(&origin)?;
-            let (account, provisioning) = developers
-                .login(&store, &keys, &machine_name(), no_browser, json_format)
-                .await?;
+            let (account, provisioning) = if resume {
+                developers
+                    .resume_login(&store, &keys, &machine_name(), json_format)
+                    .await?
+            } else {
+                developers
+                    .login(&store, &keys, &machine_name(), no_browser, json_format)
+                    .await?
+            };
             output::print_output(
                 json!({"auth":{"status":"authenticated","origin":origin,"account":account,"rpc_api_key":provisioning.to_json()}}),
                 json_format,
             );
         }
         AuthCommands::Status => {
-            // API-key automation is faucet-only, never used for account introspection.
-            let account = developers.status(&Store::configured(&origin)?).await?;
-            // Metadata only: status never reads the key from the OS keychain.
-            let rpc_api_key = match blocking(&KeyStore::configured(&origin)?, |keys| {
-                keys.load_metadata()
-            })
-            .await
-            {
-                Ok(Some(key)) => {
-                    json!({"present":true,"prefix":key.prefix,"organization":key.organization_name})
-                }
-                Ok(None) => json!({"present":false}),
-                Err(_) => json!({"present":false,"error":"stored API key details are unreadable"}),
-            };
-            output::print_output(
-                json!({"auth":{"status":"authenticated","origin":origin,"credential_kind":"device","api_key_override_configured":std::env::var_os("THRU_DEVELOPERS_API_KEY").is_some(),"account":account,"rpc_api_key":rpc_api_key}}),
-                json_format,
-            );
+            let status = auth_status(
+                &developers,
+                &Store::configured(&origin)?,
+                &KeyStore::configured(&origin)?,
+                rpc,
+            )
+            .await?;
+            output::print_output(status, json_format);
         }
         AuthCommands::Logout => {
             let (revoked, key) = developers
@@ -1127,8 +1631,120 @@ pub async fn handle_auth(command: AuthCommands, json_format: bool) -> Result<(),
                 json_format,
             );
         }
+        AuthCommands::Keys { subcommand } => {
+            let created = matches!(subcommand, AuthKeysCommands::Create { .. });
+            let result = auth_keys(&developers, &Store::configured(&origin)?, subcommand).await?;
+            output::print_output(result, json_format);
+            if created {
+                eprintln!("{NEW_KEY_WARNING}");
+            }
+        }
     }
     Ok(())
+}
+
+/// Shown after `thru auth keys create` prints a key.
+const NEW_KEY_WARNING: &str = "warning: this is the only time this API key is shown. Store it now, for example in a secret manager or CI secret; it cannot be retrieved later.";
+
+/// `thru auth status` output: the account, this machine's key, the
+/// organization and its limits, and whether RPC calls to the endpoint `rpc`
+/// selects carry an API key.
+async fn auth_status(
+    developers: &Developers,
+    store: &Store,
+    keys: &KeyStore,
+    rpc: &Config,
+) -> Result<Value, CliError> {
+    let origin = developers.origin();
+    // API-key automation is faucet-only, never used for account introspection.
+    let account = developers.status(store).await?;
+    // Metadata only: status never reads the secret.
+    let rpc_api_key = match blocking(keys, |keys| keys.load_metadata()).await {
+        Ok(Some(key)) => {
+            json!({"present":true,"prefix":key.prefix,"organization":key.organization_name})
+        }
+        Ok(None) => json!({"present":false}),
+        Err(_) => json!({"present":false,"error":"stored API key details are unreadable"}),
+    };
+    let mut status = json!({
+        "status":"authenticated",
+        "origin":origin,
+        "credential_kind":"device",
+        "api_key_override_configured":std::env::var_os("THRU_DEVELOPERS_API_KEY").is_some(),
+        "account":account,
+        "rpc_api_key":rpc_api_key,
+    });
+    // Status never fails because organization details are unavailable.
+    match developers.org_keys(store).await {
+        Ok(list) => {
+            status["organization"] = json!(list.organization);
+            status["organization_limits"] = json!(list.organization_limits);
+        }
+        Err(CliError::Developers { code, .. }) if code == "SCOPE_REQUIRED" => {
+            status["note"] = json!(
+                "This login cannot read organization details or manage API keys. Run `thru auth login` again to grant it."
+            );
+        }
+        Err(CliError::Developers { code, .. }) if code == "NO_ORGANIZATION" => {
+            status["note"] =
+                json!("Your account has no organization in which you can manage API keys.");
+        }
+        Err(error) => {
+            status["note"] = json!(format!(
+                "Organization details are unavailable ({}).",
+                describe(&error)
+            ));
+        }
+    }
+    status["rpc_endpoint"] = json!(rpc.rpc_base_url);
+    status["rpc_api_key_used"] = json!(rpc.rpc_auth_token_present());
+    Ok(json!({ "auth": status }))
+}
+
+/// `thru auth keys ...` output. A created key's plaintext is in the result,
+/// to be printed once; it is never logged or stored.
+async fn auth_keys(
+    developers: &Developers,
+    store: &Store,
+    command: AuthKeysCommands,
+) -> Result<Value, CliError> {
+    match command {
+        AuthKeysCommands::List => {
+            let list = developers.org_keys(store).await?;
+            Ok(json!({"auth_keys":{
+                "organization":list.organization,
+                "organization_limits":list.organization_limits,
+                "keys":list.keys,
+            }}))
+        }
+        AuthKeysCommands::Create { name, origins } => {
+            let created = developers.create_org_key(store, &name, &origins).await?;
+            Ok(json!({"auth_key":{
+                "organization":created.organization,
+                "key":created.key,
+                "plaintext":created.plaintext,
+            }}))
+        }
+        AuthKeysCommands::Revoke { key_id } => {
+            developers.revoke_org_key(store, &key_id).await?;
+            Ok(json!({"auth_key":{"id":key_id,"status":"revoked"}}))
+        }
+    }
+}
+
+/// Runs the interactive `thru auth login` (browser approval), as offered by
+/// the sign-in prompt after the no-key note or a rate-limit hint.
+pub async fn sign_in_interactively() -> Result<(), CliError> {
+    handle_auth(
+        AuthCommands::Login {
+            no_browser: false,
+            no_wait: false,
+            resume: false,
+        },
+        false,
+        &Config::default(),
+    )
+    .await
 }
 
 /// Reads the key provisioned by `thru auth login` for the configured
@@ -1147,30 +1763,35 @@ impl ProvisionedKeySource for ProvisionedKeyLoader {
         Self::keys().is_some_and(|keys| matches!(keys.load_metadata(), Ok(Some(_))))
     }
     fn load(&self) -> Option<String> {
-        let keys = Self::keys()?;
-        // Called from synchronous code that may run on a tokio worker; keychain
-        // access must happen on another thread (keyring's tokio caveat). The
-        // runtime handle is entered there as `spawn_blocking` would.
-        let handle = tokio::runtime::Handle::try_current().ok();
-        let result = std::thread::scope(|scope| {
-            scope
-                .spawn(|| {
-                    let _runtime = handle.as_ref().map(tokio::runtime::Handle::enter);
-                    keys.load_secret()
-                })
-                .join()
-        });
-        match result {
-            Ok(Ok(key)) => key,
-            _ => {
+        match Self::keys()?.load_secret() {
+            Ok(key) => key,
+            Err(_) => {
                 if self.warn {
                     eprintln!(
-                        "warning: could not read the API key from `thru auth login` (OS keychain unavailable or locked); continuing without it."
+                        "warning: could not read the API key from `thru auth login`; continuing without it. Run `thru auth login` again to restore it."
                     );
                 }
                 None
             }
         }
+    }
+}
+
+/// Atomically writes a small file at `path` inside `root`, owner-only (0600)
+/// on Unix, refusing to replace a symlink. For CLI state that is not a secret
+/// but is nobody else's business, such as one-time notice markers.
+pub(crate) fn write_owner_only_file(
+    root: &std::path::Path,
+    path: &std::path::Path,
+    raw: &[u8],
+) -> Result<(), CliError> {
+    #[cfg(unix)]
+    {
+        storage::write_private(root, path, raw)
+    }
+    #[cfg(not(unix))]
+    {
+        storage::write_plain(root, path, raw)
     }
 }
 
@@ -1289,7 +1910,7 @@ pub async fn fund(
     if !token_account.starts_with("ta") || token_account.len() != 46 {
         return Err(failure(
             "INVALID_TOKEN_ACCOUNT",
-            "THRUSD account must be an existing ta... token-account address",
+            "UUSD account must be an existing ta... token-account address",
             None,
         ));
     }
@@ -1302,11 +1923,11 @@ pub async fn fund(
     if !valid_amount {
         return Err(failure(
             "INVALID_AMOUNT",
-            "THRUSD amount must be a positive decimal string without exponent, sign or separators",
+            "UUSD amount must be a positive decimal string without exponent, sign or separators",
             None,
         ));
     }
-    fund_asset(config, "thrusd", token_account, amount, json_format).await
+    fund_asset(config, "uusd", token_account, amount, json_format).await
 }
 
 pub async fn fund_thru(
@@ -1322,11 +1943,7 @@ pub async fn fund_thru(
             None,
         ));
     }
-    let bytes = if let Ok(secret) = config.keys.get_key(account) {
-        crate::crypto::keypair_from_hex(secret)?.public_key
-    } else {
-        crate::utils::validate_address_or_hex(account)?
-    };
+    let bytes = config.keys.resolve_public_key(account)?;
     let address = thru_base::tn_tools::Pubkey::from_bytes(&bytes).to_string();
     fund_asset(config, "thru", &address, &amount.to_string(), json_format).await
 }
@@ -1356,7 +1973,7 @@ async fn fund_asset(
     };
     let mut funding =
         json!({"asset":asset,"network":network,"account":account,"amount":amount,"result":result});
-    if asset == "thrusd" {
+    if asset == "uusd" {
         funding["token_account"] = json!(account);
     }
     output::print_output(json!({"faucet_fund":funding}), json_format);

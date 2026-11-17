@@ -1,8 +1,6 @@
 //! Configuration management for the Thru CLI
 
 use anyhow::Result;
-use rand::TryRng;
-use rand::rngs::SysRng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 #[cfg(unix)]
@@ -10,236 +8,254 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
-use thru_base::tn_tools::Pubkey;
 use thru_base::bootstrap_addresses as programs;
-use tokio::io::AsyncWriteExt;
 use url::Url;
 
 use crate::error::{CliError, ConfigError};
+use crate::keys::{KeyManager, MigrationKeys, StoredEntry, UNQUOTED_SEED_ERROR, decode_seed};
+use thru_base::tn_tools::Pubkey;
+use zeroize::Zeroizing;
 
-pub(crate) async fn write_key_file(path: &Path, content: &str) -> Result<(), CliError> {
-    if let Some(directory) = path.parent() {
-        let mut builder = tokio::fs::DirBuilder::new();
-        builder.recursive(true);
-        #[cfg(unix)]
-        builder.mode(0o700);
-        builder
-            .create(directory)
-            .await
-            .map_err(ConfigError::DirectoryCreation)?;
-        #[cfg(unix)]
-        tokio::fs::set_permissions(directory, std::fs::Permissions::from_mode(0o700))
-            .await
-            .map_err(ConfigError::DirectoryCreation)?;
+/// All writers share this lock, acquired before reloading the document.
+pub(crate) struct MutationLock(std::fs::File);
+
+impl Drop for MutationLock {
+    fn drop(&mut self) {
+        let _ = fs2::FileExt::unlock(&self.0);
     }
+}
 
-    // Resolve symlinks so the atomic replacement preserves the config link.
+fn prepare_config_directory(directory: &Path) -> Result<(), CliError> {
+    // Only the CLI-owned directory may be tightened. Never chmod through a
+    // symlink or change permissions on a directory belonging to another user.
+    match std::fs::symlink_metadata(directory) {
+        Ok(metadata) => {
+            if !metadata.is_dir() || metadata.file_type().is_symlink() {
+                return Err(CliError::Validation(format!(
+                    "Config directory '{}' must be a non-symlink directory",
+                    directory.display()
+                )));
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::MetadataExt;
+                if metadata.uid() != unsafe { libc::geteuid() } {
+                    return Err(CliError::Validation(format!(
+                        "Config directory '{}' must be owned by this user",
+                        directory.display()
+                    )));
+                }
+            }
+            #[cfg(unix)]
+            if metadata.permissions().mode() & 0o077 != 0 {
+                let mut options = std::fs::OpenOptions::new();
+                use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+                options
+                    .read(true)
+                    .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW);
+                let file = options
+                    .open(directory)
+                    .map_err(|error| config_io(directory, error))?;
+                let opened = file
+                    .metadata()
+                    .map_err(|error| config_io(directory, error))?;
+                if opened.dev() != metadata.dev() || opened.ino() != metadata.ino() {
+                    return Err(CliError::Validation(format!(
+                        "Config directory '{}' changed",
+                        directory.display()
+                    )));
+                }
+                file.set_permissions(std::fs::Permissions::from_mode(
+                    metadata.permissions().mode() & !0o077,
+                ))
+                .map_err(|error| config_io(directory, error))?;
+                thru_base::key_file::validate_owner(
+                    &file
+                        .metadata()
+                        .map_err(|error| config_io(directory, error))?,
+                    directory,
+                )?;
+            }
+            Ok(())
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            thru_base::key_file::ensure_private_dir(directory)?;
+            Ok(())
+        }
+        Err(error) => Err(config_io(directory, error)),
+    }
+}
+
+fn config_io(path: &Path, error: std::io::Error) -> CliError {
+    CliError::Generic {
+        message: format!("Config '{}': {error}", path.display()),
+    }
+}
+
+pub(crate) async fn lock_config(path: &Path) -> Result<MutationLock, CliError> {
+    let directory = path.parent().unwrap_or(Path::new(".")).to_owned();
+    tokio::task::spawn_blocking(move || {
+        prepare_config_directory(&directory)?;
+        let path = directory.join(".keys.lock");
+        let file = thru_base::key_file::secure_open(&path, true, true)?;
+        fs2::FileExt::lock_exclusive(&file).map_err(|error| config_io(&path, error))?;
+        Ok(MutationLock(file))
+    })
+    .await
+    .map_err(|_| CliError::Generic {
+        message: "Config lock task failed".into(),
+    })?
+}
+
+#[cfg(test)]
+async fn write_key_file(path: &Path, content: &str) -> Result<(), CliError> {
+    write_config_atomic(path, content).map(|_| ())
+}
+
+/// Rename commits the registration; a subsequent directory-sync failure cannot
+/// roll it back. Return whether it is durable so callers retain old secrets if
+/// durability cannot be confirmed.
+pub(crate) fn write_config_atomic(path: &Path, content: &str) -> Result<bool, CliError> {
+    write_config(path, content, true).map(|(_, durable)| durable)
+}
+
+fn write_config(path: &Path, content: &str, overwrite: bool) -> Result<(bool, bool), CliError> {
+    use std::io::Write;
+    if let Some(directory) = path.parent() {
+        prepare_config_directory(directory)?;
+    }
+    // Preserve an existing config symlink; signing key files never follow links.
     let mut target = path.to_path_buf();
     for hops in 0..=40 {
-        let metadata = match tokio::fs::symlink_metadata(&target).await {
+        let metadata = match std::fs::symlink_metadata(&target) {
             Ok(metadata) => metadata,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => break,
-            Err(error) => return Err(error.into()),
+            Err(error) => return Err(config_io(&target, error)),
         };
         if !metadata.file_type().is_symlink() {
             break;
         }
         if hops == 40 {
-            return Err(std::io::Error::other("Config symlink chain exceeds 40 hops").into());
+            return Err(CliError::Validation(format!(
+                "Config '{}' symlink chain exceeds 40 hops",
+                path.display()
+            )));
         }
-        let link = tokio::fs::read_link(&target).await?;
-        target = target
-            .parent()
-            .unwrap_or_else(|| Path::new(""))
-            .join(link);
+        let link = std::fs::read_link(&target).map_err(|error| config_io(&target, error))?;
+        target = target.parent().unwrap_or_else(|| Path::new("")).join(link);
     }
+    // All CLI writers hold MutationLock. The presence check and rename are
+    // serialized without requiring filesystem hard-link support.
+    if !overwrite
+        && target
+            .try_exists()
+            .map_err(|error| config_io(&target, error))?
+    {
+        return Ok((false, true));
+    }
+    #[cfg(unix)]
+    let directory = std::fs::File::open(target.parent().unwrap_or(Path::new(".")))
+        .map_err(|error| config_io(&target, error))?;
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    let temp_path = target.with_extension(format!("{}.{nanos}.tmp", std::process::id()));
-
-    let mut options = tokio::fs::OpenOptions::new();
+    let temporary = target.with_extension(format!("{}.{nanos}.tmp", std::process::id()));
+    let mut options = std::fs::OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
-    options.mode(0o600);
-    let mut file = options.open(&temp_path).await?;
-    let result = async {
-        file.write_all(content.as_bytes()).await?;
-        file.flush().await?;
-        file.sync_all().await?;
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+    }
+    let mut file = options
+        .open(&temporary)
+        .map_err(|error| config_io(&temporary, error))?;
+    let result = (|| {
+        file.write_all(content.as_bytes())?;
+        file.sync_all()?;
         drop(file);
-        tokio::fs::rename(&temp_path, &target).await
-    }
-    .await;
+        std::fs::rename(&temporary, &target).map(|_| true)
+    })();
     if result.is_err() {
-        let _ = tokio::fs::remove_file(&temp_path).await;
+        let _ = std::fs::remove_file(&temporary);
     }
-    result.map_err(Into::into)
+    let created = result.map_err(|error| config_io(&target, error))?;
+    #[cfg(unix)]
+    if created {
+        if let Err(error) = directory.sync_all() {
+            eprintln!(
+                "Config '{}' committed, but directory sync failed: {error}; prior signing secrets will be retained",
+                target.display()
+            );
+            return Ok((true, false));
+        }
+    }
+    Ok((created, true))
 }
 
-/// Key management service for the Thru CLI
-#[derive(Debug, Clone)]
-pub struct KeyManager {
-    keys: HashMap<String, String>,
+fn document_error(field: String, error: &serde_yaml::Error) -> CliError {
+    // YAML error messages can quote secret values; expose metadata only.
+    let location = error
+        .location()
+        .map(|location| format!(" at line {}, column {}", location.line(), location.column()))
+        .unwrap_or_default();
+    CliError::Validation(format!(
+        "Invalid CLI config field '{field}'{location}; invalid YAML syntax, structure, or field type"
+    ))
 }
 
-impl Serialize for KeyManager {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.keys.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for KeyManager {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let keys = HashMap::deserialize(deserializer)?;
-        Ok(KeyManager { keys })
-    }
-}
-
-impl KeyManager {
-    /// Create a new KeyManager with default key
-    pub fn new() -> Self {
-        let mut keys = HashMap::new();
-
-        // Generate a cryptographically secure random 32-byte private key for default
-        let mut private_key_bytes = [0u8; 32];
-        let mut rng = SysRng;
-        rng.try_fill_bytes(&mut private_key_bytes).unwrap();
-        let private_key_hex = hex::encode(private_key_bytes);
-
-        keys.insert("default".to_string(), private_key_hex);
-
-        Self { keys }
-    }
-
-    /// List all key names
-    pub fn list_keys(&self) -> Vec<String> {
-        let mut key_names: Vec<String> = self.keys.keys().cloned().collect();
-        key_names.sort();
-        key_names
-    }
-
-    /// Add a new key
-    pub fn add_key(&mut self, name: &str, key: &str, overwrite: bool) -> Result<(), CliError> {
-        let normalized_name = Self::normalize_key_name(name);
-
-        Self::validate_key_value(&normalized_name, key)?;
-
-        // Check for existing key
-        if self.keys.contains_key(&normalized_name) && !overwrite {
-            return Err(CliError::Validation(format!(
-                "Key '{}' already exists. Use --overwrite to replace it",
-                normalized_name
-            )));
+/// Recover an original YAML field location without exposing its value.
+fn field_error(raw: &str, field: &str) -> CliError {
+    struct Locate<'a>(&'a str);
+    #[derive(Deserialize)]
+    enum InvalidValue {}
+    impl<'de> serde::de::Visitor<'de> for Locate<'_> {
+        type Value = ();
+        fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("configuration mapping")
         }
-
-        self.keys.insert(normalized_name, key.to_string());
-        Ok(())
-    }
-
-    /// Get a key value
-    pub fn get_key(&self, name: &str) -> Result<&str, CliError> {
-        let normalized_name = Self::normalize_key_name(name);
-        self.keys
-            .get(&normalized_name)
-            .map(|s| s.as_str())
-            .ok_or_else(|| CliError::Validation(format!("Key '{}' not found", normalized_name)))
-    }
-
-    /// Generate a new random key
-    pub fn generate_key(&mut self, name: &str, overwrite: bool) -> Result<String, CliError> {
-        let normalized_name = Self::normalize_key_name(name);
-
-        // Check for existing key
-        if self.keys.contains_key(&normalized_name) && !overwrite {
-            return Err(CliError::Validation(format!(
-                "Key '{}' already exists. Use --overwrite to replace it",
-                normalized_name
-            )));
+        fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<(), A::Error> {
+            while let Some(key) = map.next_key::<String>()? {
+                if key == self.0 {
+                    let value: InvalidValue = map.next_value()?;
+                    match value {}
+                } else {
+                    map.next_value::<serde::de::IgnoredAny>()?;
+                }
+            }
+            Ok(())
         }
-
-        // Generate new key
-        let mut private_key_bytes = [0u8; 32];
-        let mut rng = SysRng;
-        rng.try_fill_bytes(&mut private_key_bytes).unwrap();
-        let private_key_hex = hex::encode(private_key_bytes);
-
-        self.keys.insert(normalized_name, private_key_hex.clone());
-        Ok(private_key_hex)
     }
-
-    /// Remove a key
-    pub fn remove_key(&mut self, name: &str) -> Result<(), CliError> {
-        let normalized_name = Self::normalize_key_name(name);
-
-        if !self.keys.contains_key(&normalized_name) {
-            return Err(CliError::Validation(format!(
-                "Key '{}' not found",
-                normalized_name
-            )));
+    impl<'de> serde::de::DeserializeSeed<'de> for Locate<'_> {
+        type Value = ();
+        fn deserialize<D: serde::Deserializer<'de>>(self, deserializer: D) -> Result<(), D::Error> {
+            deserializer.deserialize_map(self)
         }
-
-        self.keys.remove(&normalized_name);
-        Ok(())
     }
-
-    /// Check if a key exists
-    #[allow(dead_code)]
-    pub fn has_key(&self, name: &str) -> bool {
-        let normalized_name = Self::normalize_key_name(name);
-        self.keys.contains_key(&normalized_name)
-    }
-
-    /// Get the default key (for backward compatibility)
-    pub fn get_default_key(&self) -> Result<&str, CliError> {
-        self.get_key("default")
-    }
-
-    /// Check whether a key name resolves to the default key
-    pub fn is_default_key_name(name: &str) -> bool {
-        Self::normalize_key_name(name) == "default"
-    }
-
-    /// Normalize key name to lowercase
-    fn normalize_key_name(name: &str) -> String {
-        name.to_lowercase()
-    }
-
-    fn validate_key_value(name: &str, key: &str) -> Result<(), CliError> {
-        if key.len() != 64 {
-            return Err(CliError::Validation(format!(
-                "Key '{}' must be exactly 64 hexadecimal characters",
-                name
-            )));
-        }
-
-        hex::decode(key).map_err(|_| {
-            CliError::Validation(format!("Key '{}' has invalid hexadecimal format", name))
-        })?;
-
-        Ok(())
-    }
-
-    fn validate_all_keys(&self) -> Result<(), CliError> {
-        for (name, key) in &self.keys {
-            Self::validate_key_value(name, key)
-                .map_err(|e| ConfigError::InvalidPrivateKey(e.to_string()))?;
-        }
-
-        Ok(())
+    let root = field.split(['.', '[']).next().unwrap_or(field);
+    match serde::de::DeserializeSeed::deserialize(
+        Locate(root),
+        serde_yaml::Deserializer::from_str(raw),
+    ) {
+        Err(error) => document_error(field.to_owned(), &error),
+        Ok(()) => CliError::Validation(format!("Invalid CLI config field '{field}'")),
     }
 }
 
 /// Canonical block-producer bond program for a freshly bootstrapped network.
 fn default_bp_program_public_key() -> String {
     programs::BLOCK_PRODUCER_PROGRAM_ADDRESS.to_string()
+}
+
+/// Canonical multisig program for a freshly bootstrapped network.
+fn default_multisig_program_public_key() -> String {
+    programs::MULTISIG_PROGRAM_ADDRESS.to_string()
+}
+
+/// Canonical Multicall program for a freshly bootstrapped network.
+fn default_multicall_program_public_key() -> String {
+    programs::MULTICALL_PROGRAM_ADDRESS.to_string()
 }
 
 /// Hostnames of the official Thru RPC endpoints. This is the single source of
@@ -274,7 +290,7 @@ pub fn api_key_eligible_endpoint(rpc_base_url: &str, insecure: bool) -> bool {
 /// configured token (any endpoint), else, only for an official endpoint with
 /// TLS verification on, the environment API key, else the key provisioned by
 /// `thru auth login`, else none. `provisioned_key` is called only when its
-/// key would be sent, so the OS keychain is not touched otherwise.
+/// key would be sent, so its file is not read otherwise.
 pub fn resolve_rpc_auth_token(
     configured: Option<&str>,
     env_api_key: Option<&str>,
@@ -296,10 +312,9 @@ pub fn resolve_rpc_auth_token(
 
 /// Where the API key provisioned by `thru auth login` comes from.
 pub trait ProvisionedKeySource: Send + Sync {
-    /// Whether a provisioned key is recorded. Must not read the secret (and so
-    /// must not touch the OS keychain).
+    /// Whether a provisioned key is recorded. Must not read the secret.
     fn present(&self) -> bool;
-    /// Reads the secret. May touch the OS keychain; called at most once.
+    /// Reads the secret; called at most once.
     fn load(&self) -> Option<String>;
 }
 
@@ -352,11 +367,13 @@ pub struct NetworkConfig {
 
 /// Configuration structure for the Thru CLI
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Config {
     /// Endpoint for gRPC requests (e.g. http://127.0.0.1:8472 or https://rpc.alphanet.thru.org)
     pub rpc_base_url: String,
 
     /// Key management
+    #[serde(default)]
     pub keys: KeyManager,
 
     /// Uploader program public key
@@ -394,6 +411,14 @@ pub struct Config {
     /// Block-producer (BP) bond program public key
     #[serde(default = "default_bp_program_public_key")]
     pub bp_program_public_key: String,
+
+    /// Multisig program public key
+    #[serde(default = "default_multisig_program_public_key")]
+    pub multisig_program_public_key: String,
+
+    /// Multicall program public key (program + ABI deploys)
+    #[serde(default = "default_multicall_program_public_key")]
+    pub multicall_program_public_key: String,
 
     /// Base name service program public key
     pub name_service_program_public_key: String,
@@ -437,7 +462,7 @@ pub struct Config {
     /// from the global `--insecure` flag; never persisted to the config file.
     #[serde(default, skip_serializing)]
     pub insecure: bool,
- 
+
     /// Runtime-only: whether transaction-submitting commands should print the
     /// pending signature to stderr before sending. Set from the CLI flags in
     /// `run` (enabled outside `--json`/`--quiet`); never persisted to disk.
@@ -445,14 +470,14 @@ pub struct Config {
     pub announce_pending_signature: bool,
 
     /// Runtime-only: developer API key read from the environment. Never
-    /// serialized, so no `save()` path can persist it. Only sent to official
+    /// serialized, so no config mutation can persist it. Only sent to official
     /// endpoints; read it through [`Config::rpc_auth_token`].
     #[serde(skip)]
     pub env_api_key: Option<String>,
 
     /// Runtime-only: org API key provisioned by `thru auth login`, read from the
-    /// OS keychain (or its owner-only file fallback) only when it would be sent.
-    /// Never serialized, so no `save()` path can persist it. Only sent to
+    /// owner-only files under `~/.thru/cli/auth` only when it would be sent.
+    /// Never serialized, so no config mutation can persist it. Only sent to
     /// official endpoints; read it through [`Config::rpc_auth_token`].
     #[serde(skip)]
     pub provisioned_api_key: ProvisionedApiKey,
@@ -468,13 +493,15 @@ impl Default for Config {
             system_test_program_public_key: None,
             abi_manager_program_public_key: programs::ABI_MANAGER_PROGRAM_ADDRESS.to_string(),
             token_program_public_key: programs::TOKEN_PROGRAM_ADDRESS.to_string(),
-            consensus_validator_program_public_key:
-                programs::CONSENSUS_VALIDATOR_PROGRAM_ADDRESS.to_string(),
+            consensus_validator_program_public_key: programs::CONSENSUS_VALIDATOR_PROGRAM_ADDRESS
+                .to_string(),
             consensus_attestor_table_public_key: programs::ATTESTOR_TABLE_ADDRESS.to_string(),
             consensus_converted_vault_public_key: programs::CONVERTED_VAULT_ADDRESS.to_string(),
             consensus_unclaimed_vault_public_key: programs::UNCLAIMED_VAULT_ADDRESS.to_string(),
             wthru_program_public_key: programs::WTHRU_PROGRAM_ADDRESS.to_string(),
             bp_program_public_key: default_bp_program_public_key(),
+            multisig_program_public_key: default_multisig_program_public_key(),
+            multicall_program_public_key: default_multicall_program_public_key(),
             name_service_program_public_key: programs::NAME_SERVICE_PROGRAM_ADDRESS.to_string(),
             thru_registrar_program_public_key: programs::THRU_REGISTRAR_PROGRAM_ADDRESS.to_string(),
             timeout_seconds: 30,
@@ -496,166 +523,272 @@ impl Default for Config {
 }
 
 impl Config {
-    /// Load configuration from the default location
+    /// Load existing configuration without rewriting it. Defaults are in-memory.
+    /// Only a missing configuration is initialized, without any signing secret.
     pub async fn load() -> Result<Self, CliError> {
-        let config = Self::load_unvalidated().await?;
-
-        // Validate the configuration
-        config.validate()?;
-
-        Ok(config)
-    }
-
-    /// Load configuration for key-management commands.
-    ///
-    /// Kept as a compatibility alias now that all configuration loading permits
-    /// a missing default key.
-    pub async fn load_for_key_management() -> Result<Self, CliError> {
-        Self::load().await
-    }
-
-    async fn load_unvalidated() -> Result<Self, CliError> {
         let config_path = Self::get_config_path()?;
-
         if !config_path.exists() {
-            // Create default config if it doesn't exist
             Self::create_default_config().await?;
         }
+        Self::load_existing_path(&config_path).await
+    }
 
-        let config_content = tokio::fs::read_to_string(&config_path).await?;
-
-        // Try to parse normally first
-        let config: Config = match serde_yaml::from_str(&config_content) {
-            Ok(c) => c,
-            Err(e) => {
-                // Check if it's a missing field error
-                let error_msg = e.to_string();
-                if error_msg.contains("missing field") {
-                    // Try to migrate the config
-                    Self::migrate_config(&config_path, &config_content).await?
-                } else {
-                    return Err(ConfigError::InvalidFormat(e).into());
+    async fn load_existing_path(config_path: &Path) -> Result<Self, CliError> {
+        let raw = Self::read_document(config_path).await?;
+        let config = Self::from_document(config_path, &raw)?;
+        config.validate().map_err(|error| {
+            if let CliError::Validation(message) = &error {
+                if let Some(field) = message
+                    .strip_prefix("Invalid CLI config field '")
+                    .and_then(|message| message.split('\'').next())
+                {
+                    return field_error(&raw, field);
                 }
             }
-        };
-
+            error
+        })?;
         Ok(config)
     }
 
-    /// Migrate an old config by adding missing fields with default values
-    async fn migrate_config(config_path: &PathBuf, config_content: &str) -> Result<Self, CliError> {
-        // Parse existing config as a generic YAML value
-        let mut existing: serde_yaml::Value =
-            serde_yaml::from_str(config_content).map_err(|e| ConfigError::InvalidFormat(e))?;
+    /// Caller holds the mutation lock; validation occurs once, at commit.
+    pub(crate) async fn load_for_update(config_path: &Path) -> Result<Self, CliError> {
+        match Self::read_document(config_path).await {
+            Ok(raw) => {
+                // Writing a config read with inline entries would drop their
+                // seeds, so every writer requires migration first.
+                let config = Self::from_document(config_path, &raw)?;
+                config.require_writable_at(config_path)?;
+                Ok(config)
+            }
+            Err(CliError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+                let mut config = Self::default();
+                config
+                    .keys
+                    .set_base_dir(config_path.parent().unwrap_or(Path::new(".")).to_owned());
+                Ok(config)
+            }
+            Err(error) => Err(error),
+        }
+    }
 
-        // Get default config as YAML value
-        let default_config = Config::default();
-        let default_yaml: serde_yaml::Value =
-            serde_yaml::to_value(&default_config).map_err(|e| ConfigError::InvalidFormat(e))?;
+    /// Fail before a command's side effects (installing or deleting files) when
+    /// its later config update would be refused: every config writer requires
+    /// legacy inline signing keys to be migrated first.
+    pub fn require_writable(&self) -> Result<(), CliError> {
+        match Self::get_config_path() {
+            Ok(path) => self.require_writable_at(&path),
+            Err(_) => self.require_writable_at(Path::new("The CLI config")),
+        }
+    }
 
-        // Track what fields were added
-        let mut added_fields: Vec<String> = Vec::new();
+    fn require_writable_at(&self, config_path: &Path) -> Result<(), CliError> {
+        let inline = self.keys.unmigrated_aliases();
+        if inline.is_empty() {
+            return Ok(());
+        }
+        Err(CliError::Validation(format!(
+            "{} still stores signing keys inline ({}); run 'thru keys migrate' before changing the config",
+            config_path.display(),
+            inline.join(", ")
+        )))
+    }
 
-        // Merge missing fields from default into existing
-        if let (Some(existing_map), Some(default_map)) =
-            (existing.as_mapping_mut(), default_yaml.as_mapping())
-        {
-            for (key, default_value) in default_map {
-                if !existing_map.contains_key(key) {
-                    if let Some(key_str) = key.as_str() {
-                        added_fields.push(key_str.to_string());
+    /// Legacy inline entries do not block reading: only their alias names are
+    /// kept (the seeds are dropped here and stay in the file), so commands that
+    /// never sign keep working and a lookup of such an alias points at
+    /// `thru keys migrate`. Writers refuse them in `load_for_update`.
+    fn from_document(config_path: &Path, raw: &str) -> Result<Self, CliError> {
+        let (mut config, inline) = Self::parse_document(raw)?;
+        config
+            .keys
+            .set_unmigrated(inline.into_iter().map(|(name, _seed)| name));
+        config
+            .keys
+            .set_base_dir(config_path.parent().unwrap_or(Path::new(".")).to_owned());
+        Ok(config)
+    }
+
+    pub(crate) async fn read_document(path: &Path) -> Result<Zeroizing<String>, CliError> {
+        let path = path.to_owned();
+        tokio::task::spawn_blocking(move || {
+            use std::io::Read;
+            const LIMIT: u64 = 1024 * 1024;
+            let context = |error: std::io::Error| {
+                std::io::Error::new(
+                    error.kind(),
+                    format!("Config '{}': {error}", path.display()),
+                )
+            };
+            let mut options = std::fs::OpenOptions::new();
+            options.read(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.custom_flags(libc::O_NONBLOCK);
+            }
+            let mut file = options.open(&path).map_err(context)?;
+            let metadata = file.metadata().map_err(context)?;
+            if !metadata.is_file() || metadata.len() > LIMIT {
+                return Err(CliError::Validation(format!(
+                    "Config '{}' must be a regular file of at most 1 MiB",
+                    path.display()
+                )));
+            }
+            // A fixed, zeroizing allocation prevents secret-bearing reallocations.
+            // One spare byte detects growth while the config is being read.
+            let mut bytes = Zeroizing::new(vec![0; metadata.len() as usize + 1]);
+            let mut length = 0;
+            loop {
+                if length == bytes.len() {
+                    return Err(CliError::Validation(format!(
+                        "Config '{}' changed while being read",
+                        path.display()
+                    )));
+                }
+                let read = file.read(&mut bytes[length..]).map_err(context)?;
+                if read == 0 {
+                    break;
+                }
+                length += read;
+            }
+            bytes.truncate(length);
+            match String::from_utf8(std::mem::take(&mut *bytes)) {
+                Ok(raw) => Ok(Zeroizing::new(raw)),
+                Err(error) => {
+                    let _invalid_bytes = Zeroizing::new(error.into_bytes());
+                    Err(CliError::Validation(format!(
+                        "Config '{}' is not valid UTF-8",
+                        path.display()
+                    )))
+                }
+            }
+        })
+        .await
+        .map_err(|_| CliError::Generic {
+            message: "Config read task failed".into(),
+        })?
+    }
+
+    /// Parse legacy seeds directly into zeroizing ownership, never a generic
+    /// YAML value that could be serialized back to disk or displayed in errors.
+    pub(crate) fn parse_document(
+        raw: &str,
+    ) -> Result<(Self, Vec<(String, Zeroizing<[u8; 32]>)>), CliError> {
+        #[derive(Deserialize)]
+        struct Document {
+            #[serde(default)]
+            keys: MigrationKeys,
+            #[serde(flatten)]
+            fields: serde_yaml::Mapping,
+        }
+        let document: Document =
+            serde_path_to_error::deserialize(serde_yaml::Deserializer::from_str(raw))
+                .map_err(|error| document_error(error.path().to_string(), error.inner()))?;
+        let mut keys = KeyManager::new();
+        let mut inline = Vec::new();
+        for (name, entry) in document.keys.0 {
+            match entry {
+                StoredEntry::Reference(entry) => keys
+                    .insert_migrated_entry(&name, entry, false)
+                    .map_err(|_| field_error(raw, "keys"))?,
+                StoredEntry::Inline(seed) => inline.push((
+                    name,
+                    decode_seed(seed.as_bytes()).map_err(|_| field_error(raw, "keys"))?,
+                )),
+                StoredEntry::UnquotedNumber => {
+                    let mut error = field_error(raw, "keys");
+                    if let CliError::Validation(message) = &mut error {
+                        message.push_str("; ");
+                        message.push_str(UNQUOTED_SEED_ERROR);
                     }
-                    existing_map.insert(key.clone(), default_value.clone());
+                    return Err(error);
                 }
             }
         }
-
-        // Try to deserialize the merged config
-        let config: Config =
-            serde_yaml::from_value(existing.clone()).map_err(|e| ConfigError::InvalidFormat(e))?;
-
-        // Save the updated config
-        let updated_content = Self::generate_config_template(&config);
-        write_key_file(config_path, &updated_content).await?;
-
-        // Notify user about the migration
-        if !added_fields.is_empty() {
-            eprintln!(
-                "Config migrated: added missing field(s): {}",
-                added_fields.join(", ")
-            );
-            eprintln!("Updated config saved to: {}", config_path.display());
-        }
-
-        Ok(config)
+        let mut fields = document.fields;
+        fields.insert(
+            "keys".into(),
+            serde_yaml::to_value(keys).map_err(ConfigError::InvalidFormat)?,
+        );
+        let config: Config = serde_path_to_error::deserialize(serde_yaml::Value::Mapping(fields))
+            .map_err(|error| field_error(raw, &error.path().to_string()))?;
+        Ok((config, inline))
     }
 
-    /// Save configuration to the default location
-    pub async fn save(&self) -> Result<(), CliError> {
-        let config_path = Self::get_config_path()?;
-        let config_content = Self::generate_config_template(self);
-        write_key_file(&config_path, &config_content).await?;
-        Ok(())
+    /// Apply field-level intent to the latest document under the shared lock.
+    pub async fn update(
+        apply: impl FnOnce(&mut Self) -> Result<(), CliError>,
+    ) -> Result<Self, CliError> {
+        Self::update_path(&Self::get_config_path()?, apply).await
     }
 
-    /// Validate the configuration
+    async fn update_path(
+        path: &Path,
+        apply: impl FnOnce(&mut Self) -> Result<(), CliError>,
+    ) -> Result<Self, CliError> {
+        let lock = lock_config(path).await?;
+        let mut config = Self::load_for_update(path).await?;
+        apply(&mut config)?;
+        config.validate()?;
+        let raw = Self::generate_config_template(&config);
+        let path = path.to_owned();
+        tokio::task::spawn_blocking(move || {
+            let _lock = lock;
+            write_config_atomic(&path, &raw)?;
+            Ok::<_, CliError>(config)
+        })
+        .await
+        .map_err(|_| CliError::Generic {
+            message: "Config update task failed".into(),
+        })?
+    }
+
+    /// Validate the configuration without reading signing secrets.
     pub fn validate(&self) -> Result<(), CliError> {
-        self.validate_common()
-    }
-
-    /// Validate key-management configuration.
-    ///
-    /// Kept as a compatibility alias for [`Self::validate`].
-    pub fn validate_for_key_management(&self) -> Result<(), CliError> {
-        self.validate()
-    }
-
-    fn validate_common(&self) -> Result<(), CliError> {
-        // Validate URL
-        Url::parse(&self.rpc_base_url).map_err(|e| ConfigError::InvalidUrl(e.to_string()))?;
-
-        // Validate all network URLs
+        let invalid =
+            |field: &str| CliError::Validation(format!("Invalid CLI config field '{field}'"));
+        Url::parse(&self.rpc_base_url).map_err(|error| {
+            CliError::Validation(format!("Invalid RPC URL in 'rpc_base_url': {error}"))
+        })?;
         for (name, network) in &self.networks {
-            Url::parse(&network.url)
-                .map_err(|e| ConfigError::InvalidUrl(format!("network '{}': {}", name, e)))?;
+            Url::parse(&network.url).map_err(|error| {
+                CliError::Validation(format!("Invalid network URL for profile {name:?}: {error}"))
+            })?;
         }
-
-        // Validate every configured key, but only require `keys.default` when
-        // a command actually falls back to it. Explicit named-key operations
-        // must remain usable without an unrelated default key.
-        self.keys.validate_all_keys()?;
-
-        // Validate uploader program public key
-        Pubkey::new(self.uploader_program_public_key.clone())
-            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()))?;
-
-        // Validate manager program public key
-        Pubkey::new(self.manager_program_public_key.clone())
-            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()))?;
-
-        // Validate ABI manager program public key
-        Pubkey::new(self.abi_manager_program_public_key.clone())
-            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()))?;
-
-        // Validate token program public key
-        Pubkey::new(self.token_program_public_key.clone())
-            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()))?;
-
-        // Validate consensus validator program public key
-        Pubkey::new(self.consensus_validator_program_public_key.clone())
-            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()))?;
-
-        // Validate consensus attestor table public key
-        Pubkey::new(self.consensus_attestor_table_public_key.clone())
-            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()))?;
-
-        // Validate consensus converted vault public key
-        Pubkey::new(self.consensus_converted_vault_public_key.clone())
-            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()))?;
-
-        // Validate consensus unclaimed vault public key
-        Pubkey::new(self.consensus_unclaimed_vault_public_key.clone())
-            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()))?;
+        self.keys.validate_all_keys().map_err(|_| invalid("keys"))?;
+        for (field, value) in [
+            (
+                "uploader_program_public_key",
+                &self.uploader_program_public_key,
+            ),
+            (
+                "manager_program_public_key",
+                &self.manager_program_public_key,
+            ),
+            (
+                "abi_manager_program_public_key",
+                &self.abi_manager_program_public_key,
+            ),
+            ("token_program_public_key", &self.token_program_public_key),
+            (
+                "consensus_validator_program_public_key",
+                &self.consensus_validator_program_public_key,
+            ),
+            (
+                "consensus_attestor_table_public_key",
+                &self.consensus_attestor_table_public_key,
+            ),
+            (
+                "consensus_converted_vault_public_key",
+                &self.consensus_converted_vault_public_key,
+            ),
+            (
+                "consensus_unclaimed_vault_public_key",
+                &self.consensus_unclaimed_vault_public_key,
+            ),
+        ] {
+            Pubkey::new(value.clone()).map_err(|_| invalid(field))?;
+        }
 
         Ok(())
     }
@@ -728,31 +861,43 @@ impl Config {
     /// Create the default configuration file
     pub async fn create_default_config() -> Result<(), CliError> {
         let config_path = Self::get_config_path()?;
+        let lock = lock_config(&config_path).await?;
 
         // Create default config
         let default_config = Config::default();
         let config_content = Self::generate_config_template(&default_config);
 
-        write_key_file(&config_path, &config_content).await?;
-
-        eprintln!(
-            "Created default configuration at: {}",
-            config_path.display()
-        );
-        eprintln!("Please edit the configuration file to set your private key and RPC endpoint.");
+        let creating = config_path.clone();
+        let (created, _) = tokio::task::spawn_blocking(move || {
+            let _lock = lock;
+            write_config(&creating, &config_content, false)
+        })
+        .await
+        .map_err(|_| CliError::Generic {
+            message: "Config creation task failed".into(),
+        })??;
+        if created {
+            eprintln!(
+                "Created default configuration at: {}",
+                config_path.display()
+            );
+            eprintln!(
+                "Create a signing key with 'thru keys generate default', or register one with 'thru keys add default --file <path>'."
+            );
+        }
 
         Ok(())
     }
 
     /// Generate a configuration template with comments
-    fn generate_config_template(config: &Config) -> String {
+    pub(crate) fn generate_config_template(config: &Config) -> String {
         // Use serde to serialize the config to YAML format
         let yaml_content = serde_yaml::to_string(config).unwrap_or_default();
 
         format!(
             r#"# Thru CLI Configuration File
 # This file contains settings for the Thru command-line interface
-# WARNING: Keep this file secure and never share your private keys
+# Signing keys are stored separately; this file contains only key references.
 
 {}
 "#,
@@ -807,25 +952,6 @@ impl Config {
         Ok(url)
     }
 
-    /// Get the default private key as bytes
-    #[allow(dead_code)]
-    pub fn get_private_key_bytes(&self) -> Result<[u8; 32], CliError> {
-        let default_key = self.keys.get_default_key()?;
-        let bytes =
-            hex::decode(default_key).map_err(|e| ConfigError::InvalidPrivateKey(e.to_string()))?;
-
-        if bytes.len() != 32 {
-            return Err(ConfigError::InvalidPrivateKey(
-                "Private key must be exactly 32 bytes".to_string(),
-            )
-            .into());
-        }
-
-        let mut key = [0u8; 32];
-        key.copy_from_slice(&bytes);
-        Ok(key)
-    }
-
     /// Get the uploader program public key
     pub fn get_uploader_pubkey(&self) -> Result<Pubkey, CliError> {
         Pubkey::new(self.uploader_program_public_key.clone())
@@ -858,6 +984,18 @@ impl Config {
             .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
     }
 
+    /// Get the multisig program public key
+    pub fn get_multisig_program_pubkey(&self) -> Result<Pubkey, CliError> {
+        Pubkey::new(self.multisig_program_public_key.clone())
+            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
+    }
+
+    /// Get the Multicall program public key
+    pub fn get_multicall_program_pubkey(&self) -> Result<Pubkey, CliError> {
+        Pubkey::new(self.multicall_program_public_key.clone())
+            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
+    }
+
     /// Bearer token for RPC requests; see [`resolve_rpc_auth_token`].
     pub fn rpc_auth_token(&self) -> Option<String> {
         resolve_rpc_auth_token(
@@ -867,6 +1005,15 @@ impl Config {
             &self.rpc_base_url,
             self.insecure,
         )
+    }
+
+    /// Whether [`Config::rpc_auth_token`] would return a token, without reading
+    /// the key `thru auth login` provisioned (so its secret file is not
+    /// touched). A recorded but unreadable provisioned key counts as present.
+    pub fn rpc_auth_token_present(&self) -> bool {
+        self.auth_token.is_some()
+            || (api_key_eligible_endpoint(&self.rpc_base_url, self.insecure)
+                && (self.env_api_key.is_some() || self.provisioned_api_key.is_present()))
     }
 
     /// Whether an environment API key is present but withheld because the
@@ -898,6 +1045,127 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn partial_commented_readonly_config_is_never_rewritten() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.yaml");
+        let raw =
+            "# Preserve this operator comment\nrpc_base_url: http://localhost:8472\nkeys: {}\n";
+        std::fs::write(&path, raw).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o400)).unwrap();
+        std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o500)).unwrap();
+        let before = std::fs::metadata(&path).unwrap().modified().unwrap();
+        let config = Config::load_existing_path(&path).await.unwrap();
+        assert_eq!(config.timeout_seconds, Config::default().timeout_seconds);
+        assert!(config.keys.list_keys().is_empty());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), raw);
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().modified().unwrap(),
+            before
+        );
+        assert_eq!(
+            std::fs::metadata(directory.path())
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o500
+        );
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
+        std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+
+    #[test]
+    fn invalid_yaml_reports_field_location_without_values() {
+        let seed = hex::encode([73; 32]);
+        for raw in [
+            format!("timeout_seconds: '{seed}'\nkeys: {{}}\n"),
+            format!("keys:\n  old: '{seed}'\ntimeout_seconds: [1]\n"),
+            format!("keys:\n  old: wrong-{seed}\n"),
+        ] {
+            let error = Config::parse_document(&raw).unwrap_err().to_string();
+            assert!(error.contains("field"));
+            assert!(error.contains("line"));
+            assert!(error.contains("column"));
+            assert!(!error.contains(&seed));
+            if raw.contains("timeout_seconds") {
+                assert!(error.contains("timeout_seconds"));
+            } else {
+                assert!(error.contains("keys"));
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn config_mutation_repairs_only_owned_real_directory() {
+        let directory = tempfile::tempdir().unwrap();
+        let cli = directory.path().join("cli");
+        std::fs::create_dir(&cli).unwrap();
+        std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let path = cli.join("config.yaml");
+        std::fs::write(&path, "keys: {}\n").unwrap();
+        Config::update_path(&path, |config| {
+            config.timeout_seconds = 91;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            std::fs::metadata(&cli).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        assert!(
+            std::fs::read_to_string(&path)
+                .unwrap()
+                .starts_with("# Thru CLI Configuration File")
+        );
+        let link = directory.path().join("linked");
+        std::os::unix::fs::symlink(&cli, &link).unwrap();
+        let error = Config::update_path(&link.join("config.yaml"), |_| Ok(()))
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains(link.to_str().unwrap()));
+    }
+
+    #[tokio::test]
+    async fn concurrent_field_intents_preserve_keys_networks_and_dev_metadata() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.yaml");
+        let (_secrets, keys) = KeyManager::test_fixture(&[("new-key", [74; 32])]);
+        let entry = keys.get_entry("new-key").unwrap().clone();
+        let (key_write, network_write, dev_write) = tokio::join!(
+            Config::update_path(&path, |config| config
+                .keys
+                .insert_entry("new-key", entry, false)),
+            Config::update_path(&path, |config| {
+                config.networks.insert(
+                    "new-network".into(),
+                    NetworkConfig {
+                        url: "http://localhost:8472".into(),
+                        auth_token: None,
+                    },
+                );
+                Ok(())
+            }),
+            Config::update_path(&path, |config| {
+                config
+                    .sdk_versions
+                    .get_or_insert_with(Default::default)
+                    .insert("rust".into(), "v1".into());
+                Ok(())
+            }),
+        );
+        key_write.unwrap();
+        network_write.unwrap();
+        dev_write.unwrap();
+        let loaded = Config::load_existing_path(&path).await.unwrap();
+        assert!(loaded.keys.has_key("new-key"));
+        assert!(loaded.networks.contains_key("new-network"));
+        assert_eq!(loaded.sdk_versions.unwrap()["rust"], "v1");
+    }
 
     #[cfg(unix)]
     #[tokio::test]
@@ -976,7 +1244,12 @@ mod tests {
                 };
                 assert_eq!(libc::setrlimit(libc::RLIMIT_FSIZE, &limit), 0);
             }
-            assert!(Config::default().save().await.is_err());
+            let path = Config::get_config_path().unwrap();
+            assert!(
+                write_key_file(&path, &Config::generate_config_template(&Config::default()))
+                    .await
+                    .is_err()
+            );
             return;
         }
 
@@ -1055,8 +1328,8 @@ mod tests {
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
         let config = Config::default();
         let expected = Config::generate_config_template(&config);
-        std::fs::write(&path, format!("{}stale content", expected)).unwrap();
-        config.save().await.unwrap();
+        std::fs::write(&path, &expected).unwrap();
+        Config::update(|_| Ok(())).await.unwrap();
         assert_eq!(
             std::fs::metadata(&directory).unwrap().permissions().mode() & 0o777,
             0o700
@@ -1073,8 +1346,14 @@ mod tests {
         let mut config = Config::default();
         assert!(config.get_system_test_program_pubkey().is_err());
         config.system_test_program_public_key = Some(programs::SYSTEM_TEST_PROGRAM_ADDRESS.into());
-        assert_eq!(config.get_system_test_program_pubkey().unwrap().to_bytes().unwrap(),
-                   programs::SYSTEM_TEST_PROGRAM_BYTES);
+        assert_eq!(
+            config
+                .get_system_test_program_pubkey()
+                .unwrap()
+                .to_bytes()
+                .unwrap(),
+            programs::SYSTEM_TEST_PROGRAM_BYTES
+        );
         config.system_test_program_public_key = Some("invalid".into());
         assert!(config.get_system_test_program_pubkey().is_err());
     }
@@ -1082,18 +1361,39 @@ mod tests {
     #[test]
     fn canonical_defaults_preserve_explicit_network_addresses() {
         let config = Config::default();
-        assert_eq!(config.token_program_public_key, programs::TOKEN_PROGRAM_ADDRESS);
-        assert_eq!(config.abi_manager_program_public_key, programs::ABI_MANAGER_PROGRAM_ADDRESS);
-        assert_eq!(config.wthru_program_public_key, programs::WTHRU_PROGRAM_ADDRESS);
-        assert_eq!(config.bp_program_public_key, programs::BLOCK_PRODUCER_PROGRAM_ADDRESS);
-        assert_eq!(config.consensus_attestor_table_public_key, programs::ATTESTOR_TABLE_ADDRESS);
+        assert_eq!(
+            config.token_program_public_key,
+            programs::TOKEN_PROGRAM_ADDRESS
+        );
+        assert_eq!(
+            config.abi_manager_program_public_key,
+            programs::ABI_MANAGER_PROGRAM_ADDRESS
+        );
+        assert_eq!(
+            config.wthru_program_public_key,
+            programs::WTHRU_PROGRAM_ADDRESS
+        );
+        assert_eq!(
+            config.bp_program_public_key,
+            programs::BLOCK_PRODUCER_PROGRAM_ADDRESS
+        );
+        assert_eq!(
+            config.consensus_attestor_table_public_key,
+            programs::ATTESTOR_TABLE_ADDRESS
+        );
 
         let mut saved = serde_yaml::to_value(&config).unwrap();
         saved["token_program_public_key"] = "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq".into();
         saved["bp_program_public_key"] = "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADQEO".into();
         let loaded: Config = serde_yaml::from_value(saved).unwrap();
-        assert_eq!(loaded.token_program_public_key, "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq");
-        assert_eq!(loaded.bp_program_public_key, "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADQEO");
+        assert_eq!(
+            loaded.token_program_public_key,
+            "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq"
+        );
+        assert_eq!(
+            loaded.bp_program_public_key,
+            "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADQEO"
+        );
         assert_eq!(loaded.rpc_base_url, config.rpc_base_url);
     }
 
@@ -1299,7 +1599,7 @@ mod tests {
                 insecure,
             );
             assert_eq!(token, None, "{url} insecure={insecure}");
-            assert!(!called.get(), "keychain read for {url}");
+            assert!(!called.get(), "provisioned key read for {url}");
         }
     }
 
@@ -1313,7 +1613,7 @@ mod tests {
         assert_eq!(loads(&source), 1);
         assert!(!config.provisioned_api_key_withheld());
 
-        // A configured token or env key wins without touching the keychain.
+        // A configured token or env key wins without reading the provisioned key.
         let (source, mut config) = with_provisioned(Some("thru_provisioned"));
         config.auth_token = Some("configured".into());
         assert_eq!(config.rpc_auth_token().as_deref(), Some("configured"));
@@ -1382,39 +1682,139 @@ mod tests {
     }
 
     #[test]
-    fn test_config_validation_accepts_missing_default_key() {
-        let mut config = Config::default();
-        config.keys.remove_key("default").unwrap();
-
+    fn empty_default_configuration_is_valid() {
+        let config = Config::default();
+        assert!(config.keys.list_keys().is_empty());
         assert!(config.validate().is_ok());
-        assert!(config.keys.get_default_key().is_err());
+        assert!(config.keys.load_key("default").is_err());
     }
 
     #[test]
-    fn test_key_management_validation_accepts_missing_default_key() {
-        let mut config = Config::default();
-        config.keys.remove_key("default").unwrap();
+    fn inline_config_rejection_does_not_echo_seed() {
+        let seed = hex::encode([41; 32]);
+        let mut value = serde_yaml::to_value(Config::default()).unwrap();
+        value["keys"] = serde_yaml::from_str(&format!("default: '{seed}'")).unwrap();
+        let raw = serde_yaml::to_string(&value).unwrap();
+        let error = serde_yaml::from_str::<Config>(&raw).unwrap_err();
+        assert!(!error.to_string().contains(&seed));
+        let (config, inline) = Config::parse_document(&raw).unwrap();
+        assert_eq!(*inline[0].1, [41; 32]);
+        assert!(config.keys.list_keys().is_empty());
+        assert!(!Config::generate_config_template(&config).contains(&seed));
+    }
 
-        assert!(config.validate_for_key_management().is_ok());
+    #[tokio::test]
+    async fn inline_keys_load_for_reading_but_block_writers() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.yaml");
+        let seed = hex::encode([42; 32]);
+        let raw = format!("keys:\n  Default: '{seed}'\n  'acc:1': '{seed}'\n");
+        std::fs::write(&path, &raw).unwrap();
+
+        // Reading keeps only the alias names; the seeds are not retained.
+        let config = Config::load_existing_path(&path).await.unwrap();
+        assert_eq!(config.keys.unmigrated_aliases(), ["acc:1", "default"]);
+        assert!(config.keys.list_keys().is_empty());
+        assert!(!format!("{config:?}").contains(&seed));
+        let error = config.keys.load_fee_payer(None).unwrap_err().to_string();
+        assert!(error.contains("thru keys migrate") && error.contains("\"default\""));
+        assert!(!Config::generate_config_template(&config).contains(&seed));
+
+        // Every writer refuses, naming the file and the aliases.
+        let error = Config::load_for_update(&path)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("thru keys migrate"), "{error}");
+        assert!(error.contains("acc:1, default"), "{error}");
+        assert!(error.contains(&path.display().to_string()), "{error}");
+        assert!(!error.contains(&seed));
+        assert!(
+            Config::update_path(&path, |_| Ok(()))
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("thru keys migrate")
+        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), raw);
+    }
+
+    #[tokio::test]
+    async fn loaded_reference_paths_use_config_directory_without_rewriting() {
+        let (directory, keys) = KeyManager::test_fixture(&[("default", [43; 32])]);
+        let mut entry = keys.get_entry("default").unwrap().clone();
+        let crate::keys::KeySource::File { path, .. } = &mut entry.source else {
+            unreachable!()
+        };
+        *path = path.file_name().unwrap().into();
+        let raw = format!(
+            "keys:\n  default:\n{}",
+            serde_yaml::to_string(&entry)
+                .unwrap()
+                .lines()
+                .map(|line| format!("    {line}\n"))
+                .collect::<String>()
+        );
+        let path = directory.path().join("config.yaml");
+        std::fs::write(&path, &raw).unwrap();
+        let loaded = Config::load_existing_path(&path).await.unwrap();
+        assert_eq!(
+            loaded.keys.load_key("default").unwrap().public_key,
+            keys.public_key("default").unwrap()
+        );
+        let saved = std::fs::read_to_string(path).unwrap();
+        assert_eq!(saved, raw);
+        assert!(!saved.contains(&hex::encode([43; 32])));
+        assert!(serde_yaml::from_str::<Config>(&saved).is_ok());
     }
 
     #[test]
-    fn test_key_management_validation_rejects_malformed_key() {
-        let mut config = Config::default();
-        config
-            .keys
-            .keys
-            .insert("bad".to_string(), "invalid".to_string());
-
-        assert!(config.validate().is_err());
-        assert!(config.validate_for_key_management().is_err());
+    fn initialization_never_overwrites_a_concurrent_registration() {
+        let (directory, keys) = KeyManager::test_fixture(&[("default", [44; 32])]);
+        let path = directory.path().join("config.yaml");
+        let registered = Config {
+            keys,
+            ..Config::default()
+        };
+        let registered_raw = Config::generate_config_template(&registered);
+        let empty_raw = Config::generate_config_template(&Config::default());
+        write_config(&path, &registered_raw, false).unwrap();
+        write_config(&path, &empty_raw, false).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), registered_raw);
+        assert!(registered.keys.load_key("default").is_ok());
     }
 
     #[test]
-    fn test_invalid_private_key() {
+    fn document_migration_preserves_supported_configuration_fields() {
         let mut config = Config::default();
-        // Test with invalid key in the key manager
-        assert!(config.keys.add_key("default", "invalid", true).is_err());
+        config.rpc_base_url = "http://localhost:1234".into();
+        config.auth_token = Some("configured-api-token".into());
+        config.timeout_seconds = 72;
+        config.max_retries = 9;
+        config.toolchain_path = Some(PathBuf::from("/custom/toolchain"));
+        config.toolchain_version = Some("custom-version".into());
+        config.sdk_paths = Some(HashMap::from([(
+            "rust".into(),
+            PathBuf::from("/custom/sdk"),
+        )]));
+        config.sdk_versions = Some(HashMap::from([("rust".into(), "custom-sdk".into())]));
+        config.github_repo = Some("custom/repository".into());
+        config.networks.insert(
+            "local".into(),
+            NetworkConfig {
+                url: "http://localhost:5678".into(),
+                auth_token: Some("local-token".into()),
+            },
+        );
+        config.default_network = Some("local".into());
+        config.system_test_program_public_key = Some(programs::SYSTEM_TEST_PROGRAM_ADDRESS.into());
+        let raw = serde_yaml::to_string(&config).unwrap();
+        let (loaded, inline) = Config::parse_document(&raw).unwrap();
+        assert!(inline.is_empty());
+        assert_eq!(
+            serde_yaml::to_value(loaded).unwrap(),
+            serde_yaml::to_value(config).unwrap()
+        );
     }
 
     #[test]

@@ -1,0 +1,22 @@
+/* Panel height animates via Base UI's --collapsible-panel-height. */
+
+.uds-coll__panel {
+  overflow: hidden;
+  height: var(--collapsible-panel-height);
+  transition: height var(--duration-med) var(--ease-standard);
+}
+.uds-coll__panel[data-starting-style],
+.uds-coll__panel[data-ending-style] {
+  height: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .uds-coll__panel {
+    transition: none;
+  }
+}
+
+.uds-coll__inner {
+  padding: var(--space-3) 0 0;
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}

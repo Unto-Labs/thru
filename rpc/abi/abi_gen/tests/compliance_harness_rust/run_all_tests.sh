@@ -34,7 +34,7 @@ while [[ $# -gt 0 ]]; do
       echo ""
       echo "Options:"
       echo "  -v, --verbose       Show verbose output for each test"
-      echo "  -l, --language LANG Run tests for specific language (rust, c, typescript, all)"
+      echo "  -l, --language LANG Run tests for specific language (rust, c, typescript, go, all)"
       echo "  --no-cleanup        Preserve temporary directories after tests"
       echo "  --failed-only       Only show failed tests"
       echo "  -h, --help          Show this help message"

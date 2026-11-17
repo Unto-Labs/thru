@@ -1,0 +1,7 @@
+test-case:
+  name: "wide_tag_enums_u16_two"
+  abi-file: "../../abi_definitions/wide_tag_enums.abi.yaml"
+  type: "U16TagEnum"
+  description: "u16 tag 2 selects Two (u16 payload)"
+  tags: ["enums", "wide-tag"]
+  binary-hex: "0200 3412"

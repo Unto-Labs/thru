@@ -81,7 +81,7 @@ export interface UiEdgeEventPayload {
 }
 
 /** Which Add funds rail a deposit runs on. */
-export type DepositMethod = "crypto" | "card";
+export type DepositMethod = "crypto" | "card" | "bank";
 
 /**
  * The rail a deposit event reports: an Add funds rail, or `faucet` for the
@@ -663,8 +663,8 @@ export enum ThruNetwork {
 }
 
 export enum DepositTarget {
-  /** THRUSD retains the legacy wire value for backend compatibility. */
-  THRUSD = "credits",
+  /** UUSD retains the legacy wire value for backend compatibility. */
+  UUSD = "credits",
 }
 
 export interface DepositDestination {
@@ -838,7 +838,7 @@ export interface DepositContactPrefill {
  *
  * A hint only: the wallet opens on its own default when it doesn't offer this
  * asset, and the user can still switch. Every source settles as the deposit
- * token (THRUSD).
+ * token (UUSD).
  */
 export interface DepositSource {
   /** Source chain family, e.g. "ethereum", "solana", "bitcoin". */
@@ -855,7 +855,7 @@ export type DepositFundingMethod = "crypto" | "stripe_link" | "card";
 /**
  * Request to open the wallet's Add funds sheet.
  *
- *   thru.deposit({})                         → the chooser (crypto / card)
+ *   thru.deposit({})                         → the chooser (crypto / bank / card)
  *   thru.deposit({ method: "card", amount: "50" }) → straight into a rail
  *
  * `destination` is optional: the wallet derives the connected account's
@@ -866,12 +866,14 @@ export interface DepositRequestPayload {
   /** Provider to open (`unifold` | `coinbase`); derived from `method` when omitted. */
   providerId?: string;
   /**
-   * Unifold funding surface. Omitted values preserve the historical crypto
-   * transfer flow so existing callers never receive a new method chooser.
+   * Funding surface for the selected provider. Specifying this skips the
+   * chooser. When omitted, the Unifold rail defaults to crypto transfers.
    */
   fundingMethod?: DepositFundingMethod;
   /** Rail to open directly; omit for the chooser. */
   method?: DepositMethod;
+  /** Temporary gate: the Bank rail is offered only when this is true. */
+  braleOnboarding?: boolean;
   /** Account the funds should land in; must be the connected account. */
   to?: string;
   /** Suggested USD amount for the card rail (alias of `paymentAmount`). */

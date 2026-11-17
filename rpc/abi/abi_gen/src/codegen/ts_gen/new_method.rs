@@ -207,7 +207,14 @@ fn emit_union_new_method(resolved_type: &ResolvedType) -> String {
                             write!(output, "    view.{}(0, value);\n", setter).unwrap();
                         }
 
-                        write!(output, "    return new {}(buffer);\n", class_name).unwrap();
+                        /* Every variant's tags must be valid, as `validate` checks. */
+                        write!(
+                            output,
+                            "    const result = {c}.from_array(buffer);\n    if (!result) throw new Error(`{c}: '{v}' = ${{value}} is not a valid {c}`);\n    return result;\n",
+                            c = class_name,
+                            v = variant.name
+                        )
+                        .unwrap();
                     }
 
                     write!(output, "  }}\n\n").unwrap();

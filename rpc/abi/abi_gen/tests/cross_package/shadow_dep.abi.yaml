@@ -1,0 +1,45 @@
+abi:
+  package: "test.cross_package.shadow_dep"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Types whose generated Rust names an importer also generates"
+
+types:
+  # The importer's inline type `A::b` is also spelled `A_b`.
+  - name: "A_b"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "x"
+            field-type:
+              primitive: u64
+          - name: "y"
+            field-type:
+              primitive: u8
+  # The importer's `Msg` has a builder `MsgBuilder`.
+  - name: "MsgBuilder"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "z"
+            field-type:
+              primitive: u16
+  # The importer's `FOO` also has IR helpers `foo_footprint_ir...`.
+  - name: "Foo"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "n"
+            field-type:
+              primitive: u8
+          - name: "data"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["n"]
+                element-type:
+                  primitive: u8

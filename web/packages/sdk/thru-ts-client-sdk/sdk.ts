@@ -3,7 +3,7 @@ import { TransactionBuilder } from "./domain/transactions";
 // Generated fresh-network defaults; explicit network configuration takes precedence.
 export {
     EOA_PROGRAM_ID,
-    ROOT_MANAGER_PROGRAM_ADDRESS,
+    CORE_MANAGER_PROGRAM_ADDRESS,
     MANAGER_PROGRAM_ADDRESS,
     UPLOADER_PROGRAM_ADDRESS,
     SYSTEM_TEST_PROGRAM_ADDRESS,
@@ -14,6 +14,11 @@ export {
     COMPRESSION_PROGRAM_ADDRESS,
     WALLET_PROGRAM_ADDRESS,
     PASSKEY_MANAGER_PROGRAM_ADDRESS,
+    E2E_TEST_UPLOADER_PROGRAM_ADDRESS,
+    E2E_EVENT_EMISSION_PROGRAM_ADDRESS,
+    E2E_EVENT_INVOKE_PROGRAM_ADDRESS,
+    E2E_DEBUG_PRIMARY_PROGRAM_ADDRESS,
+    E2E_DEBUG_SECONDARY_PROGRAM_ADDRESS,
 } from "../src/core-program-addresses";
 
 // ============================================================================
@@ -65,6 +70,10 @@ export {
   isValidThruApiKey,
   resolveThruApiKey,
   thruApiKeyHeader,
+  THRU_DEFAULT_GET_KEY_URL,
+  ThruRateLimitError,
+  isThruRateLimitError,
+  toThruRateLimitError,
 } from "./client";
 export { collectStream, firstStreamValue, forEachStreamValue } from "./modules/streaming";
 export {

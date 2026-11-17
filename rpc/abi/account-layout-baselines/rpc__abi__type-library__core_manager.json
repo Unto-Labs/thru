@@ -1,0 +1,445 @@
+{
+  "abi": "rpc/abi/type-library/core_manager.abi.yaml",
+  "account_root": "CoreManagerAccount",
+  "values": {
+    "1": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "authority",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "authority_candidate",
+                    "offset": 32,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "version",
+                    "offset": 64,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "state",
+                    "offset": 72,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 73
+          },
+          "ref": "ManagedProgramMetadata"
+        },
+        "size": 73
+      },
+      "variant": "program_meta_v1"
+    },
+    "2": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "admin_kind",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  },
+                  {
+                    "name": "pending_admin_kind",
+                    "offset": 1,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  },
+                  {
+                    "name": "pending_present",
+                    "offset": 2,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  },
+                  {
+                    "name": "reserved",
+                    "offset": 3,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "primitive": "Integral(U8)"
+                            },
+                            "size": 1
+                          },
+                          "jagged": false,
+                          "size": {
+                            "literal": {
+                              "u64": 4
+                            }
+                          }
+                        }
+                      },
+                      "size": 4
+                    }
+                  },
+                  {
+                    "name": "admin",
+                    "offset": 7,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "pending_admin",
+                    "offset": 39,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 71
+          },
+          "ref": "CoreConfig"
+        },
+        "size": 71
+      },
+      "variant": "config_v1"
+    },
+    "3": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "reserved",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "primitive": "Integral(U8)"
+                            },
+                            "size": 1
+                          },
+                          "jagged": false,
+                          "size": {
+                            "literal": {
+                              "u64": 3
+                            }
+                          }
+                        }
+                      },
+                      "size": 3
+                    }
+                  },
+                  {
+                    "name": "metadata_proof_size",
+                    "offset": 3,
+                    "type": {
+                      "alignment": 4,
+                      "kind": {
+                        "primitive": "Integral(U32)"
+                      },
+                      "size": 4
+                    }
+                  },
+                  {
+                    "name": "program_proof_size",
+                    "offset": 7,
+                    "type": {
+                      "alignment": 4,
+                      "kind": {
+                        "primitive": "Integral(U32)"
+                      },
+                      "size": 4
+                    }
+                  },
+                  {
+                    "name": "metadata_proof",
+                    "offset": 11,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "primitive": "Integral(U8)"
+                            },
+                            "size": 1
+                          },
+                          "jagged": false,
+                          "size": {
+                            "field-ref": {
+                              "path": [
+                                "metadata_proof_size"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "size": "variable"
+                    }
+                  },
+                  {
+                    "name": "program_proof",
+                    "offset": null,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "primitive": "Integral(U8)"
+                            },
+                            "size": 1
+                          },
+                          "jagged": false,
+                          "size": {
+                            "field-ref": {
+                              "path": [
+                                "program_proof_size"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "size": "variable"
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": "variable"
+          },
+          "ref": "ProofSlot"
+        },
+        "size": "variable"
+      },
+      "variant": "proof_slot_v1"
+    }
+  }
+}

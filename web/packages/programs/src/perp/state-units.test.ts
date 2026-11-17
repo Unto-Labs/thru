@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  PERP_ACCOUNT_TYPE_CBOOK,
   PERP_CBOOK_EMPTY_PRICE_IN_TICKS,
   PERP_CBOOK_MAX_PRICE_IN_TICKS,
   estimatePerpOrderStateUnits,
@@ -11,6 +12,7 @@ import {
   type PerpCbookHeader,
   type PerpOrderEntry,
 } from './index';
+import { simulatedRpc } from './sdk/test-rpc';
 
 /* The vectors match thru-perps/tests/test_txn_perp_program/test_state_units.c,
    which runs the same books through the program in LiteVM and checks that
@@ -209,6 +211,7 @@ describe('parsePerpCbookHeader', () => {
     const levelCount = 43_001;
     const data = new Uint8Array(perpCbookAccountSize(levelCount));
     const view = new DataView(data.buffer);
+    data[0] = PERP_ACCOUNT_TYPE_CBOOK;
     view.setUint32(4, 1234, true);
     view.setBigUint64(8, PERP_CBOOK_MAX_PRICE_IN_TICKS - 86_000n, true);
     const full = parsePerpCbookAccount(data);
@@ -221,7 +224,21 @@ describe('parsePerpCbookHeader', () => {
   });
 
   it('rejects a size that is not a whole number of levels', () => {
-    expect(() => parsePerpCbookHeader(new Uint8Array(perpCbookAccountSize(10) + 3))).toThrow(/malformed/);
-    expect(() => parsePerpCbookHeader(new Uint8Array(8))).toThrow(/malformed/);
+    const tagged = (size: number) => Object.assign(new Uint8Array(size), { 0: PERP_ACCOUNT_TYPE_CBOOK });
+    expect(() => parsePerpCbookHeader(tagged(perpCbookAccountSize(10) + 3))).toThrow(/malformed/);
+    expect(() => parsePerpCbookHeader(tagged(8))).toThrow(/malformed/);
+  });
+
+  it("reads the simulated RPC's default account as an empty perp cbook", async () => {
+    const { sdk } = simulatedRpc({ rttMs: 0, execMs: 0 });
+    const account = await sdk.accounts.get('any');
+    expect(parsePerpCbookHeader(account as never)).toEqual({ bestLevelIndex: 0, bestPriceInTicks: PERP_CBOOK_EMPTY_PRICE_IN_TICKS, levelCount: 10 });
+  });
+
+  it('refuses an account that is not a cbook', () => {
+    const orderArena = new Uint8Array(perpCbookAccountSize(10));
+    orderArena[0] = 4;
+    expect(() => parsePerpCbookHeader(orderArena)).toThrow(/not a perp cbook account \(order arena\)/);
+    expect(() => parsePerpCbookAccount(new Uint8Array(perpCbookAccountSize(10)))).toThrow(/not a perp cbook account/);
   });
 });

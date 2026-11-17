@@ -1,0 +1,64 @@
+{
+  "abi": "web/test-dapp/src/abi/counter.abi.yaml",
+  "account_root": "CounterProgramAccount",
+  "values": {
+    "1": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "counter_value",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "owner_pubkey",
+                    "offset": 8,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "primitive": "Integral(U8)"
+                            },
+                            "size": 1
+                          },
+                          "jagged": false,
+                          "size": {
+                            "literal": {
+                              "u64": 32
+                            }
+                          }
+                        }
+                      },
+                      "size": 32
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 40
+          },
+          "ref": "CounterAccount"
+        },
+        "size": 40
+      },
+      "variant": "counter_v1"
+    }
+  }
+}

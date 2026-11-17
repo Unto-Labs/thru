@@ -14,6 +14,8 @@ import { TxTree } from "../TxTree/TxTree";
 import { Collapsible } from "@base-ui/react/collapsible";
 import { useWaitStages, WaitHero, WALLET_SHEET_SLOW_MS, WALLET_SHEET_ESCALATE_MS } from "./wait";
 import { DepositScreens } from "./DepositScreens";
+import { DepositKyc } from "./DepositKyc";
+import { DepositBankDetails, DepositActivity } from "./DepositBank";
 import "./WalletSheet.css";
 
 const Check = (p: React.SVGProps<SVGSVGElement>) => (
@@ -49,6 +51,7 @@ export type WalletSheetScreen =
   | "deposit"
   | "depositCrypto"
   | "depositCard"
+  | "depositKyc"
   | "depositPhone"
   | "depositEmail"
   | "depositReview"
@@ -708,5 +711,8 @@ export const WalletSheet = {
   TxPending,
   TxDone,
   ...DepositScreens,
+  DepositKyc,
+  DepositBankDetails,
+  DepositActivity,
   PoweredBy,
 };

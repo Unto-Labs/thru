@@ -1,0 +1,71 @@
+abi:
+  package: "compliance.parent_scope_refs"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Inline structs sizing arrays by '..' references to enclosing fields with the same name"
+
+types:
+  - name: "ScopedCount"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "count"
+            field-type:
+              primitive: u8
+          - name: "child"
+            field-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "count"
+                    field-type:
+                      primitive: u8
+                  - name: "outer_sized"
+                    field-type:
+                      array:
+                        size:
+                          field-ref:
+                            path: ["..", "count"]
+                        element-type:
+                          primitive: u8
+                  - name: "own_sized"
+                    field-type:
+                      array:
+                        size:
+                          field-ref:
+                            path: ["count"]
+                        element-type:
+                          primitive: u8
+  - name: "ScopedDeep"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "n"
+            field-type:
+              primitive: u8
+          - name: "mid"
+            field-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "n"
+                    field-type:
+                      primitive: u8
+                  - name: "inner"
+                    field-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "n"
+                            field-type:
+                              primitive: u8
+                          - name: "data"
+                            field-type:
+                              array:
+                                size:
+                                  field-ref:
+                                    path: ["..", "..", "n"]
+                                element-type:
+                                  primitive: u8

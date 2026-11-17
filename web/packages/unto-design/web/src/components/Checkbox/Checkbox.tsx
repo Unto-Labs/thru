@@ -1,0 +1,72 @@
+import * as React from "react";
+import { Checkbox as Base } from "@base-ui/react/checkbox";
+import "./Checkbox.css";
+
+export interface CheckboxProps {
+  checked?: boolean;
+  defaultChecked?: boolean;
+  onCheckedChange?: (checked: boolean) => void;
+  indeterminate?: boolean;
+  disabled?: boolean;
+  name?: string;
+  value?: string;
+  children?: React.ReactNode;
+  className?: string;
+}
+
+const Check = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 16 16" fill="none" aria-hidden {...p}>
+    <path
+      d="M3 8.5l3.5 3.5L13 4"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+/**
+ * Checkbox — closed wrapper with a label.
+ */
+export const Checkbox = React.forwardRef<HTMLButtonElement, CheckboxProps>(
+  function Checkbox(
+    {
+      checked,
+      defaultChecked,
+      onCheckedChange,
+      indeterminate,
+      disabled,
+      name,
+      value,
+      children,
+      className,
+    },
+    ref,
+  ) {
+    return (
+      <label className={["uds-check", className].filter(Boolean).join(" ")}>
+        <Base.Root
+          ref={ref}
+          checked={checked}
+          defaultChecked={defaultChecked}
+          onCheckedChange={(v) => onCheckedChange?.(Boolean(v))}
+          indeterminate={indeterminate}
+          disabled={disabled}
+          name={name}
+          value={value}
+          className="uds-check__box"
+        >
+          <Base.Indicator className="uds-check__indicator" keepMounted>
+            {indeterminate ? (
+              <span className="uds-check__dash" />
+            ) : (
+              <Check width={12} height={12} />
+            )}
+          </Base.Indicator>
+        </Base.Root>
+        {children != null && <span className="uds-check__label">{children}</span>}
+      </label>
+    );
+  },
+);

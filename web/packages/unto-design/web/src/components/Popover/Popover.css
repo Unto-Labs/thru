@@ -1,0 +1,58 @@
+.uds-popover {
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-4);
+  width: 268px;
+  border-radius: var(--radius-none);
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+.uds-popover[data-starting-style],
+.uds-popover[data-ending-style] {
+  opacity: 0;
+  transform: scale(0.97);
+}
+@media (prefers-reduced-motion: reduce) {
+  .uds-popover {
+    transition: opacity var(--duration-fast) var(--ease-standard);
+  }
+  .uds-popover[data-starting-style],
+  .uds-popover[data-ending-style] {
+    transform: none;
+  }
+}
+
+/* No chrome: the consumer owns width, padding, border and background. Only
+   the shared entrance/exit fade lives here. */
+.uds-popover-panel {
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+.uds-popover-panel[data-starting-style],
+.uds-popover-panel[data-ending-style] {
+  opacity: 0;
+}
+
+.uds-popover__title {
+  margin: 0 0 var(--space-1);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: var(--fw-semibold);
+  color: var(--color-text-primary);
+}
+
+.uds-popover__desc {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.uds-popover__arrow {
+  display: flex;
+}
+.uds-popover__arrow svg {
+  fill: var(--color-surface-higher);
+  stroke: var(--color-border-strong);
+}

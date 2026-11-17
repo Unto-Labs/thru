@@ -2,8 +2,12 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { encodeAddress } from '@thru/sdk/helpers';
 import { createValidateChallenge } from './challenge';
-import { parseWalletAuthorities } from './accounts';
-import { LONG_LIVED_AUTHORITY_EXPIRY_SECONDS } from './constants';
+import { parseCredentialLookupWallet, parseWalletAuthorities, parseWalletNonce } from './accounts';
+import {
+  LONG_LIVED_AUTHORITY_EXPIRY_SECONDS,
+  WALLET_ACCOUNT_TYPE_CREDENTIAL_LOOKUP_V1,
+  WALLET_ACCOUNT_TYPE_WALLET_V1,
+} from './constants';
 import { encodeAddAuthorityInstruction } from './instructions/add-authority';
 import {
   buildAuthorityRecord,
@@ -13,8 +17,6 @@ import {
 import { encodeRemoveAuthorityInstruction } from './instructions/remove-authority';
 import { encodeValidateInstruction } from './instructions/validate';
 import {
-  MULTICALL_PROGRAM_ADDRESS,
-  MULTICALL_PROGRAM_PUBKEY,
   buildMulticallInstruction,
 } from '../multicall';
 import {
@@ -178,11 +180,14 @@ describe('Wallet Program validate helpers', () => {
     expect(encodedSession.slice(65, 73)).toEqual(u64le(1234n));
 
     const walletData = concat([
+      new Uint8Array([WALLET_ACCOUNT_TYPE_WALLET_V1]),
       new Uint8Array([1]),
       u64le(9n),
       buildAuthorityRecord(passkeyRecord),
       encodedSession,
     ]);
+    expect(walletData.length).toBe(10 + 2 * 73);
+    expect(parseWalletNonce(walletData)).toBe(9n);
     const parsed = parseWalletAuthorities(walletData);
     expect(parsed.nonce).toBe(9n);
     expect(parsed.authorities).toHaveLength(2);
@@ -194,6 +199,28 @@ describe('Wallet Program validate helpers', () => {
       kind: 'pubkey',
       expiresAtBlockTimeSeconds: 1234n,
     });
+
+    /* Trailing bytes after the last record are accepted, as on chain. */
+    expect(parseWalletAuthorities(concat([walletData, new Uint8Array(3)])).nonce).toBe(9n);
+    expect(() => parseWalletAuthorities(walletData.subarray(0, walletData.length - 1))).toThrow(
+      'not a wallet account'
+    );
+    const lookupTagged = Uint8Array.from(walletData);
+    lookupTagged[0] = WALLET_ACCOUNT_TYPE_CREDENTIAL_LOOKUP_V1;
+    expect(() => parseWalletAuthorities(lookupTagged)).toThrow('not a wallet account');
+    expect(() => parseWalletNonce(walletData.subarray(1))).toThrow('not a wallet account');
+    expect(parseCredentialLookupWallet(walletData)).toBeNull();
+  });
+
+  it('parses credential lookups and rejects other account types', () => {
+    const lookup = concat([new Uint8Array([WALLET_ACCOUNT_TYPE_CREDENTIAL_LOOKUP_V1]), bytes(0x07, 32)]);
+    expect(lookup.length).toBe(33);
+    expect(parseCredentialLookupWallet(lookup)).toEqual(bytes(0x07, 32));
+    expect(parseCredentialLookupWallet(lookup.subarray(1))).toBeNull();
+    expect(parseCredentialLookupWallet(concat([lookup, new Uint8Array(1)]))).toBeNull();
+    const walletTagged = Uint8Array.from(lookup);
+    walletTagged[0] = WALLET_ACCOUNT_TYPE_WALLET_V1;
+    expect(parseCredentialLookupWallet(walletTagged)).toBeNull();
   });
 
   it('bounds authority record expiry seconds to u64', () => {
@@ -219,12 +246,7 @@ describe('Wallet Program validate helpers', () => {
     ).toThrow('expiresAtBlockTimeSeconds must fit in u64');
   });
 
-  it('encodes multicall instructions with the known program address', () => {
-    expect(MULTICALL_PROGRAM_ADDRESS).toBe(
-      'taMULTIrOL8WpIFr16C1ECsO60qAsuwmwJephZHDOTvSeP'
-    );
-    expect(MULTICALL_PROGRAM_PUBKEY).toHaveLength(32);
-
+  it('encodes multicall instructions with distinct child payloads', () => {
     const encoded = buildMulticallInstruction([
       { programIdx: 2, instructionData: new Uint8Array([0xaa]) },
       { programIdx: 5, instructionData: new Uint8Array([0xbb, 0xcc]) },

@@ -14,7 +14,24 @@ type __TnIrNode =
       readonly right: __TnIrNode;
     }
   | {
+      readonly op: "sub";
+      readonly left: __TnIrNode;
+      readonly right: __TnIrNode;
+    }
+  | {
       readonly op: "mul";
+      readonly left: __TnIrNode;
+      readonly right: __TnIrNode;
+    }
+  | {
+      readonly op:
+        | "div"
+        | "mod"
+        | "bitAnd"
+        | "bitOr"
+        | "bitXor"
+        | "leftShift"
+        | "rightShift";
       readonly left: __TnIrNode;
       readonly right: __TnIrNode;
     }
@@ -26,7 +43,7 @@ type __TnIrNode =
   | {
       readonly op: "switch";
       readonly tag: string;
-      readonly cases: readonly { readonly value: number; readonly node: __TnIrNode }[];
+      readonly cases: readonly { readonly value: number | bigint; readonly node: __TnIrNode }[];
       readonly default?: __TnIrNode;
     }
   | {
@@ -39,6 +56,7 @@ type __TnIrNode =
       readonly count: __TnIrNode;
       readonly elementTypeName: string;
       readonly fieldName: string;
+      readonly payloadParam?: string;
     };
 
 type __TnIrContext = {
@@ -65,7 +83,8 @@ type __TnStructFieldInput =
   | { bytes?: () => Uint8Array };
 type __TnVariantDescriptor = {
   readonly name: string;
-  readonly tag: number;
+  /* A bigint for tags past 2^53 - 1, which a number cannot hold exactly. */
+  readonly tag: number | bigint;
   readonly payloadSize: number | null;
   readonly payloadType?: string;
   readonly createPayloadBuilder?: () => unknown | null;
@@ -106,6 +125,20 @@ function __tnWarnOnce(message: string): void {
     __tnWarnings.add(message);
     __tnLogWarn(message);
   }
+}
+
+/* Builders never return bytes their type's `validate` rejects. */
+function __tnBuilderValidateOrThrow(typeName: string, result: { ok: boolean; code?: string }): void {
+  if (!result.ok) throw new Error(`${typeName}Builder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
+}
+
+/* Packed params as a measuring walk's context: `T.kind` becomes `kind`. */
+function __tnParamsContext(record: Record<string, bigint>, prefix: string): Record<string, bigint> {
+  const ctx: Record<string, bigint> = Object.create(null);
+  for (const key of Object.keys(record)) {
+    ctx[key.startsWith(prefix) ? key.slice(prefix.length) : key] = record[key];
+  }
+  return ctx;
 }
 
 function __tnResolveBuilderInput(
@@ -273,11 +306,19 @@ function __tnBigIntGreaterThan(lhs: bigint, rhs: bigint): boolean {
   return (lhs as unknown as number) > (rhs as unknown as number);
 }
 
+/* Set bits of a u64 (a bigint is read as its low 64 bits; a number as
+   its low 32, as before). */
 function __tnPopcount(value: number | bigint): number {
-  let v =
-    typeof value === "bigint"
-      ? Number(value & BigInt(0xffffffff))
-      : Number(value) >>> 0;
+  if (typeof value === "bigint") {
+    let v = BigInt.asUintN(64, value);
+    let count = 0;
+    while (v !== BigInt(0)) {
+      v &= v - BigInt(1);
+      count++;
+    }
+    return count;
+  }
+  let v = Number(value) >>> 0;
   v = v - ((v >>> 1) & 0x55555555);
   v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
   return (((v + (v >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24;
@@ -292,10 +333,10 @@ function __tnRaiseIrError(code: string, message: string): never {
 function __tnCheckedAdd(lhs: bigint, rhs: bigint): bigint {
   if (__tnHasNativeBigInt) {
     const result = (lhs as bigint) + (rhs as bigint);
-    if (result < BigInt(0)) {
+    if (result < BigInt(0) || result > __tnU64(-BigInt(1))) {
       __tnRaiseIrError(
         "tn.ir.overflow",
-        "IR runtime detected negative size via addition"
+        "IR runtime detected an addition outside u64"
       );
     }
     return result;
@@ -315,13 +356,39 @@ function __tnCheckedAdd(lhs: bigint, rhs: bigint): bigint {
   return (sum as unknown) as bigint;
 }
 
-function __tnCheckedMul(lhs: bigint, rhs: bigint): bigint {
+function __tnCheckedSub(lhs: bigint, rhs: bigint): bigint {
   if (__tnHasNativeBigInt) {
-    const result = (lhs as bigint) * (rhs as bigint);
+    const result = (lhs as bigint) - (rhs as bigint);
     if (result < BigInt(0)) {
       __tnRaiseIrError(
         "tn.ir.overflow",
-        "IR runtime detected negative size via multiplication"
+        "IR runtime detected negative size via subtraction"
+      );
+    }
+    return result;
+  }
+  const left = lhs as unknown as number;
+  const right = rhs as unknown as number;
+  const diff = left - right;
+  if (diff < 0 || !Number.isFinite(diff)) {
+    __tnRaiseIrError(
+      "tn.ir.overflow",
+      "IR runtime detected invalid subtraction result"
+    );
+  }
+  if (!Number.isSafeInteger(diff)) {
+    __tnWarnOnce("[thru-net] Precision loss while polyfilling BigInt subtraction");
+  }
+  return (diff as unknown) as bigint;
+}
+
+function __tnCheckedMul(lhs: bigint, rhs: bigint): bigint {
+  if (__tnHasNativeBigInt) {
+    const result = (lhs as bigint) * (rhs as bigint);
+    if (result < BigInt(0) || result > __tnU64(-BigInt(1))) {
+      __tnRaiseIrError(
+        "tn.ir.overflow",
+        "IR runtime detected a multiplication outside u64"
       );
     }
     return result;
@@ -341,6 +408,178 @@ function __tnCheckedMul(lhs: bigint, rhs: bigint): bigint {
     );
   }
   return (product as unknown) as bigint;
+}
+
+function __tnCheckedDiv(lhs: bigint, rhs: bigint): bigint {
+  if (__tnBigIntEquals(rhs, __tnToBigInt(0))) {
+    __tnRaiseIrError("tn.ir.overflow", "IR runtime division by zero");
+  }
+  if (__tnHasNativeBigInt) return (lhs as bigint) / (rhs as bigint);
+  const quotient = Math.floor((lhs as unknown as number) / (rhs as unknown as number));
+  return (quotient as unknown) as bigint;
+}
+
+function __tnCheckedMod(lhs: bigint, rhs: bigint): bigint {
+  if (__tnBigIntEquals(rhs, __tnToBigInt(0))) {
+    __tnRaiseIrError("tn.ir.overflow", "IR runtime modulo by zero");
+  }
+  if (__tnHasNativeBigInt) return (lhs as bigint) % (rhs as bigint);
+  return (((lhs as unknown as number) % (rhs as unknown as number)) as unknown) as bigint;
+}
+
+function __tnBitwise(
+  lhs: bigint,
+  rhs: bigint,
+  op: "and" | "or" | "xor"
+): bigint {
+  if (__tnHasNativeBigInt) {
+    if (op === "and") return (lhs as bigint) & (rhs as bigint);
+    if (op === "or") return (lhs as bigint) | (rhs as bigint);
+    return (lhs as bigint) ^ (rhs as bigint);
+  }
+  const left = lhs as unknown as number;
+  const right = rhs as unknown as number;
+  const maxU32 = 0xffffffff;
+  if (
+    !Number.isInteger(left) ||
+    !Number.isInteger(right) ||
+    left < 0 ||
+    right < 0 ||
+    left > maxU32 ||
+    right > maxU32
+  ) {
+    __tnRaiseIrError(
+      "tn.ir.overflow",
+      "IR runtime bitwise operation requires BigInt for values outside u32 range"
+    );
+  }
+  const result = op === "and" ? left & right : op === "or" ? left | right : left ^ right;
+  return ((result >>> 0) as unknown) as bigint;
+}
+
+function __tnCheckedShift(
+  lhs: bigint,
+  rhs: bigint,
+  direction: "left" | "right"
+): bigint {
+  /* As C and Rust: shifting 0, or shifting right by 64 or more, is 0;
+     shifting a non-zero value left by 64 or more overflows. */
+  if (__tnBigIntEquals(lhs, __tnToBigInt(0))) return lhs;
+  if (direction === "right" && __tnBigIntGreaterThan(rhs, __tnToBigInt(63))) {
+    return __tnToBigInt(0);
+  }
+  const amount = __tnBigIntToNumber(rhs, "IR shift amount");
+  if (amount < 0 || amount >= 64 || !Number.isInteger(amount)) {
+    __tnRaiseIrError("tn.ir.overflow", "IR runtime invalid shift amount");
+  }
+  if (__tnHasNativeBigInt) {
+    const shift = BigInt(amount);
+    const shifted = direction === "left" ? (lhs as bigint) << shift : (lhs as bigint) >> shift;
+    if (shifted > __tnU64(-BigInt(1))) {
+      __tnRaiseIrError("tn.ir.overflow", "IR runtime shift overflows u64");
+    }
+    return shifted;
+  }
+  const value = lhs as unknown as number;
+  const result = direction === "left" ? value * 2 ** amount : Math.floor(value / 2 ** amount);
+  if (!Number.isSafeInteger(result)) {
+    __tnWarnOnce("[thru-net] Precision loss while polyfilling BigInt shift");
+  }
+  return (result as unknown) as bigint;
+}
+
+/* 2^64: no u64 value, so no enum tag and no buffer size. */
+const __tnMeasureLimit = __tnHasNativeBigInt
+  ? BigInt(1) << BigInt(64)
+  : ((2 ** 64) as unknown as bigint);
+
+/* Checked u64 arithmetic for size, enum tag and derived-parameter expressions over
+   buffer values, as C and Rust evaluate them: operands are read as u64, and a
+   result outside u64 (an overflowing add/mul/pow/shift, a negative sub, a
+   shift of 64 or more of a non-zero value, a division by zero) is `null`,
+   which propagates. No operation builds a value wider than 128 bits. */
+function __tnU64(value: bigint): bigint {
+  return BigInt.asUintN(64, value);
+}
+
+function __tnU64Op(op: string, lhs: bigint | null, rhs: bigint | null): bigint | null {
+  if (lhs === null || rhs === null) return null;
+  const a = __tnU64(lhs);
+  const b = __tnU64(rhs);
+  const zero = BigInt(0);
+  const one = BigInt(1);
+  const max = __tnU64(-one);
+  let result: bigint;
+  switch (op) {
+    case "add": result = a + b; break;
+    case "sub": result = a - b; break;
+    case "mul": result = a * b; break;
+    case "div": if (b === zero) return null; result = a / b; break;
+    case "mod": if (b === zero) return null; result = a % b; break;
+    case "and": result = a & b; break;
+    case "or": result = a | b; break;
+    case "xor": result = a ^ b; break;
+    case "shl":
+      if (a === zero) return zero;
+      if (b > BigInt(63)) return null;
+      result = a << b;
+      break;
+    case "shr": result = b > BigInt(63) ? zero : a >> b; break;
+    case "pow": {
+      if (b === zero) return one;
+      if (a === zero || a === one) return a;
+      if (b > BigInt(64)) return null;
+      result = one;
+      for (let i = zero; i < b; i++) {
+        result *= a;
+        if (result > max) return null;
+      }
+      break;
+    }
+    case "eq": return a === b ? one : zero;
+    case "ne": return a !== b ? one : zero;
+    case "lt": return a < b ? one : zero;
+    case "gt": return a > b ? one : zero;
+    case "le": return a <= b ? one : zero;
+    case "ge": return a >= b ? one : zero;
+    case "land": return a !== zero && b !== zero ? one : zero;
+    case "lor": return a !== zero || b !== zero ? one : zero;
+    case "lxor": return (a !== zero) !== (b !== zero) ? one : zero;
+    default: return null;
+  }
+  return result < zero || result > max ? null : result;
+}
+
+function __tnU64Unary(op: string, operand: bigint | null): bigint | null {
+  if (operand === null) return null;
+  const a = __tnU64(operand);
+  const zero = BigInt(0);
+  switch (op) {
+    case "bitnot": return __tnU64(~a);
+    case "neg": return a === zero ? zero : null;
+    case "not": return a === zero ? BigInt(1) : zero;
+    case "popcount": return BigInt(__tnPopcount(a));
+    default: return null;
+  }
+}
+
+/* A checked count as a number (views read validated bytes: an overflow
+   means they changed since). */
+function __tnCountNumber(count: bigint | null): number {
+  if (count === null) throw new Error("array count overflows u64");
+  return __tnBigIntToNumber(count, "array count");
+}
+
+/* Whether two enum tags are the same u64 (numbers and bigints compared
+   exactly; a null tag equals nothing). */
+function __tnTagEquals(lhs: number | bigint | null, rhs: number | bigint): boolean {
+  if (lhs === null) return false;
+  return __tnToBigInt(lhs) === __tnToBigInt(rhs);
+}
+
+/* A checked tag as a number; an overflow (`null`) selects no variant. */
+function __tnTagNumber(tag: bigint | null): number {
+  return tag === null || tag > BigInt(Number.MAX_SAFE_INTEGER) ? -1 : Number(tag);
 }
 
 function __tnAlign(value: bigint, alignment: number): bigint {
@@ -630,6 +869,17 @@ function __tnValidateIrTree(
   return { ok: true, consumed: required };
 }
 
+/* A parameter as the u64 C and Rust evaluate: a value read from a signed
+   field is its two's complement (i8 -1 is 2^64-1); a derived value past
+   u64 (an overflowed computed count or tag) is an overflow. */
+function __tnIrU64(value: bigint, name: string): bigint {
+  if (!__tnHasNativeBigInt) return value;
+  if (value > __tnU64(-BigInt(1))) {
+    __tnRaiseIrError("tn.ir.overflow", `IR parameter '${name}' overflows u64`);
+  }
+  return __tnU64(value);
+}
+
 function __tnEvalIrNode(
   node: __TnIrNode,
   ctx: __TnIrContext,
@@ -641,6 +891,9 @@ function __tnEvalIrNode(
     case "const":
       return node.value;
     case "field": {
+      if (node.param === "__buffer_size" && ctx.buffer) {
+        return __tnToBigInt(ctx.buffer.length);
+      }
       const val = ctx.params[node.param];
       if (val === undefined) {
         const prefix = ctx.typeName ? `${ctx.typeName}: ` : "";
@@ -649,7 +902,7 @@ function __tnEvalIrNode(
           `${prefix}Missing IR parameter '${node.param}'`
         );
       }
-      return val;
+      return __tnIrU64(val, node.param);
     }
     case "add":
       {
@@ -661,15 +914,63 @@ function __tnEvalIrNode(
         );
         return __tnCheckedAdd(left, right);
       }
-    case "mul":
-      return __tnCheckedMul(
+    case "sub":
+      return __tnCheckedSub(
         __tnEvalIrNode(node.left, ctx, baseOffset),
         __tnEvalIrNode(node.right, ctx, baseOffset)
+      );
+    case "mul": {
+      /* `count * element`: no elements select no variant (an unknown tag
+         with a zero count is valid), so a zero left side ends here. */
+      const left = __tnEvalIrNode(node.left, ctx, baseOffset);
+      if (__tnBigIntEquals(left, __tnToBigInt(0))) return left;
+      return __tnCheckedMul(left, __tnEvalIrNode(node.right, ctx, baseOffset));
+    }
+    case "div":
+      return __tnCheckedDiv(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset)
+      );
+    case "mod":
+      return __tnCheckedMod(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset)
+      );
+    case "bitAnd":
+      return __tnBitwise(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset),
+        "and"
+      );
+    case "bitOr":
+      return __tnBitwise(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset),
+        "or"
+      );
+    case "bitXor":
+      return __tnBitwise(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset),
+        "xor"
+      );
+    case "leftShift":
+      return __tnCheckedShift(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset),
+        "left"
+      );
+    case "rightShift":
+      return __tnCheckedShift(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset),
+        "right"
       );
     case "align":
       return __tnAlign(__tnEvalIrNode(node.node, ctx, baseOffset), node.alignment);
     case "switch": {
-      const tagVal = ctx.params[node.tag];
+      const rawTag = ctx.params[node.tag];
+      const tagVal = rawTag === undefined ? rawTag : __tnIrU64(rawTag, node.tag);
       if (tagVal === undefined) {
         const prefix = ctx.typeName ? `${ctx.typeName}: ` : "";
         __tnRaiseIrError(
@@ -677,16 +978,16 @@ function __tnEvalIrNode(
           `${prefix}Missing IR switch tag '${node.tag}'`
         );
       }
-      const tagNumber = Number(tagVal);
+      /* Case values past 2^53 - 1 are bigints: compare exact u64s. */
       for (const caseNode of node.cases) {
-        if (caseNode.value === tagNumber) {
+        if (__tnTagEquals(tagVal, caseNode.value)) {
           return __tnEvalIrNode(caseNode.node, ctx, baseOffset);
         }
       }
       if (node.default) return __tnEvalIrNode(node.default, ctx, baseOffset);
       __tnRaiseIrError(
         "tn.ir.invalid_tag",
-        `Unhandled IR switch value ${tagNumber} for '${node.tag}'`
+        `Unhandled IR switch value ${tagVal} for '${node.tag}'`
       );
     }
     case "call": {
@@ -727,6 +1028,11 @@ function __tnEvalIrNode(
       return __tnInvokeFootprint(node.typeName, nestedParams);
     }
     case "sumOverArray": {
+      if (!ctx.buffer && node.payloadParam !== undefined) {
+        /* Sizing from params: the array's byte total is a parameter. */
+        const total = ctx.params[node.payloadParam];
+        if (total !== undefined) return total;
+      }
       if (!ctx.buffer) {
         __tnRaiseIrError(
           "tn.ir.missing_buffer",
@@ -990,11 +1296,14 @@ export class BurnInstructionBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("BurnInstruction", BurnInstruction.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("BurnInstruction", BurnInstruction.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -1177,11 +1486,14 @@ export class CloseAccountInstructionBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("CloseAccountInstruction", CloseAccountInstruction.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("CloseAccountInstruction", CloseAccountInstruction.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -1364,11 +1676,14 @@ export class FreezeAccountInstructionBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("FreezeAccountInstruction", FreezeAccountInstruction.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("FreezeAccountInstruction", FreezeAccountInstruction.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -1576,11 +1891,14 @@ export class MintToInstructionBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("MintToInstruction", MintToInstruction.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("MintToInstruction", MintToInstruction.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -1862,11 +2180,14 @@ export class ThawAccountEventDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("ThawAccountEventData", ThawAccountEventData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("ThawAccountEventData", ThawAccountEventData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -2049,11 +2370,14 @@ export class ThawAccountInstructionBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("ThawAccountInstruction", ThawAccountInstruction.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("ThawAccountInstruction", ThawAccountInstruction.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -2214,11 +2538,14 @@ export class TickerFieldBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("TickerField", TickerField.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("TickerField", TickerField.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -2421,11 +2748,14 @@ export class TokenAccountBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("TokenAccount", TokenAccount.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("TokenAccount", TokenAccount.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -2440,6 +2770,149 @@ export class TokenAccountBuilder {
 __tnRegisterFootprint("TokenAccount", (params) => TokenAccount.__tnInvokeFootprint(params));
 __tnRegisterValidate("TokenAccount", (buffer, params) => TokenAccount.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("TokenAccount", (buffer) => { const result = TokenAccount.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR TokenError ----- */
+
+const __tn_ir_TokenError = {
+  typeName: "TokenError",
+  root: { op: "const", value: 8n }
+} as const;
+
+export class TokenError {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError.__tnCreateView requires a Uint8Array");
+    return new TokenError(new Uint8Array(buffer));
+  }
+
+  static builder(): TokenErrorBuilder {
+    return new TokenErrorBuilder();
+  }
+
+  static fromBuilder(builder: TokenErrorBuilder): TokenError | null {
+    const buffer = builder.build();
+    return TokenError.from_array(buffer);
+  }
+
+  get_code(): bigint {
+    const offset = 0;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_code(value: bigint): void {
+    const offset = 0;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get code(): bigint {
+    return this.get_code();
+  }
+
+  set code(value: bigint) {
+    this.set_code(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_TokenError.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_TokenError, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for TokenError');
+    }
+    return __tnBigIntToNumber(irResult, 'TokenError::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 8) return { ok: false, code: "tn.buffer_too_small", consumed: 8 };
+    return { ok: true, consumed: 8 };
+  }
+
+  static new(code: bigint): TokenError {
+    const buffer = new Uint8Array(8);
+    const view = new DataView(buffer.buffer);
+
+    let offset = 0;
+    view.setBigUint64(0, code, true); /* code (little-endian) */
+
+    return new TokenError(buffer);
+  }
+
+  static from_array(buffer: Uint8Array): TokenError | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new TokenError(buffer);
+  }
+
+}
+
+export class TokenErrorBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(8);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_code(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(0, cast, true);
+    return this;
+  }
+
+  build(): Uint8Array {
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("TokenError", TokenError.validate(buffer));
+    return buffer;
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("TokenError", TokenError.validate(this.buffer));
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): TokenError {
+    const view = TokenError.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build TokenError");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("TokenError", (params) => TokenError.__tnInvokeFootprint(params));
+__tnRegisterValidate("TokenError", (buffer, params) => TokenError.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("TokenError", (buffer) => { const result = TokenError.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR TokenMintAccount ----- */
 
@@ -2705,11 +3178,14 @@ export class TokenMintAccountBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("TokenMintAccount", TokenMintAccount.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("TokenMintAccount", TokenMintAccount.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -2729,11 +3205,54 @@ __tnRegisterDynamicValidate("TokenMintAccount", (buffer) => { const result = Tok
 
 const __tn_ir_TokenProgramAccount = {
   typeName: "TokenProgramAccount",
-  root: { op: "align", alignment: 1, node: { op: "align", alignment: 1, node: { op: "switch", tag: "TokenProgramAccount::data.payload_size", cases: [{ value: 73, node: { op: "align", alignment: 1, node: { op: "const", value: 73n } } }, { value: 115, node: { op: "align", alignment: 1, node: { op: "const", value: 115n } } }] } } }
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 1n } }, right: { op: "align", alignment: 1, node: { op: "switch", tag: "TokenProgramAccount::payload.account_type", cases: [{ value: 1, node: { op: "align", alignment: 1, node: { op: "const", value: 115n } } }, { value: 2, node: { op: "align", alignment: 1, node: { op: "const", value: 73n } } }] } } } }
 } as const;
+
+export class TokenProgramAccount_payload_Inner {
+  private view: DataView;
+  private __tnFieldContext: Record<string, number | bigint> | null = null;
+  private constructor(private buffer: Uint8Array, private descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    this.__tnFieldContext = fieldContext ?? null;
+  }
+
+  static __tnCreate(payload: Uint8Array, descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>): TokenProgramAccount_payload_Inner {
+    return new TokenProgramAccount_payload_Inner(new Uint8Array(payload), descriptor, fieldContext);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenProgramAccount_payload_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["account_type"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 1)) descriptor = { name: "mint_v1", tag: 1, payloadSize: 115 };
+      if (__tnTagEquals(tag, 2)) descriptor = { name: "token_account_v1", tag: 2, payloadSize: 73 };
+    }
+    return new TokenProgramAccount_payload_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
+  bytes(): Uint8Array {
+    return new Uint8Array(this.buffer);
+  }
+
+  variant(): __TnVariantDescriptor | null {
+    return this.descriptor;
+  }
+
+  asMintV1(): TokenMintAccount | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1)) return null;
+    return TokenMintAccount.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asTokenAccountV1(): TokenAccount | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2)) return null;
+    return TokenAccount.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+}
 
 export class TokenProgramAccount {
   private view: DataView;
+  private static readonly __tnFieldOffset_payload = 1;
   private __tnParams: TokenProgramAccount.Params;
 
   private constructor(private buffer: Uint8Array, params?: TokenProgramAccount.Params) {
@@ -2766,35 +3285,76 @@ export class TokenProgramAccount {
     return this.__tnParams;
   }
 
-  static __tnComputeSequentialLayout(view: DataView, buffer: Uint8Array): { params: Record<string, bigint> | null; offsets: Record<string, number> | null; derived: Record<string, bigint> | null } | null {
-    const __tnLength = buffer.length;
-    let __tnParamSeq_data_payload_size: bigint | null = null;
-    let __tnCursorMutable = 0;
-    const __tnSduAvailable_data = __tnLength - __tnCursorMutable;
-    let __tnSduSize_data = -1;
-    switch (__tnSduAvailable_data) {
-      case 73: __tnSduSize_data = 73; break;
-      case 115: __tnSduSize_data = 115; break;
-      default: return null;
-    }
-    __tnParamSeq_data_payload_size = __tnToBigInt(__tnSduSize_data);
-    __tnCursorMutable += __tnSduSize_data;
-    const params: Record<string, bigint> = Object.create(null);
-    if (__tnParamSeq_data_payload_size === null) return null;
-    params["data_payload_size"] = __tnParamSeq_data_payload_size as bigint;
-    return { params, offsets: null, derived: null };
+  static builder(): TokenProgramAccountBuilder {
+    return new TokenProgramAccountBuilder();
   }
 
+  static fromBuilder(builder: TokenProgramAccountBuilder): TokenProgramAccount | null {
+    const buffer = builder.build();
+    const params = builder.dynamicParams();
+    return TokenProgramAccount.from_array(buffer, { params });
+  }
+
+  static readonly payloadVariantDescriptors = Object.freeze([
+    {
+      name: "mint_v1",
+      tag: 1,
+      payloadSize: 115,
+      payloadType: "TokenProgramAccount::payload::mint_v1",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(TokenMintAccount),
+    },
+    {
+      name: "token_account_v1",
+      tag: 2,
+      payloadSize: 73,
+      payloadType: "TokenProgramAccount::payload::token_account_v1",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(TokenAccount),
+    },
+  ] as const);
+
   private static __tnExtractParams(view: DataView, buffer: Uint8Array): { params: TokenProgramAccount.Params; derived: Record<string, bigint> | null } | null {
-    const __tnLayout = TokenProgramAccount.__tnComputeSequentialLayout(view, buffer);
-    if (!__tnLayout || !__tnLayout.params) return null;
-    const __tnSeqParams = __tnLayout.params;
-    const __tnParamSeq_data_payload_size = __tnSeqParams["data_payload_size"];
-    if (__tnParamSeq_data_payload_size === undefined) return null;
+    if (buffer.length < 1) {
+      return null;
+    }
+    const __tnParam_payload_account_type = __tnToBigInt(view.getUint8(0));
     const __tnExtractedParams = TokenProgramAccount.Params.fromValues({
-      data_payload_size: __tnParamSeq_data_payload_size as bigint,
+      payload_account_type: __tnParam_payload_account_type,
     });
     return { params: __tnExtractedParams, derived: null };
+  }
+
+  get_account_type(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_account_type(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get account_type(): number {
+    return this.get_account_type();
+  }
+
+  set account_type(value: number) {
+    this.set_account_type(value);
+  }
+
+  payloadVariant(): typeof TokenProgramAccount.payloadVariantDescriptors[number] | null {
+    const tag: number | bigint | null = this.get_account_type();
+    return TokenProgramAccount.payloadVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
+  }
+
+  payload(): TokenProgramAccount_payload_Inner {
+    const descriptor = this.payloadVariant();
+    if (!descriptor) throw new Error("TokenProgramAccount: unknown payload variant");
+    const offset = TokenProgramAccount.__tnFieldOffset_payload;
+    const remaining = this.buffer.length - offset;
+    const payloadLength = descriptor.payloadSize ?? remaining;
+    if (payloadLength < 0 || offset + payloadLength > this.buffer.length) throw new Error("TokenProgramAccount: payload exceeds buffer bounds");
+    const slice = this.buffer.subarray(offset, offset + payloadLength);
+    return TokenProgramAccount_payload_Inner.__tnCreate(slice, descriptor, undefined);
   }
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
     return __tnEvalFootprint(__tn_ir_TokenProgramAccount.root, { params: __tnParams });
@@ -2812,17 +3372,17 @@ export class TokenProgramAccount {
     return this.__tnValidateInternal(buffer, __tnParams);
   }
 
-  static footprintIr(data_payload_size: number | bigint): bigint {
+  static footprintIr(payload_account_type: number | bigint): bigint {
     const params = TokenProgramAccount.Params.fromValues({
-      data_payload_size: data_payload_size,
+      payload_account_type: payload_account_type,
     });
     return this.footprintIrFromParams(params);
   }
 
   private static __tnPackParams(params: TokenProgramAccount.Params): Record<string, bigint> {
     const record: Record<string, bigint> = Object.create(null);
-    record["data.payload_size"] = params.data_payload_size;
-    record["TokenProgramAccount::data.payload_size"] = params.data_payload_size;
+    record["payload.account_type"] = params.payload_account_type;
+    record["TokenProgramAccount::payload.account_type"] = params.payload_account_type;
     return record;
   }
 
@@ -2838,7 +3398,7 @@ export class TokenProgramAccount {
     return __tnBigIntToNumber(irResult, 'TokenProgramAccount::footprintFromParams');
   }
 
-  static footprintFromValues(input: { data_payload_size: number | bigint }): number {
+  static footprintFromValues(input: { payload_account_type: number | bigint }): number {
     const params = TokenProgramAccount.params(input);
     return this.footprintFromParams(params);
   }
@@ -2864,7 +3424,24 @@ export class TokenProgramAccount {
       return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'TokenProgramAccount::validate') : undefined, params };
     }
     const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'TokenProgramAccount::validate') : undefined;
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed, params };
+  }
+
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 1 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getUint8(c))); c += 1;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 1n: t3 = 115; break;
+  case 2n: t3 = 73; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array, opts?: { params?: TokenProgramAccount.Params }): TokenProgramAccount | null {
@@ -2892,18 +3469,18 @@ export class TokenProgramAccount {
 
 export namespace TokenProgramAccount {
   export type Params = {
-    /** ABI path: data.payload_size */
-    readonly data_payload_size: bigint;
+    /** ABI path: payload.account_type */
+    readonly payload_account_type: bigint;
   };
 
   export const ParamKeys = Object.freeze({
-    data_payload_size: "data.payload_size",
+    payload_account_type: "payload.account_type",
   } as const);
 
   export const Params = {
-    fromValues(input: { data_payload_size: number | bigint }): Params {
+    fromValues(input: { payload_account_type: number | bigint }): Params {
       return {
-        data_payload_size: __tnToBigInt(input.data_payload_size),
+        payload_account_type: __tnToBigInt(input.payload_account_type),
       };
     },
     fromBuilder(source: { dynamicParams(): Params } | { params: Params } | Params): Params {
@@ -2917,14 +3494,380 @@ export namespace TokenProgramAccount {
     }
   };
 
-  export function params(input: { data_payload_size: number | bigint }): Params {
+  export function params(input: { payload_account_type: number | bigint }): Params {
     return Params.fromValues(input);
+  }
+}
+
+export class TokenProgramAccountBuilder {
+  private __tnPrefixBuffer: Uint8Array;
+  private __tnPrefixView: DataView;
+  private __tnField_account_type: number | null = null;
+  private __tnPayload_payload: { descriptor: typeof TokenProgramAccount.payloadVariantDescriptors[number]; bytes: Uint8Array } | null = null;
+  private __tnCachedParams: TokenProgramAccount.Params | null = null;
+  private __tnLastBuffer: Uint8Array | null = null;
+  private __tnLastParams: TokenProgramAccount.Params | null = null;
+  private __tnVariantSelector_payload?: __TnVariantSelectorResult<TokenProgramAccountBuilder>;
+
+  constructor() {
+    this.__tnPrefixBuffer = new Uint8Array(1);
+    this.__tnPrefixView = new DataView(this.__tnPrefixBuffer.buffer, this.__tnPrefixBuffer.byteOffset, this.__tnPrefixBuffer.byteLength);
+  }
+
+  private __tnInvalidate(): void {
+    this.__tnCachedParams = null;
+    this.__tnLastBuffer = null;
+    this.__tnLastParams = null;
+  }
+
+  private __tnAssign_account_type(value: number): void {
+    this.__tnField_account_type = value;
+    this.__tnInvalidate();
+  }
+
+  set_account_type(value: number): this {
+    this.__tnAssign_account_type(value);
+    return this;
+  }
+
+  payload(): __TnVariantSelectorResult<TokenProgramAccountBuilder> {
+    if (!this.__tnVariantSelector_payload) {
+      this.__tnVariantSelector_payload = __tnCreateVariantSelector(this, TokenProgramAccount.payloadVariantDescriptors, (descriptor, payload) => {
+        this.__tnPayload_payload = { descriptor, bytes: new Uint8Array(payload) };
+        this.__tnAssign_account_type(descriptor.tag);
+      });
+    }
+    return this.__tnVariantSelector_payload!;
+  }
+
+  build(): Uint8Array {
+    const params = this.__tnComputeParams();
+    if (this.__tnField_account_type === null) throw new Error("TokenProgramAccountBuilder: field 'account_type' must be set before build");
+    if (!this.__tnPayload_payload) throw new Error("TokenProgramAccountBuilder: payload variant not selected");
+    const payloadLength = this.__tnPayload_payload.bytes.length;
+    const requiredSize = 1 + payloadLength;
+    const footprintSize = TokenProgramAccount.footprintFromParams(params);
+    const size = Math.max(requiredSize, footprintSize);
+    const buffer = new Uint8Array(size);
+    this.__tnWriteInto(buffer);
+    this.__tnValidateOrThrow(buffer, params);
+    return buffer;
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    const params = this.__tnComputeParams();
+    if (this.__tnField_account_type === null) throw new Error("TokenProgramAccountBuilder: field 'account_type' must be set before build");
+    if (!this.__tnPayload_payload) throw new Error("TokenProgramAccountBuilder: payload variant not selected");
+    const payloadLength = this.__tnPayload_payload.bytes.length;
+    const requiredSize = 1 + payloadLength;
+    const footprintSize = TokenProgramAccount.footprintFromParams(params);
+    const size = Math.max(requiredSize, footprintSize);
+    if (target.length - offset < size) throw new Error("TokenProgramAccountBuilder: target buffer too small");
+    const slice = target.subarray(offset, offset + size);
+    this.__tnWriteInto(slice);
+    this.__tnValidateOrThrow(slice, params);
+    return target;
+  }
+
+  finish(): TokenProgramAccount {
+    const buffer = this.build();
+    const params = this.__tnLastParams ?? this.__tnComputeParams();
+    const view = TokenProgramAccount.from_array(buffer, { params });
+    if (!view) throw new Error("TokenProgramAccountBuilder: failed to finalize view");
+    return view;
+  }
+
+  finishView(): TokenProgramAccount {
+    return this.finish();
+  }
+
+  dynamicParams(): TokenProgramAccount.Params {
+    return this.__tnComputeParams();
+  }
+
+  private __tnComputeParams(): TokenProgramAccount.Params {
+    if (this.__tnCachedParams) return this.__tnCachedParams;
+    const params = TokenProgramAccount.Params.fromValues({
+      payload_account_type: (() => { if (this.__tnField_account_type === null) throw new Error("TokenProgramAccountBuilder: missing enum tag"); return __tnToBigInt(this.__tnField_account_type); })(),
+    });
+    this.__tnCachedParams = params;
+    return params;
+  }
+
+  private __tnWriteInto(target: Uint8Array): void {
+    if (this.__tnField_account_type === null) throw new Error("TokenProgramAccountBuilder: field 'account_type' must be set before build");
+    if (!this.__tnPayload_payload) throw new Error("TokenProgramAccountBuilder: payload variant not selected");
+    const view = new DataView(target.buffer, target.byteOffset, target.byteLength);
+    target.set(this.__tnPrefixBuffer, 0);
+    view.setUint8(0, this.__tnField_account_type);
+    target.set(this.__tnPayload_payload.bytes, 1);
+  }
+
+  private __tnValidateOrThrow(buffer: Uint8Array, params: TokenProgramAccount.Params): void {
+    const result = TokenProgramAccount.validate(buffer, { params });
+    if (!result.ok) {
+      throw new Error(`${ TokenProgramAccount }Builder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
+    }
+    this.__tnLastParams = result.params ?? params;
+    this.__tnLastBuffer = buffer;
   }
 }
 
 __tnRegisterFootprint("TokenProgramAccount", (params) => TokenProgramAccount.__tnInvokeFootprint(params));
 __tnRegisterValidate("TokenProgramAccount", (buffer, params) => TokenProgramAccount.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("TokenProgramAccount", (buffer) => { const result = TokenProgramAccount.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR TransferCheckedInstruction ----- */
+
+const __tn_ir_TransferCheckedInstruction = {
+  typeName: "TransferCheckedInstruction",
+  root: { op: "const", value: 24n }
+} as const;
+
+export class TransferCheckedInstruction {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TransferCheckedInstruction {
+    if (!buffer || buffer.length === undefined) throw new Error("TransferCheckedInstruction.__tnCreateView requires a Uint8Array");
+    return new TransferCheckedInstruction(new Uint8Array(buffer));
+  }
+
+  static builder(): TransferCheckedInstructionBuilder {
+    return new TransferCheckedInstructionBuilder();
+  }
+
+  static fromBuilder(builder: TransferCheckedInstructionBuilder): TransferCheckedInstruction | null {
+    const buffer = builder.build();
+    return TransferCheckedInstruction.from_array(buffer);
+  }
+
+  get_source_account_index(): number {
+    const offset = 0;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_source_account_index(value: number): void {
+    const offset = 0;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get source_account_index(): number {
+    return this.get_source_account_index();
+  }
+
+  set source_account_index(value: number) {
+    this.set_source_account_index(value);
+  }
+
+  get_dest_account_index(): number {
+    const offset = 2;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_dest_account_index(value: number): void {
+    const offset = 2;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get dest_account_index(): number {
+    return this.get_dest_account_index();
+  }
+
+  set dest_account_index(value: number) {
+    this.set_dest_account_index(value);
+  }
+
+  get_mint_account_index(): number {
+    const offset = 4;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_mint_account_index(value: number): void {
+    const offset = 4;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get mint_account_index(): number {
+    return this.get_mint_account_index();
+  }
+
+  set mint_account_index(value: number) {
+    this.set_mint_account_index(value);
+  }
+
+  get_amount(): bigint {
+    const offset = 6;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_amount(value: bigint): void {
+    const offset = 6;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get amount(): bigint {
+    return this.get_amount();
+  }
+
+  set amount(value: bigint) {
+    this.set_amount(value);
+  }
+
+  get_decimals(): number {
+    const offset = 14;
+    return this.view.getUint8(offset);
+  }
+
+  set_decimals(value: number): void {
+    const offset = 14;
+    this.view.setUint8(offset, value);
+  }
+
+  get decimals(): number {
+    return this.get_decimals();
+  }
+
+  set decimals(value: number) {
+    this.set_decimals(value);
+  }
+
+  get_ticker(): TickerField {
+    const offset = 15;
+    const slice = this.buffer.subarray(offset, offset + 9);
+    return TickerField.from_array(slice)!;
+  }
+
+  set_ticker(value: TickerField): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 15;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get ticker(): TickerField {
+    return this.get_ticker();
+  }
+
+  set ticker(value: TickerField) {
+    this.set_ticker(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_TransferCheckedInstruction.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_TransferCheckedInstruction, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for TransferCheckedInstruction');
+    }
+    return __tnBigIntToNumber(irResult, 'TransferCheckedInstruction::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 24) return { ok: false, code: "tn.buffer_too_small", consumed: 24 };
+    return { ok: true, consumed: 24 };
+  }
+
+  static from_array(buffer: Uint8Array): TransferCheckedInstruction | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new TransferCheckedInstruction(buffer);
+  }
+
+}
+
+export class TransferCheckedInstructionBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(24);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_source_account_index(value: number): this {
+    this.view.setUint16(0, value, true);
+    return this;
+  }
+
+  set_dest_account_index(value: number): this {
+    this.view.setUint16(2, value, true);
+    return this;
+  }
+
+  set_mint_account_index(value: number): this {
+    this.view.setUint16(4, value, true);
+    return this;
+  }
+
+  set_amount(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(6, cast, true);
+    return this;
+  }
+
+  set_decimals(value: number): this {
+    this.view.setUint8(14, value);
+    return this;
+  }
+
+  set_ticker(value: Uint8Array): this {
+    if (value.length !== 9) throw new Error("ticker expects 9 bytes");
+    this.buffer.set(value, 15);
+    return this;
+  }
+
+  build(): Uint8Array {
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("TransferCheckedInstruction", TransferCheckedInstruction.validate(buffer));
+    return buffer;
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("TransferCheckedInstruction", TransferCheckedInstruction.validate(this.buffer));
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): TransferCheckedInstruction {
+    const view = TransferCheckedInstruction.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build TransferCheckedInstruction");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("TransferCheckedInstruction", (params) => TransferCheckedInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("TransferCheckedInstruction", (buffer, params) => TransferCheckedInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("TransferCheckedInstruction", (buffer) => { const result = TransferCheckedInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR TransferEventData ----- */
 
@@ -3138,11 +4081,14 @@ export class TransferEventDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("TransferEventData", TransferEventData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("TransferEventData", TransferEventData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -3326,11 +4272,14 @@ export class TransferInstructionBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("TransferInstruction", TransferInstruction.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("TransferInstruction", TransferInstruction.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -3585,11 +4534,14 @@ export class BurnEventDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("BurnEventData", BurnEventData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("BurnEventData", BurnEventData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -3772,11 +4724,14 @@ export class CloseAccountEventDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("CloseAccountEventData", CloseAccountEventData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("CloseAccountEventData", CloseAccountEventData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -3959,11 +4914,14 @@ export class FreezeAccountEventDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("FreezeAccountEventData", FreezeAccountEventData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("FreezeAccountEventData", FreezeAccountEventData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -4146,11 +5104,14 @@ export class InitializeAccountEventDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("InitializeAccountEventData", InitializeAccountEventData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("InitializeAccountEventData", InitializeAccountEventData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -4430,11 +5391,14 @@ export class InitializeMintEventDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("InitializeMintEventData", InitializeMintEventData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("InitializeMintEventData", InitializeMintEventData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -4689,11 +5653,14 @@ export class MintToEventDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("MintToEventData", MintToEventData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("MintToEventData", MintToEventData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -4728,6 +5695,22 @@ export class TokenEvent_payload_Inner {
     return new TokenEvent_payload_Inner(new Uint8Array(payload), descriptor, fieldContext);
   }
 
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenEvent_payload_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["event_type"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 0)) descriptor = { name: "initialize_mint", tag: 0, payloadSize: 115 };
+      if (__tnTagEquals(tag, 1)) descriptor = { name: "initialize_account", tag: 1, payloadSize: 96 };
+      if (__tnTagEquals(tag, 2)) descriptor = { name: "transfer", tag: 2, payloadSize: 88 };
+      if (__tnTagEquals(tag, 3)) descriptor = { name: "mint_to", tag: 3, payloadSize: 120 };
+      if (__tnTagEquals(tag, 4)) descriptor = { name: "burn", tag: 4, payloadSize: 120 };
+      if (__tnTagEquals(tag, 5)) descriptor = { name: "close_account", tag: 5, payloadSize: 96 };
+      if (__tnTagEquals(tag, 6)) descriptor = { name: "freeze_account", tag: 6, payloadSize: 96 };
+      if (__tnTagEquals(tag, 7)) descriptor = { name: "thaw_account", tag: 7, payloadSize: 96 };
+    }
+    return new TokenEvent_payload_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
   bytes(): Uint8Array {
     return new Uint8Array(this.buffer);
   }
@@ -4737,42 +5720,42 @@ export class TokenEvent_payload_Inner {
   }
 
   asInitializeMint(): InitializeMintEventData | null {
-    if (!this.descriptor || this.descriptor.tag !== 0) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 0)) return null;
     return InitializeMintEventData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asInitializeAccount(): InitializeAccountEventData | null {
-    if (!this.descriptor || this.descriptor.tag !== 1) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1)) return null;
     return InitializeAccountEventData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asTransfer(): TransferEventData | null {
-    if (!this.descriptor || this.descriptor.tag !== 2) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2)) return null;
     return TransferEventData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asMintTo(): MintToEventData | null {
-    if (!this.descriptor || this.descriptor.tag !== 3) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 3)) return null;
     return MintToEventData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asBurn(): BurnEventData | null {
-    if (!this.descriptor || this.descriptor.tag !== 4) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4)) return null;
     return BurnEventData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asCloseAccount(): CloseAccountEventData | null {
-    if (!this.descriptor || this.descriptor.tag !== 5) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 5)) return null;
     return CloseAccountEventData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asFreezeAccount(): FreezeAccountEventData | null {
-    if (!this.descriptor || this.descriptor.tag !== 6) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 6)) return null;
     return FreezeAccountEventData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asThawAccount(): ThawAccountEventData | null {
-    if (!this.descriptor || this.descriptor.tag !== 7) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 7)) return null;
     return ThawAccountEventData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
@@ -4912,8 +5895,8 @@ export class TokenEvent {
   }
 
   payloadVariant(): typeof TokenEvent.payloadVariantDescriptors[number] | null {
-    const tag = this.view.getUint8(0);
-    return TokenEvent.payloadVariantDescriptors.find((variant) => variant.tag === tag) ?? null;
+    const tag: number | bigint | null = this.get_event_type();
+    return TokenEvent.payloadVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
   }
 
   payload(): TokenEvent_payload_Inner {
@@ -4994,7 +5977,30 @@ export class TokenEvent {
       return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'TokenEvent::validate') : undefined, params };
     }
     const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'TokenEvent::validate') : undefined;
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed, params };
+  }
+
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 1 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getUint8(c))); c += 1;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 0n: t3 = 115; break;
+  case 1n: t3 = 96; break;
+  case 2n: t3 = 88; break;
+  case 3n: t3 = 120; break;
+  case 4n: t3 = 120; break;
+  case 5n: t3 = 96; break;
+  case 6n: t3 = 96; break;
+  case 7n: t3 = 96; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array, opts?: { params?: TokenEvent.Params }): TokenEvent | null {
@@ -5074,7 +6080,7 @@ export class TokenEventBuilder {
   }
 
   private __tnAssign_event_type(value: number): void {
-    this.__tnField_event_type = value & 0xff;
+    this.__tnField_event_type = value;
     this.__tnInvalidate();
   }
 
@@ -5174,7 +6180,7 @@ __tnRegisterDynamicValidate("TokenEvent", (buffer) => { const result = TokenEven
 
 const __tn_ir_InitializeAccountInstruction = {
   typeName: "InitializeAccountInstruction",
-  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "align", alignment: 2, node: { op: "const", value: 2n } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 1, node: { op: "call", typeName: "StateProof", args: [{ name: "proof_body.hdr.type_slot", source: "proof_body.hdr.type_slot" }, { name: "proof_body.payload_size", source: "proof_body.payload_size" }] } } } }
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 2n } }, right: { op: "align", alignment: 1, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 1, node: { op: "call", typeName: "StateProof", args: [{ name: "proof_body.hdr.type_slot", source: "proof_body.hdr.type_slot" }, { name: "proof_body.payload_size", source: "proof_body.payload_size" }] } } } }
 } as const;
 
 export class InitializeAccountInstruction {
@@ -5435,7 +6441,16 @@ export class InitializeAccountInstruction {
     const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
     let params = opts?.params ?? null;
     if (!params) {
-      return { ok: false, code: "tn.param_extraction_failed" };
+      const extracted = this.__tnExtractParams(view, buffer);
+      if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
+      params = extracted.params;
+    } else {
+      const extracted = this.__tnExtractParams(view, buffer);
+      if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
+      const supplied = params as unknown as Record<string, bigint>;
+      for (const [key, value] of Object.entries(extracted.params as unknown as Record<string, bigint>)) {
+        if (supplied[key] === undefined || __tnToBigInt(supplied[key]) !== __tnToBigInt(value)) return { ok: false, code: "tn.param_mismatch" };
+      }
     }
     const __tnParamsRec = this.__tnPackParams(params);
     const irResult = this.__tnValidateInternal(buffer, __tnParamsRec);
@@ -5443,7 +6458,61 @@ export class InitializeAccountInstruction {
       return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'InitializeAccountInstruction::validate') : undefined, params };
     }
     const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'InitializeAccountInstruction::validate') : undefined;
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed, params };
+  }
+
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 2 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 2 > b.length) return null; const x3 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 2 > b.length) return null; const x4 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 32 > b.length) return null; c += 32;
+const s5 = c;
+const s6 = c;
+if (c + 8 > b.length) return null; const x7 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+const s8 = c;
+const av9 = v; const ao10 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s8;
+void s6;
+let t11: number | null = null;
+switch ((__tnU64Op("and", __tnU64Op("shr", x7, 62n), 3n)) as bigint | null) {
+  case 0n: t11 = ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s12 = c;
+const n13 = __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 0)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 1))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 2)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 3)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 4)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 5))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 6)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 7))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 8)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 9))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 10)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 11)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 12)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 13))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 14)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 15)))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 16)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 17))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 18)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 19)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 20)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 21))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 22)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 23))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 24)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 25))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 26)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 27)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 28)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 29))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 30)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 31))))))))); if (n13 === null || n13 < 0n) return null;
+if (BigInt(c) + n13 * 32n > BigInt(b.length)) return null; c += Number(n13 * 32n);
+void s12;
+return c; })(b.subarray(c)); break;
+  case 1n: t11 = ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s14 = c;
+const s15 = c;
+const av16 = v; const ao17 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s15;
+const n18 = __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 0)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 1))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 2)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 3)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 4)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 5))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 6)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 7))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 8)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 9))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 10)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 11)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 12)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 13))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 14)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 15)))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 16)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 17))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 18)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 19)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 20)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 21))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 22)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 23))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 24)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 25))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 26)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 27)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 28)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 29))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 30)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 31))))))))); if (n18 === null || n18 < 0n) return null;
+if (BigInt(c) + n18 * 32n > BigInt(b.length)) return null; c += Number(n18 * 32n);
+void s14;
+return c; })(b.subarray(c)); break;
+  case 2n: t11 = ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s19 = c;
+const s20 = c;
+const av21 = v; const ao22 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s20;
+const s23 = c;
+const av24 = v; const ao25 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s23;
+const n26 = __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 0)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 1))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 2)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 3)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 4)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 5))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 6)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 7))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 8)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 9))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 10)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 11)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 12)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 13))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 14)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 15)))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 16)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 17))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 18)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 19)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 20)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 21))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 22)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 23))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 24)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 25))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 26)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 27)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 28)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 29))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 30)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av9.getUint8(ao10 + 31))))))))); if (n26 === null || n26 < 0n) return null;
+if (BigInt(c) + n26 * 32n > BigInt(b.length)) return null; c += Number(n26 * 32n);
+void s19;
+return c; })(b.subarray(c)); break;
+  default: return null;
+}
+if (t11 === null || c + t11 > b.length) return null; c += t11;
+void s5;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array, opts?: { params?: InitializeAccountInstruction.Params }): InitializeAccountInstruction | null {
@@ -5453,8 +6522,9 @@ export class InitializeAccountInstruction {
     const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
     let params = opts?.params ?? null;
     if (!params) {
-      __tnLogWarn('InitializeAccountInstruction::from_array requires params when IR extraction is unavailable');
-      return null;
+      const derived = this.__tnExtractParams(view, buffer);
+      if (!derived) return null;
+      params = derived.params;
     }
     const validation = this.validate(buffer, { params });
     if (!validation.ok) {
@@ -5632,7 +6702,7 @@ __tnRegisterDynamicValidate("InitializeAccountInstruction", (buffer) => { const 
 
 const __tn_ir_InitializeMintInstruction = {
   typeName: "InitializeMintInstruction",
-  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "align", alignment: 2, node: { op: "const", value: 2n } }, right: { op: "align", alignment: 1, node: { op: "const", value: 1n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 1n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 9n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 1, node: { op: "call", typeName: "StateProof", args: [{ name: "proof_body.hdr.type_slot", source: "proof_body.hdr.type_slot" }, { name: "proof_body.payload_size", source: "proof_body.payload_size" }] } } } }
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 2n } }, right: { op: "align", alignment: 1, node: { op: "const", value: 1n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 1n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 9n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 1, node: { op: "call", typeName: "StateProof", args: [{ name: "proof_body.hdr.type_slot", source: "proof_body.hdr.type_slot" }, { name: "proof_body.payload_size", source: "proof_body.payload_size" }] } } } }
 } as const;
 
 export class InitializeMintInstruction {
@@ -5985,7 +7055,16 @@ export class InitializeMintInstruction {
     const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
     let params = opts?.params ?? null;
     if (!params) {
-      return { ok: false, code: "tn.param_extraction_failed" };
+      const extracted = this.__tnExtractParams(view, buffer);
+      if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
+      params = extracted.params;
+    } else {
+      const extracted = this.__tnExtractParams(view, buffer);
+      if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
+      const supplied = params as unknown as Record<string, bigint>;
+      for (const [key, value] of Object.entries(extracted.params as unknown as Record<string, bigint>)) {
+        if (supplied[key] === undefined || __tnToBigInt(supplied[key]) !== __tnToBigInt(value)) return { ok: false, code: "tn.param_mismatch" };
+      }
     }
     const __tnParamsRec = this.__tnPackParams(params);
     const irResult = this.__tnValidateInternal(buffer, __tnParamsRec);
@@ -5993,7 +7072,78 @@ export class InitializeMintInstruction {
       return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'InitializeMintInstruction::validate') : undefined, params };
     }
     const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'InitializeMintInstruction::validate') : undefined;
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed, params };
+  }
+
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 2 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 1 > b.length) return null; const x3 = __tnU64(__tnToBigInt(v.getUint8(c))); c += 1;
+const s4 = c;
+const av5 = v; const ao6 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s4;
+const s7 = c;
+const av8 = v; const ao9 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s7;
+const s10 = c;
+const av11 = v; const ao12 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s10;
+if (c + 1 > b.length) return null; const x13 = __tnU64(__tnToBigInt(v.getUint8(c))); c += 1;
+const s14 = c;
+if (c + 1 > b.length) return null; const x15 = __tnU64(__tnToBigInt(v.getUint8(c))); c += 1;
+const av16 = v; const ao17 = c;
+if (c + 8 > b.length) return null; c += 8;
+void s14;
+if (c + 32 > b.length) return null; c += 32;
+const s18 = c;
+const s19 = c;
+if (c + 8 > b.length) return null; const x20 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+const s21 = c;
+const av22 = v; const ao23 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s21;
+void s19;
+let t24: number | null = null;
+switch ((__tnU64Op("and", __tnU64Op("shr", x20, 62n), 3n)) as bigint | null) {
+  case 0n: t24 = ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s25 = c;
+const n26 = __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 0)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 1))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 2)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 3)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 4)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 5))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 6)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 7))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 8)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 9))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 10)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 11)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 12)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 13))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 14)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 15)))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 16)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 17))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 18)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 19)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 20)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 21))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 22)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 23))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 24)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 25))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 26)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 27)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 28)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 29))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 30)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 31))))))))); if (n26 === null || n26 < 0n) return null;
+if (BigInt(c) + n26 * 32n > BigInt(b.length)) return null; c += Number(n26 * 32n);
+void s25;
+return c; })(b.subarray(c)); break;
+  case 1n: t24 = ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s27 = c;
+const s28 = c;
+const av29 = v; const ao30 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s28;
+const n31 = __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 0)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 1))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 2)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 3)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 4)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 5))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 6)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 7))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 8)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 9))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 10)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 11)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 12)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 13))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 14)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 15)))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 16)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 17))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 18)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 19)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 20)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 21))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 22)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 23))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 24)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 25))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 26)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 27)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 28)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 29))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 30)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 31))))))))); if (n31 === null || n31 < 0n) return null;
+if (BigInt(c) + n31 * 32n > BigInt(b.length)) return null; c += Number(n31 * 32n);
+void s27;
+return c; })(b.subarray(c)); break;
+  case 2n: t24 = ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s32 = c;
+const s33 = c;
+const av34 = v; const ao35 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s33;
+const s36 = c;
+const av37 = v; const ao38 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s36;
+const n39 = __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 0)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 1))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 2)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 3)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 4)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 5))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 6)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 7))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 8)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 9))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 10)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 11)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 12)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 13))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 14)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 15)))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 16)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 17))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 18)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 19)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 20)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 21))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 22)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 23))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 24)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 25))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 26)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 27)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 28)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 29))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 30)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av22.getUint8(ao23 + 31))))))))); if (n39 === null || n39 < 0n) return null;
+if (BigInt(c) + n39 * 32n > BigInt(b.length)) return null; c += Number(n39 * 32n);
+void s32;
+return c; })(b.subarray(c)); break;
+  default: return null;
+}
+if (t24 === null || c + t24 > b.length) return null; c += t24;
+void s18;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array, opts?: { params?: InitializeMintInstruction.Params }): InitializeMintInstruction | null {
@@ -6003,8 +7153,9 @@ export class InitializeMintInstruction {
     const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
     let params = opts?.params ?? null;
     if (!params) {
-      __tnLogWarn('InitializeMintInstruction::from_array requires params when IR extraction is unavailable');
-      return null;
+      const derived = this.__tnExtractParams(view, buffer);
+      if (!derived) return null;
+      params = derived.params;
     }
     const validation = this.validate(buffer, { params });
     if (!validation.ok) {
@@ -6225,6 +7376,23 @@ export class TokenInstruction_payload_Inner {
     return new TokenInstruction_payload_Inner(new Uint8Array(payload), descriptor, fieldContext);
   }
 
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenInstruction_payload_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["tag"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 0)) descriptor = { name: "initialize_mint", tag: 0, payloadSize: null };
+      if (__tnTagEquals(tag, 1)) descriptor = { name: "initialize_account", tag: 1, payloadSize: null };
+      if (__tnTagEquals(tag, 2)) descriptor = { name: "transfer", tag: 2, payloadSize: 12 };
+      if (__tnTagEquals(tag, 3)) descriptor = { name: "mint_to", tag: 3, payloadSize: 14 };
+      if (__tnTagEquals(tag, 4)) descriptor = { name: "burn", tag: 4, payloadSize: 14 };
+      if (__tnTagEquals(tag, 5)) descriptor = { name: "close_account", tag: 5, payloadSize: 6 };
+      if (__tnTagEquals(tag, 6)) descriptor = { name: "freeze_account", tag: 6, payloadSize: 6 };
+      if (__tnTagEquals(tag, 7)) descriptor = { name: "thaw_account", tag: 7, payloadSize: 6 };
+      if (__tnTagEquals(tag, 8)) descriptor = { name: "transfer_checked", tag: 8, payloadSize: 24 };
+    }
+    return new TokenInstruction_payload_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
   bytes(): Uint8Array {
     return new Uint8Array(this.buffer);
   }
@@ -6234,43 +7402,48 @@ export class TokenInstruction_payload_Inner {
   }
 
   asInitializeMint(): InitializeMintInstruction | null {
-    if (!this.descriptor || this.descriptor.tag !== 0) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 0)) return null;
     return InitializeMintInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asInitializeAccount(): InitializeAccountInstruction | null {
-    if (!this.descriptor || this.descriptor.tag !== 1) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1)) return null;
     return InitializeAccountInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asTransfer(): TransferInstruction | null {
-    if (!this.descriptor || this.descriptor.tag !== 2) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2)) return null;
     return TransferInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asMintTo(): MintToInstruction | null {
-    if (!this.descriptor || this.descriptor.tag !== 3) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 3)) return null;
     return MintToInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asBurn(): BurnInstruction | null {
-    if (!this.descriptor || this.descriptor.tag !== 4) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4)) return null;
     return BurnInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asCloseAccount(): CloseAccountInstruction | null {
-    if (!this.descriptor || this.descriptor.tag !== 5) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 5)) return null;
     return CloseAccountInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asFreezeAccount(): FreezeAccountInstruction | null {
-    if (!this.descriptor || this.descriptor.tag !== 6) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 6)) return null;
     return FreezeAccountInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asThawAccount(): ThawAccountInstruction | null {
-    if (!this.descriptor || this.descriptor.tag !== 7) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 7)) return null;
     return ThawAccountInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asTransferChecked(): TransferCheckedInstruction | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 8)) return null;
+    return TransferCheckedInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
 }
@@ -6377,6 +7550,13 @@ export class TokenInstruction {
       payloadType: "TokenInstruction::payload::thaw_account",
       createPayloadBuilder: () => __tnMaybeCallBuilder(ThawAccountInstruction),
     },
+    {
+      name: "transfer_checked",
+      tag: 8,
+      payloadSize: 24,
+      payloadType: "TokenInstruction::payload::transfer_checked",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(TransferCheckedInstruction),
+    },
   ] as const);
 
   static __tnComputeSequentialLayout(view: DataView, buffer: Uint8Array): { params: Record<string, bigint> | null; offsets: Record<string, number> | null; derived: Record<string, bigint> | null } | null {
@@ -6391,15 +7571,16 @@ export class TokenInstruction {
     const __tnEnumTagValue_payload = __tnFieldValue_tag;
     if (__tnEnumTagValue_payload === null) return null;
     let __tnEnumSize_payload = 0;
-    switch (Number(__tnEnumTagValue_payload)) {
-      case 0: break;
-      case 1: break;
-      case 2: break;
-      case 3: break;
-      case 4: break;
-      case 5: break;
-      case 6: break;
-      case 7: break;
+    switch (__tnToBigInt(__tnEnumTagValue_payload)) {
+      case 0n: break;
+      case 1n: break;
+      case 2n: break;
+      case 3n: break;
+      case 4n: break;
+      case 5n: break;
+      case 6n: break;
+      case 7n: break;
+      case 8n: break;
       default: return null;
     }
     if (__tnCursorMutable > __tnLength) return null;
@@ -6448,8 +7629,8 @@ export class TokenInstruction {
   }
 
   payloadVariant(): typeof TokenInstruction.payloadVariantDescriptors[number] | null {
-    const tag = this.view.getUint8(0);
-    return TokenInstruction.payloadVariantDescriptors.find((variant) => variant.tag === tag) ?? null;
+    const tag: number | bigint | null = this.get_tag();
+    return TokenInstruction.payloadVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
   }
 
   payload(): TokenInstruction_payload_Inner {
@@ -6524,6 +7705,13 @@ export class TokenInstruction {
       const extracted = this.__tnExtractParams(view, buffer);
       if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
       params = extracted.params;
+    } else {
+      const extracted = this.__tnExtractParams(view, buffer);
+      if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
+      const supplied = params as unknown as Record<string, bigint>;
+      for (const [key, value] of Object.entries(extracted.params as unknown as Record<string, bigint>)) {
+        if (supplied[key] === undefined || __tnToBigInt(supplied[key]) !== __tnToBigInt(value)) return { ok: false, code: "tn.param_mismatch" };
+      }
     }
     const __tnParamsRec = this.__tnPackParams(params);
     const irResult = this.__tnValidateInternal(buffer, __tnParamsRec);
@@ -6531,7 +7719,142 @@ export class TokenInstruction {
       return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'TokenInstruction::validate') : undefined, params };
     }
     const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'TokenInstruction::validate') : undefined;
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed, params };
+  }
+
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 1 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getUint8(c))); c += 1;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 0n: t3 = ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s4 = c;
+if (c + 2 > b.length) return null; const x5 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 1 > b.length) return null; const x6 = __tnU64(__tnToBigInt(v.getUint8(c))); c += 1;
+const s7 = c;
+const av8 = v; const ao9 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s7;
+const s10 = c;
+const av11 = v; const ao12 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s10;
+const s13 = c;
+const av14 = v; const ao15 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s13;
+if (c + 1 > b.length) return null; const x16 = __tnU64(__tnToBigInt(v.getUint8(c))); c += 1;
+const s17 = c;
+if (c + 1 > b.length) return null; const x18 = __tnU64(__tnToBigInt(v.getUint8(c))); c += 1;
+const av19 = v; const ao20 = c;
+if (c + 8 > b.length) return null; c += 8;
+void s17;
+if (c + 32 > b.length) return null; c += 32;
+const s21 = c;
+const s22 = c;
+if (c + 8 > b.length) return null; const x23 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+const s24 = c;
+const av25 = v; const ao26 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s24;
+void s22;
+let t27: number | null = null;
+switch ((__tnU64Op("and", __tnU64Op("shr", x23, 62n), 3n)) as bigint | null) {
+  case 0n: t27 = ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s28 = c;
+const n29 = __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 0)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 1))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 2)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 3)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 4)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 5))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 6)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 7))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 8)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 9))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 10)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 11)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 12)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 13))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 14)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 15)))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 16)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 17))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 18)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 19)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 20)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 21))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 22)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 23))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 24)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 25))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 26)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 27)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 28)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 29))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 30)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 31))))))))); if (n29 === null || n29 < 0n) return null;
+if (BigInt(c) + n29 * 32n > BigInt(b.length)) return null; c += Number(n29 * 32n);
+void s28;
+return c; })(b.subarray(c)); break;
+  case 1n: t27 = ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s30 = c;
+const s31 = c;
+const av32 = v; const ao33 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s31;
+const n34 = __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 0)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 1))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 2)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 3)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 4)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 5))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 6)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 7))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 8)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 9))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 10)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 11)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 12)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 13))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 14)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 15)))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 16)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 17))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 18)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 19)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 20)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 21))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 22)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 23))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 24)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 25))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 26)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 27)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 28)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 29))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 30)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 31))))))))); if (n34 === null || n34 < 0n) return null;
+if (BigInt(c) + n34 * 32n > BigInt(b.length)) return null; c += Number(n34 * 32n);
+void s30;
+return c; })(b.subarray(c)); break;
+  case 2n: t27 = ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s35 = c;
+const s36 = c;
+const av37 = v; const ao38 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s36;
+const s39 = c;
+const av40 = v; const ao41 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s39;
+const n42 = __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 0)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 1))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 2)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 3)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 4)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 5))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 6)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 7))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 8)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 9))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 10)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 11)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 12)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 13))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 14)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 15)))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 16)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 17))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 18)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 19)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 20)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 21))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 22)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 23))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 24)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 25))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 26)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 27)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 28)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 29))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 30)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av25.getUint8(ao26 + 31))))))))); if (n42 === null || n42 < 0n) return null;
+if (BigInt(c) + n42 * 32n > BigInt(b.length)) return null; c += Number(n42 * 32n);
+void s35;
+return c; })(b.subarray(c)); break;
+  default: return null;
+}
+if (t27 === null || c + t27 > b.length) return null; c += t27;
+void s21;
+void s4;
+return c; })(b.subarray(c)); break;
+  case 1n: t3 = ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s43 = c;
+if (c + 2 > b.length) return null; const x44 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 2 > b.length) return null; const x45 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 2 > b.length) return null; const x46 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 32 > b.length) return null; c += 32;
+const s47 = c;
+const s48 = c;
+if (c + 8 > b.length) return null; const x49 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+const s50 = c;
+const av51 = v; const ao52 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s50;
+void s48;
+let t53: number | null = null;
+switch ((__tnU64Op("and", __tnU64Op("shr", x49, 62n), 3n)) as bigint | null) {
+  case 0n: t53 = ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s54 = c;
+const n55 = __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 0)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 1))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 2)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 3)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 4)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 5))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 6)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 7))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 8)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 9))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 10)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 11)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 12)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 13))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 14)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 15)))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 16)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 17))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 18)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 19)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 20)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 21))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 22)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 23))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 24)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 25))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 26)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 27)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 28)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 29))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 30)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 31))))))))); if (n55 === null || n55 < 0n) return null;
+if (BigInt(c) + n55 * 32n > BigInt(b.length)) return null; c += Number(n55 * 32n);
+void s54;
+return c; })(b.subarray(c)); break;
+  case 1n: t53 = ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s56 = c;
+const s57 = c;
+const av58 = v; const ao59 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s57;
+const n60 = __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 0)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 1))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 2)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 3)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 4)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 5))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 6)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 7))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 8)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 9))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 10)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 11)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 12)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 13))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 14)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 15)))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 16)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 17))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 18)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 19)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 20)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 21))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 22)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 23))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 24)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 25))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 26)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 27)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 28)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 29))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 30)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 31))))))))); if (n60 === null || n60 < 0n) return null;
+if (BigInt(c) + n60 * 32n > BigInt(b.length)) return null; c += Number(n60 * 32n);
+void s56;
+return c; })(b.subarray(c)); break;
+  case 2n: t53 = ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s61 = c;
+const s62 = c;
+const av63 = v; const ao64 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s62;
+const s65 = c;
+const av66 = v; const ao67 = c;
+if (c + 32 > b.length) return null; c += 32;
+void s65;
+const n68 = __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 0)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 1))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 2)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 3)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 4)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 5))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 6)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 7))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 8)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 9))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 10)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 11)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 12)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 13))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 14)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 15)))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 16)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 17))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 18)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 19)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 20)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 21))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 22)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 23))))))), __tnU64Op("add", __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 24)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 25))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 26)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 27)))))), __tnU64Op("add", __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 28)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 29))))), __tnU64Op("add", __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 30)))), __tnU64Unary("popcount", __tnU64(__tnToBigInt(av51.getUint8(ao52 + 31))))))))); if (n68 === null || n68 < 0n) return null;
+if (BigInt(c) + n68 * 32n > BigInt(b.length)) return null; c += Number(n68 * 32n);
+void s61;
+return c; })(b.subarray(c)); break;
+  default: return null;
+}
+if (t53 === null || c + t53 > b.length) return null; c += t53;
+void s47;
+void s43;
+return c; })(b.subarray(c)); break;
+  case 2n: t3 = 12; break;
+  case 3n: t3 = 14; break;
+  case 4n: t3 = 14; break;
+  case 5n: t3 = 6; break;
+  case 6n: t3 = 6; break;
+  case 7n: t3 = 6; break;
+  case 8n: t3 = 24; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array, opts?: { params?: TokenInstruction.Params }): TokenInstruction | null {
@@ -6615,7 +7938,7 @@ export class TokenInstructionBuilder {
   }
 
   private __tnAssign_tag(value: number): void {
-    this.__tnField_tag = value & 0xff;
+    this.__tnField_tag = value;
     this.__tnInvalidate();
   }
 

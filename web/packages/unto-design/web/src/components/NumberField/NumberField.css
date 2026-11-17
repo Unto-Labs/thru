@@ -1,0 +1,42 @@
+.uds-nf {
+  display: inline-flex;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-none);
+}
+
+.uds-nf__btn {
+  font-family: var(--font-mono);
+  width: 32px;
+  background: var(--color-surface-higher);
+  border: none;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-size: 15px;
+}
+.uds-nf__btn:hover {
+  background: var(--color-surface-primary);
+}
+.uds-nf__btn:first-child {
+  border-right: 1px solid var(--color-border-strong);
+}
+.uds-nf__btn:last-child {
+  border-left: 1px solid var(--color-border-strong);
+}
+.uds-nf__btn[data-disabled] {
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}
+
+.uds-nf__input {
+  width: 64px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  border: none;
+  background: var(--color-surface-higher);
+  color: var(--color-text-primary);
+  padding: var(--space-2) var(--space-1);
+}
+.uds-nf__input:focus {
+  outline: none;
+}

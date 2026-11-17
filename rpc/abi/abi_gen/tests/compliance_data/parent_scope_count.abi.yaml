@@ -1,0 +1,35 @@
+abi:
+  package: "test.parent_scope_count"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "A child array sized by the parent's field of the same name as a child field"
+
+types:
+  - name: "Outer"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "count"
+            field-type:
+              primitive: u8
+          - name: "inner"
+            field-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "count"
+                    field-type:
+                      primitive: u8
+                  # Sized by Outer.count, not by the sibling `count`.
+                  - name: "items"
+                    field-type:
+                      array:
+                        size:
+                          field-ref:
+                            path: ["..", "count"]
+                        element-type:
+                          primitive: u8
+          - name: "tail"
+            field-type:
+              primitive: u8

@@ -12,8 +12,9 @@ import {
   CLOB_INSTRUCTION_EXCHANGE_SET_ADMIN,
   CLOB_INSTRUCTION_EXCHANGE_RECOVER_ADMIN,
   CLOB_INSTRUCTION_MARKET_SET_EXCHANGE_STATUS,
-  CLOB_EXCHANGE_META_MAGIC,
-  CLOB_EXCHANGE_META_VERSION,
+  CLOB_ACCOUNT_TYPE_CBOOK_V1,
+  CLOB_ACCOUNT_TYPE_MARKET_V1,
+  CLOB_ACCOUNT_TYPE_ORDER_ARENA_V1,
   CLOB_CBOOK_MAX_PRICE_IN_TICKS,
   CLOB_EVENT_SIDE_BUY,
   CLOB_ORDER_FLAG_BUY,
@@ -27,6 +28,7 @@ import {
   CLOB_STATUS_FLAG_POST_ONLY,
   CLOB_STATUS_FLAG_WITHDRAWALS_FROZEN,
   ClobEventBuilder,
+  ClobProgramAccount,
   ExchangeMetaAccountBuilder,
   MarketAccountBuilder,
   MarketCreatedEventBuilder,
@@ -46,6 +48,8 @@ import {
   encodeOrderFlags,
   parseClobEvent,
   parseExchangeMetaAccount,
+  parseCbookAccount,
+  parseClobProgramAccount,
   parseMarketAccount,
   parseOrderArenaAccount,
   parseSeatArenaAccount,
@@ -134,22 +138,31 @@ describe('clob helpers', () => {
     expect(view.getUint32(12, true)).toBe(proof.length);
     expect(instruction.slice(16)).toEqual(proof);
 
-    const data = new ExchangeMetaAccountBuilder()
-      .set_magic(CLOB_EXCHANGE_META_MAGIC)
-      .set_version(CLOB_EXCHANGE_META_VERSION)
+    const payload = new ExchangeMetaAccountBuilder()
       .set_status_flags(3)
       .set_reserved0([0, 0, 0, 0, 0, 0])
       .set_token_program_pubkey(tokenProgram)
       .set_exchange_admin_pubkey(exchangeAdmin)
-      .set_reserved1(new Uint8Array(16))
+      .set_reserved1(new Array<number>(16).fill(0))
       .build();
+    const data = ClobProgramAccount.builder()
+      .payload()
+      .select('exchange_meta_v1')
+      .writePayload(payload)
+      .finish()
+      .build();
+    expect(data).toHaveLength(88);
+    expect(data[0]).toBe(1);
     expect(parseExchangeMetaAccount(data)).toEqual({
-      magic: CLOB_EXCHANGE_META_MAGIC,
-      version: CLOB_EXCHANGE_META_VERSION,
       statusFlags: 3,
       tokenProgram: bytesToAddress(tokenProgram),
       exchangeAdmin: bytesToAddress(exchangeAdmin),
     });
+
+    const wrongKind = Uint8Array.from(data);
+    wrongKind[0] = CLOB_ACCOUNT_TYPE_MARKET_V1;
+    expect(() => parseExchangeMetaAccount(wrongKind)).toThrow(/not a CLOB exchange metadata account/);
+    expect(() => parseExchangeMetaAccount(data.subarray(0, 87))).toThrow(/not a CLOB exchange metadata account/);
   });
 
   it('builds exchange administration instructions', async () => {
@@ -264,8 +277,9 @@ describe('clob helpers', () => {
   });
 
   it('parses market accounts into frontend-oriented addresses', () => {
-    const data = new MarketAccountBuilder()
-      .set_magic(0xc1)
+    const data = new Uint8Array(320 + 64);
+    data[0] = CLOB_ACCOUNT_TYPE_MARKET_V1;
+    new MarketAccountBuilder()
       .set_status_flags(3)
       .set_exchange_status_flags(4)
       .set_reserved0([0, 0, 0, 0, 0])
@@ -278,20 +292,33 @@ describe('clob helpers', () => {
       .set_base_vault_pubkey(key(13))
       .set_quote_vault_pubkey(key(14))
       .set_market_authority_pubkey(key(15))
-      .build();
+      .buildInto(data, 1);
 
     const market = parseMarketAccount(data);
-    expect(market.magic).toBe(0xc1);
     expect(market.statusFlags).toBe(3);
     expect(market.exchangeStatusFlags).toBe(4);
     expect(market.lotSize).toBe(100n);
     expect(market.tickSize).toBe(5n);
     expect(market.nextOrderId).toBe(42n);
     expect(market.bidsCbook).not.toBe(market.asksCbook);
+    expect(parseClobProgramAccount(data)).toEqual(market);
+
+    const orderArena = Uint8Array.from(data);
+    orderArena[0] = CLOB_ACCOUNT_TYPE_ORDER_ARENA_V1;
+    expect(() => parseMarketAccount(orderArena)).toThrow(/not a CLOB market account/);
+    expect(() => parseClobProgramAccount(new Uint8Array(data.length))).toThrow(/not a CLOB market account/);
+  });
+
+  it('rejects a cbook decoded as an order arena', () => {
+    const data = new Uint8Array(16 + 2 * 8);
+    data[0] = CLOB_ACCOUNT_TYPE_CBOOK_V1;
+    expect(parseCbookAccount(data).levels).toHaveLength(2);
+    expect(() => parseOrderArenaAccount(data)).toThrow(/not a CLOB order arena account/);
   });
 
   it('parses order arenas and groups active orderbook depth', () => {
     const data = new Uint8Array(72 + 3 * 64);
+    data[0] = CLOB_ACCOUNT_TYPE_ORDER_ARENA_V1;
     new DataView(data.buffer).setUint32(60, 2, true);
     new OrderEntryBuilder()
       .set_seat_ptrs(2n << 40n)
@@ -347,6 +374,7 @@ describe('clob helpers', () => {
 
   it('parses seat arenas without treating the reserved seatless slot as a user seat', () => {
     const data = new Uint8Array(320 + 3 * 64);
+    data[0] = CLOB_ACCOUNT_TYPE_MARKET_V1;
     new SeatEntryBuilder()
       .set_seat_authority_pubkey(key(1))
       .set_quantity_base(111n)

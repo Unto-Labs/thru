@@ -72,6 +72,16 @@
       "import": "./dist/manager/index.js",
       "require": "./dist/manager/index.cjs"
     },
+    "./core-manager": {
+      "types": "./dist/core-manager/index.d.ts",
+      "import": "./dist/core-manager/index.js",
+      "require": "./dist/core-manager/index.cjs"
+    },
+    "./multisig": {
+      "types": "./dist/multisig/index.d.ts",
+      "import": "./dist/multisig/index.js",
+      "require": "./dist/multisig/index.cjs"
+    },
     "./abi-manager": {
       "types": "./dist/abi-manager/index.d.ts",
       "import": "./dist/abi-manager/index.js",
@@ -140,6 +150,8 @@
     "test:run": "vitest run && pnpm run test:compatibility && pnpm run test:pack",
     "test:compatibility": "node scripts/check-wallet-compatibility.mjs",
     "test:pack": "node scripts/check-perps-pack.mjs",
+    "generate:governance": "node scripts/generate-governance-codecs.mjs",
+    "check:governance": "node scripts/generate-governance-codecs.mjs --check",
     "clean": "rm -rf dist"
   },
   "dependencies": {

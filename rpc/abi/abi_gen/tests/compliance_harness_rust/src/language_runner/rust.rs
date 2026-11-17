@@ -8,7 +8,12 @@ use super::LanguageRunner;
 use crate::{TestCaseData, TestError, TestResult, TestStages};
 
 use abi_gen::abi::file::AbiFile;
-use abi_gen::abi::types::TypeKind;
+use abi_gen::abi::resolved::{ResolvedTypeKind, TypeResolver};
+use abi_gen::codegen::rust_gen::emit::{Elem, Emitter, Shape, Slot, VInfo};
+use abi_gen::codegen::rust_gen::emit_builder::variant_setter_suffixes;
+use abi_gen::codegen::rust_gen::model::{escape_ident, plain_ident, prim_is_byte, Model};
+use std::collections::BTreeSet;
+use std::fmt::Write as _;
 
 pub struct RustRunner;
 
@@ -37,7 +42,7 @@ impl LanguageRunner for RustRunner {
         /* Create temporary directory for generated code */
         let temp_base = base_temp_dir
             .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| std::env::temp_dir());
+            .unwrap_or_else(std::env::temp_dir);
         let temp_dir = temp_base.join(format!("abi_compliance_rust_{}", test_name));
         if temp_dir.exists() {
             fs::remove_dir_all(&temp_dir)?;
@@ -119,92 +124,30 @@ path = "src/main.rs"
         let generated_dir = src_dir.join("generated");
         copy_dir_recursive(&generated_code_dir, &generated_dir)?;
 
-        /* Extract field names and package from ABI file */
-        let (
-            referenced_primitive_fields,
-            non_referenced_primitive_fields,
-            enum_fields,
-            array_fields,
-            nested_fields,
-            size_discriminated_union_fields,
-            package,
-        ) = match extract_field_info(abi_file_path, &test_case.type_name) {
-            Ok(info) => info,
-            Err(e) => {
-                return Ok(TestResult {
-                    test_name: test_name.to_string(),
-                    test_file: test_file.to_string(),
-                    status: "fail".to_string(),
-                    duration_ms: start_time.elapsed().as_millis() as u64,
-                    stages: Some(stages),
-                    error: Some(TestError {
-                        stage: "code_generation".to_string(),
-                        message: format!("Failed to extract field names from ABI: {}", e),
-                        details: None,
-                    }),
-                });
-            }
-        };
-
-        /* Write binary data to temp file */
-        let binary_file_path = temp_dir.join("test_data.bin");
-        fs::write(&binary_file_path, binary_data)?;
-
-        /* Extract SDU variant info from ABI */
-        let abi_content = fs::read_to_string(abi_file_path)?;
-        let abi: AbiFile = serde_yaml::from_str(&abi_content)?;
-        let sdu_fields_with_variants: Vec<(String, Vec<(String, u64)>)> = abi
-            .get_types()
-            .iter()
-            .find(|t| t.name == test_case.type_name)
-            .and_then(|t| {
-                if let TypeKind::Struct(struct_type) = &t.kind {
-                    Some(
-                        struct_type
-                            .fields
-                            .iter()
-                            .filter_map(|f| match &f.field_type {
-                                TypeKind::SizeDiscriminatedUnion(sdu_type) => {
-                                    let variants: Vec<(String, u64)> = sdu_type
-                                        .variants
-                                        .iter()
-                                        .map(|v| (v.name.clone(), v.expected_size))
-                                        .collect();
-                                    Some((f.name.clone(), variants))
-                                }
-                                _ => None,
-                            })
-                            .collect(),
-                    )
-                } else {
-                    None
+        /* Generate a runner that decodes, validates and re-encodes through the public API */
+        let test_runner_code =
+            match generate_runner(abi_file_path, &test_case.type_name, binary_data) {
+                Ok(code) => code,
+                Err(e) => {
+                    return Ok(TestResult {
+                        test_name: test_name.to_string(),
+                        test_file: test_file.to_string(),
+                        status: "fail".to_string(),
+                        duration_ms: start_time.elapsed().as_millis() as u64,
+                        stages: Some(stages),
+                        error: Some(TestError {
+                            stage: "code_generation".to_string(),
+                            message: format!("Failed to generate the Rust test runner: {}", e),
+                            details: None,
+                        }),
+                    });
                 }
-            })
-            .unwrap_or_default();
-
-        /* Generate test runner code */
-        let top_array = super::top_level_array::load(abi_file_path, &test_case.type_name)?;
-        let test_runner_code = if let Some(array) = top_array {
-            array.rust(&test_case.type_name, binary_data)
-        } else {
-            generate_rust_test_runner_code(
-                &test_case.type_name,
-                &binary_file_path,
-                &referenced_primitive_fields,
-                &non_referenced_primitive_fields,
-                &enum_fields,
-                &array_fields,
-                &nested_fields,
-                &size_discriminated_union_fields,
-                &sdu_fields_with_variants,
-                &package,
-            )
-        };
+            };
         fs::write(src_dir.join("main.rs"), test_runner_code)?;
 
         /* Compile the test project */
         let compile_result = Command::new("cargo")
-            .args(&["build", "--release", "--quiet"])
+            .args(["build", "--release", "--quiet"])
             .current_dir(&test_project_dir)
             .output();
 
@@ -368,565 +311,468 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
-/* Helper to extract field references from expressions */
-fn extract_field_refs_from_expr(
-    expr: &abi_gen::abi::expr::ExprKind,
-    refs: &mut std::collections::HashSet<String>,
-) {
-    use abi_gen::abi::expr::ExprKind;
-    match expr {
-        ExprKind::FieldRef(field_ref) => {
-            // Join the full path with underscores for nested field refs
-            // e.g., ["first", "count"] becomes "first_count"
-            let full_path = field_ref.path.join("_");
-            refs.insert(full_path);
-        }
-        /* Recursively extract from binary operations */
-        ExprKind::Add(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::Sub(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::Mul(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::Div(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::Mod(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::Pow(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::BitAnd(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::BitOr(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::BitXor(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::LeftShift(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::RightShift(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        /* Unary operations */
-        ExprKind::BitNot(e) => {
-            extract_field_refs_from_expr(&e.operand, refs);
-        }
-        ExprKind::Neg(e) => {
-            extract_field_refs_from_expr(&e.operand, refs);
-        }
-        ExprKind::Not(e) => {
-            extract_field_refs_from_expr(&e.operand, refs);
-        }
-        ExprKind::Popcount(e) => {
-            extract_field_refs_from_expr(&e.operand, refs);
-        }
-        _ => {}
-    }
+/* ---------------------------------------------------------------------------
+ * Runner generation
+ *
+ * The runner decodes the case with `from_slice`, checks `validate`, reads the
+ * dynamic parameters back with `<T>Params::from_buffer` / `dynamic_params()`,
+ * and re-encodes twice, both purely through the generated public API:
+ *   1. `new_from_params` + typed mutable accessors (enum payloads through the
+ *      typed `<field>_mut()` variant views) into a 0xa5-filled buffer;
+ *   2. the generated builders (`build`, `finish`, `build_into`).
+ * The copy/build helpers are generated per view from the ABI, field by field,
+ * so a field without an accessor fails to compile and a skipped field leaves
+ * zeros behind and fails the byte comparison.
+ * ------------------------------------------------------------------------- */
+
+struct RunnerGen<'m, 'a> {
+    e: &'m Emitter<'m, 'a>,
+    done: BTreeSet<String>,
+    fns: String,
 }
 
-/* Extract field names and package from ABI file for a specific type */
-fn extract_field_info(
-    abi_file_path: &Path,
-    type_name: &str,
-) -> Result<(
-    Vec<String>,
-    Vec<String>,
-    Vec<String>,
-    Vec<(String, bool, bool, bool)>,
-    Vec<(String, Vec<String>)>,
-    Vec<String>,
-    String,
-)> {
-    use std::collections::HashSet;
-
-    let abi_content = fs::read_to_string(abi_file_path)?;
-    let abi: AbiFile = serde_yaml::from_str(&abi_content)?;
-
-    let package = abi.package().to_string();
-
-    for typedef in abi.get_types() {
-        if typedef.name == type_name {
-            if matches!(typedef.kind, TypeKind::Array(_)) {
-                return Ok((vec![], vec![], vec![], vec![], vec![], vec![], package));
-            }
-            if let TypeKind::Struct(struct_type) = &typedef.kind {
-                /* Extract which fields are referenced in expressions (like enum tag-refs and FAM sizes) */
-                let mut referenced_fields = HashSet::new();
-                for field in &struct_type.fields {
-                    if let TypeKind::Enum(enum_type) = &field.field_type {
-                        extract_field_refs_from_expr(&enum_type.tag_ref, &mut referenced_fields);
-                    }
-                    /* Extract fields from FAM size expressions */
-                    if let TypeKind::Array(array_type) = &field.field_type {
-                        extract_field_refs_from_expr(&array_type.size, &mut referenced_fields);
-                    }
-                    /* Extract fields from nested inline structs */
-                    if let TypeKind::Struct(nested_struct) = &field.field_type {
-                        for nested_field in &nested_struct.fields {
-                            if let TypeKind::Array(array_type) = &nested_field.field_type {
-                                extract_field_refs_from_expr(
-                                    &array_type.size,
-                                    &mut referenced_fields,
-                                );
-                            }
-                            if let TypeKind::Enum(enum_type) = &nested_field.field_type {
-                                extract_field_refs_from_expr(
-                                    &enum_type.tag_ref,
-                                    &mut referenced_fields,
-                                );
-                            }
-                        }
-                    }
-                }
-
-                /* For opaque wrappers, collect fields by category:
-                - Referenced primitives (passed to new() - like enum tags)
-                - Non-referenced primitives (set via setters after new())
-                - Enums (set via setters after new())
-                - Arrays (set via setters after new())
-                - Nested structs (set via setters after new()) */
-
-                // Collect referenced primitive fields (both top-level and nested)
-                let mut referenced_primitive_fields = Vec::new();
-                for f in &struct_type.fields {
-                    match &f.field_type {
-                        TypeKind::Primitive(_) if referenced_fields.contains(&f.name) => {
-                            referenced_primitive_fields.push(f.name.clone());
-                        }
-                        TypeKind::Struct(nested_struct) => {
-                            // Check nested struct fields for referenced primitives
-                            for nested_field in &nested_struct.fields {
-                                if let TypeKind::Primitive(_) = &nested_field.field_type {
-                                    let nested_path = format!("{}_{}", f.name, nested_field.name);
-                                    if referenced_fields.contains(&nested_path) {
-                                        referenced_primitive_fields.push(nested_path);
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-
-                // Collect non-referenced primitive fields (both top-level and nested)
-                let mut non_referenced_primitive_fields = Vec::new();
-                for f in &struct_type.fields {
-                    match &f.field_type {
-                        TypeKind::Primitive(_) if !referenced_fields.contains(&f.name) => {
-                            non_referenced_primitive_fields.push(f.name.clone());
-                        }
-                        TypeKind::Struct(nested_struct) => {
-                            // Also collect non-referenced primitives from nested inline structs
-                            for nested_field in &nested_struct.fields {
-                                if let TypeKind::Primitive(_) = &nested_field.field_type {
-                                    let nested_path = format!("{}_{}", f.name, nested_field.name);
-                                    if !referenced_fields.contains(&nested_path) {
-                                        non_referenced_primitive_fields.push(nested_path);
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-
-                let enum_fields: Vec<String> = struct_type
-                    .fields
-                    .iter()
-                    .filter_map(|f| match &f.field_type {
-                        TypeKind::Enum(_) => Some(f.name.clone()),
-                        _ => None,
-                    })
-                    .collect();
-
-                let size_discriminated_union_fields: Vec<String> = struct_type
-                    .fields
-                    .iter()
-                    .filter_map(|f| match &f.field_type {
-                        TypeKind::SizeDiscriminatedUnion(_) => Some(f.name.clone()),
-                        _ => None,
-                    })
-                    .collect();
-
-                /* Also collect array fields for post-new() initialization
-                Format: (field_name, is_byte_array, is_struct_array, is_jagged) */
-                let array_fields: Vec<(String, bool, bool, bool)> = struct_type.fields.iter()
-                    .filter_map(|f| {
-                        match &f.field_type {
-                            TypeKind::Array(array_type) => {
-                                /* Check if element type is u8 (byte array) */
-                                let is_byte_array = matches!(&*array_type.element_type, TypeKind::Primitive(prim)
-                                    if matches!(prim, abi_gen::abi::types::PrimitiveType::Integral(
-                                        abi_gen::abi::types::IntegralType::U8)));
-                                /* Check if element type is a struct (TypeRef) */
-                                let is_struct_array = matches!(&*array_type.element_type, TypeKind::TypeRef(_));
-                                /* Check if this is a jagged array */
-                                let is_jagged = array_type.jagged;
-                                Some((f.name.clone(), is_byte_array, is_struct_array, is_jagged))
-                            },
-                            _ => None,
-                        }
-                    })
-                    .collect();
-
-                /* Also collect nested struct fields (both TypeRef and inline) with their field names
-                Format: (field_name, vec_of_nested_field_names) */
-                let nested_fields: Vec<(String, Vec<String>)> = struct_type.fields.iter()
-                    .filter_map(|f| {
-                        match &f.field_type {
-                            TypeKind::TypeRef(type_ref) => {
-                                /* Look up the nested struct type and get its fields */
-                                let nested_type_name = &type_ref.name;
-                                let nested_field_names = abi.get_types().iter()
-                                    .find(|t| &t.name == nested_type_name)
-                                    .and_then(|t| {
-                                        if let TypeKind::Struct(nested_struct) = &t.kind {
-                                            Some(nested_struct.fields.iter()
-                                                .filter_map(|nf| {
-                                                    /* Only include primitive fields for now */
-                                                    match &nf.field_type {
-                                                        TypeKind::Primitive(_) => Some(nf.name.clone()),
-                                                        _ => None,
-                                                    }
-                                                })
-                                                .collect())
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .unwrap_or_default();
-                                Some((f.name.clone(), nested_field_names))
-                            },
-                            TypeKind::Struct(nested_struct) => {
-                                /* Inline anonymous nested struct - only include arrays, not primitives
-                                   (primitives are already handled via flattened field names like first_x, first_y) */
-                                let nested_field_names: Vec<String> = nested_struct.fields.iter()
-                                    .filter_map(|nf| {
-                                        match &nf.field_type {
-                                            TypeKind::Array(_) => Some(nf.name.clone()),
-                                            _ => None,
-                                        }
-                                    })
-                                    .collect();
-                                if !nested_field_names.is_empty() {
-                                    Some((f.name.clone(), nested_field_names))
-                                } else {
-                                    None
-                                }
-                            },
-                            _ => None,
-                        }
-                    })
-                    .collect();
-
-                return Ok((
-                    referenced_primitive_fields,
-                    non_referenced_primitive_fields,
-                    enum_fields,
-                    array_fields,
-                    nested_fields,
-                    size_discriminated_union_fields,
-                    package,
-                ));
-            }
+impl<'m, 'a> RunnerGen<'m, 'a> {
+    fn ensure(&mut self, vname: &str) -> Result<()> {
+        if !self.done.insert(vname.to_string()) {
+            return Ok(());
         }
+        let v = self
+            .e
+            .info(vname)
+            .ok_or_else(|| anyhow::anyhow!("no generated view for {}", vname))?;
+        let copy = self.copy_fn(&v)?;
+        let build = self.build_fn(&v)?;
+        self.fns.push_str(&copy);
+        self.fns.push_str(&build);
+        Ok(())
     }
 
-    anyhow::bail!("Type '{}' not found in ABI file", type_name)
-}
-
-/* Generate test runner code that performs decode-validate-reencode */
-fn generate_rust_test_runner_code(
-    type_name: &str,
-    binary_file_path: &Path,
-    referenced_primitive_fields: &[String],
-    non_referenced_primitive_fields: &[String],
-    enum_fields: &[String],
-    array_fields: &[(String, bool, bool, bool)], /* (field_name, is_byte_array, is_struct_array, is_jagged) */
-    nested_fields: &[(String, Vec<String>)],     /* (field_name, nested_struct_field_names) */
-    size_discriminated_union_fields: &[String],
-    sdu_fields_with_variants: &[(String, Vec<(String, u64)>)],
-    package: &str,
-) -> String {
-    let mut code = String::new();
-
-    /* Convert package to module path: compliance.arrays -> generated::compliance::arrays */
-    let module_path = format!("generated::{}", package.replace('.', "::"));
-
-    /* Check if any array is jagged - affects buffer sizing */
-    let has_jagged_array = array_fields.iter().any(|(_, _, _, is_jagged)| *is_jagged);
-
-    code.push_str(&format!(
-        r#"use std::fs;
-use std::path::Path;
-
-mod generated;
-
-fn main() {{
-    /* Stage 1: Load binary */
-    let binary_path = Path::new({:?});
-    let original_data = match fs::read(binary_path) {{
-        Ok(data) => data,
-        Err(e) => {{
-            eprintln!("Failed to read binary file: {{}}", e);
-            println!("DECODE:error");
-            std::process::exit(1);
-        }}
-    }};
-
-    /* Stage 2: Decode from binary using from_slice() - opaque wrapper */
-    let original = match {}::{}::from_slice(&original_data) {{
-        Ok(val) => val,  /* Opaque wrapper borrows the slice */
-        Err(e) => {{
-            eprintln!("Validation failed: {{}}", e);
-            println!("DECODE:error");
-            std::process::exit(1);
-        }}
-    }};
-
-    println!("DECODE:ok");
-
-    /* Stage 3: Validate - validation happens in from_slice() */
-    println!("VALIDATION:ok");
-
-    /* Stage 4: Reencode using new() constructor with getters */
-    /* Allocate buffer for reencoding - use same size as original */
-    let mut reencoded_buffer = vec![0u8; original_data.len()];
-"#,
-        binary_file_path.display(),
-        module_path,
-        type_name,
-    ));
-
-    if referenced_primitive_fields.is_empty() && size_discriminated_union_fields.is_empty() {
-        /* No referenced fields or SDU fields - just create empty instance */
-        code.push_str(&format!(
-            "    let reencoded_size = {}::{}::new(&mut reencoded_buffer).expect(\"new() failed\");\n",
-            module_path, type_name
-        ));
-    } else {
-        /* Has referenced fields or SDU fields - use new() constructor with values */
-        code.push_str("    let reencoded_size = ");
-        code.push_str(&format!(
-            "{}::{}::new(&mut reencoded_buffer,\n",
-            module_path, type_name
-        ));
-
-        let mut param_count = 0;
-        /* Generate getter calls for referenced primitive fields */
-        for field_name in referenced_primitive_fields {
-            if param_count > 0 {
-                code.push_str(",\n");
-            }
-            code.push_str(&format!("        original.{}()", field_name));
-            param_count += 1;
+    fn child(&mut self, elem: &Elem<'a>) -> Result<()> {
+        if let Elem::View(c) = elem {
+            self.ensure(&c.vname)?;
         }
-        /* Generate tag getter calls for size-discriminated union fields */
-        for field_name in size_discriminated_union_fields {
-            if param_count > 0 {
-                code.push_str(",\n");
-            }
-            code.push_str(&format!("        original.{}_tag()", field_name));
-            param_count += 1;
-        }
-        code.push_str("\n    ).expect(\"new() failed\");\n");
+        Ok(())
     }
 
-    /* Set non-referenced primitive fields, enums, arrays, nested structs, and size-discriminated unions via setters */
-    if !non_referenced_primitive_fields.is_empty()
-        || !enum_fields.is_empty()
-        || !array_fields.is_empty()
-        || !nested_fields.is_empty()
-        || !size_discriminated_union_fields.is_empty()
-    {
-        code.push_str("\n    /* Set non-referenced fields using mutable wrapper */\n");
-        code.push_str(&format!("    {{\n"));
+    fn names(&self, v: &VInfo<'a>, slot: &Slot<'a>) -> (String, String) {
+        let base = self.e.method_base(v, slot);
+        (base.clone(), escape_ident(&base))
+    }
 
-        /* Use original buffer size for jagged arrays, otherwise use new() return value */
-        let buffer_slice = if has_jagged_array {
-            "original_data.len()"
-        } else {
-            "reencoded_size"
+    /* Union views are copied through one variant spanning the whole union. */
+    fn union_slot(&self, v: &VInfo<'a>) -> Result<Slot<'a>> {
+        let size = abi_gen::codegen::rust_gen::model::const_size(v.ty)
+            .ok_or_else(|| anyhow::anyhow!("variable-size union {}", v.ty.name))?;
+        let slots = self.e.slots(v);
+        let rank = |s: &Slot<'a>| match &s.shape {
+            Shape::Prim(_) => 0,
+            Shape::Array(_) => 1,
+            _ => 2,
         };
-
-        code.push_str(&format!("        let mut reencoded_mut = {}::{}Mut::from_slice_mut(&mut reencoded_buffer[..{}]).expect(\"from_slice_mut failed\");\n", module_path, type_name, buffer_slice));
-
-        /* Set non-referenced primitive fields */
-        for field_name in non_referenced_primitive_fields {
-            code.push_str(&format!(
-                "        reencoded_mut.set_{}(original.{}());\n",
-                field_name, field_name
-            ));
-        }
-
-        /* Set enum fields using body getters and setters */
-        if !enum_fields.is_empty() {
-            code.push_str("\n        /* Set enum fields using body getters and setters */\n");
-            for field_name in enum_fields {
-                code.push_str(&format!("        {{\n"));
-                code.push_str(&format!(
-                    "            let body = original.{}_body();\n",
-                    field_name
-                ));
-                code.push_str(&format!("            reencoded_mut.set_{}_body(body).expect(\"Failed to set enum body\");\n", field_name));
-                code.push_str("        }\n");
-            }
-        }
-
-        /* Set size-discriminated union fields using variant-specific getters and setters (like enums) */
-        if !sdu_fields_with_variants.is_empty() {
-            code.push_str("\n        /* Set size-discriminated union fields using variant-specific getters and setters */\n");
-            for (field_name, variants) in sdu_fields_with_variants {
-                code.push_str("        {\n");
-                code.push_str(&format!(
-                    "            let tag = original.{}_tag();\n",
-                    field_name
-                ));
-                code.push_str(&format!("            match tag {{\n"));
-
-                for (idx, (variant_name, _expected_size)) in variants.iter().enumerate() {
-                    let variant_name_snake = variant_name.to_lowercase().replace("-", "_");
-                    code.push_str(&format!("                {} => {{\n", idx));
-                    code.push_str(&format!(
-                        "                    let variant = original.{}_{}();\n",
-                        field_name, variant_name_snake
-                    ));
-                    code.push_str(&format!("                    reencoded_mut.{}_set_{}(&variant).expect(\"Failed to set SDU variant\");\n", field_name, variant_name_snake));
-                    code.push_str("                }\n");
-                }
-
-                code.push_str(&format!(
-                    "                _ => panic!(\"Invalid SDU tag for {}: {{}}\", tag),\n",
-                    field_name
-                ));
-                code.push_str("            }\n");
-                code.push_str("        }\n");
-            }
-        }
-
-        /* Copy arrays */
-        for (array_field, is_byte_array, is_struct_array, _is_jagged) in array_fields {
-            if *is_byte_array {
-                /* Byte arrays have a slice getter and slice setter */
-                code.push_str(&format!(
-                    "        let array_data = original.{}();\n",
-                    array_field
-                ));
-                code.push_str(&format!(
-                    "        reencoded_mut.set_{}(array_data);\n",
-                    array_field
-                ));
-            } else if *is_struct_array {
-                /* Struct arrays need element-by-element copy with reference */
-                code.push_str(&format!(
-                    "        for i in 0..original.{}_len() {{\n",
-                    array_field
-                ));
-                code.push_str(&format!(
-                    "            reencoded_mut.{}_set(i, &original.{}_get(i));\n",
-                    array_field, array_field
-                ));
-                code.push_str("        }\n");
-            } else {
-                /* Primitive arrays (non-byte) need element-by-element copy */
-                code.push_str(&format!(
-                    "        for i in 0..original.{}_len() {{\n",
-                    array_field
-                ));
-                code.push_str(&format!(
-                    "            reencoded_mut.{}_set(i, original.{}_get(i));\n",
-                    array_field, array_field
-                ));
-                code.push_str("        }\n");
-            }
-        }
-
-        /* Copy nested structs using their getters and setters */
-        for (nested_field_name, nested_field_names) in nested_fields {
-            code.push_str(&format!("        {{\n"));
-            code.push_str(&format!(
-                "            let original_nested = original.{}();\n",
-                nested_field_name
-            ));
-            code.push_str(&format!(
-                "            let mut nested_mut = reencoded_mut.{}();\n",
-                nested_field_name
-            ));
-            /* Copy each field of the nested struct (primitives and arrays) */
-            for field_name in nested_field_names {
-                /* Try byte array copy first (for u8 arrays), fallback to primitive setter */
-                code.push_str(&format!(
-                    "            /* Copy {} from nested struct */\n",
-                    field_name
-                ));
-                code.push_str(&format!(
-                    "            let {}_val = original_nested.{}();\n",
-                    field_name, field_name
-                ));
-                /* Generate code that works for both &[u8] arrays and primitive types */
-                code.push_str(&format!(
-                    "            nested_mut.set_{}({}_val);\n",
-                    field_name, field_name
-                ));
-            }
-            code.push_str("        }\n");
-        }
-
-        code.push_str("    }\n");
+        slots
+            .into_iter()
+            .filter(|s| abi_gen::codegen::rust_gen::model::const_size(s.ty) == Some(size))
+            .min_by_key(|s| rank(s))
+            .ok_or_else(|| anyhow::anyhow!("union {} has no full-width variant", v.ty.name))
     }
 
-    /* Use original data size for final slice if jagged arrays present */
-    let final_slice = if has_jagged_array {
-        "original_data.len()"
-    } else {
-        "reencoded_size"
-    };
-    code.push_str(&format!(
-        "    let reencoded_data = &reencoded_buffer[..{}];\n",
-        final_slice
-    ));
+    /* Generated Rust name of the view `key` (also the suffix of its
+     * `copy_` / `build_` helpers). */
+    fn id(&self, key: &str) -> String {
+        self.e.nm(key).ty.clone()
+    }
 
-    code.push_str(
-        r#"
-    println!("REENCODE:ok");
-
-    /* Stage 5: Binary comparison */
-    if &reencoded_data[..] == &original_data[..] {
-        println!("BINARY_MATCH:true");
-    } else {
-        eprintln!("Binary mismatch after decode/reencode round-trip!");
-        eprintln!("  Original size: {} bytes", original_data.len());
-        eprintln!("  Reencoded size: {} bytes", reencoded_data.len());
-        for (i, (orig, copy)) in original_data.iter().zip(reencoded_data.iter()).enumerate() {
-            if orig != copy {
-                eprintln!("  Byte {}: original=0x{:02x}, reencoded=0x{:02x}", i, orig, copy);
+    fn copy_fn(&mut self, v: &VInfo<'a>) -> Result<String> {
+        let nm = self.e.nm(&v.name);
+        let (n, m) = (&nm.ty, &nm.mut_);
+        let mut out = String::new();
+        writeln!(out, "#[allow(unused_variables, unused_mut)]")?;
+        writeln!(out, "fn copy_{n}(s: &{n}<'_>, d: &mut {m}<'_>) {{")?;
+        let slots = match &v.ty.kind {
+            ResolvedTypeKind::Union { .. } => vec![self.union_slot(v)?],
+            _ => self.e.slots(v),
+        };
+        for slot in &slots {
+            let (base, getter) = self.names(v, slot);
+            let h = |s: &str| self.e.hname(v, &base, s);
+            if self.e.open_slot(v, slot) {
+                /* `new_from_params` zero-fills a slot whose size is a parameter
+                 * (`<field>_payload_size`); its typed sub-views would parse the
+                 * zeros, so the encoded bytes go in at the same offset. */
+                let src = match &slot.shape {
+                    Shape::View(_) => format!("s.{getter}().as_bytes()"),
+                    Shape::Enum { .. } => format!("s.{}()", h("body")),
+                    _ => format!("s.{}()", h("bytes")),
+                };
+                writeln!(
+                    out,
+                    "    {{ let src = {src}; let off = src.as_ptr() as usize - s.as_bytes().as_ptr() as usize; d.as_bytes_mut()[off..off + src.len()].copy_from_slice(src); }}"
+                )?;
+                continue;
+            }
+            match &slot.shape {
+                Shape::Prim(_) => writeln!(out, "    d.set_{base}(s.{getter}());")?,
+                Shape::Array(a) => {
+                    let len = h("len");
+                    let get = h("get");
+                    match &a.elem {
+                        Elem::Prim(p) if prim_is_byte(p) && !base.is_empty() => {
+                            writeln!(out, "    d.set_{base}(s.{getter}());")?;
+                            writeln!(out, "    for i in 0..s.{len}() {{ assert_eq!(s.{get}(i), s.{getter}()[i]); }}")?;
+                        }
+                        Elem::Prim(_) => writeln!(
+                            out,
+                            "    for i in 0..s.{len}() {{ d.{set}(i, s.{get}(i)); }}",
+                            set = h("set")
+                        )?,
+                        Elem::View(c) => {
+                            self.child(&a.elem)?;
+                            writeln!(
+                                out,
+                                "    for i in 0..s.{len}() {{ copy_{c}(&s.{get}(i), &mut d.{gm}(i)); }}",
+                                c = self.id(&c.vname),
+                                gm = h("get_mut")
+                            )?;
+                        }
+                        Elem::Opaque(_) => anyhow::bail!("opaque array elements in {}", slot.name),
+                    }
+                }
+                Shape::View(c) => {
+                    self.ensure(&c.vname)?;
+                    writeln!(
+                        out,
+                        "    copy_{c}(&s.{getter}(), &mut d.{m}());",
+                        c = self.id(&c.vname),
+                        m = h("mut")
+                    )?;
+                }
+                Shape::Enum { variants, .. } | Shape::Sdu { variants } => {
+                    let (rn, rmn) = self.e.ref_enum_names(v, slot);
+                    let arms = self.e.variant_arm_names(variants);
+                    let (get, getm) = if base.is_empty() {
+                        ("variant".to_string(), "variant_mut".to_string())
+                    } else {
+                        (getter.clone(), h("mut"))
+                    };
+                    writeln!(out, "    match s.{get}() {{")?;
+                    for (var, arm) in variants.iter().zip(&arms) {
+                        self.child(&var.elem)?;
+                        let body = match &var.elem {
+                            Elem::View(c) => format!("copy_{}(&x, &mut y)", self.id(&c.vname)),
+                            Elem::Prim(_) => "y.copy_from_slice(&x.to_le_bytes())".to_string(),
+                            Elem::Opaque(_) => "y.copy_from_slice(x)".to_string(),
+                        };
+                        writeln!(
+                            out,
+                            "        {rn}::{arm}(x) => match d.{getm}() {{ {rmn}::{arm}(mut y) => {body}, _ => panic!(\"{arm}: destination variant differs\") }},"
+                        )?;
+                    }
+                    writeln!(
+                        out,
+                        "        _ => panic!(\"unexpected variant in {}\"),",
+                        slot.name
+                    )?;
+                    writeln!(out, "    }}")?;
+                }
             }
         }
-        println!("BINARY_MATCH:false");
-        std::process::exit(1);
+        writeln!(out, "}}\n")?;
+        Ok(out)
+    }
+
+    fn build_fn(&mut self, v: &VInfo<'a>) -> Result<String> {
+        let nm = self.e.nm(&v.name);
+        let (n, nb) = (&nm.ty, &nm.builder);
+        let mut out = String::new();
+        writeln!(
+            out,
+            "fn build_{n}(s: &{n}<'_>) -> Vec<u8> {{ builder_{n}(s).build() }}"
+        )?;
+        writeln!(out, "#[allow(unused_mut)]")?;
+        writeln!(out, "fn builder_{n}(s: &{n}<'_>) -> {nb} {{")?;
+        writeln!(out, "    let mut b = {nb}::new();")?;
+        match &v.ty.kind {
+            ResolvedTypeKind::Struct { .. } => {
+                for slot in self.e.slots(v) {
+                    let (base, getter) = self.names(v, &slot);
+                    let pb = plain_ident(&slot.name);
+                    let h = |s: &str| self.e.hname(v, &base, s);
+                    match &slot.shape {
+                        Shape::Prim(_) => writeln!(out, "    b = b.set_{pb}(s.{getter}());")?,
+                        Shape::Array(a) => match &a.elem {
+                            Elem::Prim(_) => writeln!(
+                                out,
+                                "    let vals: Vec<_> = (0..s.{len}()).map(|i| s.{get}(i)).collect();\n    b = b.set_{pb}(&vals);",
+                                len = h("len"),
+                                get = h("get")
+                            )?,
+                            Elem::View(c) => {
+                                self.child(&a.elem)?;
+                                writeln!(
+                                    out,
+                                    "    for i in 0..s.{len}() {{ b = b.push_{pb}(&build_{c}(&s.{get}(i))); }}",
+                                    len = h("len"),
+                                    get = h("get"),
+                                    c = self.id(&c.vname)
+                                )?;
+                            }
+                            Elem::Opaque(_) => anyhow::bail!("opaque array elements in {}", slot.name),
+                        },
+                        Shape::View(c) => {
+                            self.ensure(&c.vname)?;
+                            writeln!(out, "    b = b.set_{pb}(&build_{c}(&s.{getter}()));", c = self.id(&c.vname))?;
+                        }
+                        Shape::Enum { variants, .. } | Shape::Sdu { variants } => {
+                            let (rn, _) = self.e.ref_enum_names(v, &slot);
+                            let arms = self.e.variant_arm_names(variants);
+                            let suffixes = variant_setter_suffixes(variants);
+                            writeln!(out, "    match s.{getter}() {{")?;
+                            for ((var, arm), sfx) in variants.iter().zip(&arms).zip(&suffixes) {
+                                self.child(&var.elem)?;
+                                let payload = match &var.elem {
+                                    Elem::View(c) => format!("&build_{}(&x)", self.id(&c.vname)),
+                                    Elem::Prim(_) => "&x.to_le_bytes()".to_string(),
+                                    Elem::Opaque(_) => "x".to_string(),
+                                };
+                                /* Fixed-size payloads go through the fallible twin. */
+                                if var.elem.size().is_some() {
+                                    writeln!(out, "        {rn}::{arm}(x) => {{ b = b.try_set_{pb}_{sfx}({payload}).expect(\"try_set_{pb}_{sfx}\"); }}")?;
+                                } else {
+                                    writeln!(out, "        {rn}::{arm}(x) => {{ b = b.set_{pb}_{sfx}({payload}); }}")?;
+                                }
+                            }
+                            writeln!(out, "        _ => panic!(\"unexpected variant in {}\"),", slot.name)?;
+                            writeln!(out, "    }}")?;
+                        }
+                    }
+                }
+            }
+            ResolvedTypeKind::Union { .. } => {
+                let slot = self.union_slot(v)?;
+                let (_, getter) = self.names(v, &slot);
+                let pb = plain_ident(&slot.name);
+                match &slot.shape {
+                    Shape::Prim(_) => writeln!(out, "    b = b.set_{pb}(s.{getter}());")?,
+                    Shape::Array(a) => match &a.elem {
+                        Elem::Prim(p) if prim_is_byte(p) => {
+                            writeln!(out, "    b = b.set_{pb}(s.{getter}());")?
+                        }
+                        _ => writeln!(out, "    b = b.set_encoding(s.as_bytes());")?,
+                    },
+                    Shape::View(c) => {
+                        self.ensure(&c.vname)?;
+                        writeln!(
+                            out,
+                            "    b = b.set_{pb}(&build_{c}(&s.{getter}()));",
+                            c = self.id(&c.vname)
+                        )?;
+                    }
+                    _ => anyhow::bail!("unsupported union variant {}", slot.name),
+                }
+            }
+            ResolvedTypeKind::Array { .. } => {
+                let slot = &self.e.slots(v)[0];
+                if let Shape::Array(a) = &slot.shape {
+                    match &a.elem {
+                        Elem::Prim(_) => {
+                            writeln!(out, "    for i in 0..s.len() {{ b = b.set(i, s.get(i)); }}")?
+                        }
+                        Elem::View(c) => {
+                            self.child(&a.elem)?;
+                            writeln!(out, "    for i in 0..s.len() {{ b = b.set(i, &build_{c}(&s.get(i))); }}", c = self.id(&c.vname))?;
+                        }
+                        Elem::Opaque(_) => anyhow::bail!("opaque array elements in {}", v.ty.name),
+                    }
+                }
+            }
+            _ => anyhow::bail!("no builder for {}", v.ty.name),
+        }
+        writeln!(out, "    b")?;
+        writeln!(out, "}}\n")?;
+        Ok(out)
     }
 }
-"#,
-    );
 
-    code
+fn generate_runner(abi_file_path: &Path, type_name: &str, data: &[u8]) -> Result<String> {
+    let abi: AbiFile = serde_yaml::from_str(&fs::read_to_string(abi_file_path)?)?;
+    let package = abi.package().to_string();
+    let mut resolver = TypeResolver::new();
+    for typedef in abi.get_types() {
+        resolver.add_typedef(typedef.clone());
+    }
+    resolver
+        .resolve_all()
+        .map_err(|e| anyhow::anyhow!("resolve: {:?}", e))?;
+    let model = Model::new(&resolver);
+    let e = Emitter::new(&model);
+    let ty = resolver
+        .get_type_info(type_name)
+        .ok_or_else(|| anyhow::anyhow!("Type '{}' not found", type_name))?;
+    model.collect_named(&ty.name);
+    let vname = ty.name.clone();
+    let root = e
+        .info(&vname)
+        .ok_or_else(|| anyhow::anyhow!("no view generated for {}", type_name))?;
+    let mut g = RunnerGen {
+        e: &e,
+        done: BTreeSet::new(),
+        fns: String::new(),
+    };
+    g.ensure(&vname)?;
+    let is_root_struct = root.is_root_struct();
+
+    let tn = e.nm(&vname);
+    let (t, tp, tm) = (&tn.ty, &tn.params, &tn.mut_);
+    let mut code = String::new();
+    writeln!(code, "#![allow(dead_code, unused_imports, non_snake_case)]")?;
+    writeln!(code, "mod generated;")?;
+    writeln!(code, "use generated::{}::*;\n", package.replace('.', "::"))?;
+    code.push_str(&g.fns);
+    writeln!(code, "fn main() {{")?;
+    writeln!(code, "    let data: &[u8] = &{:?};", data)?;
+    writeln!(
+        code,
+        "    let orig = {t}::from_slice(data).expect(\"from_slice\");"
+    )?;
+    writeln!(code, "    println!(\"DECODE:ok\");")?;
+    writeln!(code, "    assert_eq!({t}::validate(data).expect(\"validate\"), data.len(), \"validate consumed size\");")?;
+    writeln!(
+        code,
+        "    assert_eq!(orig.size(), data.len(), \"view size\");"
+    )?;
+    writeln!(code, "    assert_eq!(orig.check(), Ok(data.len()));")?;
+    writeln!(code, "    if !data.is_empty() {{")?;
+    writeln!(
+        code,
+        "        match {t}::validate(&data[..data.len() - 1]) {{"
+    )?;
+    writeln!(
+        code,
+        "            Ok(n) => assert_ne!(n, data.len(), \"truncated buffer validated\"),"
+    )?;
+    writeln!(
+        code,
+        "            /* A short buffer reports a required size within the real one. */"
+    )?;
+    writeln!(code, "            Err(e) => if let Some(n) = e.required_size() {{ assert!(n > data.len() - 1 && n <= data.len(), \"required size {{}} for {{}} bytes\", n, data.len()); }},")?;
+    writeln!(code, "        }}")?;
+    writeln!(code, "    }}")?;
+    if is_root_struct {
+        writeln!(
+            code,
+            "    let params = {tp}::from_buffer(data).expect(\"from_buffer\");"
+        )?;
+        writeln!(
+            code,
+            "    assert_eq!(params, orig.dynamic_params(), \"dynamic_params\");"
+        )?;
+        writeln!(
+            code,
+            "    let fp = {t}::footprint_from_params(&params).expect(\"footprint_from_params\");"
+        )?;
+        writeln!(code, "    assert_eq!(params.footprint(), Ok(fp));")?;
+        /* Generic access through the parameter keys. */
+        writeln!(code, "    let mut generic = {tp}::default();")?;
+        writeln!(code, "    for (field, path) in {tp}::KEYS {{ assert!(generic.set(path, params.get(field).expect(\"key\"))); }}")?;
+        writeln!(
+            code,
+            "    assert_eq!(generic, params, \"params rebuilt from KEYS\");"
+        )?;
+        writeln!(
+            code,
+            "    assert_eq!(fp, data.len(), \"footprint_from_params\");"
+        )?;
+    }
+    writeln!(code, "    println!(\"VALIDATION:ok\");")?;
+    if is_root_struct {
+        /* Every case (jagged and payload-sized ones included) re-encodes from its params. */
+        writeln!(code, "    let mut buf = vec![0xa5u8; data.len()];")?;
+        writeln!(code, "    assert_eq!({t}::new_from_params(&mut buf, &params).expect(\"new_from_params\"), data.len());")?;
+        writeln!(code, "    {{")?;
+        writeln!(
+            code,
+            "        let mut m = {tm}::from_slice_mut(&mut buf).expect(\"from_slice_mut\");"
+        )?;
+        writeln!(code, "        copy_{t}(&orig, &mut m);")?;
+        writeln!(code, "    }}")?;
+        writeln!(
+            code,
+            "    assert_eq!(buf.as_slice(), data, \"new_from_params + setters re-encode\");"
+        )?;
+    } else {
+        writeln!(code, "    let mut buf = vec![0u8; data.len()];")?;
+        writeln!(code, "    {{")?;
+        writeln!(
+            code,
+            "        let mut m = {tm}::from_slice_mut(&mut buf).expect(\"from_slice_mut\");"
+        )?;
+        writeln!(code, "        copy_{t}(&orig, &mut m);")?;
+        writeln!(code, "    }}")?;
+        writeln!(
+            code,
+            "    assert_eq!(buf.as_slice(), data, \"setter re-encode\");"
+        )?;
+    }
+    writeln!(code, "    let built = build_{t}(&orig);")?;
+    if is_root_struct {
+        writeln!(
+            code,
+            "    assert_eq!(builder_{t}(&orig).dynamic_params(), Ok(params), \"builder dynamic_params\");"
+        )?;
+        /* Re-select every enum/SDU variant by its ABI name from the variant table. */
+        for slot in e.slots(&root) {
+            if !matches!(slot.shape, Shape::Enum { .. } | Shape::Sdu { .. }) {
+                continue;
+            }
+            let base = e.method_base(&root, &slot);
+            let pb = plain_ident(&slot.name);
+            let table = format!("{}VARIANTS", e.variant_const_prefix(&slot));
+            writeln!(
+                code,
+                "    let info = {t}::{by_tag}(orig.{tag}() as u64).expect(\"variant info\");",
+                by_tag = e.hname(&root, &base, "variant_by_tag"),
+                tag = e.hname(&root, &base, "tag")
+            )?;
+            writeln!(code, "    assert!({t}::{table}.contains(info));")?;
+            writeln!(
+                code,
+                "    let by_name = builder_{t}(&orig).try_set_{pb}_variant_by_name(info.name, orig.{body}()).expect(\"by name\").build();",
+                body = e.hname(&root, &base, "body")
+            )?;
+            writeln!(
+                code,
+                "    assert_eq!(by_name.as_slice(), data, \"variant re-selected by name\");"
+            )?;
+        }
+    }
+    writeln!(
+        code,
+        "    assert_eq!(built.as_slice(), data, \"builder re-encode\");"
+    )?;
+    writeln!(
+        code,
+        "    let owned = builder_{t}(&orig).finish().expect(\"finish\");"
+    )?;
+    writeln!(
+        code,
+        "    assert_eq!(owned.as_bytes(), data, \"finish bytes\");"
+    )?;
+    writeln!(
+        code,
+        "    assert_eq!(owned.size(), data.len(), \"finish size\");"
+    )?;
+    writeln!(code, "    let mut target = vec![0xa5u8; data.len() + 4];")?;
+    writeln!(
+        code,
+        "    let written = builder_{t}(&orig).build_into(&mut target).expect(\"build_into\");"
+    )?;
+    writeln!(
+        code,
+        "    assert_eq!(&target[..written], data, \"build_into bytes\");"
+    )?;
+    writeln!(code, "    assert!(target[written..].iter().all(|b| *b == 0xa5), \"build_into wrote past the value\");")?;
+    writeln!(code, "    println!(\"REENCODE:ok\");")?;
+    writeln!(code, "    println!(\"BINARY_MATCH:true\");")?;
+    writeln!(code, "}}")?;
+    Ok(code)
 }

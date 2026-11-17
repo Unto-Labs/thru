@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { Pubkey } from '@thru/sdk';
 import { PERP_CBOOK_EMPTY_PRICE_IN_TICKS, PERP_CBOOK_MAX_PRICE_IN_TICKS, estimatePerpOrderStateUnits } from '../index';
 import { PerpInstruction } from '../abi/thru/program/perp/types';
-import { PERP_ABI_V0_2, PERP_ABI_V0_4 } from '../versions/registry';
 import {
   depositTx,
   liquidateTx,
@@ -45,7 +44,7 @@ const PROGRAM = address(61);
 /* The owner's account links B then A then C (link order is the account's, not the market's). */
 const account: CrossAccountRef = perpCrossAccountRef(
   ACCOUNT,
-  { links: [{ market: marketB.seatArena, seatIndex: 4 }, { market: marketA.seatArena, seatIndex: 7 }, { market: marketC.seatArena, seatIndex: 2 }] },
+  { links: [{ market: marketB.seatArena }, { market: marketA.seatArena }, { market: marketC.seatArena }] },
   [marketA, marketB, marketC],
 );
 
@@ -96,7 +95,7 @@ const farBid = { side: 'buy' as const, price: 43_000n * 1000n, quantity: 1n };
 describe('cross seat transactions', () => {
   it('orders: the margin record first, every linked arena and feed read only, state units unchanged', async () => {
     const isolated = ordersTx(refA, OWNER, 7, [farBid], [{ orderEntryIndex: 3, orderId: 99n }], book);
-    const cross = ordersTx(refA, OWNER, 7, [farBid], [{ orderEntryIndex: 3, orderId: 99n }], book, { margin: account, version: PERP_ABI_V0_4 });
+    const cross = ordersTx(refA, OWNER, 7, [farBid], [{ orderEntryIndex: 3, orderId: 99n }], book, { margin: account });
 
     expect(cross.instructions.map((ix) => ix.ix)).toEqual(['margin_record', 'market_record', 'modify_order_entry', 'create_order_entry']);
     expect(cross.instructions[0]).toEqual({
@@ -152,7 +151,7 @@ describe('cross seat transactions', () => {
   });
 
   it('a cross liquidation carries the target\'s record (0) and a cross liquidator\'s (1)', async () => {
-    const liquidator = perpCrossAccountRef(OTHER_ACCOUNT, { links: [{ market: marketA.seatArena, seatIndex: 2 }] }, [marketA]);
+    const liquidator = perpCrossAccountRef(OTHER_ACCOUNT, { links: [{ market: marketA.seatArena }] }, [marketA]);
     const tx = liquidateTx(refA, OTHER, 2, 7, { target: account, liquidator });
     expect(tx.instructions.map((ix) => (ix.ix === 'margin_record' ? `margin_record:${ix.marginRecordIndex}:${ix.marginAccount === ACCOUNT ? 'target' : 'liquidator'}` : ix.ix))).toEqual([
       'margin_record:0:target',
@@ -167,7 +166,7 @@ describe('cross seat transactions', () => {
   });
 
   it('link and unlink write the margin account', () => {
-    const before = perpCrossAccountRef(ACCOUNT, { links: [{ market: marketB.seatArena, seatIndex: 4 }] }, [marketB]);
+    const before = perpCrossAccountRef(ACCOUNT, { links: [{ market: marketB.seatArena }] }, [marketB]);
     const link = marginLinkTx(refA, OWNER, 7, before, true);
     expect(link.instructions.map((ix) => ix.ix)).toEqual(['margin_record', 'market_record', 'margin_link']);
     expect(link.instructions[2]).toEqual({ ix: 'margin_link', marginRecordIndex: 0, marketRecordIndex: 1 });
@@ -188,11 +187,10 @@ describe('cross seat transactions', () => {
     expect(() => marginTransferTx(deployment, OWNER, account, 1, 1, 5n)).toThrow('are not two links');
   });
 
-  it('refuses a cross transaction for a market the account does not link, or on a version without cross margin', () => {
-    const notA = perpCrossAccountRef(ACCOUNT, { links: [{ market: marketB.seatArena, seatIndex: 4 }] }, [marketB]);
+  it('refuses a cross transaction for a market the account does not link', () => {
+    const notA = perpCrossAccountRef(ACCOUNT, { links: [{ market: marketB.seatArena }] }, [marketB]);
     expect(() => ordersTx(refA, OWNER, 7, [farBid], [], undefined, { margin: notA })).toThrow('does not link market');
-    expect(() => ordersTx(refA, OWNER, 7, [farBid], [], undefined, { margin: account, version: PERP_ABI_V0_2 })).toThrow('crossMargin');
-    expect(() => perpCrossAccountRef(ACCOUNT, { links: [{ market: address(99), seatIndex: 1 }] }, [marketA])).toThrow('oracle feed is unknown');
+    expect(() => perpCrossAccountRef(ACCOUNT, { links: [{ market: address(99) }] }, [marketA])).toThrow('oracle feed is unknown');
   });
 });
 
@@ -207,7 +205,6 @@ describe('funding settlement', () => {
     expect(tx.readWrite).toEqual([marketA.seatArena, marketA.orderArena, marketA.bidsCbook, marketA.asksCbook]);
     expect(tx.readOnly).toEqual([deployment.exchangeMeta]);
     expect((await encode(tx)).steps.map((step) => step.name)).toEqual(['market_record', 'settle_funding', 'settle_funding']);
-    expect(() => settleFundingTx(refA, [7], { version: PERP_ABI_V0_2 })).toThrow('settleFunding');
   });
 
   it('settles every linked seat of an account, one market record each', () => {

@@ -1,0 +1,7 @@
+test-case:
+  name: "nested_refs_existing"
+  abi-file: "../../abi_definitions/nested_refs.abi.yaml"
+  type: "Proof"
+  description: "Tag from hdr.type_slot>>62 = 0; siblings count = popcount(0x03)+popcount(0x01) = 3"
+  tags: ["enums", "computed-tag", "nested-field-ref", "popcount"]
+  binary-hex: "0000000000000000 0301 01000000 02000000 03000000"

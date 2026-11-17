@@ -13,7 +13,9 @@ import {
   PERP_INSTRUCTION_MARKET_RECORD,
   PERP_INSTRUCTION_MARKET_SET_ORACLE,
   PERP_MARKET_ACCOUNT_SIZE,
-  PERP_MARKET_MAGIC,
+  PERP_ACCOUNT_TYPE_CBOOK,
+  PERP_ACCOUNT_TYPE_MARKET,
+  PERP_ACCOUNT_TYPE_ORDER_ARENA,
   PERP_NULL_ACCOUNT_INDEX,
   PERP_ORDER_ARENA_ENTRIES_OFFSET,
   PERP_ORDER_ENTRY_SIZE,
@@ -88,7 +90,10 @@ import {
   PERP_INSTRUCTION_MARKET_SET_CROSS,
   PERP_INSTRUCTION_MARKET_SET_VAULT,
   PERP_MARGIN_ACCOUNT_SIZE,
-  PERP_MARGIN_MAGIC,
+  PERP_ACCOUNT_TYPE_MARGIN,
+  parsePerpExchangeMetaAccount,
+  PERP_EXCHANGE_META_ACCOUNT_SIZE,
+  PERP_ACCOUNT_TYPE_EXCHANGE_META,
   PERP_SEAT_FLAG_ACTIVE,
   PERP_SEAT_FLAG_CROSS,
   createPerpMarginAccountCreateInstruction,
@@ -100,6 +105,7 @@ import {
   createPerpMarketSetVaultInstruction,
   derivePerpMarginAccountAddress,
   parsePerpMarginAccount,
+  perpAccountType,
   perpCrossIsBankruptFlat,
   perpCrossIsLiquidatable,
   perpCrossLiquidationAction,
@@ -143,7 +149,7 @@ function context(indexes: Array<[Uint8Array, number]>) {
 function marketBytes(): Uint8Array {
   const data = new Uint8Array(PERP_MARKET_ACCOUNT_SIZE);
   const view = new DataView(data.buffer);
-  data[0] = PERP_MARKET_MAGIC;
+  data[0] = PERP_ACCOUNT_TYPE_MARKET;
   data[1] = 0x02; /* status_flags: post only */
   data[2] = 0x01; /* exchange_status_flags: paused */
   view.setBigUint64(8, 1n, true); /* lot_size */
@@ -181,7 +187,7 @@ function marketBytes(): Uint8Array {
   view.setUint32(396, 100, true); /* funding_premium_multiplier */
   view.setUint32(400, 3, true); /* funding_sample_cnt */
   view.setUint32(404, 2_500, true); /* cross_upnl_haircut_bps */
-  /* the loss waterfall (0.5.0) */
+  /* the loss waterfall */
   view.setUint16(4, 300, true); /* socialize_cap_bps */
   view.setUint16(6, 2_500, true); /* if_epoch_budget_bps */
   view.setUint16(316, 50, true); /* bankrupt_liq_reward_bps */
@@ -193,7 +199,7 @@ function marketBytes(): Uint8Array {
   view.setBigInt64(464, -71_428_572n, true); /* loss_offset_short (lo): negative as signed 128 bit */
   view.setBigInt64(472, -1n, true); /* loss_offset_short (hi) */
   view.setUint32(480, 61_351, true); /* epoch_id */
-  /* trading fees (0.5.0) */
+  /* trading fees */
   view.setUint32(296, 300, true); /* taker_fee_ppm */
   view.setUint32(300, 100, true); /* maker_rebate_ppm */
   view.setUint32(304, 50, true); /* builder_fee_cap_ppm */
@@ -280,7 +286,8 @@ function orderBytes(order: {
 function orderArenaBytes(orders: Uint8Array[]): Uint8Array {
   const data = new Uint8Array(PERP_ORDER_ARENA_ENTRIES_OFFSET + orders.length * PERP_ORDER_ENTRY_SIZE);
   const view = new DataView(data.buffer);
-  /* 8 reserved bytes, then the header: reserved0[52], next_entry_idx u32, free_magic u64 */
+  /* The discriminator padded to 8, then the header: reserved0[52], next_entry_idx u32, free_magic u64 */
+  data[0] = PERP_ACCOUNT_TYPE_ORDER_ARENA;
   view.setUint32(8 + 52, orders.length + 1, true);
   view.setBigUint64(8 + 56, 0n, true);
   orders.forEach((order, index) => data.set(order, PERP_ORDER_ARENA_ENTRIES_OFFSET + index * PERP_ORDER_ENTRY_SIZE));
@@ -289,10 +296,23 @@ function orderArenaBytes(orders: Uint8Array[]): Uint8Array {
 
 const FREE_ORDER = orderBytes({ seatNext: 0, seatPrev: 0, seatIndex: 0, levelIndex: 0, levelAccountIndex: 0, quantityInLots: 0n, orderId: 0n, expiry: 0n });
 
+/* A market's funding (off), loss waterfall and fee state, all zero. */
+const ZERO_FUNDING: PerpFunding = {
+  index: 0n, balance: 0n, lastRoundNs: 0n, lastSampleNs: 0n, premiumSum: 0n, sampleCount: 0, rate: 0n,
+  interestRate: 0, clampSmall: 0, clampBig: 0, premiumMultiplier: 0, impactNotional: 0n,
+};
+const ZERO_RISK: PerpMarket['risk'] = {
+  socializeCapBps: 0, ifEpochBudgetBps: 0, bankruptLiqRewardBps: 0, feeBalance: 0n, insuranceBalance: 0n, epochId: 0,
+  epochIfDrawn: 0n, epochSocTicks: 0n, badDebtBoth: 0n, lossOffsetLong: 0n, lossOffsetShort: 0n,
+};
+const ZERO_FEES: PerpMarket['fees'] = {
+  takerFeePpm: 0, makerRebatePpm: 0, builderFeeCapPpm: 0, feeInsuranceSharePpm: 0, liqInsuranceSharePpm: 0,
+  pendingTakerFeePpm: 0, pendingBuilderFeeCapPpm: 0, pendingActivationNs: 0n,
+};
+
 /* Worked example: 20x market (IM 500 bps, MM 250 bps), long 10 lots bought
    at 85,000,000 atoms with 50,000,000 atoms of collateral. */
 const MARKET: PerpMarket = {
-  magic: PERP_MARKET_MAGIC,
   statusFlags: 0,
   exchangeStatusFlags: 0,
   lotSize: 1n,
@@ -315,6 +335,10 @@ const MARKET: PerpMarket = {
   liquidationFeeBps: 100,
   oracleExponent: -8,
   maxMarkAgeNs: 0n,
+  funding: ZERO_FUNDING,
+  crossUpnlHaircutBps: 0,
+  risk: ZERO_RISK,
+  fees: ZERO_FEES,
 };
 
 const ENTRY = 85_000_000n;
@@ -346,7 +370,6 @@ describe('perp account parsers', () => {
   it('parses the 512 byte market account with its funding, loss waterfall and fee state', () => {
     const market = parsePerpMarketAccount(marketBytes());
     expect(market).toEqual<PerpMarket>({
-      magic: PERP_MARKET_MAGIC,
       statusFlags: 2,
       exchangeStatusFlags: 1,
       lotSize: 1n,
@@ -415,6 +438,30 @@ describe('perp account parsers', () => {
     expect(() => parsePerpMarketAccount(new Uint8Array(512))).toThrow(/not a perp market/);
   });
 
+  it('parses the 88 byte exchange meta account', () => {
+    expect(PERP_EXCHANGE_META_ACCOUNT_SIZE).toBe(88);
+    const data = new Uint8Array(PERP_EXCHANGE_META_ACCOUNT_SIZE);
+    data[0] = PERP_ACCOUNT_TYPE_EXCHANGE_META;
+    data[1] = 0x05; /* status_flags */
+    data.set(key(40), 8); /* token_program_pubkey */
+    data.set(key(41), 40); /* exchange_admin_pubkey */
+    expect(parsePerpExchangeMetaAccount(data)).toEqual({ statusFlags: 5, tokenProgram: address(40), exchangeAdmin: address(41) });
+    expect(() => parsePerpExchangeMetaAccount(data.subarray(0, 87))).toThrow(/88 bytes/);
+    data[0] = PERP_ACCOUNT_TYPE_MARKET;
+    expect(() => parsePerpExchangeMetaAccount(data)).toThrow(/not a perp exchange metadata account \(market\)/);
+  });
+
+  it('refuses another account type in place of a market, and names it', () => {
+    const margin = marketBytes();
+    margin[0] = PERP_ACCOUNT_TYPE_MARGIN;
+    expect(() => parsePerpMarketAccount(margin)).toThrow(/not a perp market account \(margin\)/);
+    expect(() => parsePerpSeatArenaAccount(margin)).toThrow(/not a perp market account/);
+    margin[0] = 0x79; /* the retired market magic */
+    expect(() => parsePerpMarketAccount(margin)).toThrow(/account type 121/);
+    expect(perpAccountType(marketBytes())).toBe(PERP_ACCOUNT_TYPE_MARKET);
+    expect(perpAccountType(new Uint8Array(0))).toBeNull();
+  });
+
   it('rejects a header whose margin fields are not a margined market', () => {
     const withHeader = (patch: (view: DataView) => void) => {
       const data = marketBytes();
@@ -434,7 +481,7 @@ describe('perp account parsers', () => {
       view.setUint32(276, 9_999, true);
       view.setUint32(280, 10_000, true);
     })).initialMarginBps).toBe(10_000);
-    /* an arena with the market magic but a header without margin fields is rejected too */
+    /* a market arena whose header has no margin fields is rejected too */
     const legacy = seatArenaBytes([]);
     legacy.fill(0, 256, PERP_MARKET_ACCOUNT_SIZE);
     expect(() => parsePerpSeatArenaAccount(legacy)).toThrow(/not a margined market/);
@@ -775,7 +822,7 @@ describe('perp margin math', () => {
     expect(preview.fee).toBe((850_000_000n - 40_000_000n) / 100n); /* 8,100,000 */
     expect(preview.targetQuoteAfter).toBe(quoteAfterClose - preview.fee);
     expect(preview.liquidatorFee).toBe(preview.fee);
-    /* A 0.5.0 market sends floor( fee * share ) to insurance: the liquidator gets the rest. */
+    /* A market sends floor( fee * share ) to insurance: the liquidator gets the rest. */
     const shared = perpLiquidationPreview({ ...MARKET, fees: { liqInsuranceSharePpm: 333_333 } }, s, mark)!;
     expect(shared.insurance).toBe((8_100_000n * 333_333n) / 1_000_000n);
     expect(shared.liquidatorFee).toBe(8_100_000n - shared.insurance);
@@ -1059,7 +1106,7 @@ describe('perp funding', () => {
       index: 232_800n, balance: 0n, lastRoundNs: 0n, lastSampleNs: 0n, premiumSum: 0n, sampleCount: 0, rate: 12n,
       interestRate: 100, clampSmall: 500, clampBig: 40_000, premiumMultiplier: 100, impactNotional: 1n,
     };
-    const market = { funding };
+    const market = { funding, risk: ZERO_RISK };
     const longer = seat({ quantityQuote: 1_000n, longLots: 10n, shortLots: 0n });
     const shorter = seat({ quantityQuote: 1_000n, longLots: 0n, shortLots: 10n });
     const a = perpSettleFunding(market, longer);
@@ -1081,16 +1128,16 @@ describe('perp funding', () => {
     expect(poor.seat.entryNotional).toBe(102n);
     expect(poor.badDebt).toBe(0n);
     /* a short's entry absorbs what it can; the rest is bad debt */
-    const down = { funding: { ...funding, index: -232_800n } };
+    const down = { funding: { ...funding, index: -232_800n }, risk: ZERO_RISK };
     const thin = perpSettleFunding(down, seat({ quantityQuote: 1n, longLots: 0n, shortLots: 10n, entryNotional: 1n }));
     expect(thin.seat.quantityQuote).toBe(0n);
     expect(thin.seat.entryNotional).toBe(0n);
     expect(thin.badDebt).toBe(1n);
-    /* no funding on the market: nothing moves */
-    expect(perpSettleFunding({}, longer)).toEqual({ seat: { ...longer, fundingSnapshot: 0n, fundingCarry: 0 }, paid: 0n, badDebt: 0n });
+    /* funding at index 0: nothing moves */
+    expect(perpSettleFunding({ funding: ZERO_FUNDING, risk: ZERO_RISK }, longer)).toEqual({ seat: { ...longer, fundingSnapshot: 0n, fundingCarry: 0 }, paid: 0n, badDebt: 0n });
   });
 
-  it('settles loss charges against the side index (0.5.0)', () => {
+  it('settles loss charges against the side index', () => {
     const funding: PerpFunding = {
       index: 0n, balance: 0n, lastRoundNs: 0n, lastSampleNs: 0n, premiumSum: 0n, sampleCount: 0, rate: 0n,
       interestRate: 100, clampSmall: 500, clampBig: 40_000, premiumMultiplier: 100, impactNotional: 1n,
@@ -1114,8 +1161,8 @@ describe('perp funding', () => {
     expect(a.seat.fundingSnapshot).toBe(142_857_143n);
     expect(perpSettleFunding(market, short7).paid).toBe(0n);
     expect(perpSettleFunding(market, flat).paid).toBe(0n);
-    /* a market without the waterfall settles against the funding index */
-    expect(perpSettleFunding({ funding }, long3).paid).toBe(0n);
+    /* no loss charges: a long settles against the funding index */
+    expect(perpSettleFunding({ funding, risk: ZERO_RISK }, long3).paid).toBe(0n);
   });
 
   it('funding update is 8 bytes; market set funding is 32', async () => {
@@ -1201,13 +1248,12 @@ describe('perp cross margin', () => {
     expect(perpSeatIsCross(1n)).toBe(false);
   });
 
-  it('parses the 433 byte margin account', () => {
-    expect(PERP_MARGIN_ACCOUNT_SIZE).toBe(433);
+  it('parses the 432 byte margin account', () => {
+    expect(PERP_MARGIN_ACCOUNT_SIZE).toBe(432);
     const data = new Uint8Array(PERP_MARGIN_ACCOUNT_SIZE);
     const view = new DataView(data.buffer);
-    data[0] = PERP_MARGIN_MAGIC;
-    data[1] = 1; /* version */
-    data[2] = 2; /* link_cnt */
+    data[0] = PERP_ACCOUNT_TYPE_MARGIN;
+    data[1] = 2; /* link_cnt */
     view.setUint32(8, 7, true); /* account_id */
     data.set(key(30), 16); /* owner */
     data.set(key(31), 48); /* vault */
@@ -1220,9 +1266,10 @@ describe('perp cross margin', () => {
       accountId: 7, owner: address(30), vault: address(31),
       links: [{ market: address(32), seatIndex: 3 }, { market: address(33), seatIndex: 9 }],
     });
-    expect(() => parsePerpMarginAccount(data.subarray(0, 432))).toThrow(/433 bytes/);
-    data[0] = PERP_MARKET_MAGIC;
-    expect(() => parsePerpMarginAccount(data)).toThrow(/not a perp margin account/);
+    expect(() => parsePerpMarginAccount(data.subarray(0, 431))).toThrow(/432 bytes/);
+    /* A 52-level cbook is 432 bytes too: the discriminator tells them apart. */
+    data[0] = PERP_ACCOUNT_TYPE_CBOOK;
+    expect(() => parsePerpMarginAccount(data)).toThrow(/not a perp margin account \(cbook\)/);
   });
 
   it('profit in one market backs a position in another', () => {
@@ -1321,7 +1368,7 @@ describe('perp cross margin', () => {
       index: 2_000_000_000n, balance: 0n, lastRoundNs: 0n, lastSampleNs: 0n, premiumSum: 0n, sampleCount: 0, rate: 0n,
       interestRate: 100, clampSmall: 500, clampBig: 40_000, premiumMultiplier: 100, impactNotional: 1n,
     };
-    const settled = perpSettleFunding({ funding }, { ...long(0n, 5n, 100n), fundingSnapshot: 0n, fundingCarry: 0 });
+    const settled = perpSettleFunding({ funding, risk: ZERO_RISK }, { ...long(0n, 5n, 100n), fundingSnapshot: 0n, fundingCarry: 0 });
     expect(settled.paid).toBe(-10_000n);
     expect(settled.seat.quantityQuote).toBe(-10_000n);
     expect(settled.seat.entryNotional).toBe(5n * 97n * 200n);

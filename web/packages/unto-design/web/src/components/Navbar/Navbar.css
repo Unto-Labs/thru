@@ -1,0 +1,346 @@
+.uds-navbar {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  height: 64px;
+  padding: 0 28px;
+  background: var(--teal-200);
+  border-bottom: 1px solid var(--teal-300);
+}
+
+.uds-navbar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 13px;
+  text-decoration: none;
+}
+.uds-navbar__wordmark {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-style: italic;
+  font-size: 24px;
+  letter-spacing: -1.1px;
+  color: var(--teal-700);
+}
+.uds-navbar__logo {
+  display: block;
+  height: 32px;
+  width: auto;
+}
+.uds-navbar__tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--teal-600);
+  border: 1px solid var(--teal-300);
+  border-radius: var(--radius-none);
+  padding: 4px 8px 3px;
+}
+
+.uds-navbar__nav {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+}
+.uds-navbar__item {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--teal-600);
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+.uds-navbar__item::after {
+  content: "";
+  width: 100%;
+  height: 2px;
+  background: transparent;
+}
+.uds-navbar__item:hover {
+  color: var(--teal-800);
+}
+.uds-navbar__item[data-active] {
+  color: var(--teal-800);
+}
+.uds-navbar__item[data-active]::after {
+  background: var(--brick-400);
+}
+
+.uds-navbar__spacer {
+  flex: 1;
+}
+
+.uds-navbar__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 14px;
+  margin: 0;
+  background: color-mix(in srgb, var(--teal-0) 55%, transparent);
+  border: 1px solid var(--teal-300);
+  border-radius: var(--radius-none);
+  cursor: default;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+button.uds-navbar__status {
+  cursor: pointer;
+}
+button.uds-navbar__status:hover,
+.uds-navbar__status[data-open] {
+  background: var(--teal-0);
+  border-color: var(--teal-400);
+}
+.uds-navbar__dot {
+  position: relative;
+  display: inline-flex;
+  width: 9px;
+  height: 9px;
+  flex: none;
+}
+.uds-navbar__dot-core {
+  position: relative;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--grass-300);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--grass-300) 55%, transparent);
+}
+.uds-navbar__dot--off .uds-navbar__dot-core {
+  background: var(--teal-400);
+  box-shadow: none;
+}
+.uds-navbar__dot-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--grass-300);
+  animation: uds-navbar-pulse 1.9s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+.uds-navbar__status-net {
+  font-size: 13px;
+  color: var(--teal-700);
+}
+.uds-navbar__status-slot {
+  font-size: 13px;
+  color: var(--teal-500);
+}
+
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar {
+  background: var(--color-surface-card);
+  border-bottom-color: var(--color-border-tertiary);
+}
+
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar__wordmark,
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar__item:hover,
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar__item[data-active],
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar__status-net {
+  color: var(--color-text-primary);
+}
+
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar__tag,
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar__status {
+  background: var(--color-surface-higher);
+  border-color: var(--color-border-secondary);
+  color: var(--color-text-primary);
+}
+
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar__item {
+  color: var(--color-text-tertiary);
+}
+
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar__item[data-active]::after {
+  background: var(--color-surface-brick);
+}
+
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar__status-slot {
+  color: var(--color-text-secondary);
+}
+
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar__dot--off .uds-navbar__dot-core {
+  background: var(--color-text-secondary);
+}
+
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) button.uds-navbar__status:hover,
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar__status[data-open] {
+  background: var(--color-surface-card);
+  border-color: var(--color-border-strong);
+}
+
+@keyframes uds-navbar-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  70% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .uds-navbar__dot-pulse {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* Mobile only; render it as `Navbar.Drawer`'s `trigger`. */
+.uds-navbar__burger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  background: var(--color-surface-higher);
+  border: none;
+  border-radius: var(--radius-none);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  flex: none;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+.uds-navbar__burger:hover {
+  background: var(--color-surface-primary);
+}
+
+/* The bar must sit above the scrim and panel (explorer gives it z-40) so the
+   panel emerges from beneath it. */
+.uds-navbar__scrim {
+  z-index: 30;
+  background: color-mix(in srgb, var(--color-surface-primary) 50%, transparent);
+  backdrop-filter: blur(4px);
+}
+.uds-navbar__drawer {
+  position: fixed;
+  /* Override on the document root when an app uses a taller header; the
+     drawer is portalled outside Navbar.Root. */
+  top: var(--uds-navbar-height, 64px);
+  left: 0;
+  right: 0;
+  z-index: 35;
+  width: auto;
+  max-width: none;
+  max-height: calc(100dvh - var(--uds-navbar-height, 64px));
+  overflow-y: auto;
+  transform: none;
+  padding: 0;
+  background: var(--color-surface-primary);
+  border: none;
+  border-bottom: 1px solid var(--color-border-secondary);
+  box-shadow: none;
+  border-radius: var(--radius-none);
+  transition: none;
+}
+/* Keyframes, not transitions: an animation always fires `animationend`, even
+   when interrupted, so Base UI's wait-for-animation unmount cannot deadlock on
+   a no-op transition. Neutralize the base dialog's fade/zoom start/end styles. */
+.uds-navbar__drawer[data-starting-style],
+.uds-navbar__drawer[data-ending-style] {
+  opacity: 1;
+  transform: none;
+}
+.uds-navbar__drawer[data-open] {
+  animation: uds-navbar-menu-in 300ms ease-in-out;
+}
+.uds-navbar__drawer[data-ending-style] {
+  animation: uds-navbar-menu-out 300ms ease-in-out forwards;
+}
+@keyframes uds-navbar-menu-in {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+@keyframes uds-navbar-menu-out {
+  from { transform: translateY(0); }
+  to { transform: translateY(-100%); }
+}
+/* Still keyframes, so animationend fires and Base UI unmounts the drawer.
+   Re-asserts the drawer's overrides of the base dialog, whose reduced-motion
+   rule loads first. */
+@keyframes uds-navbar-menu-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes uds-navbar-menu-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .uds-navbar__drawer {
+    transition: none;
+  }
+  .uds-navbar__drawer[data-starting-style],
+  .uds-navbar__drawer[data-ending-style] {
+    opacity: 1;
+    transform: none;
+  }
+  .uds-navbar__drawer[data-open] {
+    animation: uds-navbar-menu-fade-in var(--duration-fast) var(--ease-standard);
+  }
+  .uds-navbar__drawer[data-ending-style] {
+    animation: uds-navbar-menu-fade-out var(--duration-fast) var(--ease-standard) forwards;
+  }
+}
+.uds-navbar__drawer-nav {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+}
+.uds-navbar__drawer-nav .uds-navbar__item {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  width: 100%;
+  padding: 14px 18px;
+  border-left: 2px solid transparent;
+  font-size: 17px;
+}
+.uds-navbar__drawer-nav .uds-navbar__item::after {
+  display: none;
+}
+.uds-navbar__drawer-nav .uds-navbar__item[data-active] {
+  color: var(--teal-800);
+  border-left-color: var(--brick-400);
+  background: var(--teal-0);
+}
+
+@media (max-width: 640px) {
+  .uds-navbar {
+    gap: 12px;
+    padding: 0 14px;
+  }
+  .uds-navbar__nav {
+    display: none;
+  }
+  .uds-navbar__burger {
+    display: inline-flex;
+  }
+  .uds-navbar__tag {
+    display: none;
+  }
+  .uds-navbar__status {
+    padding: 7px 10px;
+    gap: 7px;
+  }
+  .uds-navbar__status-slot {
+    display: none;
+  }
+}

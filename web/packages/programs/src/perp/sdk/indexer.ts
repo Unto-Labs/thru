@@ -1,5 +1,4 @@
 import {
-  PERP_MARKET_MAGIC,
   type PerpBuilderApproval,
   type PerpFunding,
   type PerpMarginAccount,
@@ -138,12 +137,11 @@ export function perpFeesFromIndexer(json: Json): PerpMarketFees {
 }
 
 /** An indexer market (marketSchema) as the domain model's PerpMarket.  Its
-    `risk` (null on a market without the loss waterfall) is what seats settle
-    against: without it a loss offset in a seat's snapshot would read as
-    funding, so any other value is refused (and the client reads the chain). */
+    `risk` is what seats settle against: without it a loss offset in a
+    seat's snapshot would read as funding, so a market without it is refused
+    (and the client reads the chain). */
 export function perpMarketFromIndexer(json: Json): PerpMarket {
   return {
-    magic: PERP_MARKET_MAGIC,
     statusFlags: int(json.statusFlags, 'statusFlags'),
     exchangeStatusFlags: int(json.exchangeStatusFlags, 'exchangeStatusFlags'),
     lotSize: big(json.lotSize, 'lotSize'),
@@ -166,11 +164,10 @@ export function perpMarketFromIndexer(json: Json): PerpMarket {
     liquidationFeeBps: int(json.liquidationFeeBps, 'liquidationFeeBps'),
     oracleExponent: int(json.oracleExponent, 'oracleExponent'),
     maxMarkAgeNs: big(json.maxMarkAgeNs, 'maxMarkAgeNs'),
-    ...(json.funding && typeof json.funding === 'object' ? { funding: perpFundingFromIndexer(json.funding as Json) } : {}),
-    ...(typeof json.crossUpnlHaircutBps === 'number' ? { crossUpnlHaircutBps: json.crossUpnlHaircutBps } : {}),
-    ...(json.risk === null || json.risk === undefined ? {} : { risk: perpRiskFromIndexer(obj(json.risk, 'risk')) }),
-    /* Fee rates (0.5.0): null or missing on a market without them. */
-    ...(json.fees === null || json.fees === undefined ? {} : { fees: perpFeesFromIndexer(obj(json.fees, 'fees')) }),
+    funding: perpFundingFromIndexer(obj(json.funding, 'funding')),
+    crossUpnlHaircutBps: int(json.crossUpnlHaircutBps, 'crossUpnlHaircutBps'),
+    risk: perpRiskFromIndexer(obj(json.risk, 'risk')),
+    fees: perpFeesFromIndexer(obj(json.fees, 'fees')),
   };
 }
 
@@ -229,7 +226,7 @@ export interface PerpsOpenOrder {
   quantity: bigint;
   clientIdHex: string;
   expirationTime: bigint;
-  /** The order's builder code (0.5.0); absent when it has none. */
+  /** The order's builder code; absent when it has none. */
   builder?: PerpOrderBuilder;
 }
 

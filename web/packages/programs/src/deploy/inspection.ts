@@ -2,6 +2,7 @@ import { Pubkey } from "@thru/sdk";
 import { deriveProgramABIAddresses } from "../abi-manager";
 import { bytesEqual } from "../helpers/bytes";
 import { deriveManagedProgramAddresses } from "../manager";
+import { resolveManagerSelection } from "../manager/selection";
 import {
   assertManagedProgramAccount,
   assertPubkeyBytes,
@@ -34,10 +35,11 @@ export async function inspectProgramDeployment(
 ): Promise<ProgramDeploymentInspection> {
   seedBytes(request.seed);
   const ephemeral = request.ephemeral ?? false;
+  const managerProgramAddress = resolveManagerSelection(request, request.seed).programAddress;
   const programAddresses = deriveManagedProgramAddresses(
     request.seed,
     ephemeral,
-    request.managerProgramAddress,
+    managerProgramAddress,
   );
   const abiAddresses = deriveProgramABIAddresses(
     programAddresses.programAccountAddress,
@@ -67,8 +69,8 @@ export async function inspectProgramDeployment(
   if (!metadataAccount || !programAccount) {
     program = absentPair(!!metadataAccount, !!programAccount);
   } else {
-    const metadata = parseManagerMeta(metadataAccount, request.managerProgramAddress);
-    assertManagedProgramAccount(programAccount, undefined, request.managerProgramAddress);
+    const metadata = parseManagerMeta(metadataAccount, managerProgramAddress);
+    assertManagedProgramAccount(programAccount, undefined, managerProgramAddress);
     const authorityAddress = Pubkey.from(metadata.authority).toThruFmt();
     if (request.authorityAddress !== undefined) {
       let expectedAuthority: Uint8Array;

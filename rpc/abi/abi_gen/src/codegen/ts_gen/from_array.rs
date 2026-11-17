@@ -1,6 +1,6 @@
 use super::enum_utils::enum_field_infos;
 use super::helpers::{format_expr_to_ts, primitive_size, primitive_to_dataview_getter};
-use super::ir_helpers::collect_dynamic_param_bindings;
+use super::ir_helpers::extractor_emitted;
 use crate::abi::expr::ExprKind;
 use crate::abi::resolved::{ConstantStatus, ResolvedType, ResolvedTypeKind, Size};
 use crate::codegen::shared::ir::TypeIr;
@@ -154,7 +154,8 @@ pub fn emit_from_array_method(resolved_type: &ResolvedType, type_ir: Option<&Typ
                 emit_struct_from_array(resolved_type, None)
             }
         }
-        ResolvedTypeKind::Enum { .. } => emit_enum_from_array(resolved_type),
+        /* Top-level enum classes emit their own `from_array` (`union.rs`). */
+        ResolvedTypeKind::Enum { .. } => String::new(),
         ResolvedTypeKind::Union { .. } => emit_union_from_array(resolved_type),
         _ => String::new(),
     }
@@ -164,7 +165,7 @@ fn emit_ir_struct_from_array(resolved_type: &ResolvedType, type_ir: &TypeIr) -> 
     let mut output = String::new();
     let class_name = &resolved_type.name;
     let has_params = type_ir.parameters.iter().any(|param| !param.derived);
-    let extractor_defined = !collect_dynamic_param_bindings(resolved_type).is_empty();
+    let extractor_defined = extractor_emitted(resolved_type, type_ir);
     let has_computed_tags = enum_field_infos(resolved_type)
         .iter()
         .any(|info| info.tag_parameter.is_some());
@@ -791,60 +792,6 @@ fn emit_struct_from_array(resolved_type: &ResolvedType, type_ir: Option<&TypeIr>
 }
 
 /* Emit from_array() method for enums */
-fn emit_enum_from_array(resolved_type: &ResolvedType) -> String {
-    let mut output = String::new();
-    let class_name = &resolved_type.name;
-
-    write!(
-        output,
-        "  static from_array(buffer: Uint8Array): {} | null {{\n",
-        class_name
-    )
-    .unwrap();
-
-    if let Size::Const(size) = resolved_type.size {
-        write!(output, "    if (buffer.length < {}) {{\n", size).unwrap();
-        write!(output, "      return null; /* Buffer too small */\n").unwrap();
-        write!(output, "    }}\n\n").unwrap();
-    }
-
-    /* Validate tag value */
-    if let ResolvedTypeKind::Enum {
-        tag_expression,
-        variants,
-        ..
-    } = &resolved_type.kind
-    {
-        write!(
-            output,
-            "    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);\n"
-        )
-        .unwrap();
-
-        /* Get tag value */
-        if let ExprKind::FieldRef(_) = tag_expression {
-            write!(
-                output,
-                "    const tag = view.getUint8(0); /* Assuming tag at offset 0 */\n"
-            )
-            .unwrap();
-        }
-
-        /* Validate tag */
-        write!(output, "    const valid_tags = [").unwrap();
-        let valid_tags: Vec<String> = variants.iter().map(|v| v.tag_value.to_string()).collect();
-        write!(output, "{}];\n", valid_tags.join(", ")).unwrap();
-        write!(output, "    if (!valid_tags.includes(tag)) {{\n").unwrap();
-        write!(output, "      return null; /* Invalid tag value */\n").unwrap();
-        write!(output, "    }}\n\n").unwrap();
-    }
-
-    write!(output, "    return new {}(buffer);\n", class_name).unwrap();
-    write!(output, "  }}\n\n").unwrap();
-
-    output
-}
-
 /* Emit from_array() method for unions */
 fn emit_union_from_array(resolved_type: &ResolvedType) -> String {
     let mut output = String::new();
@@ -860,8 +807,14 @@ fn emit_union_from_array(resolved_type: &ResolvedType) -> String {
     if let Size::Const(size) = resolved_type.size {
         write!(output, "    if (buffer.length < {}) {{\n", size).unwrap();
         write!(output, "      return null; /* Buffer too small */\n").unwrap();
-        write!(output, "    }}\n\n").unwrap();
+        write!(output, "    }}\n").unwrap();
     }
+    /* Every variant's tags must be valid, as `validate` checks. */
+    write!(
+        output,
+        "    if (!this.validate(buffer).ok) return null;\n\n"
+    )
+    .unwrap();
 
     write!(output, "    return new {}(buffer);\n", class_name).unwrap();
     write!(output, "  }}\n\n").unwrap();

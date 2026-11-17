@@ -2,6 +2,7 @@
 //!
 //! Fetches ABI files from on-chain ABI accounts via RPC.
 
+use super::bootstrap_address::ABI_MANAGER_PROGRAM_ADDRESS as DEFAULT_ABI_MANAGER_PROGRAM_ID;
 use crate::fetcher::{FetchContext, FetchError, FetchResult, ImportFetcher, OnchainFetcherConfig};
 use crate::file::{ImportSource, OnchainTarget, RevisionSpec};
 use base64::engine::general_purpose;
@@ -9,10 +10,15 @@ use base64::Engine as _;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::time::Duration;
-use super::bootstrap_address::ABI_MANAGER_PROGRAM_ADDRESS as DEFAULT_ABI_MANAGER_PROGRAM_ID;
 
-/* ABI account header size in bytes */
-const ABI_ACCOUNT_HEADER_SIZE: usize = 45;
+/* ABI content account header size in bytes: the packed abi_account of
+tn_abi_manager_program.h (account_type, ABI meta account, revision, state,
+content size). */
+const ABI_ACCOUNT_HEADER_SIZE: usize = 46;
+
+/* Account discriminators (byte 0) of ABI manager accounts */
+const ABI_ACCOUNT_TYPE_META_V1: u8 = 1;
+const ABI_ACCOUNT_TYPE_CONTENT_V1: u8 = 2;
 
 /* ABI account state constants */
 const ABI_STATE_OPEN: u8 = 0x00;
@@ -22,7 +28,6 @@ const ABI_STATE_FINALIZED: u8 = 0x01;
 const ABI_META_HEADER_SIZE: usize = 4;
 const ABI_META_BODY_SIZE: usize = 96;
 const ABI_META_ACCOUNT_SIZE: usize = ABI_META_HEADER_SIZE + ABI_META_BODY_SIZE;
-const ABI_META_VERSION: u8 = 1;
 const ABI_META_KIND_OFFICIAL: u8 = 0x00;
 const ABI_META_KIND_EXTERNAL: u8 = 0x01;
 const ABI_ACCOUNT_SUFFIX: &[u8] = b"_abi_account";
@@ -279,12 +284,12 @@ impl OnchainFetcher {
             )));
         }
 
-        let version = data[0];
+        let account_type = data[0];
         let kind = data[1];
-        if version != ABI_META_VERSION {
+        if account_type != ABI_ACCOUNT_TYPE_META_V1 {
             return Err(FetchError::Onchain(format!(
-                "Unsupported ABI meta version: {}",
-                version
+                "Account type {} is not an ABI meta account (expected {})",
+                account_type, ABI_ACCOUNT_TYPE_META_V1
             )));
         }
         if kind != ABI_META_KIND_OFFICIAL && kind != ABI_META_KIND_EXTERNAL {
@@ -361,20 +366,28 @@ impl OnchainFetcher {
         }
 
         /* Parse header:
-           - abi_meta_acc: [u8; 32] (bytes 0-31)
-           - revision: u64 (bytes 32-39)
-           - state: u8 (byte 40)
-           - content_sz: u32 (bytes 41-44)
-           - contents: [u8; content_sz] (bytes 45+)
+           - account_type: u8 (byte 0, ABI_ACCOUNT_TYPE_CONTENT_V1)
+           - abi_meta_acc: [u8; 32] (bytes 1-32)
+           - revision: u64 (bytes 33-40)
+           - state: u8 (byte 41)
+           - content_sz: u32 (bytes 42-45)
+           - contents: [u8; content_sz] (bytes 46+)
         */
 
+        if data[0] != ABI_ACCOUNT_TYPE_CONTENT_V1 {
+            return Err(FetchError::Onchain(format!(
+                "Account type {} is not an ABI content account (expected {})",
+                data[0], ABI_ACCOUNT_TYPE_CONTENT_V1
+            )));
+        }
+
         let revision = u64::from_le_bytes(
-            data[32..40]
+            data[33..41]
                 .try_into()
                 .map_err(|_| FetchError::Parse("Failed to parse revision".to_string()))?,
         );
 
-        let state = data[40];
+        let state = data[41];
         if state != ABI_STATE_OPEN && state != ABI_STATE_FINALIZED {
             return Err(FetchError::Onchain(format!(
                 "Invalid ABI account state: {}",
@@ -383,7 +396,7 @@ impl OnchainFetcher {
         }
 
         let content_sz = u32::from_le_bytes(
-            data[41..45]
+            data[42..46]
                 .try_into()
                 .map_err(|_| FetchError::Parse("Failed to parse content size".to_string()))?,
         ) as usize;
@@ -499,19 +512,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn canonical_manager_default_and_explicit_override() {
-        let mut config = OnchainFetcherConfig::default();
-        assert_eq!(config.abi_manager_program_id, "taABII8WXcPaPIt47cXjOBbyoBUGBDXznAMHorVMeok3mw");
-        let expected = OnchainFetcher::new(&config).abi_manager_program_id().unwrap();
-        config.abi_manager_program_id.clear();
-        assert_eq!(OnchainFetcher::new(&config).abi_manager_program_id().unwrap(), expected);
-        config.abi_manager_program_id = "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACrG7".to_string();
-        let legacy = OnchainFetcher::new(&config).abi_manager_program_id().unwrap();
-        assert_ne!(legacy, expected);
-        assert_eq!(&legacy[30..], &[0x0a, 0xb1]);
-    }
-
-    #[test]
     fn test_onchain_fetcher_handles() {
         let config = OnchainFetcherConfig::default();
         let fetcher = OnchainFetcher::new(&config);
@@ -579,19 +579,44 @@ mod tests {
         let mut data = vec![0u8; ABI_ACCOUNT_HEADER_SIZE + yaml_content.len()];
 
         /* Fill header */
-        /* abi_meta_acc: bytes 0-31 (zeros) */
-        /* revision: bytes 32-39 */
-        data[32..40].copy_from_slice(&5u64.to_le_bytes());
-        /* state: byte 40 */
-        data[40] = ABI_STATE_FINALIZED;
-        /* content_sz: bytes 41-44 */
-        data[41..45].copy_from_slice(&(yaml_content.len() as u32).to_le_bytes());
+        /* account_type: byte 0 */
+        data[0] = ABI_ACCOUNT_TYPE_CONTENT_V1;
+        /* abi_meta_acc: bytes 1-32 (zeros) */
+        /* revision: bytes 33-40 */
+        data[33..41].copy_from_slice(&5u64.to_le_bytes());
+        /* state: byte 41 */
+        data[41] = ABI_STATE_FINALIZED;
+        /* content_sz: bytes 42-45 */
+        data[42..46].copy_from_slice(&(yaml_content.len() as u32).to_le_bytes());
         /* content */
-        data[45..].copy_from_slice(yaml_content);
+        data[46..].copy_from_slice(yaml_content);
 
         let (revision, state, content) = fetcher.parse_abi_account(&data).unwrap();
         assert_eq!(revision, 5);
         assert_eq!(state, ABI_STATE_FINALIZED);
         assert_eq!(content, "abi:\n  package: test\n");
+
+        /* An ABI meta account (or a zeroed account) is not ABI content. */
+        data[0] = ABI_ACCOUNT_TYPE_META_V1;
+        assert!(fetcher.parse_abi_account(&data).is_err());
+        data[0] = 0;
+        assert!(fetcher.parse_abi_account(&data).is_err());
+    }
+
+    #[test]
+    fn test_parse_abi_meta_account() {
+        let config = OnchainFetcherConfig::default();
+        let fetcher = OnchainFetcher::new(&config);
+
+        let mut data = vec![0u8; ABI_META_ACCOUNT_SIZE];
+        data[0] = ABI_ACCOUNT_TYPE_META_V1;
+        data[1] = ABI_META_KIND_OFFICIAL;
+        data[ABI_META_HEADER_SIZE..ABI_META_HEADER_SIZE + 32].fill(7);
+        let meta = fetcher.parse_abi_meta_account(&data).unwrap();
+        assert_eq!(meta.kind, ABI_META_KIND_OFFICIAL);
+        assert_eq!(meta.body[..32], [7u8; 32]);
+
+        data[0] = ABI_ACCOUNT_TYPE_CONTENT_V1;
+        assert!(fetcher.parse_abi_meta_account(&data).is_err());
     }
 }

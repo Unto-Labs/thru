@@ -21,14 +21,17 @@ import { AccountView, ChainClient, createAccountsByOwnerReplay } from "../src";
 const BASE_URL = process.env.GRPC_URL || "https://rpc.alphanet.thru.org";
 const TOKEN_PROGRAM = process.env.TOKEN_PROGRAM ?? TOKEN_PROGRAM_ADDRESS;
 
-// Account data sizes from token_program.abi.yaml
-const TOKEN_ACCOUNT_SIZE = 73;
-const MINT_ACCOUNT_SIZE = 115;
+// Byte 0 of every token program account is the account type (TokenProgramAccount
+// root in token_program.abi.yaml); sizes are only a server-side prefilter.
+const MINT_ACCOUNT_TYPE = 1;
+const TOKEN_ACCOUNT_TYPE = 2;
+const TOKEN_ACCOUNT_SIZE = 74;
+const MINT_ACCOUNT_SIZE = 116;
 
-function getAccountType(dataSize: number): string {
-  if (dataSize === TOKEN_ACCOUNT_SIZE) return "TokenAccount";
-  if (dataSize === MINT_ACCOUNT_SIZE) return "MintAccount";
-  return `Unknown(${dataSize})`;
+function getAccountType(data: Uint8Array): string {
+  if (data[0] === TOKEN_ACCOUNT_TYPE && data.length === TOKEN_ACCOUNT_SIZE) return "TokenAccount";
+  if (data[0] === MINT_ACCOUNT_TYPE && data.length === MINT_ACCOUNT_SIZE) return "MintAccount";
+  return `Unknown(type=${data[0]}, size=${data.length})`;
 }
 
 async function main(): Promise<void> {
@@ -50,7 +53,7 @@ async function main(): Promise<void> {
   const tokenProgramBytes = new Uint8Array(decodeAddress(TOKEN_PROGRAM));
 
   // Test 1: Hybrid backfill for MintAccounts
-  console.log("=== Test 1: Hybrid Backfill for MintAccounts (115 bytes) ===");
+  console.log(`=== Test 1: Hybrid Backfill for MintAccounts (${MINT_ACCOUNT_SIZE} bytes) ===`);
   console.log("Will stop after 20 accounts or 30 seconds.");
   console.log();
 
@@ -84,7 +87,7 @@ async function main(): Promise<void> {
     for await (const event of stream) {
       if (event.type === "account") {
         const account = event.account;
-        const accountType = getAccountType(account.meta.dataSize);
+        const accountType = getAccountType(account.data);
         const hasData = account.data.length > 0;
 
         // Track by source (the authoritative indicator)
@@ -110,17 +113,17 @@ async function main(): Promise<void> {
         console.log(`  dataLen=${account.data.length} hasData=${hasData}`);
 
         // Parse mint data if available
-        if (hasData && account.data.length >= 115) {
+        if (hasData && accountType === "MintAccount") {
           const data = account.data;
-          const decimals = data[0];
+          const decimals = data[1];
           const supply = new DataView(
             data.buffer,
-            data.byteOffset + 1,
+            data.byteOffset + 2,
             8
           ).getBigUint64(0, true);
-          const tickerLen = data[105];
+          const tickerLen = data[107];
           const ticker = new TextDecoder().decode(
-            data.slice(106, 106 + tickerLen)
+            data.slice(108, 108 + tickerLen)
           );
           console.log(`  Parsed: decimals=${decimals} supply=${supply} ticker="${ticker}"`);
         } else if (!hasData) {

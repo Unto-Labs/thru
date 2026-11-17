@@ -30,7 +30,7 @@ working.
 - [Sending and errors](#sending-and-errors)
 - [Units](#units)
 - [Agents](#agents)
-- [ABI versions and feature flags](#abi-versions-and-feature-flags)
+- [ABI evolution](#abi-evolution)
 - [Low-level builders](#low-level-builders)
 - [Examples](#examples)
 
@@ -47,14 +47,14 @@ const perps = await createPerpsClient({
 const signer = keypairSignerFromJSON(JSON.parse(readFileSync('key.json', 'utf8')));
 const owner = signer.address;
 
-await perps.send(await perps.createSeat({ market: 'BTC-THRUSD', owner }), signer);
-await perps.send(await perps.deposit({ market: 'BTC-THRUSD', owner, amount: '1000' }), signer);
+await perps.send(await perps.createSeat({ market: 'BTC-UUSD', owner }), signer);
+await perps.send(await perps.deposit({ market: 'BTC-UUSD', owner, amount: '1000' }), signer);
 
-const order = await perps.placeOrder({ market: 'BTC-THRUSD', owner, side: 'buy', price: '84000', size: '0.01', postOnly: true });
-console.log(order.meta); // { action, seatIndex, cross, marginAccount, stateUnits, abiVersion, ... }
+const order = await perps.placeOrder({ market: 'BTC-UUSD', owner, side: 'buy', price: '84000', size: '0.01', postOnly: true });
+console.log(order.meta); // { action, seatIndex, cross, marginAccount, stateUnits, programAddress, ... }
 const { signature } = await perps.send(order, signer);
 
-await perps.send(await perps.cancelAll({ market: 'BTC-THRUSD', owner }), signer);
+await perps.send(await perps.cancelAll({ market: 'BTC-UUSD', owner }), signer);
 ```
 
 Every builder returns `{ transaction, meta }`:
@@ -62,8 +62,8 @@ Every builder returns `{ transaction, meta }`:
 - `transaction` is an unsigned `PerpTransaction`: the instruction specs, the
   read-write and read-only accounts, and the state units to request. Its
   JSON form is `perpTransactionToJSON`.
-- `meta` says which seat it uses, whether the seat is cross, which margin
-  account it carries and which ABI version it targets.
+- `meta` says which seat it uses, whether the seat is cross and which
+  margin account it carries.
 
 `send(tx, signer)` signs the transaction, sends it and resolves when it has
 executed.
@@ -77,8 +77,6 @@ createPerpsClient({
   thru, rpcUrl,      // an existing @thru/sdk client, or an RPC URL (default: the record's rpcUrl)
   indexerUrl,        // the perps indexer API, or an app origin that proxies its /v1 routes
   indexer,           // { headers, timeoutMs, fetch } for the indexer
-  abiVersion,        // skip detection: a PerpAbiVersion or '0.4.0'
-  assumeLatest,      // unknown program hash and no ABI account: assume the latest version (default true)
   marginAccountIds,  // ids searched for an owner's margin accounts over RPC (default 0..3)
 });
 ```
@@ -91,10 +89,6 @@ and oracle programs, quote mints and markets.
   `registerPerpsDeployment(record)` registers one under its network name.
 - `PERPS_NETWORK_RPC_URLS` lists the public RPC endpoints.
 
-The client detects the deployment's ABI version when it connects (see
-[ABI versions](#abi-versions-and-feature-flags)). The result is in
-`client.version`, `client.features` and `client.versionDetection`.
-
 ## Reading
 
 | Method | Returns |
@@ -102,7 +96,7 @@ The client detects the deployment's ABI version when it connects (see
 | `getMarkets()` / `getMarket(market)` | `{ symbol, address, record, state: PerpMarket }` |
 | `getBook(market, depth = 20)` | `{ bids, asks }` levels: `price` (quote atoms per base atom), `priceTicks`, `lots`, `quantity`, `orderCount` |
 | `getMark(market)` | `{ mark, feedPrice, exponent, lastUpdateNs, maxAgeNs, stale, error }`; `mark` is null with an `error` when the feed gives none: wrong type or exponent, or `stale` by the program's rule (older than the market's `maxMarkAgeNs`, else the feed's `maxStalenessNs`, or stamped in the future: what the program rejects as ORACLE_STALE) |
-| `getFunding(market)` | `{ supported, enabled, funding: PerpFunding, nextRoundNs }` |
+| `getFunding(market)` | `{ enabled, funding: PerpFunding, nextRoundNs }` |
 | `getSeat(market, owner)` | `PerpSeatEntry` or null |
 | `getMarginAccounts(owner)` | the owner's margin accounts: `{ address, accountId, owner, vault, links }` |
 | `getOpenOrders(market, owner)` | `{ orderId, orderEntryIndex, side, price, priceTicks, lots, quantity, clientIdHex, expirationTime }` |
@@ -111,7 +105,7 @@ The client detects the deployment's ABI version when it connects (see
 
 With `indexerUrl`, reads go to the indexer (`/v1/markets/...`,
 `/v1/owners/...`). Any indexer failure falls back to RPC, and RPC reads
-decode accounts with the deployment's ABI version. The results are the same
+decode accounts with the SDK's parsers. The results are the same
 domain types either way.
 
 Pass `{ source: 'rpc' }` to read the chain directly. The builders always
@@ -302,15 +296,14 @@ The helpers:
 ```ts
 import { describePerpsActions, perpsToolDefinitions, runPerpsAction } from '@thru/programs/perps';
 
-describePerpsActions(client);  // [{ name, kind: 'read' | 'transaction', description, parameters: JSON Schema, requires? }]
-perpsToolDefinitions(client);  // [{ name: 'perps_placeOrder', description, input_schema }] for an LLM's tools
-await runPerpsAction(client, 'placeOrder', { market: 'BTC-THRUSD', owner, side: 'buy', price: '84000', size: '0.01' }, { signer });
+describePerpsActions();  // [{ name, kind: 'read' | 'transaction', description, parameters: JSON Schema }]
+perpsToolDefinitions();  // [{ name: 'perps_placeOrder', description, input_schema }] for an LLM's tools
+await runPerpsAction(client, 'placeOrder', { market: 'BTC-UUSD', owner, side: 'buy', price: '84000', size: '0.01' }, { signer });
 // { ok: true, result: { signature, label, meta } } or { ok: false, error: { message, kind, code, retryable } }
 ```
 
 The actions:
 
-- are filtered to what the deployment's ABI version supports;
 - have their params validated against the schema (unknown keys are
   refused);
 - return JSON-safe output, with bigints as strings.
@@ -318,26 +311,14 @@ The actions:
 A transaction action returns the unsigned transaction when no signer is
 given. See `examples/agent-tools.ts`.
 
-## ABI versions and feature flags
+## ABI evolution
 
-Each program release has its own ABI version: `perp-abi@0.2.0`, `0.3.0` and
-`0.4.0`. Each version has its own decoders into one domain model, and its
-own feature flags:
-
-- `oracleMargin`
-- `liquidation`
-- `funding`
-- `settleFunding`
-- `crossMargin`
-- `sharedVaults`
-- `crossUpnlHaircut`
-
-The version is detected from the program code hash first and the on-chain
-ABI account second. Gate UI on `client.features`. Builders refuse an
-instruction the version lacks.
-
-[VERSIONS.md](./VERSIONS.md) covers the registry and detection, and how to
-add a version.
+The SDK decodes with the program's latest ABI only. There are no version
+catalogs, feature flags or program-hash detection. Byte 0 of every account
+the program owns is a one-byte discriminator, and a deployed layout is
+never edited in place: a changed layout or a new kind of account takes the
+next unused discriminator value, so the latest bindings decode every
+account from its bytes alone.
 
 ## Low-level builders
 

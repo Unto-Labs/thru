@@ -1,0 +1,121 @@
+abi:
+  package: "compliance.account_root"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Program account roots: a one-byte account_type followed by a payload enum keyed on it, with one variant (fixed size), several same-size variants (fixed size) and different-size variants (variable size)"
+  options:
+    program-metadata:
+      root-types:
+        account-root: "MixedAccount"
+
+types:
+  - name: "CounterV1"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "value"
+            field-type:
+              primitive: u64
+
+  - name: "GaugeV1"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "reading"
+            field-type:
+              primitive: u64
+
+  - name: "LogV1"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "count"
+            field-type:
+              primitive: u8
+          - name: "entries"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  primitive: u16
+
+  - name: "SingleAccount"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "account_type"
+            field-type:
+              primitive: u8
+          - name: "payload"
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  field-ref:
+                    path: ["account_type"]
+                variants:
+                  - name: "counter_v1"
+                    tag-value: 1
+                    variant-type:
+                      type-ref:
+                        name: "CounterV1"
+
+  - name: "SameSizeAccount"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "account_type"
+            field-type:
+              primitive: u8
+          - name: "payload"
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  field-ref:
+                    path: ["account_type"]
+                variants:
+                  - name: "counter_v1"
+                    tag-value: 1
+                    variant-type:
+                      type-ref:
+                        name: "CounterV1"
+                  - name: "gauge_v1"
+                    tag-value: 2
+                    variant-type:
+                      type-ref:
+                        name: "GaugeV1"
+
+  - name: "MixedAccount"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "account_type"
+            field-type:
+              primitive: u8
+          - name: "payload"
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  field-ref:
+                    path: ["account_type"]
+                variants:
+                  - name: "counter_v1"
+                    tag-value: 1
+                    variant-type:
+                      type-ref:
+                        name: "CounterV1"
+                  - name: "log_v1"
+                    tag-value: 2
+                    variant-type:
+                      type-ref:
+                        name: "LogV1"

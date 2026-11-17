@@ -17,11 +17,11 @@ const WALLET_URL = 'https://app.tid.sh/embedded';
 const APP_ORIGIN = 'https://jcoin.example';
 const DESTINATION: DepositDestination = {
   network: ThruNetwork.Alphanet,
-  depositTarget: DepositTarget.THRUSD,
+  depositTarget: DepositTarget.UUSD,
   tokenAccountAddress: 'ta_token_account',
   mintAddress: 'ta_mint',
   tokenProgramAddress: 'ta_token_program',
-  symbol: 'THRUSD',
+  symbol: 'UUSD',
   decimals: 6,
 };
 const DEPOSIT_UI_CONFIG: DepositUiConfig = {
@@ -64,12 +64,12 @@ describe('deposit protocol round-trip', () => {
       network: ThruNetwork.Alphanet,
       depositUiConfig: DEPOSIT_UI_CONFIG,
     });
-    const result = await provider.prepareDeposit(DepositTarget.THRUSD);
+    const result = await provider.prepareDeposit(DepositTarget.UUSD);
 
     expect(captured).not.toBeNull();
     expect(captured!.type).toBe(POST_MESSAGE_REQUEST_TYPES.PREPARE_DEPOSIT);
     expect(captured!.payload).toEqual({
-      depositTarget: DepositTarget.THRUSD,
+      depositTarget: DepositTarget.UUSD,
       network: ThruNetwork.Alphanet,
     });
     expect(result).toEqual(DESTINATION);
@@ -120,7 +120,7 @@ describe('deposit protocol round-trip', () => {
 
     await provider.deposit({ enabledProviders: [] });
     await provider.switchNetwork('betanet');
-    await provider.prepareDeposit(DepositTarget.THRUSD);
+    await provider.prepareDeposit(DepositTarget.UUSD);
     await provider.deposit({ enabledProviders: [] });
     await provider.switchNetwork('alphanet');
     await provider.deposit({ enabledProviders: [] });
@@ -133,7 +133,7 @@ describe('deposit protocol round-trip', () => {
     expect(captured.find((request) =>
       request.type === POST_MESSAGE_REQUEST_TYPES.PREPARE_DEPOSIT
     )?.payload).toEqual({
-      depositTarget: DepositTarget.THRUSD,
+      depositTarget: DepositTarget.UUSD,
       network: 'betanet',
     });
   });

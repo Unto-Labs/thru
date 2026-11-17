@@ -42,6 +42,12 @@ fn print_human_readable(data: &Value) {
                     "networks" => print_networks_info(value),
                     "account_create" => print_account_create_info(value),
                     "account_transactions" => print_account_transactions(value),
+                    "auth" => match format_auth_pending(value) {
+                        Some(text) => print!("{text}"),
+                        None => println!("{}: {}", key.cyan(), format_value(value)),
+                    },
+                    "auth_keys" => print!("{}", format_auth_keys(value)),
+                    "auth_key" => print!("{}", format_auth_key(value)),
                     _ => println!("{}: {}", key.cyan(), format_value(value)),
                 }
             }
@@ -300,6 +306,128 @@ fn print_account_create_info(data: &Value) {
 }
 
 /// Print account transaction signatures
+/// Text for a pending `thru auth login --no-wait`; `None` for other `auth`
+/// results, which print as JSON.
+fn format_auth_pending(data: &Value) -> Option<String> {
+    if data.get("status").and_then(Value::as_str) != Some("pending") {
+        return None;
+    }
+    let text = |field: &str| data.get(field).map(format_value).unwrap_or_default();
+    Some(format!(
+        "Open this URL to approve the CLI login:\n  {}\nCode: {} (expires in {} seconds)\nThen run: {}\n",
+        text("verification_uri_complete"),
+        text("user_code"),
+        text("expires_in"),
+        text("next"),
+    ))
+}
+
+/// Text for rate limits; `None` (no limit profile) prints as the default.
+fn format_rate_limits(limits: Option<&Value>) -> String {
+    match limits {
+        Some(limits @ Value::Object(_)) => format!(
+            "{} weighted requests/s, {} bytes/s",
+            limits
+                .get("weighted_rps")
+                .map(format_value)
+                .unwrap_or_default(),
+            limits
+                .get("bytes_per_sec")
+                .map(format_value)
+                .unwrap_or_default(),
+        ),
+        _ => "default".to_string(),
+    }
+}
+
+/// Text table for `thru auth keys list`.
+fn format_auth_keys(data: &Value) -> String {
+    let field = |value: &Value, name: &str| -> String {
+        match value.get(name) {
+            None | Some(Value::Null) => "-".to_string(),
+            Some(Value::Array(items)) if items.is_empty() => "-".to_string(),
+            Some(Value::Array(items)) => {
+                items.iter().map(format_value).collect::<Vec<_>>().join(",")
+            }
+            Some(value) => format_value(value),
+        }
+    };
+    let organization = data.get("organization").cloned().unwrap_or(Value::Null);
+    let mut out = format!(
+        "Organization: {} ({})\nLimits: {}\n",
+        field(&organization, "name"),
+        field(&organization, "id"),
+        format_rate_limits(data.get("organization_limits")),
+    );
+    let keys = data
+        .get("keys")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    if keys.is_empty() {
+        out.push_str("No API keys. Create one with `thru auth keys create --name <NAME>`.\n");
+        return out;
+    }
+    let header = ["ID", "NAME", "PREFIX", "MACHINE", "ORIGINS", "LAST USED"];
+    let rows: Vec<[String; 6]> = keys
+        .iter()
+        .map(|key| {
+            [
+                field(key, "id"),
+                field(key, "name"),
+                field(key, "prefix"),
+                field(key, "cli_machine"),
+                field(key, "origin_allowlist"),
+                field(key, "last_used_at"),
+            ]
+        })
+        .collect();
+    let mut widths = header.map(str::len);
+    for row in &rows {
+        for (width, cell) in widths.iter_mut().zip(row) {
+            *width = (*width).max(cell.chars().count());
+        }
+    }
+    let line = |cells: &[String]| -> String {
+        let mut line = cells
+            .iter()
+            .zip(widths)
+            .map(|(cell, width)| format!("{cell:<width$}"))
+            .collect::<Vec<_>>()
+            .join("  ");
+        line.truncate(line.trim_end().len());
+        line.push('\n');
+        line
+    };
+    out.push('\n');
+    out.push_str(&line(&header.map(str::to_string)));
+    for row in &rows {
+        out.push_str(&line(row));
+    }
+    out
+}
+
+/// Text for `thru auth keys create` (the new key, with its plaintext once)
+/// and `thru auth keys revoke`.
+fn format_auth_key(data: &Value) -> String {
+    let text = |value: Option<&Value>| value.map(format_value).unwrap_or_default();
+    if data.get("status").and_then(Value::as_str) == Some("revoked") {
+        return format!("Revoked API key {}.\n", text(data.get("id")));
+    }
+    let key = data.get("key");
+    let mut out = format!(
+        "Created API key \"{}\" (id {}, prefix {})",
+        text(key.and_then(|key| key.get("name"))),
+        text(key.and_then(|key| key.get("id"))),
+        text(key.and_then(|key| key.get("prefix"))),
+    );
+    if let Some(name) = data.pointer("/organization/name") {
+        out.push_str(&format!(" in organization \"{}\"", format_value(name)));
+    }
+    out.push_str(&format!(".\n\n{}\n", text(data.get("plaintext"))));
+    out
+}
+
 fn print_account_transactions(data: &Value) {
     if let Value::Object(tx_data) = data {
         println!("{}", "Account Transactions".bold().green());
@@ -429,65 +557,140 @@ fn print_program_cleanup_info(data: &Value) {
     }
 }
 
-/// Print keys information
+/// Print the result of `keys move`: public metadata and references only.
+fn print_keys_move(data: &Value) {
+    let to = format_value(&data["to"]);
+    let moved = data["moved"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    if moved.is_empty() {
+        println!("No signing keys moved");
+    } else {
+        println!("Moved {} signing key(s) to {to}", moved.len());
+        for item in moved {
+            println!(
+                "  {}: {} -> {}",
+                format_value(&item["name"]).bold(),
+                format_value(&item["from"]),
+                format_value(&item["reference"])
+            );
+        }
+    }
+    let unchanged: Vec<String> = data["unchanged"]
+        .as_array()
+        .map(|names| names.iter().map(format_value).collect())
+        .unwrap_or_default();
+    if !unchanged.is_empty() {
+        println!("Already in {to}: {}", unchanged.join(", "));
+    }
+    for item in data["previous"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+    {
+        let reference = format_value(&item["reference"]);
+        if item["status"] == "deleted" {
+            println!("Deleted old copy {reference}");
+        } else if let Some(error) = item.get("error") {
+            eprintln!("Kept old copy {reference}: {}", format_value(error));
+        } else {
+            println!(
+                "Kept old copy {reference} (an external file, or still used by another alias)"
+            );
+        }
+    }
+}
+
+/// Print only public signing-key metadata.
 fn print_keys_info(data: &Value) {
-    if let Value::Object(keys_data) = data {
-        // Handle keys list
-        if let Some(list) = keys_data.get("list") {
-            if let Value::Array(key_names) = list {
-                println!("{}", "Available Keys".bold().green());
-                for key_name in key_names {
-                    println!("  {}", format_value(key_name));
-                }
+    if data.get("operation").and_then(Value::as_str) == Some("move") {
+        print_keys_move(data);
+        return;
+    }
+    if let Some(entries) = data.get("entries").and_then(Value::as_array) {
+        println!("{}", "Signing Keys".bold().green());
+        if entries.is_empty() {
+            println!("  (none)");
+        }
+        for entry in entries {
+            print_key_entry(entry);
+        }
+        if let Some(unmigrated) = data.get("unmigrated").and_then(Value::as_array) {
+            println!(
+                "{}",
+                "Not migrated (stored inline in config)".bold().yellow()
+            );
+            for name in unmigrated {
+                println!("  {}", format_value(name).bold());
+            }
+            println!("  Run 'thru keys migrate' to use these keys.");
+        }
+    } else if data.get("name").is_some() {
+        if data.get("operation").and_then(Value::as_str) == Some("remove") {
+            println!("Unregistered key '{}'", format_value(&data["name"]));
+        } else {
+            print_key_entry(data);
+        }
+    }
+    if let Some(count) = data.get("migrated") {
+        println!("Migrated {} signing keys", format_value(count));
+    }
+    if let Some(items) = data.get("converted_files").and_then(Value::as_array) {
+        let converted = items
+            .iter()
+            .filter(|item| item["status"] == "converted")
+            .count();
+        if converted > 0 {
+            println!("Converted {converted} key file(s) to the JSON key file format");
+        }
+        for item in items.iter().filter(|item| item["status"] == "failed") {
+            eprintln!(
+                "Could not convert key file {}: {}",
+                format_value(&item["reference"]),
+                format_value(&item["error"])
+            );
+        }
+    }
+    if let Some(items) = data.get("keychain_comments").and_then(Value::as_array) {
+        let added = items
+            .iter()
+            .filter(|item| item["status"] == "added")
+            .count();
+        if added > 0 {
+            println!("Added the public address as a comment to {added} Keychain item(s)");
+        }
+        for item in items {
+            let reference = format_value(&item["reference"]);
+            match item["status"].as_str() {
+                Some("missing") => eprintln!("Keychain item {reference} was not found"),
+                Some("failed") => eprintln!(
+                    "Could not add a comment to Keychain item {reference}: {}",
+                    format_value(&item["error"])
+                ),
+                _ => {}
             }
         }
-
-        // Handle keys operations
-        if let Some(operation) = keys_data.get("operation") {
-            let op_str = format_value(operation);
-
-            if let Some(name) = keys_data.get("name") {
-                let name_str = format_value(name);
-
-                match op_str.as_str() {
-                    "add" => println!(
-                        "{}: Key '{}' added to configuration",
-                        "Success".bold().green(),
-                        name_str
-                    ),
-                    "get" => {
-                        if let Some(value) = keys_data.get("value") {
-                            println!("Key '{}': {}", name_str.cyan(), format_value(value));
-                        }
-                    }
-                    "generate" => {
-                        if let Some(value) = keys_data.get("value") {
-                            println!(
-                                "Generated key '{}': {}",
-                                name_str.cyan(),
-                                format_value(value)
-                            );
-                            println!(
-                                "{}: Key '{}' added to configuration",
-                                "Success".bold().green(),
-                                name_str
-                            );
-                        }
-                    }
-                    "remove" => println!(
-                        "{}: Key '{}' removed from configuration",
-                        "Success".bold().green(),
-                        name_str
-                    ),
-                    _ => println!(
-                        "{}: Operation '{}' on key '{}'",
-                        "Info".bold().blue(),
-                        op_str,
-                        name_str
-                    ),
-                }
-            }
+    }
+    if let Some(secret) = data.get("secret") {
+        let action = match secret.get("status").and_then(Value::as_str) {
+            Some("deleted") => "Deleted backing secret",
+            _ => "Retained backing secret",
+        };
+        println!("{action}: {}", format_value(&secret["reference"]));
+        if let Some(error) = secret.get("error").and_then(Value::as_str) {
+            eprintln!("Secret cleanup failed after saving the registration: {error}");
         }
+    }
+}
+
+fn print_key_entry(entry: &Value) {
+    println!("  {}", format_value(&entry["name"]).bold());
+    if let Some(public_key) = entry.get("public_key") {
+        println!("    Address: {}", format_value(public_key));
+    }
+    if let Some(reference) = entry.get("reference") {
+        println!("    Key reference: {}", format_value(reference));
     }
 }
 
@@ -734,15 +937,6 @@ pub fn create_program_cleanup_response(status: &str, message: &str) -> Value {
     })
 }
 
-/// Create a JSON response for keys list
-pub fn create_keys_list_response(key_names: Vec<String>) -> Value {
-    json!({
-        "keys": {
-            "list": key_names
-        }
-    })
-}
-
 /// Create a JSON response for transfer operations
 pub fn create_transfer_response(
     src: &str,
@@ -760,28 +954,6 @@ pub fn create_transfer_response(
             "status": status
         }
     })
-}
-
-/// Create a JSON response for keys operations
-pub fn create_keys_operation_response(
-    operation: &str,
-    name: &str,
-    status: &str,
-    value: Option<&str>,
-) -> Value {
-    let mut response = json!({
-        "keys": {
-            "operation": operation,
-            "name": name,
-            "status": status
-        }
-    });
-
-    if let Some(key_value) = value {
-        response["keys"]["value"] = json!(key_value);
-    }
-
-    response
 }
 
 /// Create a JSON response for account creation operations
@@ -886,5 +1058,56 @@ mod tests {
         assert_eq!(networks["list"][1]["name"], "2");
         assert_eq!(networks["list"][1]["is_active"], false);
         assert_eq!(networks["list"][1]["has_auth_token"], true);
+    }
+
+    #[test]
+    fn pending_login_prints_readable_text() {
+        let pending = json!({"status":"pending","verification_uri_complete":"https://dev.thru.org/device?user_code=ABCD2345&ref=cli","user_code":"ABCD2345","expires_in":600,"next":"thru auth login --resume"});
+        let text = format_auth_pending(&pending).unwrap();
+        assert!(text.contains("https://dev.thru.org/device?user_code=ABCD2345&ref=cli"));
+        assert!(text.contains("Code: ABCD2345 (expires in 600 seconds)"));
+        assert!(text.contains("Then run: thru auth login --resume"));
+        assert!(format_auth_pending(&json!({"status":"authenticated"})).is_none());
+    }
+
+    #[test]
+    fn auth_keys_print_as_a_table_and_a_created_key_once() {
+        let list = json!({
+            "organization":{"id":"org-1","name":"Acme Labs"},
+            "organization_limits":{"weighted_rps":50,"bytes_per_sec":1000000},
+            "keys":[
+                {"id":"key-1","name":"ci","prefix":"thru_live_abc","origin_allowlist":["app.example.com","*.example.org"],"cli_machine":null,"limits":null,"created_at":"2026-11-01T00:00:00.000Z","last_used_at":null},
+                {"id":"key-2","name":"thru-cli: laptop","prefix":"thru_live_def","origin_allowlist":null,"cli_machine":"laptop","limits":null,"created_at":"2026-11-02T00:00:00.000Z","last_used_at":"2026-11-03T00:00:00.000Z"},
+            ],
+        });
+        let table = format_auth_keys(&list);
+        assert!(table.contains("Organization: Acme Labs (org-1)"));
+        assert!(table.contains("Limits: 50 weighted requests/s, 1000000 bytes/s"));
+        let lines: Vec<&str> = table.lines().collect();
+        let header = lines
+            .iter()
+            .position(|line| line.starts_with("ID"))
+            .unwrap();
+        assert!(lines[header + 1].starts_with("key-1  "));
+        assert!(lines[header + 1].contains("app.example.com,*.example.org"));
+        assert!(lines[header + 2].contains("laptop"));
+        /* Columns line up. */
+        assert_eq!(lines[header].find("NAME"), lines[header + 1].find("ci "));
+        let empty = format_auth_keys(
+            &json!({"organization":{"id":"o","name":"n"},"organization_limits":null,"keys":[]}),
+        );
+        assert!(empty.contains("Limits: default") && empty.contains("No API keys"));
+
+        let created = format_auth_key(
+            &json!({"organization":{"id":"org-1","name":"Acme Labs"},"key":{"id":"key-3","name":"ci","prefix":"thru_live_ghi"},"plaintext":"thru_live_secret"}),
+        );
+        assert!(created.contains(
+            "Created API key \"ci\" (id key-3, prefix thru_live_ghi) in organization \"Acme Labs\""
+        ));
+        assert_eq!(created.matches("thru_live_secret").count(), 1);
+        assert_eq!(
+            format_auth_key(&json!({"id":"key-3","status":"revoked"})),
+            "Revoked API key key-3.\n"
+        );
     }
 }

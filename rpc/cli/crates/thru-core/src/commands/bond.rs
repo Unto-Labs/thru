@@ -15,12 +15,14 @@ use crate::commands::state_proof::make_state_proof;
 use crate::commands::token::check_transaction_result;
 use crate::config::Config;
 use crate::error::CliError;
+use crate::keys::LoadedKey;
 use crate::output;
 use crate::utils::validate_address_or_hex;
+use std::sync::Arc;
 
 use thru_base::rpc_types::ProofType;
 use thru_base::tn_public_address::create_program_defined_account_address;
-use thru_base::tn_tools::{KeyPair, Pubkey};
+use thru_base::tn_tools::Pubkey;
 use thru_base::txn_lib::Transaction;
 use thru_base::txn_tools::{
     TransactionBuilder, bp_bond_account_address, bp_bond_ta_address, bp_sign_eoa_creation,
@@ -30,17 +32,58 @@ use thru_client::{Account as ChainAccount, Client, ClientBuilder, TransactionDet
 const BOND_PROGRAM_FEE: u64 = 0;
 const TX_TIMEOUT_SECS: u64 = 30;
 
-/* tn_bp_bond_account field offsets (tn_block_producer_program.h:102-114). */
-const BOND_MAGIC_OFFSET: usize = 0;
-const BOND_SIGNER_OFFSET: usize = 8;
-const BOND_AUTHORITY_OFFSET: usize = 40;
-const BOND_TA_OFFSET: usize = 72;
-const BOND_ACTIVE_OFFSET: usize = 104;
-const BOND_STAGED_OFFSET: usize = 112;
-const BOND_UNLOCK_OFFSET: usize = 120;
-const BOND_LAST_CHANGE_OFFSET: usize = 128;
-const BOND_ACCOUNT_SIZE: usize = 136;
-const BOND_ACCOUNT_MAGIC: u64 = 0xF17EDA2CB04D0001;
+/* tn_bp_bond_account field offsets (tn_block_producer_program.h): packed,
+account_type (TN_BP_ACCOUNT_TYPE_BOND_V1) at byte 0, then the payload. */
+const BOND_ACCOUNT_TYPE_OFFSET: usize = 0;
+const BOND_SIGNER_OFFSET: usize = 1;
+const BOND_AUTHORITY_OFFSET: usize = 33;
+const BOND_TA_OFFSET: usize = 65;
+const BOND_ACTIVE_OFFSET: usize = 97;
+const BOND_STAGED_OFFSET: usize = 105;
+const BOND_UNLOCK_OFFSET: usize = 113;
+const BOND_LAST_CHANGE_OFFSET: usize = 121;
+const BOND_ACCOUNT_SIZE: usize = 129;
+/* TN_BP_ACCOUNT_TYPE_BOND_V1 */
+const BOND_ACCOUNT_TYPE_V1: u8 = 1;
+
+/// Decoded `tn_bp_bond_account` (version 1 layout).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BondAccount {
+    signer: [u8; 32],
+    authority: [u8; 32],
+    wthru_ta: [u8; 32],
+    active_bond: u64,
+    staged_amount: u64,
+    unlock_slot: u64,
+    last_change_slot: u64,
+}
+
+/// Decodes bond account data: exact size and the bond discriminator.
+fn parse_bond_account(data: &[u8]) -> Result<BondAccount, String> {
+    if data.len() != BOND_ACCOUNT_SIZE {
+        return Err(format!(
+            "bond account data is {} bytes (expected {})",
+            data.len(),
+            BOND_ACCOUNT_SIZE
+        ));
+    }
+    let account_type = data[BOND_ACCOUNT_TYPE_OFFSET];
+    if account_type != BOND_ACCOUNT_TYPE_V1 {
+        return Err(format!(
+            "account type {} is not a bond account (expected {})",
+            account_type, BOND_ACCOUNT_TYPE_V1
+        ));
+    }
+    Ok(BondAccount {
+        signer: read_pubkey(data, BOND_SIGNER_OFFSET),
+        authority: read_pubkey(data, BOND_AUTHORITY_OFFSET),
+        wthru_ta: read_pubkey(data, BOND_TA_OFFSET),
+        active_bond: read_u64(data, BOND_ACTIVE_OFFSET),
+        staged_amount: read_u64(data, BOND_STAGED_OFFSET),
+        unlock_slot: read_u64(data, BOND_UNLOCK_OFFSET),
+        last_change_slot: read_u64(data, BOND_LAST_CHANGE_OFFSET),
+    })
+}
 
 /// Main BP bond command router
 pub async fn handle_bond_command(
@@ -242,11 +285,9 @@ async fn bond_create(
     token_program_override: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
-    /* Resolve signer/fee-payer key names so that supplying only one of them
-    still yields the self-pay (Mode 1) default: `--signer X` ⇒ fee payer X,
-    `--fee-payer X` ⇒ signer X. Only when both are given AND differ do we
-    enter the third-party-pay Mode 2. Both must be keys the CLI holds (the
-    signer signs — in Mode 1 as fee payer, in Mode 2 the EOA challenge). */
+    /* Resolve signer/fee-payer references so supplying only one retains the
+    self-pay (Mode 1) default. Mode 2 uses an independent EOA challenge signer;
+    both actual signing roles accept aliases or direct sources. */
     let (signer_key_name, fee_payer_key_name) = match (signer_name, fee_payer_name) {
         (Some(s), Some(f)) => (s, f),
         (Some(s), None) => (s, s),
@@ -254,7 +295,11 @@ async fn bond_create(
         (None, None) => ("default", "default"),
     };
     let signer_keypair = resolve_signer_keypair(config, signer_key_name)?;
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, Some(fee_payer_key_name))?;
+    let fee_payer_keypair = if signer_key_name == fee_payer_key_name {
+        Arc::clone(&signer_keypair)
+    } else {
+        config.keys.load_fee_payer(Some(fee_payer_key_name))?
+    };
 
     let create_signer_eoa = signer_keypair.public_key != fee_payer_keypair.public_key;
 
@@ -378,7 +423,7 @@ async fn bond_deposit(
             "Deposit amount must be greater than zero".to_string(),
         ));
     }
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer_name)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer_name)?;
     let bp_program_bytes = resolve_bp_program_bytes(config, program_override)?;
     let token_program_bytes = resolve_token_program_bytes(config, token_program_override)?;
     let mint_bytes = resolve_mint_bytes(config, mint_override, &token_program_bytes)?;
@@ -450,7 +495,7 @@ async fn bond_update(
     program_override: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer_name)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer_name)?;
     let bp_program_bytes = resolve_bp_program_bytes(config, program_override)?;
     let attestor_table_bytes = resolve_attestor_table_bytes(config, attestor_table_override)?;
     let signer_bytes = resolve_pubkey_arg(config, signer_arg)?;
@@ -531,7 +576,7 @@ async fn bond_withdraw(
         }
     };
 
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer_name)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer_name)?;
     let bp_program_bytes = resolve_bp_program_bytes(config, program_override)?;
     let token_program_bytes = resolve_token_program_bytes(config, token_program_override)?;
     let mint_bytes = resolve_mint_bytes(config, mint_override, &token_program_bytes)?;
@@ -607,7 +652,7 @@ async fn bond_set_authority(
     program_override: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer_name)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer_name)?;
     let bp_program_bytes = resolve_bp_program_bytes(config, program_override)?;
     let signer_bytes = resolve_pubkey_arg(config, signer_arg)?;
     let new_authority_bytes = resolve_pubkey_arg(config, new_authority_arg)?;
@@ -668,7 +713,7 @@ async fn bond_sweep(
     token_program_override: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer_name)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer_name)?;
     let bp_program_bytes = resolve_bp_program_bytes(config, program_override)?;
     let token_program_bytes = resolve_token_program_bytes(config, token_program_override)?;
     let mint_bytes = resolve_mint_bytes(config, mint_override, &token_program_bytes)?;
@@ -735,7 +780,7 @@ async fn bond_delete(
     program_override: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer_name)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer_name)?;
     let bp_program_bytes = resolve_bp_program_bytes(config, program_override)?;
     let signer_bytes = resolve_pubkey_arg(config, signer_arg)?;
     let dest_bytes = resolve_pubkey_arg(config, dest_arg)?;
@@ -809,29 +854,20 @@ async fn bond_show(
         .ok_or_else(|| CliError::Validation(format!("Bond account {} not found", bond_pubkey)))?;
 
     let data = decode_account_data(&account, "bond")?;
-    if data.len() < BOND_ACCOUNT_SIZE {
-        return Err(CliError::Validation(format!(
-            "Bond account data too small: {} bytes (expected {})",
-            data.len(),
-            BOND_ACCOUNT_SIZE
-        )));
-    }
-
-    let magic = read_u64(&data, BOND_MAGIC_OFFSET);
-    let signer = read_pubkey(&data, BOND_SIGNER_OFFSET);
-    let authority = read_pubkey(&data, BOND_AUTHORITY_OFFSET);
-    let wthru_ta = read_pubkey(&data, BOND_TA_OFFSET);
-    let active_bond = read_u64(&data, BOND_ACTIVE_OFFSET);
-    let staged_amount = read_u64(&data, BOND_STAGED_OFFSET);
-    let unlock_slot = read_u64(&data, BOND_UNLOCK_OFFSET);
-    let last_change_slot = read_u64(&data, BOND_LAST_CHANGE_OFFSET);
-
-    if magic != BOND_ACCOUNT_MAGIC {
-        return Err(CliError::Validation(format!(
-            "Account {} is not a valid bond account (magic 0x{:016x})",
-            bond_pubkey, magic
-        )));
-    }
+    let BondAccount {
+        signer,
+        authority,
+        wthru_ta,
+        active_bond,
+        staged_amount,
+        unlock_slot,
+        last_change_slot,
+    } = parse_bond_account(&data).map_err(|e| {
+        CliError::Validation(format!(
+            "Account {} is not a valid bond account: {}",
+            bond_pubkey, e
+        ))
+    })?;
 
     if json_format {
         let response = json!({
@@ -927,42 +963,14 @@ async fn bond_derive_token_account(
 /* Shared helpers                                                          */
 /* ---------------------------------------------------------------------- */
 
-fn resolve_fee_payer_keypair(
-    config: &Config,
-    fee_payer: Option<&str>,
-) -> Result<KeyPair, CliError> {
-    let key_name = fee_payer.unwrap_or("default");
-    let key_hex = config.keys.get_key(key_name).map_err(|_| {
-        CliError::Validation(format!(
-            "Fee payer key '{}' not found in configuration",
-            key_name
-        ))
-    })?;
-    KeyPair::from_hex_private_key(key_name, key_hex)
-        .map_err(|e| CliError::Crypto(format!("Failed to create fee payer keypair: {}", e)))
+/// Load the independent EOA signer from an alias or direct signing source.
+fn resolve_signer_keypair(config: &Config, name: &str) -> Result<Arc<LoadedKey>, CliError> {
+    config.keys.load_key(name)
 }
 
-/// Resolve a key name the CLI must hold (used where the key signs).
-fn resolve_signer_keypair(config: &Config, name: &str) -> Result<KeyPair, CliError> {
-    let key_hex = config.keys.get_key(name).map_err(|_| {
-        CliError::Validation(format!(
-            "Signer key '{}' not found in configuration (must be a held key)",
-            name
-        ))
-    })?;
-    KeyPair::from_hex_private_key(name, key_hex)
-        .map_err(|e| CliError::Crypto(format!("Failed to create signer keypair: {}", e)))
-}
-
-/// Resolve an argument that may be a config key name, a ta… address, or 64-hex,
-/// to its 32-byte pubkey.
+/// Resolve public metadata, a public address, or an explicit source.
 fn resolve_pubkey_arg(config: &Config, arg: &str) -> Result<[u8; 32], CliError> {
-    if let Ok(key_hex) = config.keys.get_key(arg) {
-        let keypair = KeyPair::from_hex_private_key(arg, key_hex)
-            .map_err(|e| CliError::Crypto(format!("Failed to resolve key '{}': {}", arg, e)))?;
-        return Ok(keypair.public_key);
-    }
-    validate_address_or_hex(arg)
+    config.keys.resolve_public_key(arg)
 }
 
 fn resolve_bp_program_bytes(
@@ -1048,7 +1056,7 @@ fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
 
 async fn fetch_nonce_and_balance(
     client: &Client,
-    keypair: &KeyPair,
+    keypair: &LoadedKey,
 ) -> Result<(u64, u64), CliError> {
     let account_info = client
         .get_account_info(&keypair.address_string, None, None)
@@ -1084,7 +1092,7 @@ async fn sign_and_submit(
     client: &Client,
     transaction: Transaction,
     chain_id: u16,
-    fee_payer_keypair: &KeyPair,
+    fee_payer_keypair: &LoadedKey,
     json_format: bool,
 ) -> Result<String, CliError> {
     let mut transaction = transaction.with_chain_id(chain_id);
@@ -1189,5 +1197,79 @@ fn print_simple_result(
     } else {
         println!("{}", text);
         println!("Transaction signature: {}", signature);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::keys::KeyManager;
+
+    #[test]
+    fn independent_eoa_signer_and_fee_payer_accept_unregistered_files() {
+        let (_guard, keys) = KeyManager::test_fixture(&[("signer", [1; 32]), ("payer", [2; 32])]);
+        let signer_reference = keys.get_entry("signer").unwrap().reference();
+        let payer_reference = keys.get_entry("payer").unwrap().reference();
+        let config = Config::default();
+        let signer = resolve_signer_keypair(&config, &signer_reference).unwrap();
+        let payer = config.keys.load_fee_payer(Some(&payer_reference)).unwrap();
+        assert_eq!(signer.public_key, keys.public_key("signer").unwrap());
+        assert_eq!(payer.public_key, keys.public_key("payer").unwrap());
+        assert_ne!(signer.public_key, payer.public_key);
+    }
+
+    #[test]
+    fn public_alias_resolution_does_not_open_signing_source() {
+        let (_guard, keys) = KeyManager::test_fixture(&[("signer", [1; 32])]);
+        let expected = keys.public_key("signer").unwrap();
+        let crate::keys::KeySource::File { path, .. } = &keys.get_entry("signer").unwrap().source
+        else {
+            panic!("fixture must use file storage");
+        };
+        std::fs::remove_file(path).unwrap();
+        let config = Config {
+            keys,
+            ..Config::default()
+        };
+        assert_eq!(resolve_pubkey_arg(&config, "signer").unwrap(), expected);
+        assert!(resolve_signer_keypair(&config, "signer").is_err());
+    }
+
+    fn bond_fixture() -> Vec<u8> {
+        let mut data = vec![0u8; BOND_ACCOUNT_SIZE];
+        data[0] = BOND_ACCOUNT_TYPE_V1;
+        data[1..33].fill(0x11);
+        data[33..65].fill(0x22);
+        data[65..97].fill(0x33);
+        data[97..105].copy_from_slice(&500u64.to_le_bytes());
+        data[105..113].copy_from_slice(&7u64.to_le_bytes());
+        data[113..121].copy_from_slice(&99u64.to_le_bytes());
+        data[121..129].copy_from_slice(&42u64.to_le_bytes());
+        data
+    }
+
+    #[test]
+    fn bond_account_decodes_packed_v1_layout() {
+        let bond = parse_bond_account(&bond_fixture()).unwrap();
+        assert_eq!(bond.signer, [0x11; 32]);
+        assert_eq!(bond.authority, [0x22; 32]);
+        assert_eq!(bond.wthru_ta, [0x33; 32]);
+        assert_eq!(bond.active_bond, 500);
+        assert_eq!(bond.staged_amount, 7);
+        assert_eq!(bond.unlock_slot, 99);
+        assert_eq!(bond.last_change_slot, 42);
+    }
+
+    #[test]
+    fn bond_account_rejects_wrong_type_and_size() {
+        let mut data = bond_fixture();
+        data[0] = 0;
+        assert!(parse_bond_account(&data).is_err());
+        data[0] = 2;
+        assert!(parse_bond_account(&data).is_err());
+        let mut data = bond_fixture();
+        data.push(0);
+        assert!(parse_bond_account(&data).is_err());
+        assert!(parse_bond_account(&bond_fixture()[..128]).is_err());
     }
 }

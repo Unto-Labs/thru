@@ -1,9 +1,11 @@
 import { Pubkey } from '@thru/sdk';
 import {
+  PERP_ACCOUNT_TYPE_CBOOK,
+  PERP_ACCOUNT_TYPE_MARGIN,
+  PERP_ACCOUNT_TYPE_MARKET,
+  PERP_ACCOUNT_TYPE_ORDER_ARENA,
   PERP_CBOOK_EMPTY_PRICE_IN_TICKS,
   PERP_MARGIN_ACCOUNT_SIZE,
-  PERP_MARGIN_MAGIC,
-  PERP_MARKET_MAGIC,
   PERP_ORDER_ARENA_ENTRIES_OFFSET,
   PERP_ORDER_ENTRY_SIZE,
   PERP_SEAT_ARENA_ENTRIES_OFFSET,
@@ -12,7 +14,8 @@ import {
 } from '../index';
 import type { PerpDeployment } from './deployment';
 
-/* Account bytes in the current (0.4.0) layout for the SDK's tests; not exported. */
+/* Account bytes in the current layout for the SDK's tests; not exported.
+   Byte 0 of each is its discriminator (PERP_ACCOUNT_TYPE_*). */
 
 export function key(id: number): Uint8Array {
   const bytes = new Uint8Array(32);
@@ -45,11 +48,11 @@ export interface FixtureSeat {
   cross?: boolean;
 }
 
-/** A seat arena: a 448 byte market header (lot 1, tick 1000, 20x) and seats. */
+/** A seat arena: the 512 byte market header (lot 1, tick 1000, 20x) and seats. */
 export function seatArenaBytes(market: FixtureMarket, seats: FixtureSeat[], options: { funding?: boolean; maxMarkAgeNs?: bigint } = {}): Uint8Array {
   const data = new Uint8Array(PERP_SEAT_ARENA_ENTRIES_OFFSET + Math.max(seats.length, 1) * PERP_SEAT_ENTRY_SIZE);
   const view = new DataView(data.buffer);
-  data[0] = PERP_MARKET_MAGIC;
+  data[0] = PERP_ACCOUNT_TYPE_MARKET;
   view.setBigUint64(8, 1n, true); /* lot_size */
   view.setBigUint64(16, 1_000n, true); /* tick_size */
   view.setBigUint64(24, 5n, true); /* next_order_id */
@@ -117,6 +120,7 @@ export function oracleFeedBytes(feed: { price: bigint; lastUpdateNs: bigint; max
 export function orderArenaBytes(orders: Array<{ seatIndex: number; levelIndex: number; lots: bigint; orderId: bigint }>): Uint8Array {
   const data = new Uint8Array(PERP_ORDER_ARENA_ENTRIES_OFFSET + Math.max(orders.length, 1) * PERP_ORDER_ENTRY_SIZE);
   const view = new DataView(data.buffer);
+  data[0] = PERP_ACCOUNT_TYPE_ORDER_ARENA;
   view.setUint32(8 + 52, orders.length + 1, true);
   orders.forEach((order, i) => {
     const at = PERP_ORDER_ARENA_ENTRIES_OFFSET + i * PERP_ORDER_ENTRY_SIZE;
@@ -133,6 +137,7 @@ export function orderArenaBytes(orders: Array<{ seatIndex: number; levelIndex: n
 export function cbookBytes(levels: number, bestPriceInTicks: bigint = PERP_CBOOK_EMPTY_PRICE_IN_TICKS, heads: Array<[number, number]> = []): Uint8Array {
   const data = new Uint8Array(16 + levels * 8);
   const view = new DataView(data.buffer);
+  data[0] = PERP_ACCOUNT_TYPE_CBOOK;
   view.setBigUint64(8, bestPriceInTicks, true);
   for (const [level, entry] of heads) {
     view.setUint32(16 + level * 8, entry, true);
@@ -144,9 +149,8 @@ export function cbookBytes(levels: number, bestPriceInTicks: bigint = PERP_CBOOK
 export function marginAccountBytes(account: { owner: string; vault: string; accountId: number; links: Array<{ market: string; seatIndex: number }> }): Uint8Array {
   const data = new Uint8Array(PERP_MARGIN_ACCOUNT_SIZE);
   const view = new DataView(data.buffer);
-  data[0] = PERP_MARGIN_MAGIC;
-  data[1] = 1;
-  data[2] = account.links.length;
+  data[0] = PERP_ACCOUNT_TYPE_MARGIN;
+  data[1] = account.links.length;
   view.setUint32(8, account.accountId, true);
   data.set(Pubkey.from(account.owner).toBytes(), 16);
   data.set(Pubkey.from(account.vault).toBytes(), 48);
@@ -182,11 +186,11 @@ export function fixtureDeployment(markets: Array<{ symbol: string; market: Fixtu
     tokenProgram: address(2),
     oracleProgram: address(3),
     thruFaucetUrl: 'http://127.0.0.1:1/faucet',
-    quoteMints: [{ symbol: 'THRUSD', name: 'Thru USD', glyph: '$', address: address(4), decimals: 6, mintAuthority: address(8), faucet: 'perps', seedHex: null }],
+    quoteMints: [{ symbol: 'UUSD', name: 'Unto USD', glyph: '$', address: address(4), decimals: 6, mintAuthority: address(8), faucet: 'perps', seedHex: null }],
     markets: markets.map(({ symbol, market }) => ({
       symbol,
       baseSymbol: symbol.split('-')[0]!,
-      quoteSymbol: 'THRUSD',
+      quoteSymbol: 'UUSD',
       ...market,
       lotSize: '1',
       tickSize: '1000',

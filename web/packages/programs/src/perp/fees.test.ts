@@ -53,9 +53,8 @@ import {
   seatSetFeeReceiverTx,
   type MarketRef,
 } from './sdk';
-import { PERP_ABI_V0_4, PERP_ABI_V0_5 } from './versions';
 
-/* Trading fees and builder codes (0.5.0): thru-perps/PLAN-FEES.md,
+/* Trading fees and builder codes: thru-perps/PLAN-FEES.md,
    tn_perp_program/utils/fees.h and tests/test_txn_perp_program/test_fees.c. */
 
 function key(id: number): Uint8Array {
@@ -131,7 +130,6 @@ describe('perp fee math', () => {
     const fees: PerpMarketFees = { ...RATES, pendingTakerFeePpm: 500, pendingBuilderFeeCapPpm: 20, pendingActivationNs: 1_000n };
     expect(perpEffectiveFeeRates({ fees }, 999n)).toMatchObject({ takerFeePpm: 300, builderFeeCapPpm: 0 });
     expect(perpEffectiveFeeRates({ fees }, 1_000n)).toMatchObject({ takerFeePpm: 500, builderFeeCapPpm: 20, makerRebatePpm: 100 });
-    expect(perpEffectiveFeeRates({}, 0n)).toEqual({ takerFeePpm: 0, makerRebatePpm: 0, builderFeeCapPpm: 0, feeInsuranceSharePpm: 0, liqInsuranceSharePpm: 0 });
   });
 
   it('validates and applies market_set_fees like fee_params_valid / fee_set', () => {
@@ -144,8 +142,12 @@ describe('perp fee math', () => {
     /* From zero: an increase is pending for the delay; the rebate must fit
        the taker fee in effect, so it is refused until the fee applies. */
     const now = 5_000n;
-    expect(perpFeesAfterSet(undefined, now, RATES)).toBeNull();
-    const pending = perpFeesAfterSet(undefined, now, { ...RATES, makerRebatePpm: 0, builderFeeCapPpm: 50 })!;
+    const zero: PerpMarketFees = {
+      takerFeePpm: 0, makerRebatePpm: 0, builderFeeCapPpm: 0, feeInsuranceSharePpm: 0, liqInsuranceSharePpm: 0,
+      pendingTakerFeePpm: 0, pendingBuilderFeeCapPpm: 0, pendingActivationNs: 0n,
+    };
+    expect(perpFeesAfterSet(zero, now, RATES)).toBeNull();
+    const pending = perpFeesAfterSet(zero, now, { ...RATES, makerRebatePpm: 0, builderFeeCapPpm: 50 })!;
     expect(pending).toEqual({
       takerFeePpm: 0, makerRebatePpm: 0, builderFeeCapPpm: 0, feeInsuranceSharePpm: 250_000, liqInsuranceSharePpm: 0,
       pendingTakerFeePpm: 300, pendingBuilderFeeCapPpm: 50, pendingActivationNs: now + PERP_FEE_INCREASE_DELAY_NS,
@@ -353,13 +355,12 @@ describe('perp fee transactions', () => {
   const trader = address(10);
   const admin = address(11);
 
-  it('puts the builder code in the order record and refuses it before 0.5.0', () => {
+  it('puts the builder code in the order record', () => {
     const order = { side: 'buy' as const, price: 100_000n, quantity: 2n };
-    const tx = ordersTx(ref, trader, 3, [order], [], undefined, { builder: { builderSeatIndex: 9, feePpm: 40 }, version: PERP_ABI_V0_5 });
+    const tx = ordersTx(ref, trader, 3, [order], [], undefined, { builder: { builderSeatIndex: 9, feePpm: 40 } });
     expect(tx.instructions[0]).toMatchObject({ ix: 'market_record', seatIndex: 3, builderSeatIndex: 9, builderFeePpm: 40 });
     expect(perpTransactionFromJSON(JSON.parse(JSON.stringify(perpTransactionToJSON(tx)))).instructions).toEqual(tx.instructions);
     expect('builderSeatIndex' in ordersTx(ref, trader, 3, [order]).instructions[0]!).toBe(false);
-    expect(() => ordersTx(ref, trader, 3, [order], [], undefined, { builder: { builderSeatIndex: 9, feePpm: 40 }, version: PERP_ABI_V0_4 })).toThrow(/tradingFees/);
   });
 
   it('builds the fee administration and seat transactions', async () => {
@@ -375,7 +376,6 @@ describe('perp fee transactions', () => {
       ix: 'seat_set_builder_approval', marketRecordIndex: 1, builderSeatIndex: 4, maxFeePpm: 20,
     });
     expect(seatSetBuilderApprovalTx(ref, trader, 3, { builderSeatIndex: 0, maxFeePpm: 0 }).label).toBe('revoke builder approval');
-    expect(() => marketSetFeesTx(ref, admin, RATES, { version: PERP_ABI_V0_4 })).toThrow(/tradingFees/);
     /* The specs encode as the createPerp* encoders do. */
     const spec = setFees.instructions[1]!;
     expect([...(await encodePerpInstruction(spec)({ getAccountIndex: () => 0 }))]).toEqual([

@@ -110,6 +110,28 @@ const thru = createThruClient({
 });
 ```
 
+### Rate limits
+
+When the Thru edge rate-limits a call, the SDK rejects it (or ends the stream) with a `ThruRateLimitError` instead of the raw `ConnectError`. This applies to the SDK-built transport and to a `transport` you supply. Requests without an API key share a low per-IP limit. Get a free key with higher limits at `err.getKeyUrl` and pass it as `apiKey`:
+
+```ts
+import { isThruRateLimitError } from "@thru/sdk";
+
+try {
+  await thru.blocks.getBlockHeight();
+} catch (err) {
+  if (isThruRateLimitError(err)) {
+    // err.keyed: false for the shared limit on requests without an API key
+    // err.retryAfterSeconds: from the retry-after header, when visible
+    // err.cause: the original ConnectError (code RESOURCE_EXHAUSTED)
+    console.error(`${err.message}\nGet a free API key at ${err.getKeyUrl}`);
+  }
+  throw err;
+}
+```
+
+`toThruRateLimitError(err)` converts a `ConnectError` you caught elsewhere (for example, from your own `createClient`). It returns `undefined` for any other error.
+
 ### Legacy transaction signing
 
 RFC-8032 is always the default. Networks that have not completed the signing

@@ -14,14 +14,12 @@ export interface ProgramABIAddresses {
 
 export interface OfficialABIMetaAccountInfo {
   kind: 'official';
-  version: number;
   flags: number;
   programAddress: string;
 }
 
 export interface ExternalABIMetaAccountInfo {
   kind: 'external';
-  version: number;
   flags: number;
   publisherAddress: string;
   targetProgramAddress: string;
@@ -57,6 +55,7 @@ interface ABIOfficialIndices extends MetaOfficialIndices {
   sourceBufferAccountIdx: number;
   sourceOffset?: number;
   sourceSize: number;
+  sourceSha256: Uint8Array;
 }
 
 interface ABIExternalIndices {
@@ -65,6 +64,7 @@ interface ABIExternalIndices {
   sourceBufferAccountIdx: number;
   sourceOffset?: number;
   sourceSize: number;
+  sourceSha256: Uint8Array;
   authorityAccountIdx: number;
 }
 
@@ -128,6 +128,10 @@ export interface OfficialABIAccounts extends OfficialABIMetaAccounts {
   sourceBufferAccount: Uint8Array;
   sourceOffset?: number;
   sourceSize: number;
+  /** SHA-256 of exactly the `sourceSize` bytes at `sourceOffset` in the source
+   * buffer. The ABI manager rejects any other bytes, so a buffer rewritten after
+   * this instruction is signed or approved cannot be installed. */
+  sourceSha256: Uint8Array;
 }
 
 export interface ExternalABIAccounts {
@@ -136,6 +140,9 @@ export interface ExternalABIAccounts {
   sourceBufferAccount: Uint8Array;
   sourceOffset?: number;
   sourceSize: number;
+  /** SHA-256 of exactly the `sourceSize` bytes at `sourceOffset` in the source
+   * buffer. The ABI manager rejects any other bytes, as for official ABIs. */
+  sourceSha256: Uint8Array;
   authorityAccount: Uint8Array;
 }
 

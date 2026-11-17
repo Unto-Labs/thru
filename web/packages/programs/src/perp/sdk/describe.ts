@@ -34,12 +34,10 @@ export interface PerpsActionDescription {
   description: string;
   /** JSON Schema of the params object. */
   parameters: JsonSchema;
-  /** Feature flag the deployment's ABI version must have, if any. */
-  requires?: 'crossMargin' | 'funding' | 'settleFunding';
 }
 
 const address: JsonSchema = { type: 'string', pattern: '^ta[A-Za-z0-9_-]{44}$', description: 'Thru address (ta...)' };
-const market: JsonSchema = { type: 'string', description: 'Market symbol (e.g. BTC-THRUSD) or seat arena address' };
+const market: JsonSchema = { type: 'string', description: 'Market symbol (e.g. BTC-UUSD) or seat arena address' };
 const owner: JsonSchema = { ...address, description: 'Seat authority / wallet address the transaction acts for (the signer)' };
 const atoms: JsonSchema = { type: 'string', pattern: '^\\d+$', description: 'Integer amount in on-chain atoms, as a decimal string' };
 const decimal: JsonSchema = { type: 'string', pattern: '^\\d+(\\.\\d+)?$', description: 'Human decimal amount' };
@@ -69,7 +67,7 @@ const ACTIONS: readonly PerpsActionDescription[] = [
   { name: 'getMark', kind: 'read', description: "The market's oracle mark price (quote atoms per base atom); null with an error when the feed is stale.", parameters: obj({ market }, ['market']) },
   { name: 'getFunding', kind: 'read', description: "The market's funding state: rate (ticks of 1e-6 per hour, positive: longs pay), index, next round.", parameters: obj({ market }, ['market']) },
   { name: 'getSeat', kind: 'read', description: "The owner's seat (position, collateral, open order lots) in a market, or null.", parameters: obj({ market, owner }, ['market', 'owner']) },
-  { name: 'getMarginAccounts', kind: 'read', description: "The owner's cross margin accounts and their linked seats.", parameters: obj({ owner }, ['owner']), requires: 'crossMargin' },
+  { name: 'getMarginAccounts', kind: 'read', description: "The owner's cross margin accounts and their linked seats.", parameters: obj({ owner }, ['owner']) },
   { name: 'getOpenOrders', kind: 'read', description: "The owner's resting orders in a market.", parameters: obj({ market, owner }, ['market', 'owner']) },
   { name: 'createSeat', kind: 'transaction', description: 'Create the owner\'s seat in a market (needed once per market before trading).', parameters: obj({ market, owner }, ['market', 'owner']) },
   {
@@ -102,24 +100,23 @@ const ACTIONS: readonly PerpsActionDescription[] = [
   },
   { name: 'deposit', kind: 'transaction', description: "Deposit quote collateral from the owner's token account into the seat.", parameters: obj({ market, owner, amount: decimal, amountAtoms: atoms }, ['market', 'owner']) },
   { name: 'withdraw', kind: 'transaction', description: 'Withdraw free collateral to the owner\'s token account (a cross seat draws on its account).', parameters: obj({ market, owner, amount: decimal, amountAtoms: atoms }, ['market', 'owner']) },
-  { name: 'createMarginAccount', kind: 'transaction', description: "Create a cross margin account on the market's quote vault.", parameters: obj({ market, owner, accountId: { type: 'integer', minimum: 0 } }, ['market', 'owner']), requires: 'crossMargin' },
-  { name: 'linkMargin', kind: 'transaction', description: "Link the owner's seat in a market into a margin account (cross margin).", parameters: obj({ market, owner, accountId: { type: 'integer', minimum: 0 } }, ['market', 'owner']), requires: 'crossMargin' },
-  { name: 'unlinkMargin', kind: 'transaction', description: "Unlink the owner's flat seat from its margin account.", parameters: obj({ market, owner }, ['market', 'owner']), requires: 'crossMargin' },
-  { name: 'settleFunding', kind: 'transaction', description: "Settle funding for seats of a market (by index) or the owner's seat; optional, the program settles before it reads equity.", parameters: obj({ market, owner, seatIndexes: { type: 'array', items: { type: 'integer', minimum: 1 } } }, ['market']), requires: 'settleFunding' },
-  { name: 'settleAccountFunding', kind: 'transaction', description: 'Settle funding of every seat a margin account links.', parameters: obj({ owner, marginAccount: address }, ['owner']), requires: 'settleFunding' },
+  { name: 'createMarginAccount', kind: 'transaction', description: "Create a cross margin account on the market's quote vault.", parameters: obj({ market, owner, accountId: { type: 'integer', minimum: 0 } }, ['market', 'owner']) },
+  { name: 'linkMargin', kind: 'transaction', description: "Link the owner's seat in a market into a margin account (cross margin).", parameters: obj({ market, owner, accountId: { type: 'integer', minimum: 0 } }, ['market', 'owner']) },
+  { name: 'unlinkMargin', kind: 'transaction', description: "Unlink the owner's flat seat from its margin account.", parameters: obj({ market, owner }, ['market', 'owner']) },
+  { name: 'settleFunding', kind: 'transaction', description: "Settle funding for seats of a market (by index) or the owner's seat; optional, the program settles before it reads equity.", parameters: obj({ market, owner, seatIndexes: { type: 'array', items: { type: 'integer', minimum: 1 } } }, ['market']) },
+  { name: 'settleAccountFunding', kind: 'transaction', description: 'Settle funding of every seat a margin account links.', parameters: obj({ owner, marginAccount: address }, ['owner']) },
   { name: 'liquidate', kind: 'transaction', description: "Liquidate seat targetSeatIndex with the owner's seat in the same market.", parameters: obj({ market, owner, targetSeatIndex: { type: 'integer', minimum: 1 } }, ['market', 'owner', 'targetSeatIndex']) },
 ];
 
-/** Every action with its parameter schema; with a client, only the
-    actions its ABI version supports. */
-export function describePerpsActions(client?: Pick<PerpsClient, 'features'>): PerpsActionDescription[] {
-  return ACTIONS.filter((action) => !client || !action.requires || client.features[action.requires]).map((action) => structuredClone(action));
+/** Every action with its parameter schema. */
+export function describePerpsActions(): PerpsActionDescription[] {
+  return ACTIONS.map((action) => structuredClone(action));
 }
 
 /** The actions as tool definitions in the common { name, description,
     input_schema } shape (Anthropic, and others with a rename). */
-export function perpsToolDefinitions(client?: Pick<PerpsClient, 'features'>): Array<{ name: string; description: string; input_schema: JsonSchema }> {
-  return describePerpsActions(client).map((action) => ({
+export function perpsToolDefinitions(): Array<{ name: string; description: string; input_schema: JsonSchema }> {
+  return describePerpsActions().map((action) => ({
     name: `perps_${action.name}`,
     description: `${action.description}${action.kind === 'transaction' ? ' Returns the signature once executed (or the unsigned transaction when no signer is configured).' : ''}`,
     input_schema: action.parameters,
@@ -179,10 +176,6 @@ export async function runPerpsAction(
 ): Promise<PerpsActionResult> {
   const problems = validatePerpsActionParams(name, params);
   if (problems.length) return { ok: false, action: name, error: { message: `invalid parameters: ${problems.join('; ')}`, kind: 'invalid-params' } };
-  const action = ACTIONS.find((entry) => entry.name === name)!;
-  if (action.requires && !client.features[action.requires]) {
-    return { ok: false, action: name, error: { message: `${name} needs ${action.requires}, which ABI ${client.version.abiPackageVersion} does not have`, kind: 'unsupported' } };
-  }
   try {
     const run = (client as unknown as Record<string, (input: unknown, ...rest: unknown[]) => Promise<unknown>>)[name]!.bind(client);
     const p = params as Record<string, never>;

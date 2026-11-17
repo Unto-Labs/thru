@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import * as legacy from '@thru/programs/passkey-manager';
 import * as current from '@thru/programs/wallet';
 import { PASSKEY_MANAGER_PROGRAM_ADDRESS, WALLET_PROGRAM_ADDRESS } from '@thru/sdk';
+import { BOOTSTRAP_PROGRAM_ADDRESSES } from '@thru/programs/bootstrap-addresses';
 import { AuthorityRecord as oldRecord } from '@thru/sdk/programs/passkey-manager/abi/thru/program/passkey_manager/types';
 import { AuthorityRecord as newRecord } from '@thru/sdk/programs/wallet/abi/thru/program/wallet/types';
 import * as oldContext from '@thru/sdk/programs/passkey-manager/context';
@@ -11,7 +12,7 @@ import * as newContext from '@thru/sdk/programs/wallet/context';
 
 assert.equal(legacy.PASSKEY_MANAGER_PROGRAM_ADDRESS, current.WALLET_PROGRAM_ADDRESS);
 assert.equal(PASSKEY_MANAGER_PROGRAM_ADDRESS, WALLET_PROGRAM_ADDRESS);
-assert.equal(WALLET_PROGRAM_ADDRESS, 'taPASSIvjIgz2kZ1CIIhvbT00XV9Ve5kZ2I9uDLanzIgbA');
+assert.equal(WALLET_PROGRAM_ADDRESS, BOOTSTRAP_PROGRAM_ADDRESSES.wallet);
 assert.equal(oldRecord.footprint(), newRecord.footprint());
 assert.equal(oldRecord.footprint(), 73);
 assert.equal(typeof oldContext.buildWalletAccountContext, typeof newContext.buildWalletAccountContext);

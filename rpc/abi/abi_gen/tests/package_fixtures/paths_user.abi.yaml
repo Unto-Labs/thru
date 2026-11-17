@@ -1,0 +1,27 @@
+abi:
+  package: "paths_user"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Imports every package of package_fixtures: clashing import names, directories that differ in case, and a package named like the Rust runtime module"
+  imports:
+    - type: path
+      path: "user.abi.yaml"
+    - type: path
+      path: "runtime_named.abi.yaml"
+
+types:
+  - name: "Holder"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "both"
+            field-type:
+              type-ref:
+                name: "Both"
+                package: "pkguser"
+          - name: "rt"
+            field-type:
+              type-ref:
+                name: "RuntimeNamed"
+                package: "tn_abi_runtime"

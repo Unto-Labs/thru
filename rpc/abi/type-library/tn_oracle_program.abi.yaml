@@ -2,15 +2,12 @@ abi:
   package: thru.program.oracle
   name: "Oracle Program"
   abi-version: 1
-  package-version: 0.1.0
+  package-version: 0.2.0
   description: ABI for the Thru oracle program instructions, feed accounts, events, and errors
   imports:
     # thru_primitives
-    - type: onchain
-      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
-      target: abi
-      network: alphanet
-      revision: latest
+    - type: path
+      path: thru_primitives.abi.yaml
   options:
     program-metadata:
       root-types:
@@ -286,7 +283,7 @@ types:
 
 # ── Feed accounts ──
 
-# Common feed data following the leading feed_type byte.
+# Common feed data following the leading account_type byte.
 - name: OracleFeedCommonData
   kind:
     struct:
@@ -345,30 +342,33 @@ types:
         field-type:
           primitive: u8
 
-# feed_type=1 is PRICE (161 bytes total); feed_type=2 is BOOLEAN (146 bytes).
+# Account root: byte 0 is the account discriminator (account_type), one value
+# per (account kind, layout). Values are never reused; a new layout or a new
+# kind takes the next unused value.
+# price_feed_v1 is 161 bytes total; bool_feed_v1 is 146 bytes total.
 - name: OracleFeedAccount
   kind:
     struct:
       packed: true
       fields:
-      - name: feed_type
+      - name: account_type
         field-type:
           primitive: u8
-      - name: data
+      - name: payload
         field-type:
           enum:
             packed: true
             tag-ref:
               field-ref:
                 path:
-                - feed_type
+                - account_type
             variants:
-            - name: price
+            - name: price_feed_v1
               tag-value: 1
               variant-type:
                 type-ref:
                   name: OraclePriceFeedData
-            - name: boolean
+            - name: bool_feed_v1
               tag-value: 2
               variant-type:
                 type-ref:

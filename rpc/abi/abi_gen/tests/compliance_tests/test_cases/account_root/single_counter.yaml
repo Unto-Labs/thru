@@ -1,0 +1,7 @@
+test-case:
+  name: "account_root_single_counter"
+  abi-file: "../../abi_definitions/account_root.abi.yaml"
+  type: "SingleAccount"
+  description: "Single-variant root: counter_v1 (fixed-size enum)"
+  tags: ["enums", "tagged", "account-root"]
+  binary-hex: "01 05 00 00 00 00 00 00 00"

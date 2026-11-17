@@ -1,15 +1,16 @@
 //! Account management command implementations
 
 use base64::Engine;
+use std::sync::Arc;
 use std::time::Duration;
 use thru_base::rpc_types::{MakeStateProofConfig, ProofType};
-use thru_base::tn_account::{TnAccountMeta, TN_ACCOUNT_META_FOOTPRINT};
+use thru_base::tn_account::{TN_ACCOUNT_META_FOOTPRINT, TnAccountMeta};
 use thru_base::{StateProof, TransactionBuilder};
 
 use crate::cli::AccountCommands;
 use crate::config::Config;
-use crate::crypto::keypair_from_hex;
 use crate::error::CliError;
+use crate::keys::LoadedKey;
 use crate::output;
 use crate::utils::format_vm_error;
 use thru_client::{Client, ClientBuilder};
@@ -19,22 +20,8 @@ fn resolve_fee_payer_and_target(
     config: &Config,
     fee_payer: Option<&str>,
     target_account: &str,
-) -> Result<(thru_base::tn_tools::KeyPair, thru_base::tn_tools::Pubkey), CliError> {
-    // Resolve fee payer using resolve_account_input for validation
-    let _fee_payer_pubkey = crate::commands::rpc::resolve_account_input(fee_payer, config)?;
-
-    // Get the private key for the fee payer to create the keypair for signing
-    let fee_payer_private_key = if let Some(fee_payer_name) = fee_payer {
-        config.keys.get_key(fee_payer_name).map_err(|_| {
-            CliError::Validation(format!(
-                "Fee payer key '{}' not found in configuration",
-                fee_payer_name
-            ))
-        })?
-    } else {
-        config.keys.get_default_key()?
-    };
-    let fee_payer_keypair = keypair_from_hex(fee_payer_private_key)?;
+) -> Result<(Arc<LoadedKey>, thru_base::tn_tools::Pubkey), CliError> {
+    let fee_payer_keypair = config.keys.load_key(fee_payer.unwrap_or("default"))?;
 
     // Resolve target account using resolve_account_input
     let target_pubkey = crate::commands::rpc::resolve_account_input(Some(target_account), config)?;
@@ -119,12 +106,7 @@ async fn create_account(
 
     // Resolve the key to use
     let key_name = key_name.unwrap_or("default");
-    let private_key_hex = config.keys.get_key(key_name).map_err(|_| {
-        CliError::Validation(format!("Key '{}' not found in configuration", key_name))
-    })?;
-
-    // Create keypair from private key
-    let keypair = keypair_from_hex(private_key_hex)?;
+    let keypair = config.keys.load_key(key_name)?;
     let account_pubkey = &keypair.address_string;
 
     if !json_format {
@@ -643,7 +625,7 @@ async fn decompress_account(
 /// Direct decompression using build_decompress_account (for small data)
 async fn decompress_direct(
     config: &Config,
-    fee_payer_keypair: &thru_base::tn_tools::KeyPair,
+    fee_payer_keypair: &Arc<LoadedKey>,
     target_pubkey: &thru_base::tn_tools::Pubkey,
     decomp_data: &[u8],
     state_proof_bytes: &[u8],
@@ -747,7 +729,7 @@ async fn decompress_direct(
 /// Uploader-based decompression using DECOMPRESS2 (for large data)
 async fn decompress_with_uploader(
     config: &Config,
-    fee_payer_keypair: &thru_base::tn_tools::KeyPair,
+    fee_payer_keypair: &Arc<LoadedKey>,
     target_pubkey: &thru_base::tn_tools::Pubkey,
     decomp_data: &[u8],
     json_format: bool,
@@ -787,7 +769,7 @@ async fn decompress_with_uploader(
     uploader_config.uploader_program_public_key = uploader_program_pubkey.to_string();
     let uploader = crate::commands::uploader::UploaderManager::new_with_keypair(
         &uploader_config,
-        fee_payer_keypair.clone(),
+        Arc::clone(fee_payer_keypair),
     )
     .await?;
 
@@ -978,7 +960,7 @@ async fn decompress_with_uploader(
 /// Uploader-based decompression for huge data (>16MB) using DECOMPRESS2 with separate accounts
 async fn decompress_with_uploader_huge(
     config: &Config,
-    fee_payer_keypair: &thru_base::tn_tools::KeyPair,
+    fee_payer_keypair: &Arc<LoadedKey>,
     target_pubkey: &thru_base::tn_tools::Pubkey,
     decomp_data: &[u8],
     json_format: bool,
@@ -1025,7 +1007,7 @@ async fn decompress_with_uploader_huge(
     uploader_config.uploader_program_public_key = uploader_program_pubkey.to_string();
     let uploader = crate::commands::uploader::UploaderManager::new_with_keypair(
         &uploader_config,
-        fee_payer_keypair.clone(),
+        Arc::clone(fee_payer_keypair),
     )
     .await?;
 
@@ -1257,19 +1239,8 @@ async fn prepare_account_decompression(
 ) -> Result<(), CliError> {
     let client = create_rpc_client(config)?;
 
-    // Resolve account address (either from config key name or direct address)
-    let account_pubkey = if account.starts_with("ta") && account.len() == 46 {
-        // Direct ta... address
-        thru_base::tn_tools::Pubkey::new(account.to_string())
-            .map_err(|e| CliError::Validation(format!("Invalid account address: {}", e)))?
-    } else {
-        // Try to resolve from config keys
-        let private_key_hex = config.keys.get_key(account)
-            .map_err(|_| CliError::Validation(format!("Account '{}' not found in configuration. Use a ta... address or add the key to configuration.", account)))?;
-
-        let keypair = crate::crypto::keypair_from_hex(private_key_hex)?;
-        keypair.address_string
-    };
+    let account_pubkey =
+        thru_base::tn_tools::Pubkey::from_bytes(&config.keys.resolve_public_key(account)?);
 
     if !json_format {
         output::print_info(&format!(
@@ -1345,6 +1316,40 @@ fn vm_error_strings(code: i32) -> (String, String) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fee_payer_accepts_unregistered_file_reference() {
+        let (_guard, keys) =
+            crate::keys::KeyManager::test_fixture(&[("payer", [1u8; 32]), ("target", [2u8; 32])]);
+        let mut config = Config {
+            keys,
+            ..Config::default()
+        };
+        let expected_payer = config.keys.public_key("payer").unwrap();
+        let expected_target = config.keys.public_key("target").unwrap();
+        let reference = config.keys.get_entry("payer").unwrap().reference();
+        config.keys.remove_key("payer").unwrap();
+        let mut target = config.keys.get_entry("target").unwrap().clone();
+        target.source = crate::keys::KeySource::MacosKeychain {
+            id: "unavailable-account-public-metadata-test".to_string(),
+        };
+        config.keys.insert_entry("target", target, true).unwrap();
+
+        let (payer, target) =
+            resolve_fee_payer_and_target(&config, Some(&reference), "target").unwrap();
+        assert_eq!(payer.public_key, expected_payer);
+        assert_eq!(target.to_bytes().unwrap(), expected_target);
+    }
+
+    #[test]
+    fn fee_payer_preserves_explicit_source_error() {
+        let guard = tempfile::tempdir().unwrap();
+        let reference = format!("file:{}", guard.path().join("missing.key").display());
+        let config = Config::default();
+        let expected = config.keys.load_key(&reference).unwrap_err().to_string();
+        let error = resolve_fee_payer_and_target(&config, Some(&reference), "target").unwrap_err();
+        assert_eq!(error.to_string(), expected);
+    }
 
     #[tokio::test]
     async fn test_create_rpc_client() {

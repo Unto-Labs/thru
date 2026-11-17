@@ -58,18 +58,18 @@ import {
   CbookHeader,
   CreateOrderEntryInstructionBuilder,
   ExchangeInitializeInstructionBuilder,
-  ExchangeMetaAccount,
+  ExchangeMetaAccountPayload,
   ExchangeSetAdminInstructionBuilder,
   ExchangeSetStatusInstructionBuilder,
   FeeClaimInstructionBuilder,
   FundingUpdateInstructionBuilder,
   LiquidateInstructionBuilder,
-  MarginAccount as MarginAccountView,
   MarginAccountCreateInstructionBuilder,
+  MarginAccountPayload,
   MarginLinkInstructionBuilder,
   MarginRecordEntryBuilder,
   MarginTransferInstructionBuilder,
-  MarketAccount as MarketAccountView,
+  MarketAccountPayload,
   MarketSetCrossInstructionBuilder,
   MarketSetFeesInstructionBuilder,
   MarketSetVaultInstructionBuilder,
@@ -166,11 +166,11 @@ export const PERP_INSTRUCTION_MARGIN_UNLINK = 0x18;
 export const PERP_INSTRUCTION_MARGIN_TRANSFER = 0x19;
 export const PERP_INSTRUCTION_MARKET_SET_VAULT = 0x1a;
 export const PERP_INSTRUCTION_MARKET_SET_CROSS = 0x1b;
-/* The loss waterfall (0.5.0). */
+/* The loss waterfall. */
 export const PERP_INSTRUCTION_INSURANCE_DEPOSIT = 0x1e;
 export const PERP_INSTRUCTION_RESOLVE_BAD_DEBT = 0x21;
 export const PERP_INSTRUCTION_MARKET_SET_RISK_PARAMS = 0x22;
-/* Trading fees and builder codes (0.5.0). */
+/* Trading fees and builder codes. */
 export const PERP_INSTRUCTION_MARKET_SET_FEES = 0x1c;
 export const PERP_INSTRUCTION_FEE_CLAIM = 0x1d;
 export const PERP_INSTRUCTION_SEAT_SET_FEE_RECEIVER = 0x1f;
@@ -279,7 +279,18 @@ export const PERP_MODIFY_FLAG_FAIL_IF_OUT_OF_RANGE = 1 << 0;
 export const PERP_MODIFY_FLAG_HAS_CLIENT_ID = 1 << 1;
 export const PERP_MODIFY_FLAG_HAS_ORDER_ID = 1 << 2;
 
-export const PERP_MARKET_MAGIC = 0x79;
+/* Account discriminators (PerpProgramAccount.account_type, byte 0 of every
+   account the program owns; thru-perps/tn_perp_program/base.h).  A layout
+   is never edited in place: a changed or new layout takes the next unused
+   value. */
+export const PERP_ACCOUNT_TYPE_EXCHANGE_META = 1;
+/** A market's seat arena: the 512-byte market header, then the seats. */
+export const PERP_ACCOUNT_TYPE_MARKET = 2;
+export const PERP_ACCOUNT_TYPE_MARGIN = 3;
+export const PERP_ACCOUNT_TYPE_ORDER_ARENA = 4;
+/** A bids or asks book. */
+export const PERP_ACCOUNT_TYPE_CBOOK = 5;
+/** The market header (market_t, byte 0 its discriminator). */
 export const PERP_MARKET_ACCOUNT_SIZE = 512;
 
 /* Funding: mirrors thru-perps/tn_perp_program/utils/funding.h.  Rates are integer ticks of 1e-6. */
@@ -299,12 +310,13 @@ export const PERP_PPM_DENOMINATOR = 1_000_000n;
 export const PERP_FEE_MAX_PPM = 10_000;
 /** How long an increase of the taker fee or of the builder cap waits. */
 export const PERP_FEE_INCREASE_DELAY_NS = 3_600_000_000_000n;
-/** The seat arena's header entry starts here; seat index 1 follows it. */
-export const PERP_SEAT_MANAGER_RESERVED_SIZE = 512;
+/** The seat arena's header entry starts here (after the market header);
+    seat index 1 follows it. */
+export const PERP_SEAT_MANAGER_RESERVED_SIZE = PERP_MARKET_ACCOUNT_SIZE;
 /** Seat flags word: bit 0 always set (an active arena entry), bit 1 cross. */
 export const PERP_SEAT_FLAG_ACTIVE = 1n;
 export const PERP_SEAT_FLAG_CROSS = 2n;
-/** A builder's fee seat (0.5.0): isolated, flat, never trades; irreversible. */
+/** A builder's fee seat: isolated, flat, never trades; irreversible. */
 export const PERP_SEAT_FLAG_FEE = 4n;
 /* A seat's builder approval lives in its flags (utils/fees.h): bits 8-21
    the highest rate approved (ppm), bits 22-41 the builder's seat index
@@ -313,26 +325,27 @@ export const PERP_SEAT_APPROVAL_PPM_SHIFT = 8n;
 export const PERP_SEAT_APPROVAL_PPM_MASK = (1n << 14n) - 1n;
 export const PERP_SEAT_APPROVAL_SEAT_SHIFT = 22n;
 export const PERP_SEAT_APPROVAL_SEAT_MASK = (1n << 20n) - 1n;
-export const PERP_MARGIN_MAGIC = 0x7a;
-/** margin_account_t (432 bytes) plus one reserved byte: a length no other
-    account of the program has (every other layout is a multiple of 8; see
-    TN_PERP_MARGIN_ACCOUNT_SZ).  The leading byte is PERP_MARGIN_MAGIC. */
-export const PERP_MARGIN_ACCOUNT_SIZE = 433;
+/** margin_account_t (utils/margin.h); byte 0 is PERP_ACCOUNT_TYPE_MARGIN.
+    Other accounts can have this size too (a 52-level cbook): the
+    discriminator, not the size, tells a margin account apart. */
+export const PERP_MARGIN_ACCOUNT_SIZE = 432;
 export const PERP_MARGIN_MAX_LINKS = 8;
 export const PERP_MARGIN_MAX_RECORDS = 4;
 export const PERP_MARGIN_SEED_PREFIX = 'perp_margin';
-export const PERP_EXCHANGE_META_ACCOUNT_SIZE = 96;
-export const PERP_EXCHANGE_META_MAGIC = 0xf17eda2c9e290078n;
-export const PERP_EXCHANGE_META_VERSION = 1;
+/** exchange_meta_t (utils/exchange.h); byte 0 is PERP_ACCOUNT_TYPE_EXCHANGE_META. */
+export const PERP_EXCHANGE_META_ACCOUNT_SIZE = 88;
 export const PERP_EXCHANGE_META_SEED = fixedSeed('exchange_meta');
 export const PERP_SEAT_ARENA_HEADER_SIZE = 128;
 export const PERP_SEAT_ENTRY_SIZE = 128;
 export const PERP_SEAT_ARENA_ENTRIES_OFFSET =
   PERP_SEAT_MANAGER_RESERVED_SIZE + PERP_SEAT_ARENA_HEADER_SIZE;
 export const PERP_ORDER_ARENA_HEADER_SIZE = 64;
-/** 8 reserved bytes, the arena header, then order entry 1. */
+/** The discriminator byte padded to 8 (seven zero bytes), the arena header,
+    then order entry 1. */
 export const PERP_ORDER_ARENA_ENTRIES_OFFSET = 8 + PERP_ORDER_ARENA_HEADER_SIZE;
 export const PERP_ORDER_ENTRY_SIZE = 64;
+/** cbook_header_t: discriminator, 3 reserved bytes, best level index u32,
+    best price in ticks u64. */
 export const PERP_CBOOK_HEADER_SIZE = 16;
 export const PERP_CBOOK_LEVEL_SIZE = 8;
 export const PERP_CBOOK_MAX_SIZE = ((1 << 24) - PERP_CBOOK_HEADER_SIZE) / PERP_CBOOK_LEVEL_SIZE;
@@ -396,7 +409,7 @@ export interface PerpMarketRecordArgs {
   /** Oracle feed account (read-only). Required by every instruction that
       needs the mark: post/match, withdraw and liquidate. Absent = 0xffff. */
   oracleFeedAccountBytes?: Uint8Array;
-  /** Builder code (0.5.0): every order the record's seat sends pays the fee
+  /** Builder code: every order the record's seat sends pays the fee
       seat builderSeatIndex builderFeePpm of its filled notional as taker
       (capped by the market's builder cap), and its resting orders carry
       the terms.  Needs a seat in the record; absent (0) = no builder. */
@@ -561,7 +574,6 @@ export interface PerpFunding extends PerpFundingParams {
 }
 
 export interface PerpMarket {
-  magic: number;
   statusFlags: number;
   exchangeStatusFlags: number;
   lotSize: bigint;
@@ -571,8 +583,8 @@ export interface PerpMarket {
   maxPositionLots: bigint;
   openInterestLots: bigint;
   /** Quote the vault is short of what the seats are owed, not yet resolved
-      by the loss waterfall (0.5.0): while nonzero the market's withdrawals
-      are frozen.  Before 0.5.0 it was only recorded (cumulative). */
+      by the loss waterfall: while nonzero the market's withdrawals are
+      frozen. */
   badDebt: bigint;
   orderArena: string;
   bidsCbook: string;
@@ -587,17 +599,15 @@ export interface PerpMarket {
   liquidationFeeBps: number;
   oracleExponent: number;
   maxMarkAgeNs: bigint;
-  /** Optional so callers can build markets without funding (funding off). */
-  funding?: PerpFunding;
+  /** Funding state (premiumMultiplier 0: funding off). */
+  funding: PerpFunding;
   /** Share of a cross seat's positive unrealized PnL left out of initial
-      margin, bps (0 = counted in full; absent reads as 0). */
-  crossUpnlHaircutBps?: number;
-  /** The loss waterfall's state (absent before 0.5.0: no insurance, no
-      loss charges, nothing frozen for bad debt). */
-  risk?: PerpMarketRisk;
-  /** Trading fee rates (absent before 0.5.0: no fees, no builder codes).
-      Every rate 0 charges nothing. */
-  fees?: PerpMarketFees;
+      margin, bps (0 = counted in full). */
+  crossUpnlHaircutBps: number;
+  /** The loss waterfall's state. */
+  risk: PerpMarketRisk;
+  /** Trading fee rates.  Every rate 0 charges nothing. */
+  fees: PerpMarketFees;
 }
 
 /** A market's trading fee rates, parts per million of filled notional
@@ -637,8 +647,6 @@ export interface PerpMarketRisk {
 }
 
 export interface PerpExchangeMeta {
-  magic: bigint;
-  version: number;
   statusFlags: number;
   tokenProgram: string;
   exchangeAdmin: string;
@@ -684,13 +692,13 @@ export interface PerpSeatEntry {
   fundingSnapshot?: bigint;
   /** Sub-atom funding credit carried to the next settlement, [0, 1e6). */
   fundingCarry?: number;
-  /** A builder's fee seat (seat flags bit 2, PERP_SEAT_FLAG_FEE, 0.5.0):
+  /** A builder's fee seat (seat flags bit 2, PERP_SEAT_FLAG_FEE):
       builders are paid into it; it never trades, rests orders or links.
-      Absent on any other seat and before 0.5.0. */
+      Absent on any other seat. */
   feeReceiver?: boolean;
   /** The one builder the seat lets charge its resting orders as maker, up
-      to maxFeePpm (seat flags bits 8-41, 0.5.0).  Absent when the seat
-      approves none and before 0.5.0. */
+      to maxFeePpm (seat flags bits 8-41).  Absent when the seat approves
+      none. */
   builderApproval?: PerpBuilderApproval;
 }
 
@@ -829,9 +837,9 @@ export interface PerpOrderEntry {
   orderId: bigint;
   clientId: Uint8Array;
   expirationTime: bigint;
-  /** The builder code the order was posted with (0.5.0): a maker fill pays
+  /** The builder code the order was posted with: a maker fill pays
       the builder min(feePpm, the seat's approval for it, the market's cap).
-      Absent when the order has none and before 0.5.0. */
+      Absent when the order has none. */
   builder?: PerpOrderBuilder;
 }
 
@@ -1026,7 +1034,7 @@ export type ParsedPerpEvent =
       roundNs: bigint;
     })
   | (ParsedPerpEventBase & {
-      /** The loss waterfall took a deficit (0.5.0). */
+      /** The loss waterfall took a deficit. */
       variant: 'loss';
       market: string;
       deficit: bigint;
@@ -1046,7 +1054,7 @@ export type ParsedPerpEvent =
       cause: 'isolated' | 'write_off' | 'resolve';
     })
   | (ParsedPerpEventBase & {
-      /** The insurance balance changed outside a loss (0.5.0). */
+      /** The insurance balance changed outside a loss. */
       variant: 'insurance';
       market: string;
       amount: bigint;
@@ -1060,7 +1068,7 @@ export type ParsedPerpEvent =
   | (ParsedPerpEventBase & {
       /** The fees of one create_order instruction (kind trade) or a
           protocol fee claim (kind claim: the amount in protocolFee, the
-          claiming seat in seatIndex, every other amount 0) (0.5.0). */
+          claiming seat in seatIndex, every other amount 0). */
       variant: 'fee';
       market: string;
       kind: 'trade' | 'claim';
@@ -1571,7 +1579,7 @@ export function perpLotInitialMargin(market: Pick<PerpMarket, 'lotSize' | 'initi
 /** Taker capacity (seat_max_buy_lots_given): closing short lots are
     always allowed; opening lots are limited by the position limit and by
     max(free, 0) / ceil(lotSize * price * initialMarginBps / 10000).  With
-    trading fees (0.5.0) pass `feePerLot` (perpFeePerLot at the price): every
+    trading fees pass `feePerLot` (perpFeePerLot at the price): every
     lot of the fill, the closing ones included, may be charged up to it, so
     the closing lots' fees come out of free first and each opened lot needs
     its margin plus its fee.  0 (the default, and any market without fees)
@@ -1591,7 +1599,7 @@ export function perpMaxSellLots(market: PerpMarginMarket, seat: PerpMarginSeat, 
 export type PerpFundingSeat = PerpMarginSeat & Pick<PerpSeatEntry, 'fundingSnapshot' | 'fundingCarry'>;
 
 export function perpFundingEnabled(market: Pick<PerpMarket, 'funding'>): boolean {
-  return (market.funding?.premiumMultiplier ?? 0) !== 0;
+  return market.funding.premiumMultiplier !== 0;
 }
 
 /** The hourly rate (ticks) a round turns premiumSum into. */
@@ -1662,11 +1670,11 @@ export function perpFundingSampleDue(funding: Pick<PerpFunding, 'lastSampleNs'>,
 }
 
 /** The index a seat settles against: the funding index plus the loss
-    offset of its side (0.5.0; a flat seat's is the funding index). */
+    offset of its side (a flat seat's is the funding index). */
 export function perpSeatSideIndex(market: Pick<PerpMarket, 'funding' | 'risk'>, seat: Pick<PerpSeatEntry, 'longLots' | 'shortLots'>): bigint {
-  const index = market.funding?.index ?? 0n;
-  if (seat.longLots > 0n) return index + (market.risk?.lossOffsetLong ?? 0n);
-  if (seat.shortLots > 0n) return index + (market.risk?.lossOffsetShort ?? 0n);
+  const index = market.funding.index;
+  if (seat.longLots > 0n) return index + market.risk.lossOffsetLong;
+  if (seat.shortLots > 0n) return index + market.risk.lossOffsetShort;
   return index;
 }
 
@@ -1743,25 +1751,15 @@ export function perpSeatBuilderApproval(flags: bigint): PerpBuilderApproval | un
   return { builderSeatIndex, maxFeePpm: Number((flags >> PERP_SEAT_APPROVAL_PPM_SHIFT) & PERP_SEAT_APPROVAL_PPM_MASK) };
 }
 
-const NO_FEES: Readonly<PerpFeeParams> = Object.freeze({
-  takerFeePpm: 0,
-  makerRebatePpm: 0,
-  builderFeeCapPpm: 0,
-  feeInsuranceSharePpm: 0,
-  liqInsuranceSharePpm: 0,
-});
-
 /** Whether the market's pending increases have taken effect at nowNs (fee_pending_due). */
 export function perpFeesPendingDue(fees: Pick<PerpMarketFees, 'pendingActivationNs'>, nowNs: bigint): boolean {
   return fees.pendingActivationNs !== 0n && nowNs >= fees.pendingActivationNs;
 }
 
 /** The rates in effect at block time nowNs (fee_taker_ppm,
-    fee_builder_cap_ppm): a pending increase replaces its rate once due.
-    A market without fees (before 0.5.0) charges nothing. */
+    fee_builder_cap_ppm): a pending increase replaces its rate once due. */
 export function perpEffectiveFeeRates(market: Pick<PerpMarket, 'fees'>, nowNs: bigint): PerpFeeParams {
   const fees = market.fees;
-  if (!fees) return { ...NO_FEES };
   const due = perpFeesPendingDue(fees, nowNs);
   return {
     takerFeePpm: due && fees.pendingTakerFeePpm ? fees.pendingTakerFeePpm : fees.takerFeePpm,
@@ -1794,9 +1792,8 @@ export function perpFeeParamsProblem(params: PerpFeeParams): string | null {
     PERP_FEE_INCREASE_DELAY_NS (restarting the delay), a rate at or below it
     applies at once and drops its pending increase; the rebate must not
     exceed the taker fee in effect after the change. */
-export function perpFeesAfterSet(fees: PerpMarketFees | undefined, nowNs: bigint, params: PerpFeeParams): PerpMarketFees | null {
+export function perpFeesAfterSet(current: PerpMarketFees, nowNs: bigint, params: PerpFeeParams): PerpMarketFees | null {
   if (perpFeeParamsProblem(params)) return null;
-  const current: PerpMarketFees = fees ?? { ...NO_FEES, pendingTakerFeePpm: 0, pendingBuilderFeeCapPpm: 0, pendingActivationNs: 0n };
   const effective = perpEffectiveFeeRates({ fees: current }, nowNs);
   const due = perpFeesPendingDue(current, nowNs);
   let taker = effective.takerFeePpm;
@@ -2058,7 +2055,7 @@ export function perpAverageEntryPrice(market: Pick<PerpMarket, 'lotSize'>, seat:
     price (max for a long target, min for a short one), and the fee the
     target pays, min(notional_at_p_liq * liquidationFeeBps / 10000,
     target.quantityQuote after the transfer).  Of that fee, floor(fee *
-    liqInsuranceSharePpm / 1e6) goes to insurance (0.5.0) and the liquidator
+    liqInsuranceSharePpm / 1e6) goes to insurance and the liquidator
     receives the rest (liquidatorFee).  Preview only; the program is
     authoritative. */
 export function perpLiquidationPreview(
@@ -2150,7 +2147,7 @@ export function createPerpMarketRecordInstruction(args: PerpMarketRecordArgs): I
     ceil((64 + data_sz) / 4096) per new account, and market_create creates five:
     the seat arena (128640 bytes: 32), the order arena (64072 bytes: 16), the
     bids and asks cbooks (96 bytes: 1 each) and the quote vault token account
-    (73 bytes: 1). Requesting fewer fails with SU_EXHAUSTED. */
+    (74 bytes: 1). Requesting fewer fails with SU_EXHAUSTED. */
 export const PERP_MARKET_CREATE_STATE_UNITS = 51;
 
 /** The named market authority must authorize the transaction. */
@@ -2565,44 +2562,66 @@ export function concatPerpInstructions(...instructions: InstructionData[]): Inst
 
 /* Account parsers **********************************************************/
 
+/* Every account the program owns starts with its discriminator
+   (PerpProgramAccount.account_type); a parser refuses any other.  The
+   generated payload views lay out the bytes after it, so each parser reads
+   data.subarray(1) and its offsets stay those of the C structs. */
+const PERP_ACCOUNT_KIND: Record<number, string> = {
+  [PERP_ACCOUNT_TYPE_EXCHANGE_META]: 'exchange metadata',
+  [PERP_ACCOUNT_TYPE_MARKET]: 'market',
+  [PERP_ACCOUNT_TYPE_MARGIN]: 'margin',
+  [PERP_ACCOUNT_TYPE_ORDER_ARENA]: 'order arena',
+  [PERP_ACCOUNT_TYPE_CBOOK]: 'cbook',
+};
+
+/** The discriminator of a perp program account (its first byte); null for
+    empty data. */
+export function perpAccountType(accountOrData: Account | Uint8Array): number | null {
+  const data = accountData(accountOrData, 'perp account');
+  return data.length ? data[0] : null;
+}
+
+function perpPayload(data: Uint8Array, accountType: number, what: string): Uint8Array {
+  if (data[0] !== accountType) {
+    const found = data.length ? PERP_ACCOUNT_KIND[data[0]] ?? `account type ${data[0]}` : 'empty data';
+    throw new Error(`account is not a perp ${what} account (${found})`);
+  }
+  return data.subarray(1);
+}
+
 export function parsePerpExchangeMetaAccount(accountOrData: Account | Uint8Array): PerpExchangeMeta {
   const data = accountData(accountOrData, 'perp exchange metadata account');
+  const payload = perpPayload(data, PERP_ACCOUNT_TYPE_EXCHANGE_META, 'exchange metadata');
   if (data.length !== PERP_EXCHANGE_META_ACCOUNT_SIZE) {
     throw new Error(`perp exchange metadata account must be ${PERP_EXCHANGE_META_ACCOUNT_SIZE} bytes`);
   }
-  const parsed = ExchangeMetaAccount.from_array(data);
+  const parsed = ExchangeMetaAccountPayload.from_array(payload);
   if (!parsed) throw new Error('perp exchange metadata account data is malformed');
-  if (parsed.get_magic() !== PERP_EXCHANGE_META_MAGIC) {
-    throw new Error('perp exchange metadata account has an invalid magic value');
-  }
-  if (parsed.get_version() !== PERP_EXCHANGE_META_VERSION) {
-    throw new Error('perp exchange metadata account has an unsupported version');
-  }
   return {
-    magic: parsed.get_magic(),
-    version: parsed.get_version(),
     statusFlags: parsed.get_status_flags(),
     tokenProgram: pubkeyViewToAddress(parsed.get_token_program_pubkey()),
     exchangeAdmin: pubkeyViewToAddress(parsed.get_exchange_admin_pubkey()),
   };
 }
 
+/** The market header of a seat arena (the whole arena, or its first
+    PERP_MARKET_ACCOUNT_SIZE bytes read on their own). */
 export function parsePerpMarketAccount(accountOrData: Account | Uint8Array): PerpMarket {
   const data = accountData(accountOrData, 'perp market account');
-  if (data[0] !== PERP_MARKET_MAGIC) throw new Error('account is not a perp market account');
+  const payload = perpPayload(data, PERP_ACCOUNT_TYPE_MARKET, 'market');
   if (data.length < PERP_MARKET_ACCOUNT_SIZE) {
     throw new Error(`perp market account must be at least ${PERP_MARKET_ACCOUNT_SIZE} bytes`);
   }
-  const parsed = MarketAccountView.from_array(data);
+  const parsed = MarketAccountPayload.from_array(payload.subarray(0, PERP_MARKET_ACCOUNT_SIZE - 1));
   if (!parsed) throw new Error('perp market account data is malformed');
   return marketFromView(parsed);
 }
 
 export function parsePerpMarginAccount(accountOrData: Account | Uint8Array): PerpMarginAccount {
   const data = accountData(accountOrData, 'perp margin account');
-  if (data[0] !== PERP_MARGIN_MAGIC) throw new Error('account is not a perp margin account');
+  const payload = perpPayload(data, PERP_ACCOUNT_TYPE_MARGIN, 'margin');
   if (data.length !== PERP_MARGIN_ACCOUNT_SIZE) throw new Error(`perp margin account must be ${PERP_MARGIN_ACCOUNT_SIZE} bytes`);
-  const view = MarginAccountView.from_array(data);
+  const view = MarginAccountPayload.from_array(payload);
   if (!view) throw new Error('perp margin account data is malformed');
   const linkCount = view.get_link_cnt();
   if (linkCount > PERP_MARGIN_MAX_LINKS) throw new Error(`perp margin account has ${linkCount} links`);
@@ -2624,11 +2643,11 @@ export function parsePerpSeatArenaAccount(accountOrData: Account | Uint8Array): 
   seats: PerpSeatEntry[];
 } {
   const data = accountData(accountOrData, 'perp seat arena account');
-  if (data[0] !== PERP_MARKET_MAGIC) throw new Error('account is not a perp seat arena');
+  const payload = perpPayload(data, PERP_ACCOUNT_TYPE_MARKET, 'market');
   if (data.length < PERP_SEAT_ARENA_ENTRIES_OFFSET) {
     throw new Error(`perp seat arena must be at least ${PERP_SEAT_ARENA_ENTRIES_OFFSET} bytes`);
   }
-  const parsed = SeatArenaAccount.from_array(data);
+  const parsed = SeatArenaAccount.from_array(payload);
   if (!parsed) throw new Error('perp seat arena account data is malformed');
   const { slots, entries: seats } = activeArenaSlots(parsed.get_entries_length(), (idx) => {
     const entry = parsed.get_entries_at(idx);
@@ -2667,7 +2686,8 @@ export function parsePerpOrderArenaAccount(accountOrData: Account | Uint8Array):
   orders: PerpOrderEntry[];
 } {
   const data = accountData(accountOrData, 'perp order arena account');
-  const parsed = OrderArenaAccount.from_array(data);
+  const payload = perpPayload(data, PERP_ACCOUNT_TYPE_ORDER_ARENA, 'order arena');
+  const parsed = OrderArenaAccount.from_array(payload);
   if (!parsed) throw new Error('perp order arena account data is malformed');
   const { slots, entries: orders } = activeArenaSlots(parsed.get_entries_length(), (idx) => {
     const entry = parsed.get_entries_at(idx);
@@ -2700,7 +2720,8 @@ function activeArenaSlots<T>(
 
 export function parsePerpCbookAccount(accountOrData: Account | Uint8Array): PerpCbook {
   const data = accountData(accountOrData, 'perp cbook account');
-  const parsed = CbookAccount.from_array(data);
+  const payload = perpPayload(data, PERP_ACCOUNT_TYPE_CBOOK, 'cbook');
+  const parsed = CbookAccount.from_array(payload);
   if (!parsed) throw new Error('perp cbook account data is malformed');
   const header = parsed.get_header();
   return {
@@ -2714,10 +2735,11 @@ export function parsePerpCbookAccount(accountOrData: Account | Uint8Array): Perp
     so a book of millions of levels costs no per-level allocation. */
 export function parsePerpCbookHeader(accountOrData: Account | Uint8Array): PerpCbookHeader {
   const data = accountData(accountOrData, 'perp cbook account');
+  const payload = perpPayload(data, PERP_ACCOUNT_TYPE_CBOOK, 'cbook');
   if (data.length < PERP_CBOOK_HEADER_SIZE || (data.length - PERP_CBOOK_HEADER_SIZE) % PERP_CBOOK_LEVEL_SIZE) {
     throw new Error('perp cbook account data is malformed');
   }
-  const header = CbookHeader.from_array(data.subarray(0, PERP_CBOOK_HEADER_SIZE));
+  const header = CbookHeader.from_array(payload.subarray(0, PERP_CBOOK_HEADER_SIZE - 1));
   if (!header) throw new Error('perp cbook account data is malformed');
   return {
     bestLevelIndex: header.get_best_level_idx(),
@@ -3273,12 +3295,11 @@ function liquidationSideFromValue(value: number): 'long' | 'short' {
   throw new Error(`unknown perp liquidation side ${value}`);
 }
 
-/** Every parser goes through here, so an arena with the market magic but an
-    older, shorter header (whose margin fields decode as nonsense) fails to
-    parse instead of yielding a market nothing can margin against. */
-function marketFromView(view: MarketAccountView): PerpMarket {
+/** Every parser goes through here, so a header whose margin fields decode
+    as nonsense fails to parse instead of yielding a market nothing can
+    margin against. */
+function marketFromView(view: MarketAccountPayload): PerpMarket {
   return assertPerpMarketHeader({
-    magic: view.get_magic(),
     statusFlags: view.get_status_flags(),
     exchangeStatusFlags: view.get_exchange_status_flags(),
     lotSize: view.get_lot_size(),
@@ -3357,8 +3378,8 @@ function joinI128(lo: bigint, hi: bigint): bigint {
 }
 
 /** 1 <= maintenance < initial <= 10000, liquidationFeeBps <= 10000, markNum
-    and markDen > 0: a decoded header is a margined market (every ABI
-    version's decoder checks this). */
+    and markDen > 0: a decoded header is a margined market (every parser
+    checks this). */
 export function assertPerpMarketHeader(market: PerpMarket): PerpMarket {
   const { initialMarginBps: initial, maintenanceMarginBps: maintenance, liquidationFeeBps: fee, markNum, markDen } = market;
   const problem = !(initial >= 1 && initial <= PERP_BPS_DENOMINATOR)
@@ -3402,7 +3423,7 @@ function seatEntryFromView(view: SeatEntryView, seatIndex: number): PerpSeatEntr
   };
 }
 
-/** A seat's fee seat mark and builder approval (0.5.0), set only when
+/** A seat's fee seat mark and builder approval, set only when
     present, from its flags word. */
 export function perpSeatFeeFields(flags: bigint): Pick<PerpSeatEntry, 'feeReceiver' | 'builderApproval'> {
   const builderApproval = perpSeatBuilderApproval(flags);

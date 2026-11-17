@@ -18,7 +18,7 @@ memset( void * dest, int c, ulong n ) {
 
 void *
 memcpy( void * dest, void const * src, ulong n ) {
-  uchar *       d = (uchar *)dest;
+  uchar       * d = (uchar *)dest;
   uchar const * s = (uchar const *)src;
   while( n-- )
     *d++ = *s++;
@@ -104,7 +104,8 @@ tsdk_printf( char const * fmt, ... ) {
   }
   if( err >= (int)sizeof( buf ) ) {
     tsys_log( buf, sizeof( buf ) - 1 );
-  } else {
+  }
+  else {
     tsys_log( buf, (ulong)err );
   }
 }
@@ -123,7 +124,7 @@ tsdk_is_account_authorized_by_idx( ushort account_idx ) {
   /* No parent frames to check */
   if( ss->call_depth == 1 ) return 0;
 
-  tn_pubkey_t const *         accs        = tsdk_txn_get_acct_addrs( tsdk_get_txn( ) );
+  tn_pubkey_t const         * accs        = tsdk_txn_get_acct_addrs( tsdk_get_txn( ) );
   tsdk_account_meta_t const * target_meta = tsdk_get_account_meta( account_idx );
 
   /* Walk shadow stack from most recent parent down to root.
@@ -156,6 +157,40 @@ tsdk_is_account_authorized_by_idx( ushort account_idx ) {
 
     /* Existing behavior: program in call chain is authorized */
     if( frame->program_acc_idx == account_idx ) return 1;
+  }
+
+  return 0;
+}
+
+int
+tsdk_is_account_explicitly_authorized( ushort account_idx ) {
+  tsdk_shadow_stack_t const * ss = tsdk_get_shadow_stack( );
+  if( ss->call_depth < 2U ) return 0;
+
+  tn_pubkey_t const         * accs        = tsdk_txn_get_acct_addrs( tsdk_get_txn( ) );
+  tsdk_account_meta_t const * target_meta = tsdk_get_account_meta( account_idx );
+
+  /* As with the generic helper, the nearest matching entry wins and a
+     frame's deauthorization takes precedence over its authorization. */
+  for( ushort i = (ushort)( ss->call_depth - 1U ); i > 0; i-- ) {
+    tsdk_shadow_stack_frame_t const * frame = &ss->stack_frames[ i ];
+    ulong auth_ptr = frame->saved_regs[ 13 ];
+    if( !auth_ptr ) continue;
+
+    tsdk_invoke_auth_t const * auth = (tsdk_invoke_auth_t const *)auth_ptr;
+    if( auth->magic != TSDK_INVOKE_AUTH_MAGIC ) continue;
+
+    ushort const * deauth = &auth->acc_idxs[ auth->auth_cnt ];
+    for( ushort j = 0; j < auth->deauth_cnt; j++ ) {
+      if( deauth[ j ] == account_idx ) return 0;
+    }
+    for( ushort j = 0; j < auth->auth_cnt; j++ ) {
+      if( auth->acc_idxs[ j ] == account_idx ) {
+        if( memcmp( &target_meta->owner, &accs[ frame->program_acc_idx ],
+                    sizeof( tn_pubkey_t ) ) == 0 ) return 1;
+        tsdk_revert( 0xBAD0A174UL );
+      }
+    }
   }
 
   return 0;
@@ -277,7 +312,7 @@ tn_pubkey_t *
 tsdk_create_program_defined_account_address( tn_pubkey_t const * owner,
                                              uchar               is_ephemeral,
                                              uchar const         seed[TN_SEED_SIZE],
-                                             tn_pubkey_t *       out_pubkey ) {
+                                             tn_pubkey_t       * out_pubkey ) {
   tsdk_sha256_t sha;
   tsdk_sha256_init( &sha );
   tsdk_sha256_append( &sha, owner, sizeof( tn_pubkey_t ) );

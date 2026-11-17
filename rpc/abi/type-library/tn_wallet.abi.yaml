@@ -2,27 +2,21 @@ abi:
   package: thru.program.wallet
   name: "Wallet Program"
   abi-version: 1
-  package-version: 0.1.0
+  package-version: 0.2.0
   description: ABI for the Wallet Program instructions, account state,
     and events
   imports:
     # thru_primitives
-    - type: onchain
-      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
-      target: abi
-      network: mainnet
-      revision: latest
+    - type: path
+      path: thru_primitives.abi.yaml
     # state_proof
-    - type: onchain
-      address: ta1l4yBjT6a7PQ4Wu_sJPQwb8jJiJ8Ei71gOuE5Dnotfrl
-      target: abi
-      network: mainnet
-      revision: latest
+    - type: path
+      path: state_proof.abi.yaml
   options:
     program-metadata:
       root-types:
         instruction-root: "PasskeyInstruction"
-        account-root: "WalletAccount"
+        account-root: "WalletProgramAccount"
         errors: "PasskeyError"
         events: "PasskeyEvent"
 
@@ -274,6 +268,39 @@ types:
 
 # ── Account state ──
 
+# Account root: byte 0 of every Wallet Program account is account_type and the
+# payload follows. One value per (account kind, layout); 0 is invalid, so a
+# zeroed account never decodes. Values are never reused: a new layout or a new
+# kind of account takes the next unused value.
+- name: WalletProgramAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: account_type
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - account_type
+            variants:
+            - name: wallet_v1
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: WalletAccount
+            - name: credential_lookup_v1
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: CredentialLookup
+
+# Wallet payload: num_auth, nonce, then num_auth + 1 authority records.
 - name: WalletAccount
   kind:
     struct:
@@ -300,6 +327,8 @@ types:
               type-ref:
                 name: AuthorityRecord
 
+# Credential lookup payload: the wallet a WebAuthn credential belongs to. The
+# account address is a PDA seeded by SHA-256(credentialId).
 - name: CredentialLookup
   kind:
     struct:
@@ -414,3 +443,17 @@ types:
               variant-type:
                 type-ref:
                   name: CredentialRegisteredEventData
+
+# Matches #[repr(u64)] PasskeyError in programs/rust/examples/wallet/types.rs:
+# 81 InvalidInstruction, 82 InvalidAccountIdx, 83 AccountNotFound,
+# 84 AccountNotWritable, 85 InvalidSize, 86 InvalidOwner, 87 InvalidSignature,
+# 88 NotValidated, 89 AccountAlreadyExists, 90 InvalidChallenge,
+# 91 AuthorityExpired, 92 PasskeyRequired, 93 SessionExpiryTooLong.
+- name: PasskeyError
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: code
+        field-type:
+          primitive: u64

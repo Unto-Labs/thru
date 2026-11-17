@@ -23,8 +23,6 @@ const market = process.argv[2] ?? perps.deployment.markets[0]!.symbol;
 const record = perps.market(market);
 const owner = signer.address;
 
-console.log(`ABI ${perps.version.abiPackageVersion} (${perps.versionDetection?.source}), cross margin: ${perps.features.crossMargin}`);
-
 if (!(await perps.getSeat(market, owner))) {
   const { signature } = await perps.send(await perps.createSeat({ market, owner }), signer);
   console.log(`created a seat in ${market}: ${signature}`);

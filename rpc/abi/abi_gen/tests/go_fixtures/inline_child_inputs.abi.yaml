@@ -1,0 +1,48 @@
+abi:
+  package: "test.inline_child_inputs"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Two inline structs each holding a named variable-size child"
+
+types:
+  - name: "A"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "n"
+            field-type:
+              primitive: u8
+          - name: "items"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["n"]
+                element-type:
+                  primitive: u8
+
+  # Each child's count is its own IR input (`left.items.n`, `right.items.n`).
+  - name: "Outer"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "left"
+            field-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "child"
+                    field-type:
+                      type-ref:
+                        name: "A"
+          - name: "right"
+            field-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "child"
+                    field-type:
+                      type-ref:
+                        name: "A"

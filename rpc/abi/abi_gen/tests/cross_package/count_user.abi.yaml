@@ -1,0 +1,66 @@
+abi:
+  package: "compliance.cross_package.user"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Arrays sized by a field of an imported struct that follows variable-size data"
+  imports:
+    - type: path
+      path: "count_child.abi.yaml"
+
+types:
+  - name: "ImportedCount"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "child"
+            field-type:
+              type-ref:
+                name: "CountChild"
+                package: "compliance.cross_package.child"
+          - name: "items"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["child", "count"]
+                element-type:
+                  primitive: u16
+          - name: "tail"
+            field-type:
+              primitive: u8
+  # The imported struct itself follows variable-size data in an inline struct.
+  - name: "WrappedImportedCount"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "wrap"
+            field-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "m"
+                    field-type:
+                      primitive: u8
+                  - name: "pad"
+                    field-type:
+                      array:
+                        size:
+                          field-ref:
+                            path: ["m"]
+                        element-type:
+                          primitive: u8
+                  - name: "child"
+                    field-type:
+                      type-ref:
+                        name: "CountChild"
+                        package: "compliance.cross_package.child"
+          - name: "items"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["wrap", "child", "count"]
+                element-type:
+                  primitive: u8

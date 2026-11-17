@@ -1,0 +1,90 @@
+/* Popup enter/exit via Base UI's [data-starting-style] / [data-ending-style]. */
+
+.uds-navmenu__list {
+  display: flex;
+  gap: var(--space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.uds-navmenu__trigger {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: 1px solid transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.uds-navmenu__trigger:hover,
+.uds-navmenu__trigger[data-popup-open] {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong);
+}
+
+.uds-navmenu__positioner {
+  z-index: 60;
+}
+
+.uds-navmenu__popup {
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-secondary);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-3);
+  width: 280px;
+  border-radius: var(--radius-none);
+  transition:
+    opacity var(--duration-med) var(--ease-standard),
+    transform var(--duration-med) var(--ease-standard);
+}
+.uds-navmenu__popup[data-starting-style],
+.uds-navmenu__popup[data-ending-style] {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .uds-navmenu__popup {
+    transition: opacity var(--duration-fast) var(--ease-standard);
+  }
+  .uds-navmenu__popup[data-starting-style],
+  .uds-navmenu__popup[data-ending-style] {
+    transform: none;
+  }
+}
+
+.uds-navmenu__link {
+  display: block;
+  padding: var(--space-2);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+.uds-navmenu__link:hover {
+  background: var(--color-surface-lower);
+  text-decoration: none;
+}
+.uds-navmenu__link b {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.uds-navmenu__link span {
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+}
+
+:where([data-theme="dark"], :root[data-theme="dark"]) .uds-navmenu__trigger:hover,
+:where([data-theme="dark"], :root[data-theme="dark"]) .uds-navmenu__trigger[data-popup-open] {
+  background: var(--color-surface-higher);
+  border-color: var(--color-border-secondary);
+}
+
+:where([data-theme="dark"], :root[data-theme="dark"]) .uds-navmenu__popup {
+  border-color: var(--color-border-secondary);
+  color: var(--color-text-primary);
+}
+

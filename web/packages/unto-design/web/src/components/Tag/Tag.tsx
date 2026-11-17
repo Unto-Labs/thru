@@ -1,0 +1,20 @@
+import * as React from "react";
+import "./Tag.css";
+
+export type TagTone = "neutral" | "dark" | "brick" | "sky" | "grass" | "yellow";
+
+export interface TagProps extends React.HTMLAttributes<HTMLSpanElement> {
+  tone?: TagTone;
+}
+
+/**
+ * Tag (a.k.a. Chip) — a solid-fill mono label. `tone` selects the fill/text
+ * pair.
+ */
+export const Tag = React.forwardRef<HTMLSpanElement, TagProps>(function Tag(
+  { tone = "neutral", className, ...props },
+  ref,
+) {
+  const cls = ["uds-tag", `uds-tag--${tone}`, className].filter(Boolean).join(" ");
+  return <span ref={ref} className={cls} {...props} />;
+});

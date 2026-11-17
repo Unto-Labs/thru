@@ -101,6 +101,9 @@ export function createParallelHistory(options: ParallelHistoryOptions): {
   const readRange = async (source: EventSource, range: Range): Promise<void> => {
     const filter = options.rangeFilter(range.lo, range.hi);
     let pageToken: string | undefined;
+    /* Events this range has read, and whether they have sized later ranges. */
+    let read = 0;
+    let observed = false;
     do {
       let response;
       for (let attempt = 0; ; attempt++) {
@@ -117,11 +120,15 @@ export function createParallelHistory(options: ParallelHistoryOptions): {
         }
       }
       options.checkPage(response.events);
-      const first = pageToken === undefined;
       pageToken = response.page?.nextPageToken || undefined;
-      if (first) {
+      read += response.events.length;
+      /* The RPC scans a bounded number of slots per page, so an empty page
+         with a token says nothing about density: size from the first page
+         with events, or from the whole range once it is read. */
+      if (!observed && (read > 0 || !pageToken)) {
+        observed = true;
         const last = response.events[response.events.length - 1]?.slot ?? range.lo;
-        observe(pageToken ? last - range.lo + 1n : range.hi - range.lo, response.events.length);
+        observe(pageToken ? last - range.lo + 1n : range.hi - range.lo, read);
       }
       buffered += response.events.length;
       if (response.events.length) range.pages.push(response.events);

@@ -13,12 +13,10 @@ Typed TypeScript clients for Thru's core on-chain programs: token, AMM, CLOB, or
 - unit helpers;
 - an action catalog with JSON Schemas for LLM agents.
 
-It also decodes every ABI version of the program into one domain model and
-detects a deployment's version from its program hash.
+It decodes accounts and events with the program's latest ABI only.
 `@thru/programs/perp` is an alias of the same module.
 
-See [src/perp/README.md](./src/perp/README.md) for the SDK and
-[src/perp/VERSIONS.md](./src/perp/VERSIONS.md) for ABI versions.
+See [src/perp/README.md](./src/perp/README.md) for the SDK.
 
 ## Managed program primitives
 
@@ -45,6 +43,8 @@ const instructionData = createUpgradeProgramInstruction({
   programAccount: programAddressBytes,
   sourceBufferAccount: uploadBufferAddressBytes,
   sourceSize: programBytes.length,
+  // SHA-256 of exactly the uploaded bytes; the manager rejects any others.
+  sourceSha256: new Uint8Array(await crypto.subtle.digest("SHA-256", programBytes)),
 });
 ```
 
@@ -112,6 +112,73 @@ Program images must use managed image version 1 and end in an eight-byte zero
 trailer. ABI input must be valid, self-contained UTF-8 YAML; prepare or flatten
 local path imports before publishing. The default upload chunk size is 30,720
 bytes and may be set from 1,024 through 31,000 bytes.
+
+### Core program manager transaction layouts
+
+`buildCoreOperationPlan` and `buildGovernedABIOperationPlan` bind the transaction
+program and fixed account indices before review. They use atomic Multicall by
+default. When canonical Multicall is itself an operand, they instead use direct
+Core/ABI Manager execution for an EOA admin, or direct canonical Multisig
+execution for a Multisig admin. This supports pausing, upgrading, resuming and
+managing the official ABI of Multicall without executing it. Set
+`executionMode: 'direct'` explicitly to govern other accounts while Multicall
+is unavailable. The selected program occupies slot 1; additional accounts
+start at slot 2, and Multisig request references include slot 1.
+
+`proposeMultisigRequest`, `approveMultisigRequest` and `executeMultisigRequest`
+preserve this layout through voting and execution. For direct permanent Core
+creation, the submission helpers first submit and confirm a separate Core
+proof-slot refresh, then submit the approved creation. **That refresh and
+creation are not atomic.** A successful result includes
+`proof_refresh_transaction_id` as well as `transaction_id`; a failed creation
+does not undo the refresh. Low-level consumers must use
+`buildGovernanceTransactions` or `buildMultisigExecutionTransactions` and confirm
+each returned transaction in order. The singular builders reject this two-
+transaction path rather than silently omitting the refresh. Ordinary Multicall
+permanent creation continues to refresh and consume proofs atomically.
+
+Reviewed Core and official-ABI execution compares the explicitly approved program
+state with live accounts before submission and again before issuing a successful
+receipt. This includes reviewed executable commitments, metadata versions and
+lifecycle, authorities, exact account flags, and ABI revisions and content.
+Stale before-state prevents submission; direct creation rechecks it after the
+separate proof refresh. Before checking after-state, reviewed execution waits
+for `transactions.get` to report an indexed transaction with a nonzero slot:
+execution notifications can arrive before account queries see the changes.
+Like the CLI, this visibility wait polls every 500 ms, retries only `NOT_FOUND`
+or a transaction without a nonzero slot, and shares the execution's 60-second
+deadline. It never retries the transaction or a state mismatch. Proposal,
+approval and proof refresh do not approve or verify an unexecuted after-state.
+
+Core and official-ABI creation reviews bind exact runtime flags separately for
+each created account. Fresh permanent accounts receive `NEW` (`32`); permanent
+revival preserves prior flags except `DELETED` and `RECEIVE_NATIVE`. Ephemeral
+creation resets flags to `EPHEMERAL` (`8`), without `NEW`. Core also sets executable
+`PROGRAM` and applies the requested pin bit without clearing inherited permanent
+pins. Invalid before-state classes or impossible after-state flags are rejected
+before submission, rather than executing successfully and then withholding the
+receipt. This rule covers ABI metadata and content creation independently.
+
+Destruction reviews classify the executable and metadata independently. Deletion
+clears `RECEIVE_NATIVE` and adds `DELETED` for `NEW` or `EPHEMERAL` accounts;
+Core also clears executable `PROGRAM`. Reviewed removable terminal accounts may
+be exact empty corpses or absent from RPC. Older permanent accounts must remain
+present and empty. ABI close deletes only content, never its metadata. Missing
+nonterminal accounts, RPC errors, owner/flag drift and resurrection still fail.
+All other reviewed program flags remain exact; `NEW` is not masked here.
+
+A reviewed Core proposal or acceptance of a Multisig admin must include that
+candidate's explicit descriptor in `roles.after.multisigs`, even for an existing
+role. Reviewed flags must be `0` or `UNCOMPRESSABLE` (`4`); descriptors containing
+`NEW` are rejected. Submission compares its canonical owner, durable flags,
+ordered members and threshold with live state before submission and again after
+execution. Only the live account's transient `NEW` bit (`32`) is ignored, so it
+may clear between these checks without invalidating the reviewed descriptor.
+Reviewed values are never populated from RPC observations. If index visibility
+or any post-execution state check fails, `GovernanceReceiptWithheldError.receipt.transaction_id`
+identifies the transaction that already executed; no successful reviewed-state
+receipt is returned, and the expected-state manifest must not advance. These
+checks detect drift but do not provide atomic concurrency protection.
 
 ## Oracle read SDK
 
@@ -285,6 +352,45 @@ const instruction = createTransferInstruction({
 });
 ```
 
+#### Transfer tokens with a checked mint, decimals and ticker
+
+`createTransferCheckedInstruction` names the mint account and the decimals and
+ticker you expect. The token program reverts unless they match the mint, so a
+signer that reviews the instruction bytes, such as a hardware wallet, can show
+the token and the amount in whole units. The program only reads the mint
+account: list it in the transaction's read-only accounts.
+
+```typescript
+import {
+  TokenMintAccount,
+  createTransferCheckedInstruction,
+} from "@thru/programs/token";
+
+const mintData = mintAccount.data?.data;
+const mint = mintData ? TokenMintAccount.from_array(mintData) : null;
+if (!mint) throw new Error("Not a mint account");
+const tickerField = mint.get_ticker();
+
+const instruction = createTransferCheckedInstruction({
+  sourceAccountBytes,
+  destinationAccountBytes,
+  mintAccountBytes,
+  amount: 1_000_000n,
+  decimals: mint.get_decimals(),
+  // The stored ticker bytes, without the unused padding.
+  ticker: Uint8Array.from(tickerField.get_bytes()).subarray(
+    0,
+    tickerField.get_length(),
+  ),
+});
+```
+
+The ticker must equal the bytes stored in the mint, so read them from the mint
+account as shown. `parseMintAccountData` returns the ticker as display text
+with trailing zero bytes removed, which does not reproduce every stored
+ticker. You can pass a string when you know the stored ticker is plain text.
+It is encoded as UTF-8 exactly as given.
+
 #### Parse on-chain account data
 
 ```typescript
@@ -311,7 +417,7 @@ formatRawAmount(1_000_000n, 6); // "1"
 
 ### Key Capabilities
 
-- **Instruction builders** -- `createInitializeMintInstruction`, `createInitializeAccountInstruction`, `createMintToInstruction`, `createTransferInstruction`
+- **Instruction builders** -- `createInitializeMintInstruction`, `createInitializeAccountInstruction`, `createMintToInstruction`, `createTransferInstruction`, `createTransferCheckedInstruction`
 - **Address derivation** -- `deriveMintAddress`, `deriveTokenAccountAddress`, `deriveWalletSeed`
 - **Account parsing** -- `parseMintAccountData`, `parseTokenAccountData` decode raw on-chain data into typed objects
 - **Formatting utilities** -- `formatRawAmount`, `bytesToHex`, `hexToBytes`
@@ -329,6 +435,7 @@ Each instruction builder returns an `InstructionData` function that accepts an `
 | `createInitializeAccountInstruction(args)`     | Create a token account for a given owner and mint                  |
 | `createMintToInstruction(args)`                | Mint new tokens to a destination account                           |
 | `createTransferInstruction(args)`              | Transfer tokens between accounts                                   |
+| `createTransferCheckedInstruction(args)`       | Transfer tokens and check the mint, decimals and ticker on chain   |
 | `buildTokenInstructionBytes(variant, payload)` | Low-level helper to wrap a payload in a token instruction envelope |
 
 #### Derivation

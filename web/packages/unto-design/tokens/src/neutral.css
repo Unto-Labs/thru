@@ -1,0 +1,175 @@
+/* Neutral skin. Opt in with `data-uds-skin` (light) or `data-uds-skin="dark"`
+   on a container; nothing outside it changes.
+
+   The `--uds-*` role tokens are the contract: a host recolors by setting them
+   inline, and an unset one falls through to the neutral default. The rest of
+   the file remaps the tokens `web/src` components read, including raw-palette
+   reaches (Input's focus ring, Tag's accents), onto those roles. Keep this
+   file the only place the two vocabularies meet. */
+
+[data-uds-skin] {
+  --uds-background: #fafafa;
+  --uds-surface: #ffffff;
+  --uds-surface-muted: #f4f4f5;
+  --uds-surface-sunken: #ececef;
+  --uds-surface-inverse: #161619;
+
+  /* Foreground ramp: title → body → label → caption. */
+  --uds-foreground: #161619;
+  --uds-foreground-body: #2b2b31;
+  --uds-foreground-muted: #5d5d66;
+  --uds-foreground-faint: #9b9ba4;
+  --uds-foreground-inverse: #fafafa;
+
+  /* Lines. `border` is the hairline; `border-strong` is the form-control
+     outline. `focus-ring` is separate so a host can recolor focus without
+     restyling every border. */
+  --uds-border: #e5e5e8;
+  --uds-border-strong: #c9c9d1;
+  --uds-focus-ring: #161619;
+
+  /* Accent. Neutral ships ink, not a hue — a host supplies its own. */
+  --uds-accent: #161619;
+  --uds-accent-foreground: #ffffff;
+  --uds-accent-soft: #ececef;
+
+  --uds-success: #147347;
+  --uds-success-soft: #e3f5eb;
+  --uds-warning: #8a5a00;
+  --uds-warning-soft: #fdf3e0;
+  --uds-danger: #d7232a;
+  --uds-danger-soft: #fdeceb;
+
+  --uds-radius-control: 6px;
+  --uds-radius-field: 6px;
+  --uds-radius-surface: 10px;
+
+  /* Scrim behind a sheet or dialog. */
+  --uds-overlay: rgba(23, 23, 26, 0.48);
+
+  --uds-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --uds-font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  --color-text-primary: var(--uds-foreground);
+  --color-text-secondary: var(--uds-foreground-body);
+  --color-text-tertiary: var(--uds-foreground-muted);
+  --color-text-disabled: var(--uds-foreground-faint);
+  --color-text-brand: var(--uds-accent);
+  --color-text-primary-inverse: var(--uds-foreground-inverse);
+  --color-text-secondary-inverse: var(--uds-foreground-inverse);
+  --color-text-tertiary-inverse: var(--uds-foreground-faint);
+  --color-text-disabled-inverse: var(--uds-foreground-faint);
+
+  --color-border-primary: var(--uds-foreground);
+  --color-border-secondary: var(--uds-border-strong);
+  --color-border-tertiary: var(--uds-border);
+  --color-border-strong: var(--uds-border-strong);
+  --color-border-brand: var(--uds-focus-ring);
+  --color-border-disabled: var(--uds-border);
+
+  --color-text-danger: var(--uds-danger);
+  --color-border-danger: var(--uds-danger);
+  --color-surface-danger: var(--uds-danger);
+
+  --color-surface-higher: var(--uds-surface);
+  --color-surface-card: var(--uds-surface);
+  --color-surface-primary: var(--uds-surface-muted);
+  --color-surface-lower: var(--uds-surface-sunken);
+  --color-surface-disabled: var(--uds-surface-muted);
+  --color-surface-lower-inverse: var(--uds-accent);
+  --color-surface-higher-inverse: var(--uds-foreground-body);
+  --color-surface-primary-inverse: var(--uds-foreground-body);
+  --color-surface-brick: var(--uds-accent);
+  --color-surface-sky: var(--uds-foreground-muted);
+  --color-surface-grass: var(--uds-success);
+  --color-surface-yellow: var(--uds-warning);
+  --color-surface-tan: var(--uds-surface-muted);
+  --color-surface-sand: var(--uds-surface-muted);
+  --color-golden: var(--uds-warning-soft);
+
+  --brick-100: var(--uds-accent-soft);
+  --brick-200: var(--uds-accent-soft);
+  --brick-300: var(--uds-focus-ring);
+  --brick-400: var(--uds-focus-ring);
+
+  --steel-200: var(--uds-border-strong);
+  --steel-300: var(--uds-border-strong);
+  --steel-400: var(--uds-foreground-faint);
+  --steel-600: var(--uds-foreground-muted);
+  --steel-700: var(--uds-foreground-body);
+  --steel-800: var(--uds-foreground);
+
+  --teal-0: var(--uds-surface);
+  --teal-200: var(--uds-border);
+  --teal-300: var(--uds-border-strong);
+  --teal-400: var(--uds-border-strong);
+  --teal-500: var(--uds-foreground-faint);
+  --teal-600: var(--uds-foreground-muted);
+  --teal-700: var(--uds-foreground-body);
+  --teal-800: var(--uds-foreground);
+
+  --grass-100: var(--uds-success-soft);
+  --grass-300: var(--uds-success);
+  --grass-400: var(--uds-success);
+
+  --sky-100: var(--uds-surface-muted);
+  --sky-200: var(--uds-surface-muted);
+  --sky-300: var(--uds-foreground-muted);
+  --sky-400: var(--uds-foreground-muted);
+
+  --yellow-100: var(--uds-warning-soft);
+  --yellow-300: var(--uds-warning);
+  --yellow-400: var(--uds-warning);
+
+  --red-bright: var(--uds-danger);
+  --red-hot: var(--uds-danger);
+
+  --font-sans: var(--uds-font-sans);
+  --font-mono: var(--uds-font-mono);
+
+  /* Components express "square" as --radius-none, so the neutral radius
+     has to land on that token to round them. The name is inherited, not
+     descriptive, inside this scope. */
+  --radius-none: var(--uds-radius-control);
+  --radius-xs: var(--uds-radius-control);
+  --radius-sm: var(--uds-radius-field);
+  --radius-md: var(--uds-radius-surface);
+
+  color-scheme: light;
+  background-color: var(--uds-background);
+  color: var(--uds-foreground);
+  font-family: var(--uds-font-sans);
+}
+
+[data-uds-skin="dark"] {
+  --uds-background: #131316;
+  --uds-surface: #1c1c20;
+  --uds-surface-muted: #26262b;
+  --uds-surface-sunken: #0e0e10;
+  --uds-surface-inverse: #f4f4f5;
+
+  --uds-foreground: #f5f5f7;
+  --uds-foreground-body: #d4d4da;
+  --uds-foreground-muted: #9d9da6;
+  --uds-foreground-faint: #64646e;
+  --uds-foreground-inverse: #161619;
+
+  --uds-border: #2b2b31;
+  --uds-border-strong: #45454e;
+  --uds-focus-ring: #f5f5f7;
+
+  --uds-accent: #f5f5f7;
+  --uds-accent-foreground: #161619;
+  --uds-accent-soft: #26262b;
+
+  --uds-success: #56c88b;
+  --uds-success-soft: #142b1e;
+  --uds-warning: #e0a44a;
+  --uds-warning-soft: #2e2410;
+  --uds-danger: #f6716b;
+  --uds-danger-soft: #2f1614;
+
+  --uds-overlay: rgba(0, 0, 0, 0.6);
+
+  color-scheme: dark;
+}

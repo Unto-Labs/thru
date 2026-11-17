@@ -1,0 +1,354 @@
+abi:
+  package: thru.program.feature_gate
+  name: "Feature Gate"
+  abi-version: 1
+  package-version: "0.1.0"
+  description: >-
+    ABI for the Thru feature-gate program: instruction envelopes and the global
+    feature-gate account (header plus a trailing table of gate entries).
+    Mirrors src/thru/runtime/tn_feature_gate_abi.h and
+    programs/c/examples/tn_feature_gate_program.h.
+  imports: []
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: "FeatureGateInstruction"
+        account-root: "FeatureGateProgramAccount"
+        errors: "FeatureGateError"
+types:
+- name: Pubkey
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+- name: FeatureGateValue
+  kind:
+    struct:
+      packed: true
+      comment: >-
+        Fixed-width 64-byte encoded value.  Binary gates use byte 0 (0 inactive,
+        1 active); chain parameters are canonical little-endian unsigned
+        integers whose bytes above their width are zero.
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 64
+            element-type:
+              primitive: u8
+- name: CreateGateArgs
+  kind:
+    struct:
+      packed: true
+      comment: Appends one entry initialized with initial_value.
+      fields:
+      - name: global_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: initial_value
+        field-type:
+          type-ref:
+            name: FeatureGateValue
+      - name: next_change_lead_slots
+        field-type:
+          primitive: u64
+- name: ArmArgs
+  kind:
+    struct:
+      packed: true
+      comment: Schedules entry index to take armed_value at target_slot.
+      fields:
+      - name: global_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: target_slot
+        field-type:
+          primitive: u64
+      - name: index
+        field-type:
+          primitive: u32
+      - name: armed_value
+        field-type:
+          type-ref:
+            name: FeatureGateValue
+- name: DisarmArgs
+  kind:
+    struct:
+      packed: true
+      comment: Cancels the scheduled transition of entry index.
+      fields:
+      - name: global_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: index
+        field-type:
+          primitive: u32
+- name: UpdateTimingKnobsArgs
+  kind:
+    struct:
+      packed: true
+      comment: Replaces the config-admin controlled timing knobs.
+      fields:
+      - name: global_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: min_arming_lead_slots
+        field-type:
+          primitive: u64
+      - name: min_gap_between_armings_slots
+        field-type:
+          primitive: u64
+      - name: min_dwell_slots
+        field-type:
+          primitive: u64
+      - name: no_disarm_window_slots
+        field-type:
+          primitive: u64
+- name: ProposeAdminArgs
+  kind:
+    struct:
+      packed: true
+      comment: >-
+        Starts a handoff of role (0 creation, 1 management, 2 config) to
+        new_admin_pubkey.
+      fields:
+      - name: global_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: role
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 3
+            element-type:
+              primitive: u8
+      - name: new_admin_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+- name: AcceptAdminArgs
+  kind:
+    struct:
+      packed: true
+      comment: Completes a handoff of role by its pending admin.
+      fields:
+      - name: global_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: role
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 3
+            element-type:
+              primitive: u8
+- name: FeatureGateInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: tag
+        field-type:
+          primitive: u32
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - tag
+            variants:
+            - name: create_gate
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: CreateGateArgs
+            - name: arm
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: ArmArgs
+            - name: disarm
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: DisarmArgs
+            - name: update_timing_knobs
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: UpdateTimingKnobsArgs
+            - name: propose_admin
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: ProposeAdminArgs
+            - name: accept_admin
+              tag-value: 5
+              variant-type:
+                type-ref:
+                  name: AcceptAdminArgs
+- name: FeatureGateEntry
+  kind:
+    struct:
+      packed: true
+      comment: >-
+        One registry entry (152 bytes).  transition_slot is u64::MAX when the
+        entry is disarmed.
+      fields:
+      - name: current_value
+        field-type:
+          type-ref:
+            name: FeatureGateValue
+      - name: armed_value
+        field-type:
+          type-ref:
+            name: FeatureGateValue
+      - name: transition_slot
+        field-type:
+          primitive: u64
+      - name: last_change_slot
+        field-type:
+          primitive: u64
+      - name: next_change_lead_slots
+        field-type:
+          primitive: u64
+- name: FeatureGateAccount
+  kind:
+    struct:
+      packed: true
+      comment: >-
+        The global feature-gate account after its discriminator: a 240-byte
+        header, then entry_count entries.  currently_armed_index is u32::MAX
+        and most_recent_change_slot u64::MAX when unset.
+      fields:
+      - name: entry_count
+        field-type:
+          primitive: u32
+      - name: creation_admin
+        field-type:
+          type-ref:
+            name: Pubkey
+      - name: pending_creation_admin
+        field-type:
+          type-ref:
+            name: Pubkey
+      - name: management_admin
+        field-type:
+          type-ref:
+            name: Pubkey
+      - name: pending_management_admin
+        field-type:
+          type-ref:
+            name: Pubkey
+      - name: config_admin
+        field-type:
+          type-ref:
+            name: Pubkey
+      - name: pending_config_admin
+        field-type:
+          type-ref:
+            name: Pubkey
+      - name: min_arming_lead_slots
+        field-type:
+          primitive: u64
+      - name: min_gap_between_armings_slots
+        field-type:
+          primitive: u64
+      - name: min_dwell_slots
+        field-type:
+          primitive: u64
+      - name: no_disarm_window_slots
+        field-type:
+          primitive: u64
+      - name: currently_armed_index
+        field-type:
+          primitive: u32
+      - name: most_recent_change_slot
+        field-type:
+          primitive: u64
+      - name: entries
+        field-type:
+          array:
+            size:
+              field-ref:
+                path:
+                - entry_count
+            element-type:
+              type-ref:
+                name: FeatureGateEntry
+# Account root: byte 0 is the account discriminator (account_type), one value
+# per (account kind, layout). Values are never reused; a new layout or a new
+# kind takes the next unused value.
+- name: FeatureGateProgramAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: account_type
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - account_type
+            variants:
+            - name: gate_v1
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: FeatureGateAccount
+- name: FeatureGateError
+  kind:
+    struct:
+      packed: true
+      comment: >-
+        Revert code: 1 invalid instruction, 2 invalid instruction data size,
+        3 not implemented, 4 invalid account, 5 unauthorized, 6 invalid role,
+        7 invalid index, 8 value unchanged, 9 timing constraint, 10 already
+        armed, 11 not armed, 12 account full, 13 invalid state params.
+      fields:
+      - name: code
+        field-type:
+          primitive: u64

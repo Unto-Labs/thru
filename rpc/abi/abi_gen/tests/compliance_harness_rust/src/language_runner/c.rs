@@ -1,4 +1,31 @@
-use anyhow::Result;
+/* C compliance runner.
+
+Generates C for the case's ABI, then builds a test program that:
+- validates the input (consumed == len, a truncated buffer is rejected),
+- extracts params from the buffer and checks footprint_from_params == len,
+- re-encodes the value into a fresh buffer sized by footprint_from_params
+  using only the generated public API: field setters, nested views, enum
+  variant views (`<S>_<f>_as_<V>`), select helpers, array element accessors
+  (including jagged arrays), SDU variant views and union variant setters,
+- requires a byte-identical result and that the copy validates.
+
+The zero-filled pass writes nested struct / type-ref fields through their
+whole-value setters instead: `<S>_set_<f>( d, value )` for a constant-size
+field, and `<S>_set_<f>_bytes( d, src, n )` after the field is copied for a
+variable-size one (a size other than the current one must be rejected).
+Arrays with a count-writing setter are written again through
+`<S>_set_<f>( d, src, n )` at the count in place, after checking that
+another count is rejected.
+
+The copy is walked from the resolved type tree; no field is skipped and no
+buffer-wide memcpy is used. The copy runs twice: into a zeroed buffer and
+into one prefilled with the complement of the input, so a field the copy
+never writes cannot pass by coincidence (the complement pass is skipped
+when a non-packed struct leaves padding no field setter covers). */
+
+use anyhow::{Context, Result};
+use std::collections::BTreeSet;
+use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -7,10 +34,36 @@ use std::time::Instant;
 use super::LanguageRunner;
 use crate::{TestCaseData, TestError, TestResult, TestStages};
 
-use abi_gen::abi::file::AbiFile;
-use abi_gen::abi::types::TypeKind;
+use abi_gen::abi::file::ImportResolver;
+use abi_gen::cmds::common::{analyze_and_resolve_types, normalize_type_refs};
+use abi_gen::codegen::c_gen::model::{
+    prim_c_type, Field, Model, Node, NodeId, NodeKind, Slot, ValueSetter, Variant,
+};
 
 pub struct CRunner;
+
+fn fail(
+    test_name: &str,
+    test_file: &str,
+    start: Instant,
+    stages: TestStages,
+    stage: &str,
+    message: &str,
+    details: Option<String>,
+) -> Result<TestResult> {
+    Ok(TestResult {
+        test_name: test_name.to_string(),
+        test_file: test_file.to_string(),
+        status: "fail".to_string(),
+        duration_ms: start.elapsed().as_millis() as u64,
+        stages: Some(stages),
+        error: Some(TestError {
+            stage: stage.to_string(),
+            message: message.to_string(),
+            details,
+        }),
+    })
+}
 
 impl LanguageRunner for CRunner {
     fn language_name(&self) -> &str {
@@ -32,24 +85,19 @@ impl LanguageRunner for CRunner {
         no_cleanup: bool,
         base_temp_dir: Option<&Path>,
     ) -> Result<TestResult> {
-        let start_time = Instant::now();
-
-        /* Create temporary directory for generated code */
+        let start = Instant::now();
         let temp_base = base_temp_dir
             .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| std::env::temp_dir());
+            .unwrap_or_else(std::env::temp_dir);
         let temp_dir = temp_base.join(format!("abi_compliance_c_{}", test_name));
         if temp_dir.exists() {
             fs::remove_dir_all(&temp_dir)?;
         }
-        fs::create_dir_all(&temp_dir)?;
-
+        let generated_code_dir = temp_dir.join("generated_code");
+        fs::create_dir_all(&generated_code_dir)?;
         if verbose {
             println!("  Temp dir: {}", temp_dir.display());
         }
-
-        let generated_code_dir = temp_dir.join("generated_code");
-        fs::create_dir_all(&generated_code_dir)?;
 
         let mut stages = TestStages {
             code_generation: "pending".to_string(),
@@ -60,1331 +108,636 @@ impl LanguageRunner for CRunner {
             binary_match: false,
         };
 
-        /* Stage 1: Generate C code */
-        if verbose {
-            println!("  [1/5] Generating C code...");
+        /* Stage 1: generate C */
+        if let Err(e) = abi_gen::cmds::codegen::run(
+            vec![abi_file_path.to_path_buf()],
+            Vec::new(),
+            abi_gen::cmds::codegen::Language::C,
+            generated_code_dir.clone(),
+            false,
+        ) {
+            return fail(
+                test_name,
+                test_file,
+                start,
+                stages,
+                "code_generation",
+                "Code generation failed",
+                Some(format!("{e:#}")),
+            );
         }
+        stages.code_generation = "ok".to_string();
 
-        let codegen_result = Command::new("cargo")
-            .args(&["run", "--quiet", "--", "codegen"])
-            .arg("--files")
-            .arg(&abi_file_path)
-            .arg("--language")
-            .arg(self.codegen_language_param())
-            .arg("--output")
-            .arg(&generated_code_dir)
-            .current_dir("../../") /* Run from abi_gen root */
-            .output();
-
-        match codegen_result {
-            Ok(output) => {
-                let stderr_text = String::from_utf8_lossy(&output.stderr);
-                let has_errors = stderr_text.lines().any(|line| {
-                    let trimmed = line.trim_start();
-                    trimmed.starts_with("error:") || trimmed.starts_with("error[")
-                });
-
-                if !output.status.success() && has_errors {
-                    return Ok(TestResult {
-                        test_name: test_name.to_string(),
-                        test_file: test_file.to_string(),
-                        status: "fail".to_string(),
-                        duration_ms: start_time.elapsed().as_millis() as u64,
-                        stages: Some(stages),
-                        error: Some(TestError {
-                            stage: "code_generation".to_string(),
-                            message: "Code generation failed".to_string(),
-                            details: Some(stderr_text.to_string()),
-                        }),
-                    });
-                }
-
-                stages.code_generation = "ok".to_string();
-
-                if verbose && !stderr_text.is_empty() {
-                    println!(
-                        "  Code generation had {} bytes of stderr output (warnings)",
-                        stderr_text.len()
-                    );
-                }
-            }
+        /* Stage 2: build the round-trip program */
+        let program = match build_program(abi_file_path, &test_case.type_name, binary_data) {
+            Ok(p) => p,
             Err(e) => {
-                return Ok(TestResult {
-                    test_name: test_name.to_string(),
-                    test_file: test_file.to_string(),
-                    status: "fail".to_string(),
-                    duration_ms: start_time.elapsed().as_millis() as u64,
-                    stages: Some(stages),
-                    error: Some(TestError {
-                        stage: "code_generation".to_string(),
-                        message: format!("Failed to run codegen: {}", e),
-                        details: None,
-                    }),
-                });
-            }
-        }
-
-        /* Stage 2: Generate and compile C test code */
-        if verbose {
-            println!("  [2/5] Generating test code and compiling...");
-        }
-
-        /* Extract field information for opaque wrapper API */
-        let (
-            referenced_primitive_fields,
-            non_referenced_primitive_fields,
-            enum_fields,
-            array_fields,
-            nested_fields,
-            size_discriminated_union_fields,
-            package,
-        ) = match extract_field_info_opaque(abi_file_path, &test_case.type_name) {
-            Ok(info) => info,
-            Err(e) => {
-                return Ok(TestResult {
-                    test_name: test_name.to_string(),
-                    test_file: test_file.to_string(),
-                    status: "fail".to_string(),
-                    duration_ms: start_time.elapsed().as_millis() as u64,
-                    stages: Some(stages),
-                    error: Some(TestError {
-                        stage: "code_generation".to_string(),
-                        message: format!("Failed to extract field info from ABI: {}", e),
-                        details: None,
-                    }),
-                });
+                return fail(
+                    test_name,
+                    test_file,
+                    start,
+                    stages,
+                    "code_generation",
+                    "Failed to build the C test program",
+                    Some(format!("{e:#}")),
+                )
             }
         };
-
-        /* Write binary data to temp file */
-        let binary_file_path = temp_dir.join("test_data.bin");
-        fs::write(&binary_file_path, binary_data)?;
-
-        /* Extract SDU variant info from ABI */
-        let abi_content = fs::read_to_string(abi_file_path)?;
-        let abi: AbiFile = serde_yaml::from_str(&abi_content)?;
-        let sdu_fields_with_variants: Vec<SDUFieldInfo> = abi
-            .get_types()
-            .iter()
-            .find(|t| t.name == test_case.type_name)
-            .and_then(|t| {
-                if let TypeKind::Struct(struct_type) = &t.kind {
-                    Some(
-                        struct_type
-                            .fields
-                            .iter()
-                            .filter_map(|f| match &f.field_type {
-                                TypeKind::SizeDiscriminatedUnion(sdu_type) => {
-                                    let variants: Vec<SDUVariantInfo> = sdu_type
-                                        .variants
-                                        .iter()
-                                        .map(|v| SDUVariantInfo {
-                                            name: v.name.clone(),
-                                            expected_size: v.expected_size,
-                                        })
-                                        .collect();
-                                    Some(SDUFieldInfo {
-                                        field_name: f.name.clone(),
-                                        variants,
-                                    })
-                                }
-                                _ => None,
-                            })
-                            .collect(),
-                    )
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_default();
-
-        /* Generate C test runner code using opaque wrapper API */
-        let top_array = super::top_level_array::load(abi_file_path, &test_case.type_name)?;
-        let test_runner_code = if let Some(array) = top_array {
-            array.c(&test_case.type_name, binary_data)
-        } else {
-            generate_c_test_runner_code_opaque(
-                &test_case.type_name,
-                &binary_file_path,
-                &referenced_primitive_fields,
-                &non_referenced_primitive_fields,
-                &enum_fields,
-                &array_fields,
-                &nested_fields,
-                &size_discriminated_union_fields,
-                &sdu_fields_with_variants,
-                &package,
-            )
-        };
-
-        let test_file_path = temp_dir.join("test.c");
-        fs::write(&test_file_path, test_runner_code)?;
-
-        /* Compile test - functions.c is included directly in test code */
-        let compile_result = Command::new("gcc")
-            .arg("-std=c11")
-            .arg(format!("-I{}", generated_code_dir.display()))
-            .arg("-o")
+        let test_path = temp_dir.join("test.c");
+        fs::write(&test_path, program)?;
+        let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
+        let output = Command::new(&cc)
+            .args(["-std=c11", "-Wall", "-Werror", "-o"])
             .arg(temp_dir.join("test"))
-            .arg(&test_file_path)
-            .arg("-lm")
-            .output();
+            .arg(&test_path)
+            .current_dir(&temp_dir)
+            .output()
+            .context("running the C compiler")?;
+        if !output.status.success() {
+            return fail(
+                test_name,
+                test_file,
+                start,
+                stages,
+                "compilation",
+                "Test compilation failed",
+                Some(String::from_utf8_lossy(&output.stderr).to_string()),
+            );
+        }
+        stages.compilation = "ok".to_string();
 
-        match compile_result {
-            Ok(output) if output.status.success() => {
-                stages.compilation = "ok".to_string();
-            }
-            Ok(output) => {
-                let error_msg = String::from_utf8_lossy(&output.stderr);
-                return Ok(TestResult {
-                    test_name: test_name.to_string(),
-                    test_file: test_file.to_string(),
-                    status: "fail".to_string(),
-                    duration_ms: start_time.elapsed().as_millis() as u64,
-                    stages: Some(stages),
-                    error: Some(TestError {
-                        stage: "compilation".to_string(),
-                        message: "Test compilation failed".to_string(),
-                        details: Some(error_msg.to_string()),
-                    }),
-                });
-            }
-            Err(e) => {
-                return Ok(TestResult {
-                    test_name: test_name.to_string(),
-                    test_file: test_file.to_string(),
-                    status: "fail".to_string(),
-                    duration_ms: start_time.elapsed().as_millis() as u64,
-                    stages: Some(stages),
-                    error: Some(TestError {
-                        stage: "compilation".to_string(),
-                        message: format!("Failed to compile test: {}", e),
-                        details: None,
-                    }),
-                });
+        /* Stages 3-5: run */
+        let output = Command::new(temp_dir.join("test"))
+            .output()
+            .context("running the C test program")?;
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        for line in stdout.lines() {
+            if let Some(v) = line.strip_prefix("DECODE:") {
+                stages.decode = v.to_string();
+            } else if let Some(v) = line.strip_prefix("VALIDATION:") {
+                stages.validation = v.to_string();
+            } else if let Some(v) = line.strip_prefix("REENCODE:") {
+                stages.reencode = v.to_string();
+            } else if let Some(v) = line.strip_prefix("BINARY_MATCH:") {
+                stages.binary_match = v == "true";
             }
         }
-
-        /* Stage 3-5: Run test (decode, validate, reencode) */
-        if verbose {
-            println!("  [3/5] Running decode-validate-reencode test...");
+        if !output.status.success() {
+            return fail(
+                test_name,
+                test_file,
+                start,
+                stages,
+                "decode",
+                "Test execution failed",
+                Some(format!(
+                    "stdout:\n{}\nstderr:\n{}",
+                    stdout,
+                    String::from_utf8_lossy(&output.stderr)
+                )),
+            );
         }
 
-        let test_binary = temp_dir.join("test");
-        let test_output = Command::new(&test_binary).output();
-
-        match test_output {
-            Ok(output) if output.status.success() => {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-
-                /* Parse test output - format is: STAGE:status */
-                for line in stdout.lines() {
-                    if line.starts_with("DECODE:") {
-                        stages.decode = line.strip_prefix("DECODE:").unwrap().to_string();
-                    } else if line.starts_with("VALIDATION:") {
-                        stages.validation = line.strip_prefix("VALIDATION:").unwrap().to_string();
-                    } else if line.starts_with("REENCODE:") {
-                        stages.reencode = line.strip_prefix("REENCODE:").unwrap().to_string();
-                    } else if line.starts_with("BINARY_MATCH:") {
-                        stages.binary_match = line.strip_prefix("BINARY_MATCH:").unwrap() == "true";
-                    }
-                }
-            }
-            Ok(output) => {
-                let error_msg = String::from_utf8_lossy(&output.stderr);
-                let stdout_msg = String::from_utf8_lossy(&output.stdout);
-                return Ok(TestResult {
-                    test_name: test_name.to_string(),
-                    test_file: test_file.to_string(),
-                    status: "fail".to_string(),
-                    duration_ms: start_time.elapsed().as_millis() as u64,
-                    stages: Some(stages),
-                    error: Some(TestError {
-                        stage: "decode".to_string(),
-                        message: "Test execution failed".to_string(),
-                        details: Some(format!("stdout:\n{}\nstderr:\n{}", stdout_msg, error_msg)),
-                    }),
-                });
-            }
-            Err(e) => {
-                return Ok(TestResult {
-                    test_name: test_name.to_string(),
-                    test_file: test_file.to_string(),
-                    status: "fail".to_string(),
-                    duration_ms: start_time.elapsed().as_millis() as u64,
-                    stages: Some(stages),
-                    error: Some(TestError {
-                        stage: "decode".to_string(),
-                        message: format!("Failed to execute test: {}", e),
-                        details: None,
-                    }),
-                });
-            }
-        }
-
-        /* Clean up */
-        if !no_cleanup && temp_dir.exists() {
+        if !no_cleanup {
             let _ = fs::remove_dir_all(&temp_dir);
-        } else if no_cleanup && verbose {
+        } else if verbose {
             println!("  Temporary directory preserved at: {}", temp_dir.display());
         }
 
-        let duration_ms = start_time.elapsed().as_millis() as u64;
-
-        /* Mark as pass if all stages succeeded */
-        let status = if stages.code_generation == "ok"
+        let pass = stages.code_generation == "ok"
             && stages.compilation == "ok"
             && stages.decode == "ok"
             && stages.validation == "ok"
             && stages.reencode == "ok"
-            && stages.binary_match
-        {
-            "pass"
-        } else {
-            "fail"
-        };
-
+            && stages.binary_match;
         Ok(TestResult {
             test_name: test_name.to_string(),
             test_file: test_file.to_string(),
-            status: status.to_string(),
-            duration_ms,
+            status: if pass { "pass" } else { "fail" }.to_string(),
+            duration_ms: start.elapsed().as_millis() as u64,
             stages: Some(stages),
             error: None,
         })
     }
 }
 
-/* Field information for code generation */
-#[derive(Debug)]
-struct FieldInfo {
-    name: String,
-    is_array: bool,
-    element_type: Option<String>, // For arrays: the C type of elements
-}
-
-/* Map ABI primitive type to C type name */
-fn primitive_to_c_type(prim: &abi_gen::abi::types::PrimitiveType) -> String {
-    use abi_gen::abi::types::{FloatingPointType, IntegralType, PrimitiveType};
-    match prim {
-        PrimitiveType::Integral(IntegralType::U8) => "uint8_t",
-        PrimitiveType::Integral(IntegralType::U16) => "uint16_t",
-        PrimitiveType::Integral(IntegralType::U32) => "uint32_t",
-        PrimitiveType::Integral(IntegralType::U64) => "uint64_t",
-        PrimitiveType::Integral(IntegralType::I8) => "int8_t",
-        PrimitiveType::Integral(IntegralType::I16) => "int16_t",
-        PrimitiveType::Integral(IntegralType::I32) => "int32_t",
-        PrimitiveType::Integral(IntegralType::I64) => "int64_t",
-        PrimitiveType::Integral(IntegralType::Char) => "uint8_t",
-        PrimitiveType::FloatingPoint(FloatingPointType::F16) => "uint16_t", /* No native f16 in C */
-        PrimitiveType::FloatingPoint(FloatingPointType::F32) => "float",
-        PrimitiveType::FloatingPoint(FloatingPointType::F64) => "double",
-    }
-    .to_string()
-}
-
-/* Enum variant information */
-#[derive(Debug, Clone)]
-struct EnumVariantInfo {
-    name: String,
-    tag_value: u64,
-}
-
-/* Enum field information (one per enum field in the struct) */
-#[derive(Debug)]
-struct EnumFieldInfo {
-    field_name: String,             /* Name of the enum field */
-    tag_field_name: String,         /* Name of the tag field (e.g., "first_tag") */
-    variants: Vec<EnumVariantInfo>, /* All variants for this enum */
-}
-
-/* SDU variant information */
-#[derive(Debug, Clone)]
-struct SDUVariantInfo {
-    name: String,
-    expected_size: u64,
-}
-
-/* SDU field information (one per SDU field in the struct) */
-#[derive(Debug)]
-struct SDUFieldInfo {
-    field_name: String,            /* Name of the SDU field */
-    variants: Vec<SDUVariantInfo>, /* All variants for this SDU */
-}
-
-/* Field classification for test generation */
-#[derive(Debug)]
-struct FieldClassification {
-    settable_fields: Vec<FieldInfo>, /* Fields with setters */
-    init_fields: Vec<FieldInfo>,     /* Fields only settable via init */
-    enum_fields: Vec<EnumFieldInfo>, /* Enum fields (one entry per enum field) */
-}
-
-/* Extract field information for opaque wrapper API */
-fn extract_field_info_opaque(
-    abi_file_path: &Path,
-    type_name: &str,
-) -> Result<(
-    Vec<String>,
-    Vec<String>,
-    Vec<String>,
-    Vec<(String, bool, bool, Option<String>)>,
-    Vec<(String, String, Vec<String>, u64)>,
-    Vec<String>,
-    String,
-)> {
-    use std::collections::HashSet;
-
-    let abi_content = fs::read_to_string(abi_file_path)?;
-    let abi: AbiFile = serde_yaml::from_str(&abi_content)?;
-
-    let package = abi.package().to_string();
-
-    for typedef in abi.get_types() {
-        if typedef.name == type_name {
-            if matches!(typedef.kind, TypeKind::Array(_)) {
-                return Ok((vec![], vec![], vec![], vec![], vec![], vec![], package));
-            }
-            if let TypeKind::Struct(struct_type) = &typedef.kind {
-                /* Extract which fields are referenced in expressions (like enum tag-refs and FAM sizes) */
-                let mut referenced_fields = HashSet::new();
-                for field in &struct_type.fields {
-                    if let TypeKind::Enum(enum_type) = &field.field_type {
-                        extract_field_refs_from_expr(&enum_type.tag_ref, &mut referenced_fields);
-                    }
-                    /* Extract fields from FAM size expressions */
-                    if let TypeKind::Array(array_type) = &field.field_type {
-                        extract_field_refs_from_expr(&array_type.size, &mut referenced_fields);
-                    }
-                    /* Extract fields from nested struct field expressions */
-                    if let TypeKind::Struct(nested_struct) = &field.field_type {
-                        for nested_field in &nested_struct.fields {
-                            if let TypeKind::Enum(enum_type) = &nested_field.field_type {
-                                extract_field_refs_from_expr(
-                                    &enum_type.tag_ref,
-                                    &mut referenced_fields,
-                                );
-                            }
-                            if let TypeKind::Array(array_type) = &nested_field.field_type {
-                                extract_field_refs_from_expr(
-                                    &array_type.size,
-                                    &mut referenced_fields,
-                                );
-                            }
-                        }
-                    }
-                }
-
-                /* For opaque wrappers, collect fields by category:
-                - Referenced primitives (passed to new() - like enum tags)
-                - Non-referenced primitives (set via setters after new())
-                - Enums (set via setters after new())
-                - Arrays (set via setters after new())
-                - Nested structs (set via setters after new()) */
-
-                // Collect referenced primitive fields (both top-level and nested)
-                let mut referenced_primitive_fields = Vec::new();
-                for f in &struct_type.fields {
-                    match &f.field_type {
-                        TypeKind::Primitive(_) if referenced_fields.contains(&f.name) => {
-                            referenced_primitive_fields.push(f.name.clone());
-                        }
-                        TypeKind::Struct(nested_struct) => {
-                            // Check nested struct fields for referenced primitives
-                            for nested_field in &nested_struct.fields {
-                                if let TypeKind::Primitive(_) = &nested_field.field_type {
-                                    let nested_path = format!("{}_{}", f.name, nested_field.name);
-                                    if referenced_fields.contains(&nested_path) {
-                                        referenced_primitive_fields.push(nested_path);
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-
-                /* Collect non-referenced primitive fields (both top-level and nested) */
-                let mut non_referenced_primitive_fields = Vec::new();
-                for f in &struct_type.fields {
-                    match &f.field_type {
-                        TypeKind::Primitive(_) if !referenced_fields.contains(&f.name) => {
-                            non_referenced_primitive_fields.push(f.name.clone());
-                        }
-                        TypeKind::Struct(nested_struct) => {
-                            /* Also collect non-referenced primitives from nested inline structs */
-                            for nested_field in &nested_struct.fields {
-                                if let TypeKind::Primitive(_) = &nested_field.field_type {
-                                    let nested_path = format!("{}_{}", f.name, nested_field.name);
-                                    if !referenced_fields.contains(&nested_path) {
-                                        non_referenced_primitive_fields.push(nested_path);
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-
-                let enum_fields: Vec<String> = struct_type
-                    .fields
-                    .iter()
-                    .filter_map(|f| match &f.field_type {
-                        TypeKind::Enum(_) => Some(f.name.clone()),
-                        _ => None,
-                    })
-                    .collect();
-
-                /* Extract SDU fields with variant information */
-                let size_discriminated_union_fields: Vec<SDUFieldInfo> = struct_type
-                    .fields
-                    .iter()
-                    .filter_map(|f| match &f.field_type {
-                        TypeKind::SizeDiscriminatedUnion(sdu_type) => {
-                            let variants: Vec<SDUVariantInfo> = sdu_type
-                                .variants
-                                .iter()
-                                .map(|v| SDUVariantInfo {
-                                    name: v.name.clone(),
-                                    expected_size: v.expected_size,
-                                })
-                                .collect();
-                            Some(SDUFieldInfo {
-                                field_name: f.name.clone(),
-                                variants,
-                            })
-                        }
-                        _ => None,
-                    })
-                    .collect();
-
-                /* Also collect array fields with element type info
-                Format: (field_name, is_byte_array, is_struct_array, element_type_name) */
-                let mut array_fields: Vec<(String, bool, bool, Option<String>)> = struct_type.fields.iter()
-                    .filter_map(|f| {
-                        match &f.field_type {
-                            TypeKind::Array(array_type) => {
-                                /* Check if element type is u8 (byte array) */
-                                let is_byte_array = matches!(&*array_type.element_type, TypeKind::Primitive(prim)
-                                    if matches!(prim, abi_gen::abi::types::PrimitiveType::Integral(
-                                        abi_gen::abi::types::IntegralType::U8)));
-                                /* Check if element type is a struct (TypeRef) and get its name */
-                                let (is_struct_array, elem_type_name) = if let TypeKind::TypeRef(type_ref) = &*array_type.element_type {
-                                    (true, Some(type_ref.name.clone()))
-                                } else {
-                                    (false, None)
-                                };
-                                Some((f.name.clone(), is_byte_array, is_struct_array, elem_type_name))
-                            },
-                            _ => None,
-                        }
-                    })
-                    .collect();
-
-                /* Also extract arrays from nested inline structs - they are accessed via parent methods like parent_nested_array_at() */
-                for field in &struct_type.fields {
-                    if let TypeKind::Struct(nested_struct) = &field.field_type {
-                        for nested_field in &nested_struct.fields {
-                            if let TypeKind::Array(array_type) = &nested_field.field_type {
-                                /* Check if element type is u8 (byte array) */
-                                let is_byte_array = matches!(&*array_type.element_type, TypeKind::Primitive(prim)
-                                    if matches!(prim, abi_gen::abi::types::PrimitiveType::Integral(
-                                        abi_gen::abi::types::IntegralType::U8)));
-                                /* Check if element type is a struct (TypeRef) and get its name */
-                                let (is_struct_array, elem_type_name) = if let TypeKind::TypeRef(
-                                    type_ref,
-                                ) =
-                                    &*array_type.element_type
-                                {
-                                    (true, Some(type_ref.name.clone()))
-                                } else {
-                                    (false, None)
-                                };
-                                /* Use nested field name format: "parent_child" */
-                                let nested_field_name =
-                                    format!("{}_{}", field.name, nested_field.name);
-                                array_fields.push((
-                                    nested_field_name,
-                                    is_byte_array,
-                                    is_struct_array,
-                                    elem_type_name,
-                                ));
-                            }
-                        }
-                    }
-                }
-
-                /* Extract nested struct fields (TypeRef) with their field names and sizes
-                Format: (field_name, nested_type_name, vec_of_nested_field_names, size_in_bytes) */
-                let nested_fields: Vec<(String, String, Vec<String>, u64)> = struct_type.fields.iter()
-                    .filter_map(|f| {
-                        match &f.field_type {
-                            TypeKind::TypeRef(type_ref) => {
-                                /* Look up the nested struct type and get its primitive fields + calculate size */
-                                let nested_type_name = &type_ref.name;
-                                let (nested_field_names, size) = abi.get_types().iter()
-                                    .find(|t| &t.name == nested_type_name)
-                                    .and_then(|t| {
-                                        if let TypeKind::Struct(nested_struct) = &t.kind {
-                                            let mut total_size = 0u64;
-                                            let field_names: Vec<String> = nested_struct.fields.iter()
-                                                .filter_map(|nf| {
-                                                    match &nf.field_type {
-                                                        TypeKind::Primitive(prim_type) => {
-                                                            /* Add primitive size */
-                                                            use abi_gen::abi::types::{IntegralType, FloatingPointType};
-                                                            let field_size = match prim_type {
-                                                                abi_gen::abi::types::PrimitiveType::Integral(int_type) => match int_type {
-                                                                    IntegralType::U8 | IntegralType::I8 | IntegralType::Char => 1,
-                                                                    IntegralType::U16 | IntegralType::I16 => 2,
-                                                                    IntegralType::U32 | IntegralType::I32 => 4,
-                                                                    IntegralType::U64 | IntegralType::I64 => 8,
-                                                                },
-                                                                abi_gen::abi::types::PrimitiveType::FloatingPoint(float_type) => match float_type {
-                                                                    FloatingPointType::F16 => 2,
-                                                                    FloatingPointType::F32 => 4,
-                                                                    FloatingPointType::F64 => 8,
-                                                                },
-                                                            };
-                                                            total_size += field_size;
-                                                            Some(nf.name.clone())
-                                                        },
-                                                        _ => {
-                                                            /* For now, skip non-primitive fields in nested structs */
-                                                            None
-                                                        }
-                                                    }
-                                                })
-                                                .collect();
-                                            Some((field_names, total_size))
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .unwrap_or((Vec::new(), 0));
-                                Some((f.name.clone(), nested_type_name.clone(), nested_field_names, size))
-                            },
-                            _ => None,
-                        }
-                    })
-                    .collect();
-
-                /* Convert SDUFieldInfo to Vec<String> for backward compatibility in function signature */
-                let size_discriminated_union_field_names: Vec<String> =
-                    size_discriminated_union_fields
-                        .iter()
-                        .map(|sdu| sdu.field_name.clone())
-                        .collect();
-
-                return Ok((
-                    referenced_primitive_fields,
-                    non_referenced_primitive_fields,
-                    enum_fields,
-                    array_fields,
-                    nested_fields,
-                    size_discriminated_union_field_names,
-                    package,
-                ));
-            }
-        }
-    }
-
-    anyhow::bail!("Type '{}' not found in ABI file", type_name)
-}
-
-/* Helper to extract field references from expressions */
-fn extract_field_refs_from_expr(
-    expr: &abi_gen::abi::expr::ExprKind,
-    refs: &mut std::collections::HashSet<String>,
-) {
-    use abi_gen::abi::expr::ExprKind;
-    match expr {
-        ExprKind::FieldRef(field_ref) => {
-            // Join the full path with underscores for nested field refs
-            // e.g., ["first", "count"] becomes "first_count"
-            let full_path = field_ref.path.join("_");
-            refs.insert(full_path);
-        }
-        /* Recursively extract from binary operations */
-        ExprKind::Add(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::Sub(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::Mul(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::Div(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::Mod(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::Pow(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::BitAnd(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::BitOr(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::BitXor(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::LeftShift(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        ExprKind::RightShift(e) => {
-            extract_field_refs_from_expr(&e.left, refs);
-            extract_field_refs_from_expr(&e.right, refs);
-        }
-        /* Unary operations */
-        ExprKind::BitNot(e) => {
-            extract_field_refs_from_expr(&e.operand, refs);
-        }
-        ExprKind::Neg(e) => {
-            extract_field_refs_from_expr(&e.operand, refs);
-        }
-        ExprKind::Not(e) => {
-            extract_field_refs_from_expr(&e.operand, refs);
-        }
-        ExprKind::Popcount(e) => {
-            extract_field_refs_from_expr(&e.operand, refs);
-        }
-        _ => {}
-    }
-}
-
-/* OLD: Extract field classification and package from ABI file for a specific type */
-fn extract_field_info(
-    abi_file_path: &Path,
-    type_name: &str,
-) -> Result<(FieldClassification, String)> {
-    use abi_gen::abi::expr::ExprKind;
-
-    let abi_content = fs::read_to_string(abi_file_path)?;
-    let abi: AbiFile = serde_yaml::from_str(&abi_content)?;
-
-    let package = abi.package().to_string();
-
-    for typedef in abi.get_types() {
-        if typedef.name == type_name {
-            if let TypeKind::Struct(struct_type) = &typedef.kind {
-                let mut settable_fields = Vec::new();
-                let mut init_fields = Vec::new();
-                let mut enum_fields = Vec::new();
-
-                /* Collect tag field references and enum field information */
-                let mut tag_fields = std::collections::HashSet::new();
-                for field in &struct_type.fields {
-                    if let TypeKind::Enum(enum_type) = &field.field_type {
-                        /* Collect enum variants for this enum field */
-                        let mut variants = Vec::new();
-                        for variant in &enum_type.variants {
-                            variants.push(EnumVariantInfo {
-                                name: variant.name.clone(),
-                                tag_value: variant.tag_value,
-                            });
-                        }
-
-                        /* Get tag field name */
-                        let tag_field_name =
-                            if let ExprKind::FieldRef(field_ref) = &enum_type.tag_ref {
-                                if let Some(tag_name) = field_ref.path.first() {
-                                    tag_fields.insert(tag_name.clone());
-                                    tag_name.clone()
-                                } else {
-                                    "tag".to_string()
-                                }
-                            } else {
-                                "tag".to_string()
-                            };
-
-                        enum_fields.push(EnumFieldInfo {
-                            field_name: field.name.clone(),
-                            tag_field_name,
-                            variants,
-                        });
-                    }
-                }
-
-                /* Classify each field */
-                for f in &struct_type.fields {
-                    /* Skip enum fields - they're not regular fields */
-                    if matches!(&f.field_type, TypeKind::Enum(_)) {
-                        continue;
-                    }
-
-                    let field_info = match &f.field_type {
-                        TypeKind::Array(array_type) => {
-                            let elem_type = match &*array_type.element_type {
-                                TypeKind::Primitive(prim) => Some(primitive_to_c_type(prim)),
-                                _ => None,
-                            };
-                            FieldInfo {
-                                name: f.name.clone(),
-                                is_array: true,
-                                element_type: elem_type,
-                            }
-                        }
-                        _ => FieldInfo {
-                            name: f.name.clone(),
-                            is_array: false,
-                            element_type: None,
-                        },
-                    };
-
-                    /* Classify: fields referenced as tags go to init_fields, others to settable_fields */
-                    if tag_fields.contains(&f.name) {
-                        init_fields.push(field_info);
-                    } else {
-                        settable_fields.push(field_info);
-                    }
-                }
-
-                let classification = FieldClassification {
-                    settable_fields,
-                    init_fields,
-                    enum_fields,
-                };
-
-                return Ok((classification, package));
-            }
-        }
-    }
-
-    anyhow::bail!("Type '{}' not found in ABI file", type_name)
-}
-
-/* Generate C test runner code that performs decode-validate-reencode */
-fn generate_c_test_runner_code(
-    type_name: &str,
-    binary_file_path: &Path,
-    classification: &FieldClassification,
-    package: &str,
-) -> String {
-    let mut code = String::new();
-
-    let package_path = package.replace('.', "/");
-
-    code.push_str(&format!(
-        r#"#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "generated_code/{}/types.h"
-
-int main( void ) {{
-  /* Stage 1: Load binary */
-  FILE *f = fopen( "{}", "rb" );
-  if ( !f ) {{
-    fprintf( stderr, "Failed to open binary file\n" );
-    printf( "DECODE:error\n" );
-    return 1;
-  }}
-
-  fseek( f, 0, SEEK_END );
-  long file_size = ftell( f );
-  fseek( f, 0, SEEK_SET );
-
-  unsigned char *original_buffer = malloc( file_size );
-  if ( !original_buffer ) {{
-    fprintf( stderr, "Failed to allocate buffer\n" );
-    fclose( f );
-    printf( "DECODE:error\n" );
-    return 1;
-  }}
-
-  fread( original_buffer, 1, file_size, f );
-  fclose( f );
-
-  /* Stage 2: Decode */
-  {}_t *original = ({}_t *)original_buffer;
-  printf( "DECODE:ok\n" );
-
-  /* Stage 3: Validate using generated validate function */
-  uint64_t bytes_consumed = 0;
-  int validate_result = {}_validate( original_buffer, file_size, &bytes_consumed );
-
-  if ( validate_result != 0 ) {{
-    fprintf( stderr, "Validation failed with code %d\n", validate_result );
-    printf( "VALIDATION:error\n" );
-    free( original_buffer );
-    return 1;
-  }}
-
-  printf( "VALIDATION:ok\n" );
-
-  /* Stage 4: Get size */
-  uint64_t struct_size = {}_size( original );
-
-  /* Stage 5: Create new instance */
-  unsigned char *new_buffer = malloc( struct_size );
-  if ( !new_buffer ) {{
-    fprintf( stderr, "Failed to allocate new buffer\n" );
-    free( original_buffer );
-    printf( "REENCODE:error\n" );
-    return 1;
-  }}
-
-  memset( new_buffer, 0, struct_size );
-"#,
-        package_path,
-        binary_file_path.display(),
-        type_name,
-        type_name,
-        type_name,
-        type_name,
-    ));
-
-    /* Initialize using init() if there are init fields, otherwise just cast */
-    if !classification.init_fields.is_empty() {
-        /* Call init with values from original */
-        code.push_str(&format!(
-            "  int init_result = {}_init( new_buffer, struct_size",
-            type_name
-        ));
-        for field_info in &classification.init_fields {
-            code.push_str(&format!(
-                ", {}_get_{}( original )",
-                type_name, field_info.name
-            ));
-        }
-        code.push_str(" );\n");
-        code.push_str("  if ( init_result != 0 ) {\n");
-        code.push_str("    fprintf( stderr, \"Init failed with code %d\\n\", init_result );\n");
-        code.push_str("    printf( \"REENCODE:error\\n\" );\n");
-        code.push_str("    free( original_buffer );\n");
-        code.push_str("    free( new_buffer );\n");
-        code.push_str("    return 1;\n");
-        code.push_str("  }\n");
-    }
-
-    code.push_str(&format!(
-        "  {}_t *copy = ({}_t *)new_buffer;\n\n",
-        type_name, type_name
-    ));
-
-    /* Generate field copying code for settable fields */
-    if !classification.settable_fields.is_empty() {
-        code.push_str("  /* Copy settable fields using getters and setters */\n");
-        for field_info in &classification.settable_fields {
-            if field_info.is_array {
-                /* For arrays: use memcpy with getters and size function */
-                let default_type = "unsigned char".to_string();
-                let element_type = field_info.element_type.as_ref().unwrap_or(&default_type);
-                code.push_str(&format!(
-                    "  memcpy( {}_get_{}( copy ), {}_get_{}_const( original ), {}_get_{}_size( original ) * sizeof( {} ) );\n",
-                    type_name, field_info.name,
-                    type_name, field_info.name,
-                    type_name, field_info.name,
-                    element_type
-                ));
-            } else {
-                /* For non-arrays: use setter/getter pairs */
-                code.push_str(&format!(
-                    "  {}_set_{}( copy, {}_get_{}( original ) );\n",
-                    type_name, field_info.name, type_name, field_info.name
-                ));
-            }
-        }
-    }
-
-    /* For enums, use variant-specific setters based on tag - one switch per enum field */
-    if !classification.enum_fields.is_empty() {
-        code.push_str("\n  /* Copy enum variant data using variant setters */\n");
-
-        for enum_field in &classification.enum_fields {
-            code.push_str(&format!(
-                "  /* Enum field: {} (tag: {}) */\n",
-                enum_field.field_name, enum_field.tag_field_name
-            ));
-            code.push_str(&format!(
-                "  uint8_t {} = {}_get_{}( original );\n",
-                enum_field.tag_field_name, type_name, enum_field.tag_field_name
-            ));
-            code.push_str(&format!("  switch ( {} ) {{\n", enum_field.tag_field_name));
-
-            for variant in &enum_field.variants {
-                code.push_str(&format!(
-                    "    case {}: /* {} */\n",
-                    variant.tag_value, variant.name
-                ));
-                code.push_str(&format!(
-                    "      {}_{}_set_{}( copy, {}_{}_get_{}_const( original ) );\n",
-                    type_name,
-                    enum_field.field_name,
-                    variant.name,
-                    type_name,
-                    enum_field.field_name,
-                    variant.name
-                ));
-                code.push_str("      break;\n");
-            }
-
-            code.push_str("    default:\n");
-            code.push_str(&format!(
-                "      fprintf( stderr, \"Invalid enum tag value for {}: %d\\n\", {} );\n",
-                enum_field.field_name, enum_field.tag_field_name
-            ));
-            code.push_str("      break;\n");
-            code.push_str("  }\n");
-        }
-    }
-
-    code.push_str(
-        r#"
-  printf( "REENCODE:ok\n" );
-
-  /* Stage 6: Binary comparison via memcmp */
-  int cmp_result = memcmp( original_buffer, new_buffer, struct_size );
-
-  if ( cmp_result == 0 ) {
-    printf( "BINARY_MATCH:true\n" );
-  } else {
-    fprintf( stderr, "Binary mismatch after getter/setter round-trip\n" );
-    printf( "BINARY_MATCH:false\n" );
-    free( original_buffer );
-    free( new_buffer );
-    return 1;
-  }
-
-  free( original_buffer );
-  free( new_buffer );
-  return 0;
-}
-"#,
-    );
-
-    code
-}
-
-/* Generate test runner code for opaque wrapper API */
-fn generate_c_test_runner_code_opaque(
-    type_name: &str,
-    binary_file_path: &Path,
-    referenced_primitive_fields: &[String],
-    non_referenced_primitive_fields: &[String],
-    enum_fields: &[String],
-    array_fields: &[(String, bool, bool, Option<String>)], /* (field_name, is_byte_array, is_struct_array, element_type_name) */
-    nested_fields: &[(String, String, Vec<String>, u64)], /* (field_name, nested_type_name, nested_struct_field_names, size) */
-    size_discriminated_union_fields: &[String],
-    sdu_fields_with_variants: &[SDUFieldInfo],
-    package: &str,
-) -> String {
-    let mut code = String::new();
-
-    let package_path = package.replace('.', "/");
-
-    code.push_str(&format!(
-        r#"#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "generated_code/{}/types.h"
-#include "generated_code/{}/functions.c"
-
-int main( void ) {{
-  /* Stage 1: Load binary */
-  FILE *f = fopen( "{}", "rb" );
-  if ( !f ) {{
-    fprintf( stderr, "Failed to open binary file\n" );
-    printf( "DECODE:error\n" );
-    return 1;
-  }}
-
-  fseek( f, 0, SEEK_END );
-  long file_size = ftell( f );
-  fseek( f, 0, SEEK_SET );
-
-  unsigned char *original_data = malloc( file_size );
-  if ( !original_data ) {{
-    fprintf( stderr, "Failed to allocate buffer\n" );
-    fclose( f );
-    printf( "DECODE:error\n" );
-    return 1;
-  }}
-
-  fread( original_data, 1, file_size, f );
-  fclose( f );
-
-  /* Stage 2: Decode using from_slice() - opaque wrapper */
-  {}_t const * original = {}_from_slice( original_data, file_size );
-  if ( original == NULL ) {{
-    fprintf( stderr, "from_slice validation failed\n" );
-    printf( "DECODE:error\n" );
-    free( original_data );
-    return 1;
-  }}
-
-  printf( "DECODE:ok\n" );
-
-  /* Stage 3: Validate - validation happens in from_slice() */
-  printf( "VALIDATION:ok\n" );
-
-  /* Stage 4: Reencode using new() constructor with getters */
-  /* Allocate buffer for reencoding - use same size as original */
-  unsigned char *reencoded_data = malloc( file_size );
-  if ( !reencoded_data ) {{
-    fprintf( stderr, "Failed to allocate reencode buffer\n" );
-    printf( "REENCODE:error\n" );
-    free( original_data );
-    return 1;
-  }}
-
-  uint64_t reencoded_size;
-"#,
-        package_path,
-        package_path,
-        binary_file_path.display(),
-        type_name,
-        type_name,
-    ));
-
-    if referenced_primitive_fields.is_empty() && size_discriminated_union_fields.is_empty() {
-        /* No referenced fields or SDU fields - just create empty instance */
-        code.push_str(&format!(
-            "  int new_result = {}_new( reencoded_data, file_size, &reencoded_size );\n",
-            type_name
-        ));
+/* Resolve the ABI exactly as `abi codegen` does and emit the test program. */
+fn build_program(abi_path: &Path, type_name: &str, data: &[u8]) -> Result<String> {
+    let mut imports = ImportResolver::new(Vec::new());
+    imports.load_file_with_imports(abi_path, false)?;
+    let mut typedefs = imports.get_all_types().to_vec();
+    normalize_type_refs(&mut typedefs, &imports)?;
+    let resolver = analyze_and_resolve_types(&typedefs, false)?;
+    let package = imports
+        .get_package_for_type(type_name)
+        .with_context(|| format!("no package for {type_name}"))?;
+
+    let mut model = Model::new(&resolver);
+    let root = model.named(type_name);
+    let mut gen = CopyGen {
+        m: &model,
+        protos: String::new(),
+        defs: String::new(),
+        done: BTreeSet::new(),
+    };
+    gen.copy_fn(root);
+    let root_node = model.node(model.resolve_alias(root));
+    let root_c = &model.node(root).c_name;
+    let pn = root_node.needs_params();
+    let complement = !gen.has_padding(root, &mut BTreeSet::new());
+
+    let pkg_dir = package.replace('.', "/");
+    let bytes = if data.is_empty() {
+        "0".to_string()
     } else {
-        /* Has referenced fields or SDU fields - pass them to new() constructor */
-        code.push_str(&format!(
-            "  int new_result = {}_new( reencoded_data, file_size,\n",
-            type_name
-        ));
+        data.iter()
+            .map(|b| format!("0x{b:02x}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let mut p = String::new();
+    writeln!(
+        p,
+        r#"#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "generated_code/{pkg_dir}/types.h"
+#include "generated_code/{pkg_dir}/functions.c"
 
-        let mut param_count = 0;
-        /* Generate getter calls for referenced primitive fields */
-        for field_name in referenced_primitive_fields {
-            if param_count > 0 {
-                code.push_str(",\n");
-            }
-            code.push_str(&format!("    {}_get_{}( original )", type_name, field_name));
-            param_count += 1;
-        }
-        /* Generate tag getter calls for size-discriminated union fields */
-        for field_name in size_discriminated_union_fields {
-            if param_count > 0 {
-                code.push_str(",\n");
-            }
-            code.push_str(&format!(
-                "    {}_{}_size( original, file_size )",
-                type_name,
-                field_name.replace("-", "_")
-            ));
-            param_count += 1;
-        }
-        code.push_str(",\n    &reencoded_size );\n");
-    }
+#define TN_FAIL( ... ) do {{ fprintf( stderr, __VA_ARGS__ ); fprintf( stderr, " (line %d)\n", __LINE__ ); return 1; }} while( 0 )
+#define TN_CHECK( c ) do {{ if( !( c ) ) TN_FAIL( "check failed: %s", #c ); }} while( 0 )
+#define TN_RC( e ) do {{ int tn_rc_ = ( e ); if( tn_rc_ ) {{ fprintf( stderr, "%s returned %d (line %d)\n", #e, tn_rc_, __LINE__ ); return 1; }} }} while( 0 )
 
-    code.push_str(
-        r#"
-  if ( new_result != 0 ) {{
-    fprintf( stderr, "new() failed with code %d\n", new_result );
-    printf( "REENCODE:error\n" );
-    free( original_data );
-    free( reencoded_data );
-    return 1;
+static uint8_t const tn_data[] = {{ {bytes} }};
+static uint64_t const tn_len = {len}UL;
+
+/* Write nested values through the whole-value setters (zero-filled pass). */
+static int tn_whole;
+"#,
+        len = data.len()
+    )?;
+    p.push_str(&gen.protos);
+    p.push('\n');
+    p.push_str(&gen.defs);
+
+    let params_arg = if pn { ", &params" } else { "" };
+    writeln!(
+        p,
+        r#"/* Copy of the members the key table marks as inputs (zero elsewhere). */
+static void tn_inputs( {root_c}_params_t const * all, {root_c}_params_t * out ) {{
+  memset( out, 0, sizeof *out );
+  for( uint64_t i=0UL; i<{root_c}_PARAM_KEY_CNT; i++ ) {{
+    if( {root_c}_param_keys[i].input ) memcpy( (uint8_t *)out+{root_c}_param_keys[i].offset, (uint8_t const *)all+{root_c}_param_keys[i].offset, 8UL );
   }}
-"#,
-    );
+}}
 
-    /* Set non-referenced primitive fields via setters */
-    if !non_referenced_primitive_fields.is_empty() {
-        code.push_str("\n  /* Set non-referenced primitive fields via setters */\n");
-        for field_name in non_referenced_primitive_fields {
-            code.push_str(&format!(
-                "  {}_set_{}( reencoded_data, {}_get_{}( original ) );\n",
-                type_name, field_name, type_name, field_name
-            ));
-        }
-    }
-
-    /* Set enum fields via body setters (Layer 1 API) */
-    if !enum_fields.is_empty() {
-        code.push_str("\n  /* Set enum fields via body setters (Layer 1 API) */\n");
-        for field_name in enum_fields {
-            code.push_str(&format!("  {{\n"));
-            code.push_str(&format!(
-                "    uint8_t const * body = {}_get_{}_body( original );\n",
-                type_name, field_name
-            ));
-            code.push_str(&format!(
-                "    uint64_t body_len = {}_get_{}_size( original );\n",
-                type_name, field_name
-            ));
-            code.push_str(&format!(
-                "    if ( {}_set_{}_body( reencoded_data, body, body_len ) != 0 ) {{\n",
-                type_name, field_name
-            ));
-            code.push_str("      fprintf( stderr, \"Failed to set enum body\\n\" );\n");
-            code.push_str("      printf( \"REENCODE:error\\n\" );\n");
-            code.push_str("      free( original_data );\n");
-            code.push_str("      free( reencoded_data );\n");
-            code.push_str("      return 1;\n");
-            code.push_str("    }\n");
-            code.push_str("  }\n");
-        }
-    }
-
-    /* Set size-discriminated union fields via variant-specific setters (like enums) */
-    if !sdu_fields_with_variants.is_empty() {
-        code.push_str(
-            "\n  /* Set size-discriminated union fields via variant-specific setters */\n",
-        );
-        for sdu_field in sdu_fields_with_variants {
-            let field_name_escaped = sdu_field.field_name.replace("-", "_");
-            code.push_str(&format!("  {{\n"));
-            code.push_str(&format!("    /* Determine variant from size */\n"));
-            code.push_str(&format!(
-                "    uint64_t {}_size = {}_{}_size( original, file_size );\n",
-                field_name_escaped, type_name, field_name_escaped
-            ));
-            code.push_str(&format!(
-                "    uint8_t {}_tag = {}_{}_tag_from_size( {}_size );\n",
-                field_name_escaped, type_name, field_name_escaped, field_name_escaped
-            ));
-            code.push_str(&format!("    switch( {}_tag ) {{\n", field_name_escaped));
-
-            for (idx, variant) in sdu_field.variants.iter().enumerate() {
-                let variant_name_escaped = variant.name.replace("-", "_");
-                code.push_str(&format!("      case {}: {{\n", idx));
-                code.push_str(&format!(
-                    "        {}_{}_set_{}( reencoded_data, {}_{}_get_{}_const( original ) );\n",
-                    type_name,
-                    field_name_escaped,
-                    variant_name_escaped,
-                    type_name,
-                    field_name_escaped,
-                    variant_name_escaped
-                ));
-                code.push_str("        break;\n");
-                code.push_str("      }\n");
-            }
-
-            code.push_str("      default:\n");
-            code.push_str(&format!(
-                "        fprintf( stderr, \"Invalid SDU tag for {}: %d\\n\", {}_tag );\n",
-                sdu_field.field_name, field_name_escaped
-            ));
-            code.push_str("        printf( \"REENCODE:error\\n\" );\n");
-            code.push_str("        free( original_data );\n");
-            code.push_str("        free( reencoded_data );\n");
-            code.push_str("        return 1;\n");
-            code.push_str("    }\n");
-            code.push_str("  }\n");
-        }
-    }
-
-    /* Copy nested struct fields */
-    if !nested_fields.is_empty() {
-        code.push_str("\n  /* Copy nested struct fields */\n");
-        for (field_name, nested_type_name, _nested_field_names, _size) in nested_fields {
-            code.push_str(&format!("  {{\n"));
-            code.push_str(&format!(
-                "    /* Get nested struct wrapper from original */\n"
-            ));
-            code.push_str(&format!(
-                "    {}_t const * nested = {}_get_{}_const( original );\n",
-                nested_type_name, type_name, field_name
-            ));
-            code.push_str(&format!("    /* Copy nested struct to reencoded data */\n"));
-            code.push_str(&format!(
-                "    if ( {}_set_{}( reencoded_data, nested ) != 0 ) {{\n",
-                type_name, field_name
-            ));
-            code.push_str("      fprintf( stderr, \"Failed to set nested struct\\n\" );\n");
-            code.push_str("      printf( \"REENCODE:error\\n\" );\n");
-            code.push_str("      free( original_data );\n");
-            code.push_str("      free( reencoded_data );\n");
-            code.push_str("      return 1;\n");
-            code.push_str("    }\n");
-            code.push_str("  }\n");
-        }
-    }
-
-    /* Copy array data if there are any array fields */
-    if !array_fields.is_empty() {
-        code.push_str("\n  /* Copy array data using setters */\n");
-
-        for (array_field, _is_byte_array, is_struct_array, elem_type_name) in array_fields {
-            /* Get array length and copy element by element */
-            code.push_str(&format!("  {{\n"));
-            code.push_str(&format!(
-                "    uint64_t array_len = {}_get_{}_length( original );\n",
-                type_name, array_field
-            ));
-            code.push_str(&format!(
-                "    for ( uint64_t i = 0; i < array_len; i++ ) {{\n"
-            ));
-            if *is_struct_array {
-                /* For struct arrays, getter returns const pointer, setter expects const pointer */
-                let elem_type = elem_type_name.as_ref().unwrap();
-                code.push_str(&format!(
-                    "      {}_t const * elem = {}_get_{}_at( original, i );\n",
-                    elem_type, type_name, array_field
-                ));
-                code.push_str(&format!(
-                    "      {}_set_{}_at( reencoded_data, i, elem );\n",
-                    type_name, array_field
-                ));
-            } else {
-                /* For primitive arrays, pass value directly */
-                code.push_str(&format!(
-                    "      {}_set_{}_at( reencoded_data, i, {}_get_{}_at( original, i ) );\n",
-                    type_name, array_field, type_name, array_field
-                ));
-            }
-            code.push_str("    }\n");
-            code.push_str("  }\n");
-        }
-
-        code.push_str("\n");
-    }
-
-    code.push_str("  printf( \"REENCODE:ok\\n\" );\n");
-    code.push_str(
-        r#"
-
-  /* Stage 5: Binary comparison */
-  if ( file_size != reencoded_size ) {
-    fprintf( stderr, "Binary size mismatch after decode/reencode round-trip!\n" );
-    fprintf( stderr, "  Original size: %ld bytes\n", file_size );
-    fprintf( stderr, "  Reencoded size: %lu bytes\n", reencoded_size );
-    printf( "BINARY_MATCH:false\n" );
-    free( original_data );
-    free( reencoded_data );
-    return 1;
-  }
-
-  int cmp_result = memcmp( original_data, reencoded_data, file_size );
-  if ( cmp_result == 0 ) {
-    printf( "BINARY_MATCH:true\n" );
-  } else {
-    fprintf( stderr, "Binary mismatch after decode/reencode round-trip!\n" );
-    printf( "BINARY_MATCH:false\n" );
-    free( original_data );
-    free( reencoded_data );
-    return 1;
-  }
-
-  free( original_data );
-  free( reencoded_data );
+/* Re-encode into a buffer prefilled with zeros (fill 0) or the complement of
+   the input (fill 1), or prefilled with the complement and then set up by
+   <T>_init from the input params (init). `whole` selects the whole-value
+   setters for nested values. */
+static int tn_reencode( uint8_t fill, int init, int whole ) {{
+  {root_c}_params_t params;
+  tn_whole = whole;
+  memset( &params, 0, sizeof params );
+  TN_RC( {root_c}_params_from_buffer( tn_data, tn_len, &params ) );
+  uint64_t fp = 0UL;
+  TN_RC( {root_c}_footprint_from_params( &params, &fp ) );
+  TN_CHECK( fp==tn_len );
+  {root_c}_t const * src = {root_c}_from_slice( tn_data, tn_len );
+  TN_CHECK( src!=NULL );
+  uint8_t * dst = malloc( fp ? fp : 1UL );
+  TN_CHECK( dst!=NULL );
+  for( uint64_t i=0UL; i<fp; i++ ) dst[i] = fill ? (uint8_t)~tn_data[i] : (uint8_t)0;
+  if( init ) {{
+    {root_c}_params_t inputs;
+    uint64_t isz = 0UL;
+    tn_inputs( &params, &inputs );
+    if( fp ) TN_CHECK( {root_c}_init( dst, fp-1UL, &inputs, &isz )==TN_ABI_ERR_SHORT_BUFFER && isz==fp );
+    TN_RC( {root_c}_init( dst, fp, &inputs, &isz ) );
+    TN_CHECK( isz==fp );
+  }}
+  if( tn_copy_{root_c}( src, &params, ({root_c}_t *)dst, &params ) ) {{ free( dst ); TN_FAIL( "copy failed (fill %u)", fill ); }}
+  for( uint64_t i=0UL; i<fp; i++ ) {{
+    if( dst[i]!=tn_data[i] ) {{
+      fprintf( stderr, "byte %lu differs: got %02x want %02x (fill %u)\n", (unsigned long)i, dst[i], tn_data[i], fill );
+      printf( "BINARY_MATCH:false\n" );
+      free( dst );
+      return 1;
+    }}
+  }}
+  uint64_t consumed = 0UL;
+  int rc = {root_c}_validate( dst, fp, &consumed );
+  free( dst );
+  TN_CHECK( rc==0 && consumed==fp );
   return 0;
-}
-"#,
-    );
+}}
 
-    code
+int main( void ) {{
+  uint64_t consumed = 0UL;
+  int rc = {root_c}_validate( tn_data, tn_len, &consumed );
+  if( rc ) {{ printf( "VALIDATION:error\n" ); TN_FAIL( "validate returned %d", rc ); }}
+  TN_CHECK( consumed==tn_len );
+  {root_c}_t const * src = {root_c}_from_slice( tn_data, tn_len );
+  if( !src ) {{ printf( "DECODE:error\n" ); TN_FAIL( "from_slice failed" ); }}
+  printf( "DECODE:ok\n" );
+  {root_c}_params_t params;
+  memset( &params, 0, sizeof params );
+  TN_RC( {root_c}_params_from_buffer( tn_data, tn_len, &params ) );
+  TN_CHECK( {root_c}_size( src{params_arg} )==tn_len );
+  {{
+    /* The members the key table marks as inputs are enough to size the value. */
+    {root_c}_params_t inputs;
+    uint64_t fp = 0UL;
+    TN_CHECK( {root_c}_param_keys[{root_c}_PARAM_KEY_CNT].member==NULL );
+    for( uint64_t i=0UL; i<{root_c}_PARAM_KEY_CNT; i++ ) TN_CHECK( {root_c}_param_keys[i].offset+8UL<=sizeof inputs );
+    tn_inputs( &params, &inputs );
+    TN_RC( {root_c}_footprint_from_params( &inputs, &fp ) );
+    TN_CHECK( fp==tn_len );
+  }}
+  TN_CHECK( {root_c}_validate( tn_data, tn_len, NULL )==TN_ABI_OK );
+  TN_CHECK( {root_c}_from_slice( NULL, tn_len )==NULL );"#
+    )?;
+    if !root_node.len_dep {
+        /* A truncated buffer is rejected; the required size it reports is
+        either unknown (0) or the real size (always known for fixed sizes). */
+        let fixed = if root_node.const_size.is_some() {
+            " TN_CHECK( need==tn_len );"
+        } else {
+            ""
+        };
+        writeln!(
+            p,
+            "  if( tn_len ) {{ uint64_t need = 1UL; TN_CHECK( {root_c}_validate( tn_data, tn_len-1UL, &need )!=TN_ABI_OK ); TN_CHECK( need==0UL || need==tn_len );{fixed} }}"
+        )?;
+    }
+    writeln!(
+        p,
+        r#"  printf( "VALIDATION:ok\n" );
+  if( tn_reencode( 0, 0, 1 ) ) {{ printf( "REENCODE:error\n" ); return 1; }}
+  if( tn_reencode( 1, 1, 0 ) ) {{ printf( "REENCODE:error\n" ); return 1; }}"#
+    )?;
+    if complement {
+        writeln!(
+            p,
+            "  if( tn_reencode( 1, 0, 0 ) ) {{ printf( \"REENCODE:error\\n\" ); return 1; }}"
+        )?;
+    }
+    writeln!(
+        p,
+        "  printf( \"REENCODE:ok\\nBINARY_MATCH:true\\n\" );\n  return 0;\n}}"
+    )?;
+    Ok(p)
+}
+
+struct CopyGen<'m, 'a> {
+    m: &'m Model<'a>,
+    protos: String,
+    defs: String,
+    done: BTreeSet<NodeId>,
+}
+
+/* `, x` when node `n`'s API takes params. */
+fn pa(n: &Node, x: &str) -> String {
+    if n.needs_params() {
+        format!(", {x}")
+    } else {
+        String::new()
+    }
+}
+
+impl<'m, 'a> CopyGen<'m, 'a> {
+    fn r(&self, id: NodeId) -> &'m Node {
+        self.m.node(self.m.resolve_alias(id))
+    }
+
+    /* Whether any struct reachable from `id` is non-packed (may hold padding). */
+    fn has_padding(&self, id: NodeId, seen: &mut BTreeSet<NodeId>) -> bool {
+        let id = self.m.resolve_alias(id);
+        if !seen.insert(id) {
+            return false;
+        }
+        let n = self.m.node(id);
+        let slots: Vec<Slot> = match &n.kind {
+            NodeKind::Struct { fields, packed } => {
+                if !packed {
+                    return true;
+                }
+                fields.iter().map(|f| f.slot.clone()).collect()
+            }
+            NodeKind::Union { variants } => variants.iter().map(|f| f.slot.clone()).collect(),
+            NodeKind::Enum { variants, .. } | NodeKind::Sdu { variants } => {
+                variants.iter().map(|v| v.slot.clone()).collect()
+            }
+            NodeKind::Array { elem, .. } => vec![elem.clone()],
+            NodeKind::Prim(_) | NodeKind::Alias { .. } => Vec::new(),
+        };
+        slots.iter().any(|s| match s {
+            Slot::Node(c) => self.has_padding(*c, seen),
+            Slot::Prim(_) => false,
+        })
+    }
+
+    /* Ensures `tn_copy_<X>` exists; returns the C name of X. */
+    fn copy_fn(&mut self, id: NodeId) -> String {
+        let id = self.m.resolve_alias(id);
+        let n = self.m.node(id);
+        let c = n.c_name.clone();
+        if !self.done.insert(id) {
+            return c;
+        }
+        let sig = format!(
+            "static int tn_copy_{c}( {c}_t const * s, {c}_params_t const * sp, {c}_t * d, {c}_params_t const * dp )"
+        );
+        writeln!(self.protos, "{sig};").unwrap();
+        let mut b = String::from("  int rc = 0;\n  (void)sp; (void)dp; (void)rc;\n");
+        match &n.kind {
+            NodeKind::Prim(_) => {
+                writeln!(b, "  TN_RC( {c}_set( d, {c}_get( s ) ) );").unwrap();
+            }
+            NodeKind::Struct { fields, .. } => {
+                for f in fields {
+                    self.copy_field(n, f, &mut b);
+                }
+            }
+            NodeKind::Union { variants } => {
+                writeln!(b, "  TN_CHECK( {c}_VARIANT_CNT=={}UL );", variants.len()).unwrap();
+                for (idx, f) in variants.iter().enumerate() {
+                    writeln!(
+                        b,
+                        "  TN_CHECK( {c}_variant_by_name( \"{}\" )==&{c}_variants[{idx}] );",
+                        f.name
+                    )
+                    .unwrap();
+                }
+                /* Write the widest variant, then check every variant reads back equal. */
+                let widest = variants
+                    .iter()
+                    .max_by_key(|f| {
+                        (
+                            self.m.slot_size(&f.slot).unwrap_or(0),
+                            std::cmp::Reverse(f.ident.clone()),
+                        )
+                    })
+                    .cloned();
+                if let Some(w) = widest {
+                    self.copy_field(n, &w, &mut b);
+                }
+                for f in variants {
+                    if let Slot::Prim(p) = &f.slot {
+                        let t = prim_c_type(p);
+                        writeln!(
+                            b,
+                            "  {{ {t} a = {c}_get_{i}( s{sp} ), z = {c}_get_{i}( d{dp} ); TN_CHECK( memcmp( &a, &z, sizeof a )==0 ); }}",
+                            i = f.ident,
+                            sp = pa(n, "sp"),
+                            dp = pa(n, "dp")
+                        )
+                        .unwrap();
+                    }
+                }
+            }
+            NodeKind::Array { elem, .. } => {
+                let (sp, dp) = (pa(n, "sp"), pa(n, "dp"));
+                writeln!(
+                    b,
+                    "  uint64_t cnt = {c}_len( s{sp} );\n  TN_CHECK( cnt=={c}_len( d{dp} ) );\n  for( uint64_t i=0UL; i<cnt; i++ ) {{"
+                )
+                .unwrap();
+                match elem {
+                    Slot::Prim(_) => writeln!(
+                        b,
+                        "    TN_RC( {c}_set_at( d{dp}, i, {c}_get_at( s{sp}, i ) ) );"
+                    )
+                    .unwrap(),
+                    Slot::Node(e) => {
+                        let en = self.r(*e);
+                        let ec = self.copy_fn(*e);
+                        writeln!(
+                            b,
+                            "    {ec}_params_t es, ed;\n    memset( &es, 0, sizeof es ); memset( &ed, 0, sizeof ed );\n    {ec}_t const * ep = {c}_at( s{sp}, i{eo} );\n    {ec}_t * eq = {c}_at_mut( d{dp}, i{eq} );\n    TN_CHECK( ep && eq );\n    TN_RC( tn_copy_{ec}( ep, &es, eq, &ed ) );",
+                            eo = pa(en, "&es"),
+                            eq = pa(en, "&ed")
+                        )
+                        .unwrap();
+                    }
+                }
+                b.push_str("  }\n");
+            }
+            NodeKind::Enum { variants, .. } => {
+                /* A standalone enum (not a struct field): node-level API. */
+                let (sp, dp) = (pa(n, "sp"), pa(n, "dp"));
+                writeln!(
+                    b,
+                    "  uint64_t tag = {c}_get_tag( s{sp} );\n  TN_CHECK( tag=={c}_get_tag( d{dp} ) );"
+                )
+                .unwrap();
+                self.copy_variants(
+                    n,
+                    variants,
+                    &format!("{c}_as_"),
+                    "s",
+                    "d",
+                    &sp,
+                    &dp,
+                    false,
+                    &mut b,
+                );
+            }
+            NodeKind::Sdu { variants } => {
+                let (sp, dp) = (pa(n, "sp"), pa(n, "dp"));
+                writeln!(
+                    b,
+                    "  int var = {c}_get_variant( s{sp} );\n  TN_CHECK( var>=0 && var=={c}_get_variant( d{dp} ) );"
+                )
+                .unwrap();
+                self.copy_variants(
+                    n,
+                    variants,
+                    &format!("{c}_as_"),
+                    "s",
+                    "d",
+                    &sp,
+                    &dp,
+                    true,
+                    &mut b,
+                );
+            }
+            NodeKind::Alias { .. } => unreachable!(),
+        }
+        b.push_str("  return 0;\n");
+        writeln!(self.defs, "{sig} {{\n{b}}}\n").unwrap();
+        c
+    }
+
+    /* Copy one struct field (or union variant) through the struct-level API. */
+    fn copy_field(&mut self, s: &Node, f: &Field, b: &mut String) {
+        let c = &s.c_name;
+        let i = &f.ident;
+        let (sp, dp) = (pa(s, "sp"), pa(s, "dp"));
+        writeln!(b, "  /* {} */", f.name).unwrap();
+        match &f.slot {
+            Slot::Prim(_) => {
+                writeln!(b, "  TN_RC( {c}_set_{i}( d{dp}, {c}_get_{i}( s{sp} ) ) );").unwrap();
+            }
+            Slot::Node(child) => {
+                let ch = self.r(*child);
+                let cc = ch.c_name.clone();
+                match &ch.kind {
+                    NodeKind::Enum { tag, variants } if ch.is_field_slot => {
+                        writeln!(
+                            b,
+                            "  {{\n    uint64_t tag = {c}_get_{i}_tag( s{sp} );\n    TN_CHECK( tag!=UINT64_MAX && tag=={c}_get_{i}_tag( d{dp} ) );"
+                        )
+                        .unwrap();
+                        let select = s.plain_ref(tag).is_some();
+                        let prefix = format!("{c}_{i}_as_");
+                        let mut inner = String::new();
+                        self.copy_variants(
+                            ch, variants, &prefix, "s", "d", &sp, &dp, false, &mut inner,
+                        );
+                        if select {
+                            /* Re-select the (already written) variant through the
+                            select helpers, by constant and by name. */
+                            for v in variants {
+                                writeln!(
+                                    b,
+                                    "    if( tag=={cc}_TAG_{vi} ) {{ TN_RC( {c}_{i}_select_{vi}( d{dp} ) ); TN_RC( {c}_{i}_select_by_name( d{dp}, \"{vn}\" ) ); }}",
+                                    vi = v.ident,
+                                    vn = v.name
+                                )
+                                .unwrap();
+                            }
+                        }
+                        b.push_str(&indent(&inner));
+                        b.push_str("  }\n");
+                    }
+                    NodeKind::Sdu { variants } if ch.is_field_slot => {
+                        writeln!(
+                            b,
+                            "  {{\n    int var = {c}_get_{i}_variant( s{sp} );\n    TN_CHECK( var>=0 && var=={c}_get_{i}_variant( d{dp} ) );"
+                        )
+                        .unwrap();
+                        let mut inner = String::new();
+                        self.copy_variants(
+                            ch,
+                            variants,
+                            &format!("{c}_{i}_as_"),
+                            "s",
+                            "d",
+                            &sp,
+                            &dp,
+                            true,
+                            &mut inner,
+                        );
+                        b.push_str(&indent(&inner));
+                        b.push_str("  }\n");
+                    }
+                    _ => {
+                        let cc = self.copy_fn(*child);
+                        /* Arrays with a setter are written again through it
+                        at the count already in place (a wrong byte shows up
+                        in the comparison); any other count is refused. */
+                        let fam = if self.m.fam_count(s, &f.slot).is_some() {
+                            format!("\n    {{\n      uint64_t n = {c}_get_{i}_len( s{sp} );\n      int rc = {c}_set_{i}( d{dp}, cp, n+1UL );\n      TN_CHECK( rc==TN_ABI_ERR_BAD_SIZE || rc==TN_ABI_ERR_OVERFLOW );\n      if( n ) TN_CHECK( {c}_set_{i}( d{dp}, cp, n-1UL )==TN_ABI_ERR_BAD_SIZE );\n      TN_RC( {c}_set_{i}( d{dp}, cp, n ) );\n    }}")
+                        } else {
+                            String::new()
+                        };
+                        /* Whole-value setters (zero-filled pass only, so the
+                        other passes still prove every member is written). */
+                        let (copy, whole) = match self.m.value_setter(&f.slot) {
+                            Some(ValueSetter::Copy(_)) => (
+                                format!("if( tn_whole ) TN_RC( {c}_set_{i}( d{dp}, cp ) );\n    else TN_RC( tn_copy_{cc}( cp, &cs, cq, &cd ) );"),
+                                String::new(),
+                            ),
+                            Some(ValueSetter::Bytes) => (
+                                format!("TN_RC( tn_copy_{cc}( cp, &cs, cq, &cd ) );"),
+                                format!(
+                                    "\n    if( tn_whole ) {{\n      uint64_t n = {cc}_size( cp{cs} );\n      TN_CHECK( n!=UINT64_MAX );\n      TN_CHECK( {c}_set_{i}_bytes( d{dp}, (uint8_t const *)cp, n+1UL )==TN_ABI_ERR_BAD_SIZE );\n      TN_RC( {c}_set_{i}_bytes( d{dp}, (uint8_t const *)cp, n ) );\n    }}",
+                                    cs = pa(ch, "&cs")
+                                ),
+                            ),
+                            None => (format!("TN_RC( tn_copy_{cc}( cp, &cs, cq, &cd ) );"), String::new()),
+                        };
+                        writeln!(
+                            b,
+                            "  {{\n    {cc}_params_t cs, cd;\n    memset( &cs, 0, sizeof cs ); memset( &cd, 0, sizeof cd );\n    {cc}_t const * cp = {c}_get_{i}( s{sp}{co} );\n    {cc}_t * cq = {c}_get_{i}_mut( d{dp}{cq} );\n    TN_CHECK( cp && cq );\n    {copy}{fam}{whole}\n  }}",
+                            co = pa(ch, "&cs"),
+                            cq = pa(ch, "&cd")
+                        )
+                        .unwrap();
+                    }
+                }
+            }
+        }
+    }
+
+    /* Branch on the active variant (`tag` / `var`) and copy its payload via
+    `<prefix><V>` / `<prefix><V>_mut` views. */
+    #[allow(clippy::too_many_arguments)]
+    fn copy_variants(
+        &mut self,
+        e: &Node,
+        variants: &[Variant],
+        prefix: &str,
+        s: &str,
+        d: &str,
+        sp: &str,
+        dp: &str,
+        sdu: bool,
+        b: &mut String,
+    ) {
+        let ec = &e.c_name;
+        for (idx, v) in variants.iter().enumerate() {
+            let cond = if sdu {
+                format!("var=={ec}_TAG_{}", v.ident)
+            } else {
+                format!("tag=={ec}_TAG_{}", v.ident)
+            };
+            let kw = if idx == 0 { "if" } else { "} else if" };
+            writeln!(b, "  {kw}( {cond} ) {{").unwrap();
+            let Slot::Node(vid) = v.slot else {
+                continue;
+            };
+            let vn = self.r(vid);
+            let vc = self.copy_fn(vid);
+            let vi = &v.ident;
+            /* The descriptor table agrees with the active variant. */
+            let active = if sdu { "(uint64_t)var" } else { "tag" };
+            writeln!(
+                b,
+                "    TN_CHECK( {ec}_variant_by_name( \"{name}\" )==&{ec}_variants[{idx}] && {ec}_variants[{idx}].tag=={active} );",
+                name = v.name
+            )
+            .unwrap();
+            /* Every other variant view must report inactive. */
+            for o in variants.iter().filter(|o| o.ident != v.ident) {
+                if let Slot::Node(oid) = o.slot {
+                    writeln!(
+                        b,
+                        "    TN_CHECK( {prefix}{oi}( {s}{sp}{on} )==NULL );",
+                        oi = o.ident,
+                        on = pa(self.r(oid), "NULL")
+                    )
+                    .unwrap();
+                }
+            }
+            writeln!(
+                b,
+                "    {vc}_params_t vs, vd;\n    memset( &vs, 0, sizeof vs ); memset( &vd, 0, sizeof vd );\n    {vc}_t const * vp = {prefix}{vi}( {s}{sp}{vo} );\n    {vc}_t * vq = {prefix}{vi}_mut( {d}{dp}{vq} );\n    TN_CHECK( vp && vq );\n    if( {ec}_variants[{idx}].payload_size!=UINT64_MAX ) TN_CHECK( {vc}_size( vp{vs} )=={ec}_variants[{idx}].payload_size );\n    TN_RC( tn_copy_{vc}( vp, &vs, vq, &vd ) );",
+                vo = pa(vn, "&vs"),
+                vq = pa(vn, "&vd"),
+                vs = pa(vn, "&vs")
+            )
+            .unwrap();
+        }
+        if variants.is_empty() {
+            b.push_str("  TN_FAIL( \"no variants\" );\n");
+        } else {
+            b.push_str("  } else {\n    TN_FAIL( \"unknown variant\" );\n  }\n");
+        }
+    }
+}
+
+fn indent(s: &str) -> String {
+    s.lines().map(|l| format!("  {l}\n")).collect()
 }

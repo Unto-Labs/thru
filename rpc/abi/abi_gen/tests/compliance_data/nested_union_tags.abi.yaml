@@ -1,0 +1,126 @@
+abi:
+  package: "compliance.nested_union_tags"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Unions whose fixed-size variants hold an enum tag that must be validated"
+
+types:
+  - name: "TaggedChoice"
+    kind:
+      union:
+        packed: true
+        variants:
+          - name: "raw"
+            variant-type:
+              array:
+                size:
+                  literal:
+                    u64: 2
+                element-type:
+                  primitive: u8
+          - name: "tagged"
+            variant-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "tag"
+                    field-type:
+                      primitive: u8
+                  - name: "body"
+                    field-type:
+                      enum:
+                        packed: true
+                        tag-ref:
+                          field-ref:
+                            path: ["tag"]
+                        variants:
+                          - name: "One"
+                            tag-value: 1
+                            variant-type:
+                              struct:
+                                packed: true
+                                fields:
+                                  - name: "v"
+                                    field-type:
+                                      primitive: u8
+                          - name: "Two"
+                            tag-value: 2
+                            variant-type:
+                              struct:
+                                packed: true
+                                fields:
+                                  - name: "w"
+                                    field-type:
+                                      primitive: u8
+  - name: "UnionHolder"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "lead"
+            field-type:
+              primitive: u8
+          - name: "choice"
+            field-type:
+              union:
+                packed: true
+                variants:
+                  - name: "raw"
+                    variant-type:
+                      array:
+                        size:
+                          literal:
+                            u64: 2
+                        element-type:
+                          primitive: u8
+                  - name: "tagged"
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "tag"
+                            field-type:
+                              primitive: u8
+                          - name: "body"
+                            field-type:
+                              enum:
+                                packed: true
+                                tag-ref:
+                                  field-ref:
+                                    path: ["tag"]
+                                variants:
+                                  - name: "One"
+                                    tag-value: 1
+                                    variant-type:
+                                      struct:
+                                        packed: true
+                                        fields:
+                                          - name: "v"
+                                            field-type:
+                                              primitive: u8
+                                  - name: "Two"
+                                    tag-value: 2
+                                    variant-type:
+                                      struct:
+                                        packed: true
+                                        fields:
+                                          - name: "w"
+                                            field-type:
+                                              primitive: u8
+          - name: "trail"
+            field-type:
+              primitive: u8
+  - name: "ChoiceList"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "items"
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 2
+                element-type:
+                  type-ref:
+                    name: "TaggedChoice"

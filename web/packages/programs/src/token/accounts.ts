@@ -5,8 +5,10 @@ import {
   TickerField,
   TokenAccount,
   TokenMintAccount,
+  TokenProgramAccount,
 } from './abi/thru/program/token/types';
 import type { MintAccountInfo, TokenAccountInfo } from './types';
+import { decodeAccountRoot } from '../utils/account-root';
 
 const TEXT_DECODER = new TextDecoder();
 
@@ -16,9 +18,9 @@ export function parseMintAccountData(account: Account): MintAccountInfo {
     throw new Error('Mint account data is missing');
   }
 
-  const parsed = TokenMintAccount.from_array(data);
+  const parsed = decodeTokenMintAccount(data);
   if (!parsed) {
-    throw new Error('Mint account data is malformed');
+    throw new Error('Account data is not a token mint');
   }
 
   const hasFreezeAuthority = parsed.get_has_freeze_authority() === 1;
@@ -43,9 +45,9 @@ export function parseTokenAccountData(account: Account): TokenAccountInfo {
     throw new Error('Token account data is missing');
   }
 
-  const parsed = TokenAccount.from_array(data);
+  const parsed = decodeTokenAccount(data);
   if (!parsed) {
-    throw new Error('Token account data is malformed');
+    throw new Error('Account data is not a token account');
   }
 
   return {
@@ -54,6 +56,25 @@ export function parseTokenAccountData(account: Account): TokenAccountInfo {
     amount: parsed.get_amount(),
     isFrozen: parsed.get_is_frozen() === 1,
   };
+}
+
+/**
+ * Decodes Token Program account data through its account root. Byte 0 is the
+ * account type (mint or token account); returns null for any other type or a
+ * buffer whose size does not match that type exactly.
+ */
+export function decodeTokenProgramAccount(data: Uint8Array): TokenProgramAccount | null {
+  return decodeAccountRoot(data, (bytes) => TokenProgramAccount.from_array(bytes));
+}
+
+/** Decodes mint account data; null when the bytes are not a token mint. */
+export function decodeTokenMintAccount(data: Uint8Array): TokenMintAccount | null {
+  return decodeTokenProgramAccount(data)?.payload().asMintV1() ?? null;
+}
+
+/** Decodes token account data; null when the bytes are not a token account. */
+export function decodeTokenAccount(data: Uint8Array): TokenAccount | null {
+  return decodeTokenProgramAccount(data)?.payload().asTokenAccountV1() ?? null;
 }
 
 export function isAccountNotFoundError(err: unknown): boolean {

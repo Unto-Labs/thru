@@ -9,7 +9,8 @@
 #   TEST_SCOPE   - run a subset of scenarios (default: "all"). Supported scopes:
 #                  all, all-no-debug, a single scenario, or comma-separated
 #                  scenarios from core, keys, accounts, transfers, txn, program,
-#                  program-upgrade, event, token, validator, bond, util, debug.
+#                  program-upgrade, program-abi, event, token, multisig, validator,
+#                  bond, util, debug.
 #   SKIP_BUILD   - set to 1 to reuse an existing thru-cli binary.
 #   THRU_CLI_BIN - override path to the thru-cli binary.
 #   RPC_BASE_URL - override gRPC endpoint base URL (default: http://127.0.0.1:8472).
@@ -49,6 +50,7 @@
 # responses with jq.
 
 set -euo pipefail
+umask 077
 trap 'log "ERR trap: line=$LINENO exit=$? BASH_COMMAND=$BASH_COMMAND"' ERR
 
 readonly TEST_SCOPE="${TEST_SCOPE:-all}"
@@ -65,7 +67,7 @@ GENESIS_BLS_KEY="${GENESIS_BLS_KEY:-}"
 # Node identity ed25519 seed (64-hex), and a file holding it — the producer key the
 # bond ClaimFees/§B scenarios sign injected blocks with. See resolve_node_identity_seed.
 NODE_IDENTITY_KEY_FILE="${NODE_IDENTITY_KEY_FILE:-}"
-readonly AVAILABLE_SCENARIOS=(core keys accounts transfers txn program program-upgrade event token validator bond util debug)
+readonly AVAILABLE_SCENARIOS=(core keys accounts transfers txn program program-upgrade program-abi event token multisig validator bond util debug)
 
 SELECTED_SCENARIO="${TEST_SCOPE:-all}"
 
@@ -74,6 +76,7 @@ REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || (cd "
 readonly SCRIPT_DIR REPO_ROOT
 
 source "$SCRIPT_DIR/account_create_helpers.sh"
+source "${E2E_ADDRESSES_FILE:-$REPO_ROOT/programs/bootstrap/generated/e2e-addresses.sh}"
 
 CLI_TMP_HOME="$(mktemp -d)"
 readonly CLI_TMP_HOME
@@ -91,6 +94,10 @@ EVENT_PROGRAM_BIN="$REPO_ROOT/build/thruvm/bin/tn_event_emission_program_c.bin"
 EVENT_PROGRAM_MANAGER="taMGRmPoSTkUtF6UlmCIq58K8OYsnXshOMPdobxxHytqmu"
 readonly EVENT_PROGRAM_BIN
 readonly EVENT_PROGRAM_MANAGER
+# Deployed by the `multisig` scenario only if genesis did not install the
+# canonical multisig program.
+MULTISIG_PROGRAM_BIN="$REPO_ROOT/build/thruvm/bin/tn_multisig_program_c.bin"
+readonly MULTISIG_PROGRAM_BIN
 
 declare -a CLEANUP_ACTIONS=()
 declare PROGRAM_ACCOUNT_ID=""
@@ -114,13 +121,13 @@ declare BOND_B_SRC=""
 declare BOND_B_A=0
 declare BOND_B_P=0
 declare BOND_B_ACCEPTED=""
-declare GENESIS_EVENT_PROGRAM_HEX="00000000000000000000000000000000000000000000000000000000000000EE"
+declare GENESIS_EVENT_PROGRAM_HEX="$E2E_EVENT_EMISSION_PROGRAM_HEX"
 
 # Canonical WTHRU mint + the bootstrap-managed Token program, pinned in
 # programs/c/examples/tn_wthru_mint.h. The bond program denominates bonds in
 # this mint; the operator wraps native THRU into a WTHRU token account here.
-readonly WTHRU_MINT="taaoXQw03WlYWdo1jhfFi2Nqfqsf4RqYySn_89mchjCiLb"
-readonly WTHRU_TOKEN_PROGRAM="taTOKENKRgcl3vO0yVhftATDbXuhgWcfaaxv9xpEEdMdUE"
+readonly WTHRU_MINT="$BOOTSTRAP_WTHRU_MINT_ADDRESS"
+readonly WTHRU_TOKEN_PROGRAM="$BOOTSTRAP_TOKEN_PROGRAM_ADDRESS"
 # §B (attestor_payment debit + ClaimFees) drives the fullnode block-builder BTP
 # endpoint (UDP) via send-block. §B ALWAYS runs — it never skips; if send-block
 # cannot be resolved the test fails.
@@ -341,7 +348,7 @@ assert_jq_eq() {
 assert_contains() {
   local haystack="$1"
   local needle="$2"
-  if ! grep -Fq "$needle" <<<"$haystack"; then
+  if ! grep -Fq -- "$needle" <<<"$haystack"; then
     log "Assertion failed: expected output to contain '$needle'"
     log "Output: $haystack"
     return 1
@@ -613,8 +620,10 @@ Available scenarios:
   txn
   program
   program-upgrade
+  program-abi
   event
   token
+  multisig
   validator
   bond
   util
@@ -641,7 +650,7 @@ parse_args() {
       all-no-debug)
         SELECTED_SCENARIO="all-no-debug"
         ;;
-      core|keys|accounts|transfers|txn|program|program-upgrade|event|token|validator|bond|util|debug)
+      core|keys|accounts|transfers|txn|program|program-upgrade|program-abi|event|token|multisig|validator|bond|util|debug)
         SELECTED_SCENARIO="$arg"
         ;;
       *)
@@ -698,31 +707,36 @@ seed_cli_config() {
   # Account 3: 0300...0000 (index 3)
   cat >"$CONFIG_PATH" <<EOF
 rpc_base_url: "$RPC_BASE_URL"
-keys:
-  default: "0000000000000000000000000000000000000000000000000000000000000000"
-  acc_0: "0000000000000000000000000000000000000000000000000000000000000000"
-  acc_1: "0100000000000000000000000000000000000000000000000000000000000000"
-  acc_2: "0200000000000000000000000000000000000000000000000000000000000000"
-  acc_3: "0300000000000000000000000000000000000000000000000000000000000000"
-uploader_program_public_key: "taUPLMH5QYOAT4ktwQeO7DXAEKtqBhYehalNGf5BJFQDYq"
-manager_program_public_key: "taMGRmPoSTkUtF6UlmCIq58K8OYsnXshOMPdobxxHytqmu"
-system_test_program_public_key: "tar71GzddPShylAkcr4uvCDLRtdovGCI64b54CYtqCWSVA"
-abi_manager_program_public_key: "taABII8WXcPaPIt47cXjOBbyoBUGBDXznAMHorVMeok3mw"
-token_program_public_key: "taTOKENKRgcl3vO0yVhftATDbXuhgWcfaaxv9xpEEdMdUE"
-consensus_validator_program_public_key: "taCONStGMCE1RJ9ttceyt0FZhYapGJ7zzBuCE5qqYdLhaF"
-consensus_attestor_table_public_key: "ta1hwl1IPgsgFwWPQMmru6Wy55X-5F79RedCGZK6FLu81a"
-consensus_converted_vault_public_key: "taR_oF_dyYHoV1-lz_Dqg63XXSNEKu1dSsRqGFo8nc5mey"
-consensus_unclaimed_vault_public_key: "tanMgIvVjQKG5C23bpXQba6gnvQhwo09ZUOH73AuXRHI0T"
-wthru_program_public_key: "taWTHRUBelpONhTRjYc7n4OovodUsUtZKTIuREWAi9G9lm"
-bp_program_public_key: "taBPUH9m3CXZcBQyCrTmclHtltipiPelIHzdAf8QdIDvnt"
-name_service_program_public_key: "taNAMEqRNEDeMWp0cDYmMVdZyTZiF5NyGDR9zTwH42rWQG"
-thru_registrar_program_public_key: "taREGMtyyVIMr27zDpvN0aRiSS2aOVffM9cZCsc0Xomaxw"
+keys: {}
+uploader_program_public_key: "$BOOTSTRAP_UPLOADER_PROGRAM_ADDRESS"
+manager_program_public_key: "$BOOTSTRAP_PUBLIC_MANAGER_PROGRAM_ADDRESS"
+system_test_program_public_key: "$BOOTSTRAP_SYSTEM_TEST_PROGRAM_ADDRESS"
+abi_manager_program_public_key: "$BOOTSTRAP_ABI_MANAGER_PROGRAM_ADDRESS"
+token_program_public_key: "$BOOTSTRAP_TOKEN_PROGRAM_ADDRESS"
+consensus_validator_program_public_key: "$BOOTSTRAP_CONSENSUS_VALIDATOR_PROGRAM_ADDRESS"
+consensus_attestor_table_public_key: "$BOOTSTRAP_ATTESTOR_TABLE_ADDRESS"
+consensus_converted_vault_public_key: "$BOOTSTRAP_CONVERTED_VAULT_ADDRESS"
+consensus_unclaimed_vault_public_key: "$BOOTSTRAP_UNCLAIMED_VAULT_ADDRESS"
+wthru_program_public_key: "$BOOTSTRAP_WTHRU_PROGRAM_ADDRESS"
+bp_program_public_key: "$BOOTSTRAP_BLOCK_PRODUCER_PROGRAM_ADDRESS"
+name_service_program_public_key: "$BOOTSTRAP_NAME_SERVICE_PROGRAM_ADDRESS"
+thru_registrar_program_public_key: "$BOOTSTRAP_THRU_REGISTRAR_PROGRAM_ADDRESS"
+multisig_program_public_key: "$BOOTSTRAP_MULTISIG_PROGRAM_ADDRESS"
+multicall_program_public_key: "$BOOTSTRAP_MULTICALL_PROGRAM_ADDRESS"
 timeout_seconds: 300
 max_retries: 5
 auth_token:
 EOF
 
   chmod 600 "$CONFIG_PATH"
+  local index seed
+  for index in 0 1 2 3; do
+    printf -v seed '%02x%062d' "$index" 0
+    printf '%s' "$seed" | run_cli_json "seed acc_$index" keys add "acc_$index" --stdin --store file >/dev/null
+    if [[ "$index" == 0 ]]; then
+      printf '%s' "$seed" | run_cli_json "seed default" keys add default --stdin --store file >/dev/null
+    fi
+  done
   log "Configuration seeded at $CONFIG_PATH"
 }
 
@@ -759,42 +773,46 @@ scenario_keys() {
   run_cli_json "keys list" keys list >/dev/null
 
   local generated_json
-  generated_json=$(run_cli_json "keys generate cli-test" keys generate cli-test)
-  local generated_value
-  generated_value=$(printf '%s' "$generated_json" | jq -er '.keys.value')
-  [[ ${#generated_value} -eq 64 ]] || die "Generated key not 64 hex chars"
+  generated_json=$(run_cli_json "keys generate cli-test" keys generate cli-test --store file)
+  local generated_reference generated_public
+  generated_reference=$(printf '%s' "$generated_json" | jq -er '.keys.reference')
+  generated_public=$(printf '%s' "$generated_json" | jq -er '.keys.public_key')
+  [[ "$generated_reference" == file:* ]] || die "Generated key has no file reference"
+  [[ "$generated_public" == ta* ]] || die "Generated key has no public address"
+  assert_jq_eq "$generated_json" '.keys | has("value") | not' 'true'
 
-  run_cli_json "keys get cli-test" keys get cli-test >/dev/null
+  local get_json
+  get_json=$(run_cli_json "keys get cli-test" keys get cli-test)
+  assert_jq_eq "$get_json" '.keys.reference' "$generated_reference"
+  assert_jq_eq "$get_json" '.keys.public_key' "$generated_public"
+  assert_jq_eq "$get_json" '.keys | has("value") | not' 'true'
 
-  run_cli_expect_fail "keys add duplicate without overwrite" keys add cli-test "$generated_value"
+  run_cli_expect_fail "keys add duplicate without overwrite" keys add cli-test --file "${generated_reference#file:}" --store file
 
   local overwrite_value="5555555555555555555555555555555555555555555555555555555555555555"
-  run_cli_json "keys add with overwrite" keys add --overwrite cli-test "$overwrite_value" >/dev/null
+  printf '%s' "$overwrite_value" | run_cli_json "keys add with overwrite" keys add --overwrite cli-test --stdin --store file >/dev/null
 
   run_cli_json "keys remove cli-test" keys rm cli-test >/dev/null
 
-  local rm_default_output
-  rm_default_output=$(run_cli_expect_fail_capture "keys remove default without force" keys rm default)
-  assert_contains "$rm_default_output" "Cannot remove the 'default' key because the CLI requires it."
+  run_cli_expect_fail "keys remove default without force" keys rm default
 
   run_cli_json "keys force remove default" keys rm --force default >/dev/null
   run_cli_json "keys list after forced default removal" keys list >/dev/null
-  run_cli_json "restore default key" keys add --overwrite default "0000000000000000000000000000000000000000000000000000000000000000" >/dev/null
+  printf '%064d' 0 | run_cli_json "restore default key" keys add --overwrite default --stdin --store file >/dev/null
 }
 
 scenario_accounts() {
   should_run "accounts" || return 0
   log_section "Scenario: account lifecycle"
 
-  local new_key_hex
-  new_key_hex=$(random_hex32)
   local key_suffix
   key_suffix="$(date +%s)-$RANDOM"
   GENERATED_ACCOUNT_KEY="test-acct-${key_suffix}"
-  run_cli_json "keys add $GENERATED_ACCOUNT_KEY" keys add --overwrite "$GENERATED_ACCOUNT_KEY" "$new_key_hex" >/dev/null
+  local generated_json
+  generated_json=$(run_cli_json "keys generate $GENERATED_ACCOUNT_KEY" keys generate "$GENERATED_ACCOUNT_KEY" --store file)
 
   local expected_pubkey
-  expected_pubkey=$(run_cli_raw "derive $GENERATED_ACCOUNT_KEY address" util derive "$new_key_hex" --format thrufmt)
+  expected_pubkey=$(printf '%s' "$generated_json" | jq -er '.keys.public_key')
   create_or_reuse_account "$GENERATED_ACCOUNT_KEY" "$expected_pubkey" \
     || die "Failed to create or reconcile account $GENERATED_ACCOUNT_KEY"
 
@@ -918,7 +936,7 @@ scenario_programs() {
   assert_jq_eq "$cleanup_json" '.program_cleanup.status' 'success'
 
   local create_json
-  create_json=$(run_cli_json "program create" program create --ephemeral "$PROGRAM_SEED" "$EVENT_PROGRAM_BIN")
+  create_json=$(run_cli_json "program create" program create --dangerously-exclude-abi --ephemeral "$PROGRAM_SEED" "$EVENT_PROGRAM_BIN")
   assert_jq_eq "$create_json" '.program_create.status' 'success'
   PROGRAM_ACCOUNT_ID=$(printf '%s' "$create_json" | jq -er '.program_create.program_account')
   PROGRAM_META_ID=$(printf '%s' "$create_json" | jq -er '.program_create.meta_account')
@@ -990,7 +1008,7 @@ scenario_programs() {
   PROGRAM_SEED="event-$(date +%s)"
   local destroy_seed="${PROGRAM_SEED}"
   local recreate_json
-  recreate_json=$(run_cli_json "program create (destroy-only)" program create --ephemeral "$destroy_seed" "$EVENT_PROGRAM_BIN")
+  recreate_json=$(run_cli_json "program create (destroy-only)" program create --dangerously-exclude-abi --ephemeral "$destroy_seed" "$EVENT_PROGRAM_BIN")
   assert_jq_eq "$recreate_json" '.program_create.status' 'success'
   local destroy_fresh_json
   destroy_fresh_json=$(run_cli_json "program destroy (without finalize)" program destroy --ephemeral "$destroy_seed" )
@@ -1012,7 +1030,7 @@ scenario_program_upgrade() {
   local upgrade_program_bin="$REPO_ROOT/build/thruvm/bin/tn_token_program_rust.bin"
 
   local create_json
-  create_json=$(run_cli_json "program create permanent" program create --manager "$EVENT_PROGRAM_MANAGER" "$upgrade_seed" "$initial_program_bin")
+  create_json=$(run_cli_json "program create permanent" program create --dangerously-exclude-abi --manager "$EVENT_PROGRAM_MANAGER" "$upgrade_seed" "$initial_program_bin")
   assert_jq_eq "$create_json" '.program_create.status' 'success'
   local upgrade_program_account
   upgrade_program_account=$(printf '%s' "$create_json" | jq -er '.program_create.program_account')
@@ -1023,7 +1041,7 @@ scenario_program_upgrade() {
   assert_jq_eq "$event_tx_json" '.transaction_execute.status' 'success'
 
   local upgrade_json
-  upgrade_json=$(run_cli_json "program upgrade" program upgrade --manager "$EVENT_PROGRAM_MANAGER" "$upgrade_seed" "$upgrade_program_bin")
+  upgrade_json=$(run_cli_json "program upgrade" program upgrade --dangerously-exclude-abi --manager "$EVENT_PROGRAM_MANAGER" "$upgrade_seed" "$upgrade_program_bin")
   assert_jq_eq "$upgrade_json" '.program_upgrade.status' 'success'
 
   local post_upgrade_output
@@ -1045,6 +1063,134 @@ scenario_program_upgrade() {
 
   local destroy_json
   destroy_json=$(run_cli_json "program destroy upgraded" program destroy --manager "$EVENT_PROGRAM_MANAGER" "$upgrade_seed")
+  assert_jq_eq "$destroy_json" '.program_destroy.status' 'success'
+}
+
+# Writes a minimal publishable ABI. The second revision appends a field, the
+# append-only change `program upgrade --abi` is meant to ship.
+write_program_abi_fixture() {
+  local path="$1"
+  local revision="$2"
+  {
+    cat <<'EOF'
+abi:
+  package: "thru.e2e.program_abi"
+  abi-version: 1
+  package-version: "0.1.0"
+  description: "CLI e2e fixture for program create/upgrade --abi"
+  imports: []
+
+types:
+  - name: "E2eState"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "count"
+            field-type:
+              primitive: u64
+EOF
+    if [[ "$revision" == "2" ]]; then
+      cat <<'EOF'
+          - name: "owner"
+            field-type:
+              primitive: u64
+EOF
+    fi
+  } >"$path"
+}
+
+# Reads the official ABI account back and checks its revision and that its
+# stored YAML is byte-identical to the file that was deployed.
+assert_official_abi() {
+  local abi_account="$1"
+  local abi_file="$2"
+  local expected_revision="$3"
+  local out_file="$CLI_TMP_HOME/abi-readback.yaml"
+  rm -f "$out_file"
+  local get_json
+  get_json=$(run_cli_json_retry "abi account get (revision $expected_revision)" abi account get "$abi_account" --out "$out_file")
+  assert_jq_eq "$get_json" '.abi_account.revision' "$expected_revision"
+  if ! cmp -s "$abi_file" "$out_file"; then
+    log "On-chain ABI differs from $abi_file"
+    diff "$abi_file" "$out_file" || true
+    return 1
+  fi
+}
+
+scenario_program_abi() {
+  should_run "program-abi" || return 0
+  log_section "Scenario: program create/upgrade with --abi"
+
+  local seed
+  seed="abi-$(date +%s)"
+  local abi_v1="$CLI_TMP_HOME/program-abi-v1.yaml"
+  local abi_v2="$CLI_TMP_HOME/program-abi-v2.yaml"
+  write_program_abi_fixture "$abi_v1" 1
+  write_program_abi_fixture "$abi_v2" 2
+  local upgrade_program_bin="$REPO_ROOT/build/thruvm/bin/tn_token_program_rust.bin"
+
+  # Neither flag: refused before any network call, naming both flags.
+  local missing_out
+  missing_out=$(run_cli_expect_fail_capture "program create without an ABI flag" program create "$seed" "$EVENT_PROGRAM_BIN")
+  assert_contains "$missing_out" "--abi"
+  assert_contains "$missing_out" "--dangerously-exclude-abi"
+
+  # Both flags: clap conflict.
+  run_cli_expect_fail "program create with both ABI flags" program create --abi "$abi_v1" --dangerously-exclude-abi "$seed" "$EVENT_PROGRAM_BIN"
+
+  # Create: program, official ABI meta and ABI in one Multicall transaction.
+  local create_json
+  create_json=$(run_cli_json "program create --abi" program create --abi "$abi_v1" "$seed" "$EVENT_PROGRAM_BIN")
+  assert_jq_eq "$create_json" '.program_create.status' 'success'
+  assert_jq_eq "$create_json" '.program_create.abi.status' 'created'
+  local program_account abi_account
+  program_account=$(jq_str "$create_json" -er '.program_create.program_account')
+  abi_account=$(jq_str "$create_json" -er '.program_create.abi.abi_account')
+  assert_official_abi "$abi_account" "$abi_v1" 0
+
+  local event_instruction_hex="03000000000000000100000000000000546f2062652c206f72206e6f7420746f2062653f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+  local event_tx_json
+  event_tx_json=$(run_cli_json "txn execute program created with --abi" txn execute "$program_account" "$event_instruction_hex" --fee-payer acc_0 --compute-units 300000000 --state-units 1 --memory-units 10000 --timeout 120)
+  assert_jq_eq "$event_tx_json" '.transaction_execute.status' 'success'
+
+  # Create on an existing program is refused before upload.
+  run_cli_expect_fail "program create --abi on an existing program" program create --abi "$abi_v1" "$seed" "$EVENT_PROGRAM_BIN"
+
+  # Upgrade: a larger program and the appended ABI in one transaction.
+  local upgrade_json
+  upgrade_json=$(run_cli_json "program upgrade --abi" program upgrade --abi "$abi_v2" "$seed" "$upgrade_program_bin")
+  assert_jq_eq "$upgrade_json" '.program_upgrade.status' 'success'
+  assert_jq_eq "$upgrade_json" '.program_upgrade.abi.status' 'upgraded'
+  assert_jq_eq "$upgrade_json" '.program_upgrade.abi.previous_revision' '0'
+  assert_jq_eq "$upgrade_json" '.program_upgrade.abi.abi_account' "$abi_account"
+  assert_official_abi "$abi_account" "$abi_v2" 1
+
+  # The program really was replaced: the token program rejects the event instruction.
+  local post_upgrade_output
+  if post_upgrade_output=$(with_cli_env "$THRU_CLI_BIN" --json txn execute "$program_account" "$event_instruction_hex" --fee-payer acc_0 --compute-units 300000000 --state-units 1 --memory-units 10000 --timeout 60 2>&1); then
+    die "Expected txn execute after program upgrade --abi to fail"
+  fi
+  assert_contains "$post_upgrade_output" "Transaction failed"
+
+  # A program deployed without an ABI gets one created by its first upgrade --abi.
+  local bare_seed
+  bare_seed="abi-bare-$(date +%s)"
+  local bare_create_json
+  bare_create_json=$(run_cli_json "program create --dangerously-exclude-abi" program create --dangerously-exclude-abi "$bare_seed" "$EVENT_PROGRAM_BIN")
+  assert_jq_eq "$bare_create_json" '.program_create.status' 'success'
+  local bare_upgrade_json
+  bare_upgrade_json=$(run_cli_json "program upgrade --abi creating a missing ABI" program upgrade --abi "$abi_v1" "$bare_seed" "$EVENT_PROGRAM_BIN")
+  assert_jq_eq "$bare_upgrade_json" '.program_upgrade.status' 'success'
+  assert_jq_eq "$bare_upgrade_json" '.program_upgrade.abi.status' 'created'
+  local bare_abi_account
+  bare_abi_account=$(jq_str "$bare_upgrade_json" -er '.program_upgrade.abi.abi_account')
+  assert_official_abi "$bare_abi_account" "$abi_v1" 0
+
+  local destroy_json
+  destroy_json=$(run_cli_json "program destroy (--abi program)" program destroy "$seed")
+  assert_jq_eq "$destroy_json" '.program_destroy.status' 'success'
+  destroy_json=$(run_cli_json "program destroy (ABI added on upgrade)" program destroy "$bare_seed")
   assert_jq_eq "$destroy_json" '.program_destroy.status' 'success'
 }
 
@@ -1098,7 +1244,7 @@ scenario_token() {
   local token_program_bin="$REPO_ROOT/build/thruvm/bin/tn_token_program_rust.bin"
 
   local token_program_json
-  token_program_json=$(run_cli_json "program create token program" program create "$token_program_seed" "$token_program_bin")
+  token_program_json=$(run_cli_json "program create token program" program create --dangerously-exclude-abi "$token_program_seed" "$token_program_bin")
   assert_jq_eq "$token_program_json" '.program_create.status' 'success'
   local token_program_id
   token_program_id=$(printf '%s' "$token_program_json" | jq -er '.program_create.program_account')
@@ -1170,9 +1316,24 @@ scenario_token() {
   assert_jq_eq "$mint_to_json" '.token_mint_to.status' 'success'
   assert_token_amount "$acc_2_token_account" 1000 "after mint-to"
 
+  # The default transfer is TransferChecked: it names the mint and repeats the
+  # decimals and ticker that the mint stores.
   local transfer_json
-  transfer_json=$(run_cli_json "token transfer acc_2->acc_3" token transfer "$acc_2_token_account" "$acc_3_token_account" 200 --fee-payer acc_2 --token-program "$token_program_id")
+  transfer_json=$(run_cli_json "token transfer acc_2->acc_3" token transfer "$acc_2_token_account" "$acc_3_token_account" 150 --fee-payer acc_2 --token-program "$token_program_id")
   assert_jq_eq "$transfer_json" '.token_transfer.status' 'success'
+  assert_jq_eq "$transfer_json" '.token_transfer.instruction' 'transfer_checked'
+  assert_jq_eq "$transfer_json" '.token_transfer.mint' "$TOKEN_MINT_ADDRESS"
+  assert_jq_eq "$transfer_json" '.token_transfer.decimals | tostring' '9'
+  assert_jq_eq "$transfer_json" '.token_transfer.ticker' 'TST'
+  assert_token_amount "$acc_2_token_account" 850 "after checked transfer src"
+  assert_token_amount "$acc_3_token_account" 150 "after checked transfer dst"
+
+  # --unchecked sends the plain Transfer.
+  local unchecked_transfer_json
+  unchecked_transfer_json=$(run_cli_json "token transfer --unchecked acc_2->acc_3" token transfer "$acc_2_token_account" "$acc_3_token_account" 50 --unchecked --fee-payer acc_2 --token-program "$token_program_id")
+  assert_jq_eq "$unchecked_transfer_json" '.token_transfer.status' 'success'
+  assert_jq_eq "$unchecked_transfer_json" '.token_transfer.instruction' 'transfer'
+  assert_jq_eq "$unchecked_transfer_json" '.token_transfer | has("mint") | tostring' 'false'
   assert_token_amount "$acc_2_token_account" 800 "after transfer src"
   assert_token_amount "$acc_3_token_account" 200 "after transfer dst"
 
@@ -1217,6 +1378,212 @@ scenario_token() {
 # non-deterministic across runs — see "NOT covered" in the plan). Covers the new
 # `validator bls-pubkey` and `validator status` surfaces plus a required
 # cross-check that CLI BLS derivation matches the live genesis on-chain key.
+# Little-endian hex of an unsigned value: le_hex <value> <bytes>
+le_hex() {
+  local value="$1" bytes="$2" out="" i
+  for (( i = 0; i < bytes; i++ )); do
+    out+=$(printf '%02x' $(( (value >> (8 * i)) & 255 )))
+  done
+  printf '%s' "$out"
+}
+
+scenario_multisig() {
+  should_run "multisig" || return 0
+  log_section "Scenario: multisig (thru multisig + --via-multisig)"
+
+  # The canonical token program: the CLI decodes and authority-checks calls to
+  # it, which a freshly deployed copy would not get.
+  local token_program="$BOOTSTRAP_TOKEN_PROGRAM_ADDRESS"
+  local ms_program="$BOOTSTRAP_MULTISIG_PROGRAM_ADDRESS"
+  local prog_json
+  if prog_json=$(run_cli_json "multisig program present" getaccountinfo "$ms_program") \
+    && [[ "$(jq_str "$prog_json" -r '.account_info.program // false')" == "true" ]]; then
+    log "Using the canonical multisig program $ms_program"
+  else
+    [[ -f "$MULTISIG_PROGRAM_BIN" ]] || die "Multisig program not installed and binary missing: $MULTISIG_PROGRAM_BIN"
+    local deploy_json
+    deploy_json=$(run_cli_json "program create multisig" program create --dangerously-exclude-abi "msig-$(date +%s)" "$MULTISIG_PROGRAM_BIN")
+    assert_jq_eq "$deploy_json" '.program_create.status' 'success' || die "multisig program deploy failed"
+    ms_program=$(jq_str "$deploy_json" -er '.program_create.program_account')
+    log "Deployed the multisig program at $ms_program"
+  fi
+  local via=(--multisig-program "$ms_program")
+
+  ms_json() {
+    local desc="$1"; shift
+    run_cli_json "multisig $desc" multisig "$@" --program "$ms_program"
+  }
+  ms_fail() {
+    local desc="$1"; shift
+    run_cli_expect_fail_capture "multisig $desc" multisig "$@" --program "$ms_program"
+  }
+  # Proposes and prints the request address.
+  ms_propose() {
+    local desc="$1"; shift
+    local out
+    out=$(ms_json "propose $desc" propose "$@") || die "propose $desc failed"
+    jq_str "$out" -er '.multisig_propose.request'
+  }
+  # Prints the request a --via-multisig admin command proposed.
+  via_propose() {
+    local desc="$1"; shift
+    local out
+    out=$(run_cli_json "$desc via multisig" "$@" "${via[@]}") || die "$desc via multisig failed"
+    jq_str "$out" -er '.multisig_propose.request'
+  }
+  ms_approve() {
+    local out
+    out=$(ms_json "approve as $2" approve "$1" --fee-payer "$2" --yes) || die "approve $1 as $2 failed"
+    assert_jq_eq "$out" '.multisig_approve.status' 'success' || die "approve $1 as $2 not successful"
+  }
+  ms_execute() {
+    local out
+    out=$(ms_json "execute as $2" execute "$1" --fee-payer "$2" --yes) || die "execute $1 as $2 failed"
+    assert_jq_eq "$out" '.multisig_execute.status' 'success' || die "execute $1 as $2 not successful"
+  }
+  # Polls a jq expression on `<subcommand...>` output until it equals <expected>.
+  # Usage: ms_wait <expected> <jq-expr> <ctx> <cli args...>
+  ms_wait() {
+    local expected="$1" expr="$2" ctx="$3"; shift 3
+    local attempts="${RETRY_ATTEMPTS:-5}" delay="${RETRY_DELAY_SECS:-2}" out="" actual=""
+    for (( attempt = 1; attempt <= attempts; attempt++ )); do
+      if out=$(run_cli_json "$ctx (attempt ${attempt}/${attempts})" "$@"); then
+        actual=$(jq_str "$out" -r "$expr") || actual=""
+        [[ "$actual" == "$expected" ]] && return 0
+      fi
+      (( attempt < attempts )) && sleep "$delay"
+    done
+    die "$ctx: ${expr} => '${actual}', expected '${expected}'"
+  }
+
+  # --- 1. create; threshold 2 -> 3 -> 2; add a member, then remove them ----
+  local create_json ms
+  create_json=$(ms_json "create" create --members acc_0,acc_1,acc_2 --threshold 2 --seed "e2e-$(random_hex32)" --fee-payer acc_0)
+  assert_jq_eq "$create_json" '.multisig_create.status' 'success' || die "multisig create failed"
+  ms=$(jq_str "$create_json" -er '.multisig_create.multisig')
+  ms_wait "2/3" '"\(.multisig.threshold)/\(.multisig.member_count)"' "multisig show after create" multisig show "$ms" --program "$ms_program"
+
+  local req
+  req=$(ms_propose "set-threshold 3" set-threshold "$ms" 3 --fee-payer acc_0)
+  ms_approve "$req" acc_1
+  ms_execute "$req" acc_3   # anyone can execute, not just members
+  ms_wait "3" '.multisig.threshold' "threshold after raise" multisig show "$ms" --program "$ms_program"
+  req=$(ms_propose "set-threshold 2" set-threshold "$ms" 2 --fee-payer acc_1)
+  ms_approve "$req" acc_2
+  ms_execute "$req" acc_0
+  ms_wait "2/2" '"\(.multisig.threshold)/\(.multisig.config_epoch)"' "threshold and epoch after lower" multisig show "$ms" --program "$ms_program"
+
+  req=$(ms_propose "add-members acc_3" add-members "$ms" --members acc_3 --fee-payer acc_0)
+  ms_approve "$req" acc_1
+  ms_execute "$req" acc_2
+  ms_wait "4" '.multisig.member_count' "member count after add" multisig show "$ms" --program "$ms_program"
+  # Membership changes need a majority of all members: 3 of 4.
+  req=$(ms_propose "remove-members acc_3" remove-members "$ms" --members acc_3 --fee-payer acc_0)
+  ms_approve "$req" acc_1
+  ms_approve "$req" acc_2
+  ms_execute "$req" acc_3
+  ms_wait "3" '.multisig.member_count' "member count after remove" multisig show "$ms" --program "$ms_program"
+
+  # --- 2. refusals ---------------------------------------------------------
+  local pending out
+  pending=$(ms_propose "set-threshold 3 (stays pending)" set-threshold "$ms" 3 --fee-payer acc_0)
+  out=$(ms_fail "approve as outsider" approve "$pending" --fee-payer acc_3 --yes) || die "outsider approval was accepted"
+  assert_contains "$out" "is not a member" || die "outsider approval refused for the wrong reason"
+  out=$(ms_fail "duplicate approval" approve "$pending" --fee-payer acc_0 --yes) || die "duplicate approval was accepted"
+  assert_contains "$out" "already approved" || die "duplicate approval refused for the wrong reason"
+  out=$(ms_fail "execute before quorum" execute "$pending" --fee-payer acc_0 --yes) || die "execute before quorum was accepted"
+  assert_contains "$out" "not enough approvals" || die "early execute refused for the wrong reason"
+  out=$(ms_fail "cancel after approval" cancel "$pending" --fee-payer acc_0) || die "cancel after approval was accepted"
+  assert_contains "$out" "once it has approvals" || die "cancel refused for the wrong reason"
+
+  # --- 3. token through --via-multisig ---------------------------------------
+  local mint_json mint treasury_json treasury acc_1_json acc_1_token
+  mint_json=$(run_cli_json "token initialize-mint controlled by the multisig" token initialize-mint "$ACC_0_ADDRESS" \
+    --mint-authority "$ms" --freeze-authority "$ms" --decimals 6 MSIG "$(random_hex32)" \
+    --fee-payer acc_0 --token-program "$token_program")
+  assert_jq_eq "$mint_json" '.token_initialize_mint.status' 'success' || die "multisig mint creation failed"
+  mint=$(jq_str "$mint_json" -er '.token_initialize_mint.mint_account')
+  treasury_json=$(run_cli_json "token initialize-account owned by the multisig" token initialize-account "$mint" "$ms" "$(random_hex32)" \
+    --fee-payer acc_0 --token-program "$token_program")
+  treasury=$(jq_str "$treasury_json" -er '.token_initialize_account.token_account')
+  acc_1_json=$(run_cli_json "token initialize-account for acc_1" token initialize-account "$mint" "$ACC_1_ADDRESS" "$(random_hex32)" \
+    --fee-payer acc_1 --token-program "$token_program")
+  acc_1_token=$(jq_str "$acc_1_json" -er '.token_initialize_account.token_account')
+
+  req=$(via_propose "token mint-to" token mint-to "$mint" "$treasury" "$ms" 1000000 --via-multisig "$ms" --fee-payer acc_0)
+  out=$(ms_json "request show mint-to" request show "$req")
+  assert_jq_eq "$out" '.multisig_request.action.decoded.type' 'token.mint_to' || die "mint-to request not decoded"
+  ms_approve "$req" acc_1
+  ms_execute "$req" acc_2
+  ms_wait "1000000" '.token_balance.amount' "treasury after mint-to" token balance "$treasury" --token-program "$token_program"
+
+  req=$(via_propose "token transfer" token transfer "$treasury" "$acc_1_token" 250000 --via-multisig "$ms" --fee-payer acc_1)
+  ms_approve "$req" acc_0
+  ms_execute "$req" acc_1
+  ms_wait "750000" '.token_balance.amount' "treasury after transfer" token balance "$treasury" --token-program "$token_program"
+  ms_wait "250000" '.token_balance.amount' "acc_1 after transfer" token balance "$acc_1_token" --token-program "$token_program"
+
+  # A transfer out of an account the multisig doesn't own would borrow its
+  # owner's authority if the owner executed it.
+  out=$(run_cli_expect_fail_capture "token transfer from acc_1's account via multisig" token transfer "$acc_1_token" "$treasury" 1 \
+    --via-multisig "$ms" --fee-payer acc_0 "${via[@]}") || die "transfer from a non-multisig account was proposed"
+  assert_contains "$out" "not this multisig" || die "foreign-owner transfer refused for the wrong reason"
+
+  req=$(via_propose "token freeze-account" token freeze-account "$acc_1_token" "$mint" "$ms" --via-multisig "$ms" --fee-payer acc_2)
+  ms_approve "$req" acc_0
+  ms_execute "$req" acc_2
+  ms_wait "true" '.token_balance.is_frozen | tostring' "acc_1 after freeze" token balance "$acc_1_token" --token-program "$token_program"
+  req=$(via_propose "token thaw-account" token thaw-account "$acc_1_token" "$mint" "$ms" --via-multisig "$ms" --fee-payer acc_2)
+  ms_approve "$req" acc_1
+  ms_execute "$req" acc_2
+  ms_wait "false" '.token_balance.is_frozen | tostring' "acc_1 after thaw" token balance "$acc_1_token" --token-program "$token_program"
+
+  # --- 4. generic propose invoke from --show-layout ---------------------------
+  local layout_json seed mint_idx treasury_idx ms_idx data bad
+  layout_json=$(ms_json "propose invoke --show-layout" propose invoke "$ms" --target "$token_program" \
+    --rw "$mint,$treasury" --show-layout --fee-payer acc_0)
+  seed=$(jq_str "$layout_json" -er '.request_seed')
+  mint_idx=$(jq_str "$layout_json" -er --arg a "$mint" '.multisig_layout[] | select(.address == $a) | .index')
+  treasury_idx=$(jq_str "$layout_json" -er --arg a "$treasury" '.multisig_layout[] | select(.address == $a) | .index')
+  ms_idx=$(jq_str "$layout_json" -er --arg a "$ms" '.multisig_layout[] | select(.address == $a) | .index')
+  # token mint-to: tag 3, mint, destination, authority (u16 each), amount (u64)
+  data="03$(le_hex "$mint_idx" 2)$(le_hex "$treasury_idx" 2)$(le_hex "$ms_idx" 2)$(le_hex 5 8)"
+  bad="03$(le_hex "$mint_idx" 2)$(le_hex "$treasury_idx" 2)$(le_hex 0 2)$(le_hex 5 8)"
+  out=$(ms_fail "propose invoke naming index 0" propose invoke "$ms" --target "$token_program" --rw "$mint,$treasury" \
+    --data "$bad" --request-seed "$seed" --fee-payer acc_0) || die "a call naming index 0 was proposed"
+  assert_contains "$out" "aren't among its accounts" || die "index-0 call refused for the wrong reason"
+  out=$(ms_json "propose invoke mint-to 5" propose invoke "$ms" --target "$token_program" --rw "$mint,$treasury" \
+    --data "$data" --request-seed "$seed" --fee-payer acc_0)
+  req=$(jq_str "$out" -er '.multisig_propose.request')
+  [[ "$req" == "$(jq_str "$layout_json" -er '.request')" ]] || die "pinned request address changed"
+  out=$(ms_json "request show invoke" request show "$req")
+  assert_jq_eq "$out" '.multisig_request.action.decoded.amount' '5' || die "generic invoke not decoded"
+  ms_approve "$req" acc_1
+  ms_execute "$req" acc_2
+  ms_wait "750005" '.token_balance.amount' "treasury after generic mint-to" token balance "$treasury" --token-program "$token_program"
+
+  # --- 5. replace-members leaves the pending request stale -------------------
+  req=$(ms_propose "replace-members acc_2 -> acc_3" replace-members "$ms" --old acc_2 --new acc_3 --fee-payer acc_0)
+  ms_approve "$req" acc_1
+  ms_execute "$req" acc_1
+  ms_wait "STALE" "[.multisig_requests.requests[] | select(.request == \"$pending\") | .status][0]" \
+    "pending request after replace-members" multisig requests "$ms" --include-stale --program "$ms_program"
+  out=$(ms_fail "approve stale request" approve "$pending" --fee-payer acc_1 --yes) || die "a stale request was approved"
+  assert_contains "$out" "stale" || die "stale approval refused for the wrong reason"
+  out=$(ms_json "cancel stale request as the new member" cancel "$pending" --fee-payer acc_3)
+  assert_jq_eq "$out" '.multisig_cancel.status' 'success' || die "stale request cancel failed"
+  ms_wait "0" '.multisig_requests.requests | length' "requests after cancel" multisig requests "$ms" --include-stale --program "$ms_program"
+
+  # --- 6. delete ---------------------------------------------------------------
+  req=$(ms_propose "delete-multisig" delete-multisig "$ms" --fee-payer acc_3)
+  ms_approve "$req" acc_0
+  ms_execute "$req" acc_0
+  out=$(ms_fail "show deleted multisig" show "$ms") || die "deleted multisig still readable"
+  assert_contains "$out" "not found" || die "deleted multisig refused for the wrong reason"
+
+  log "Multisig scenario passed (multisig $ms, mint $mint)"
+}
+
 scenario_validator() {
   should_run "validator" || return 0
   log_section "Scenario: consensus-validator BLS derivation + status (read-only)"
@@ -1462,7 +1829,7 @@ scenario_bond() {
 
 # Post-block native fee distribution (UNTO-1293).  After a block executes the
 # runtime credits the block's collected native fees to the producer's account if
-# it is live, else to the genesis null/burn account — there is no ClaimFees txn.
+# it is live, else to the Native Token Vault receiver (UNTO-3561) — there is no ClaimFees txn.
 # This runs in the DEFAULT suite (re-runnable/non-destructive); it needs only
 # block finalization, not certificate posting, so unlike §B's PayOutBlock half it
 # is not gated behind RUN_BOND_SECTION_B.  The producer MUST be the node's own
@@ -1475,7 +1842,7 @@ scenario_claimfees() {
 
   # Post-block fee distribution (UNTO-1293): after a block executes, the runtime
   # credits the block's collected native fees to the block producer's account if
-  # it is live, else to the genesis null/burn account.  There is no ClaimFees
+  # it is live, else to the Native Token Vault receiver.  There is no ClaimFees
   # txn anymore.  We drive both branches via send-block (the block is produced by
   # the node's own validator identity so it finalizes) and verify the per-slot
   # grpc metrics (absent_block_producer_fees / claimed_fees) plus the resulting balances.
@@ -1487,8 +1854,12 @@ scenario_claimfees() {
   local grpc_hp="${RPC_BASE_URL#http://}"
   grpc_hp="${grpc_hp#https://}"
 
-  # Genesis null/burn account address (single source of truth: tn_absent_block_producer_fee_receiver.h).
-  local burn_addr="000000000000000000000000000000000000000000000000000000000000dead"
+  # Absent-producer fee receiver (single source of truth:
+  # tn_absent_block_producer_fee_receiver.h).  UNTO-3561: the Native Token
+  # Vault's receiver PDA(native_token_vault, "absent-producer-fees:v1"), not the
+  # old 0x...DEAD sink; "burn" below means credited to this vault-custodied
+  # account rather than to the producer.
+  local burn_addr="c4c7c03dd9e3cc012b5536489cce2cfc528437db9ad4c75b84d7f5d20e680677"
 
   # Producer = the node's own validator identity, so the injected block finalizes.
   local bp_hex
@@ -1496,9 +1867,10 @@ scenario_claimfees() {
   [[ -n "$bp_hex" ]] || die "claimfees: no producer key. Set NODE_IDENTITY_KEY (or NODE_IDENTITY_KEY_FILE), or provision the node identity via 'dev.sh start' so $REPO_ROOT/contrib/docker-dev/data/nodekey.hex exists. The injected block must be produced by the node's own validator identity or it won't finalize."
   [[ ${#bp_hex} -eq 64 ]] || die "claimfees: node producer seed must be 64 hex chars, got ${#bp_hex}"
   local bp="cf-node"
-  run_cli_json "claimfees: register node producer key" keys add --overwrite "$bp" "$bp_hex" >/dev/null
+  local bp_json
+  bp_json=$(printf '%s' "$bp_hex" | run_cli_json "claimfees: register node producer key" keys add --overwrite "$bp" --stdin --store file)
   local bp_addr
-  bp_addr=$(run_cli_raw "claimfees: derive node address" util derive "$bp_hex" --format thrufmt)
+  bp_addr=$(printf '%s' "$bp_json" | jq -er '.keys.public_key')
   log "claimfees: producer = node validator identity $bp_addr"
 
   # Each block carries two unrelated fee-paying transfers.  The transfer fee is a
@@ -1640,9 +2012,10 @@ scenario_bond_part1() {
   [[ ${#bp_hex} -eq 64 ]] || die "§B: node producer seed must be 64 hex chars, got ${#bp_hex}"
 
   local bp="node"
-  run_cli_json "§B: register node producer key" keys add --overwrite "$bp" "$bp_hex" >/dev/null
+  local bp_json
+  bp_json=$(printf '%s' "$bp_hex" | run_cli_json "§B: register node producer key" keys add --overwrite "$bp" --stdin --store file)
   local bp_addr
-  bp_addr=$(run_cli_raw "§B: derive node address" util derive "$bp_hex" --format thrufmt)
+  bp_addr=$(printf '%s' "$bp_json" | jq -er '.keys.public_key')
   BOND_B_BP_KEY="$bp"
   BOND_B_BP_ADDR="$bp_addr"
   log "§B: producer = node validator identity $bp_addr"
@@ -1803,8 +2176,8 @@ scenario_debug() {
   log_section "Scenario: txn debug"
 
   # Debug test program addresses (deployed at genesis)
-  local DEBUG_TEST_PROG_A_HEX="00000000000000000000000000000000000000000000000000000000000000EB"
-  local DEBUG_TEST_PROG_B_HEX="00000000000000000000000000000000000000000000000000000000000000EC"
+  local DEBUG_TEST_PROG_A_HEX="$E2E_DEBUG_PRIMARY_PROGRAM_HEX"
+  local DEBUG_TEST_PROG_B_HEX="$E2E_DEBUG_SECONDARY_PROGRAM_HEX"
 
   # Resolve builtin event emission program address
   local builtin_program_addr
@@ -1823,7 +2196,8 @@ scenario_debug() {
   # Commands: 0=PrintAndSucceed 1=PrintAndRevert 2=Segfault 3=ExhaustCU 4=RecursiveCPI
   #           5=EmitEventsThenRevert 6=ExhaustCUSyscall 7=ExhaustSU 8=RecursiveCPIRevert
   local DEBUG_TEST_CU="10000000"
-  local DEBUG_TEST_SU="10000"
+  # Match the Go debug fixtures; 10000 exceeds the block admission limit.
+  local DEBUG_TEST_SU="1"
   local DEBUG_TEST_MU="100"
   local DEBUG_TEST_EXPIRY="100000"
 
@@ -2500,8 +2874,10 @@ main() {
   scenario_txn
   scenario_programs
   scenario_program_upgrade
+  scenario_program_abi
   scenario_event
   scenario_token
+  scenario_multisig
   scenario_validator
   scenario_bond
   # ClaimFees native-sweep coverage (ungated, re-runnable). Skips itself when §B is

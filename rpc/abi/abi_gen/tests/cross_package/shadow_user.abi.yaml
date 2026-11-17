@@ -1,0 +1,66 @@
+abi:
+  package: "test.cross_package.shadow_user"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Local items named like items of an imported package, next to fields of the imported types"
+  imports:
+    - type: path
+      path: "shadow_dep.abi.yaml"
+
+types:
+  - name: "A"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "n"
+            field-type:
+              primitive: u8
+          - name: "b"
+            field-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "p"
+                    field-type:
+                      primitive: u8
+                  - name: "q"
+                    field-type:
+                      primitive: u16
+  - name: "Msg"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "m"
+            field-type:
+              primitive: u8
+  - name: "FOO"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "w"
+            field-type:
+              primitive: u32
+  # Every field is a type of the imported package.
+  - name: "Holder"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "ab"
+            field-type:
+              type-ref:
+                name: "A_b"
+                package: "test.cross_package.shadow_dep"
+          - name: "mb"
+            field-type:
+              type-ref:
+                name: "MsgBuilder"
+                package: "test.cross_package.shadow_dep"
+          - name: "foo"
+            field-type:
+              type-ref:
+                name: "Foo"
+                package: "test.cross_package.shadow_dep"

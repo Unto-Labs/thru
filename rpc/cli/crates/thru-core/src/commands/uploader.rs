@@ -2,8 +2,9 @@
 
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
-use thru_base::tn_tools::{KeyPair, Pubkey};
+use thru_base::tn_tools::Pubkey;
 use thru_base::txn_lib::Transaction;
 use thru_base::txn_tools::{TransactionBuilder, UploaderWriteOptions};
 
@@ -11,6 +12,7 @@ use crate::cli::UploaderCommands;
 use crate::config::Config;
 use crate::crypto;
 use crate::error::CliError;
+use crate::keys::LoadedKey;
 use crate::output;
 use crate::utils::format_vm_error;
 use thru_client::{Client as RpcClient, VersionContext};
@@ -60,6 +62,36 @@ pub async fn handle_uploader_command(
             get_uploader_status(config, uploader.as_deref(), &seed, json_format).await
         }
     }
+}
+
+/// Packed `tn_uploader_program_meta` (tn_uploader_program.h): account_type
+/// (`TN_UPLOADER_ACCOUNT_TYPE_META_V1`), authority, expected account hash,
+/// state.
+const UPLOADER_ACCOUNT_TYPE_META_V1: u8 = 1;
+const UPLOADER_META_SIZE: usize = 1 + 32 + 32 + 1;
+/// `TN_UPLOADER_PROGRAM_STATE_FINALIZED`
+const UPLOADER_STATE_FINALIZED: u8 = 0x02;
+
+/// Decode an uploader meta account: (expected account hash, is finalized).
+fn parse_uploader_meta(meta_data: &[u8]) -> Result<([u8; 32], bool), CliError> {
+    if meta_data.len() != UPLOADER_META_SIZE {
+        return Err(CliError::ResumeValidation(format!(
+            "Meta account data is {} bytes, expected {} bytes",
+            meta_data.len(),
+            UPLOADER_META_SIZE
+        )));
+    }
+    if meta_data[0] != UPLOADER_ACCOUNT_TYPE_META_V1 {
+        return Err(CliError::ResumeValidation(format!(
+            "Meta account type {} is not an uploader meta account (expected {})",
+            meta_data[0], UPLOADER_ACCOUNT_TYPE_META_V1
+        )));
+    }
+    let mut stored_hash = [0u8; 32];
+    stored_hash.copy_from_slice(&meta_data[33..65]);
+    // TN_UPLOADER_PROGRAM_STATE_OPEN = 0x01, FINALIZED = 0x02
+    let is_finalized = meta_data[65] == UPLOADER_STATE_FINALIZED;
+    Ok((stored_hash, is_finalized))
 }
 
 /// Upload progress tracking
@@ -139,7 +171,7 @@ pub struct UploaderManager {
     config: Config,
     rpc_client: RpcClient,
     uploader_program_pubkey: Pubkey,
-    fee_payer_keypair: KeyPair,
+    fee_payer_keypair: Arc<LoadedKey>,
     chain_id: u16,
 }
 
@@ -154,12 +186,7 @@ impl UploaderManager {
         config: &Config,
         fee_payer_name: Option<&str>,
     ) -> Result<Self, CliError> {
-        let fee_payer_key_hex = if let Some(name) = fee_payer_name {
-            config.keys.get_key(name)?
-        } else {
-            config.keys.get_default_key()?
-        };
-        let fee_payer_keypair = crypto::keypair_from_hex(fee_payer_key_hex)?;
+        let fee_payer_keypair = config.keys.load_key(fee_payer_name.unwrap_or("default"))?;
 
         Self::new_with_keypair(config, fee_payer_keypair).await
     }
@@ -167,7 +194,7 @@ impl UploaderManager {
     /// Create a new uploader manager with an already resolved fee payer.
     pub async fn new_with_keypair(
         config: &Config,
-        fee_payer_keypair: KeyPair,
+        fee_payer_keypair: Arc<LoadedKey>,
     ) -> Result<Self, CliError> {
         // Create RPC client
         let rpc_url = config.get_grpc_url()?;
@@ -298,8 +325,8 @@ impl UploaderManager {
         let buffer_data = self.decode_account_data(&buffer_account_info.data)?;
 
         // Validate meta account has data
-        const EXPECTED_META_SIZE: usize = 32 + 32 + 1; // authority + hash + state = 65 bytes
-        if meta_data.len() < EXPECTED_META_SIZE {
+        const EXPECTED_META_SIZE: usize = UPLOADER_META_SIZE;
+        if meta_data.len() != EXPECTED_META_SIZE {
             if meta_data.is_empty() {
                 return Err(CliError::ResumeValidationAccount {
                     message: format!(
@@ -313,7 +340,7 @@ impl UploaderManager {
             } else {
                 return Err(CliError::ResumeValidationAccount {
                     message: format!(
-                        "Uploader meta account has invalid data size: {} bytes (expected at least {} bytes). \
+                        "Uploader meta account has invalid data size: {} bytes (expected {} bytes). \
                         Try cleaning up with: thru uploader cleanup {}",
                         meta_data.len(),
                         EXPECTED_META_SIZE,
@@ -368,33 +395,7 @@ impl UploaderManager {
     /// - `Ok((hash, is_finalized))` - The stored hash and finalization status
     /// - `Err(CliError)` - If the meta account data is invalid
     fn parse_meta_account_data(&self, meta_data: &[u8]) -> Result<([u8; 32], bool), CliError> {
-        // Meta account structure (from tn_uploader_program.h):
-        // struct tn_uploader_program_meta {
-        //   tn_pubkey_t    authority;              // 32 bytes (0-31)
-        //   tn_hash_t      expected_account_hash;  // 32 bytes (32-63)
-        //   uchar          state;                  // 1 byte (64)
-        // };
-
-        const EXPECTED_SIZE: usize = 32 + 32 + 1; // authority + hash + state = 65 bytes
-        if meta_data.len() < EXPECTED_SIZE {
-            return Err(CliError::ResumeValidation(format!(
-                "Meta account data too small: {} bytes, expected at least {} bytes",
-                meta_data.len(),
-                EXPECTED_SIZE
-            )));
-        }
-
-        // Extract expected_account_hash (bytes 32-63)
-        let mut stored_hash = [0u8; 32];
-        stored_hash.copy_from_slice(&meta_data[32..64]);
-
-        // Extract state (byte 64)
-        // TN_UPLOADER_PROGRAM_STATE_OPEN = 0x01
-        // TN_UPLOADER_PROGRAM_STATE_FINALIZED = 0x02
-        let state = meta_data[64];
-        let is_finalized = state == 0x02; // TN_UPLOADER_PROGRAM_STATE_FINALIZED
-
-        Ok((stored_hash, is_finalized))
+        parse_uploader_meta(meta_data)
     }
 
     /// Validate resume conditions
@@ -1504,8 +1505,7 @@ async fn upload_program(
 
     // Get uploader program public key
     let uploader_program_pubkey = if let Some(custom_uploader) = uploader_pubkey {
-        Pubkey::new(custom_uploader.to_string())
-            .map_err(|e| CliError::Validation(format!("Invalid uploader public key: {}", e)))?
+        Pubkey::from_bytes(&config.keys.resolve_public_key(custom_uploader)?)
     } else {
         config.get_uploader_pubkey()?
     };
@@ -1588,8 +1588,7 @@ async fn cleanup_program(
 ) -> Result<(), CliError> {
     // Get uploader program public key
     let uploader_program_pubkey = if let Some(custom_uploader) = uploader_pubkey {
-        Pubkey::new(custom_uploader.to_string())
-            .map_err(|e| CliError::Validation(format!("Invalid uploader public key: {}", e)))?
+        Pubkey::from_bytes(&config.keys.resolve_public_key(custom_uploader)?)
     } else {
         config.get_uploader_pubkey()?
     };
@@ -1703,8 +1702,7 @@ async fn get_uploader_status(
 ) -> Result<(), CliError> {
     // Get uploader program public key
     let uploader_program_pubkey = if let Some(custom_uploader) = uploader_pubkey {
-        Pubkey::new(custom_uploader.to_string())
-            .map_err(|e| CliError::Validation(format!("Invalid uploader public key: {}", e)))?
+        Pubkey::from_bytes(&config.keys.resolve_public_key(custom_uploader)?)
     } else {
         config.get_uploader_pubkey()?
     };
@@ -1857,6 +1855,20 @@ mod tests {
     // use std::io::Write;
 
     #[tokio::test]
+    async fn uploader_preserves_explicit_source_error() {
+        let guard = tempfile::tempdir().unwrap();
+        let reference = format!("file:{}", guard.path().join("missing.key").display());
+        let config = Config::default();
+        let expected = config.keys.load_key(&reference).unwrap_err().to_string();
+
+        let error = UploaderManager::new_with_fee_payer(&config, Some(&reference))
+            .await
+            .err()
+            .expect("an unavailable explicit signer must fail before connecting");
+        assert_eq!(error.to_string(), expected);
+    }
+
+    #[tokio::test]
     async fn test_upload_file_not_found() {
         let config = Config::default();
         let result = upload_program(
@@ -1871,5 +1883,21 @@ mod tests {
         )
         .await;
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn uploader_meta_decodes_after_the_account_type() {
+        let mut meta = vec![0u8; UPLOADER_META_SIZE];
+        meta[0] = UPLOADER_ACCOUNT_TYPE_META_V1;
+        meta[1..33].fill(0x11);
+        meta[33..65].fill(0x22);
+        meta[65] = UPLOADER_STATE_FINALIZED;
+        assert_eq!(parse_uploader_meta(&meta).unwrap(), ([0x22; 32], true));
+        meta[65] = 0x01;
+        assert_eq!(parse_uploader_meta(&meta).unwrap(), ([0x22; 32], false));
+        meta[0] = 0;
+        assert!(parse_uploader_meta(&meta).is_err());
+        meta[0] = UPLOADER_ACCOUNT_TYPE_META_V1;
+        assert!(parse_uploader_meta(&meta[..65]).is_err());
     }
 }

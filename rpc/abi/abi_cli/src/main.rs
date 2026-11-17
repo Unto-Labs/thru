@@ -40,6 +40,10 @@ enum Commands {
         /// Enable verbose output
         #[arg(short = 'v', long = "verbose")]
         verbose: bool,
+
+        /// Go module path of the output root (written to go.mod; Go only)
+        #[arg(long = "go-module", value_name = "PATH")]
+        go_module: Option<String>,
     },
 
     /// Analyze ABI type definitions and show detailed type information
@@ -187,6 +191,8 @@ enum Language {
     /// Generate TypeScript code (.ts files)
     #[value(name = "typescript")]
     TypeScript,
+    /// Generate Go code (one package per ABI package plus a shared runtime)
+    Go,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
@@ -205,13 +211,22 @@ fn main() -> anyhow::Result<()> {
             language,
             output_dir,
             verbose,
+            go_module,
         } => {
             let lang = match language {
                 Language::C => abi_gen::cmds::codegen::Language::C,
                 Language::Rust => abi_gen::cmds::codegen::Language::Rust,
                 Language::TypeScript => abi_gen::cmds::codegen::Language::TypeScript,
+                Language::Go => abi_gen::cmds::codegen::Language::Go,
             };
-            abi_gen::cmds::codegen::run(files, include_dirs, lang, output_dir, verbose)?;
+            abi_gen::cmds::codegen::run_with_options(
+                files,
+                include_dirs,
+                lang,
+                output_dir,
+                verbose,
+                &abi_gen::cmds::codegen::CodegenOptions { go_module },
+            )?;
         }
 
         Commands::Analyze {
@@ -416,112 +431,16 @@ fn run_prep_for_publish(
     output: PathBuf,
     verbose: bool,
 ) -> anyhow::Result<()> {
-    use abi_loader::{normalize_type_refs, AbiFile, AbiMetadata, ImportResolver, ImportSource};
-
     if verbose {
         println!("Preparing for publish: {}", file.display());
         println!("  Target network: {}", network);
     }
 
-    /* Load root file and inline only local (path) imports */
-    let mut resolver = ImportResolver::new(include_dirs.clone());
-    resolver.load_file_with_imports_skip_remote(&file, verbose)?;
-
-    let all_files = resolver.get_all_files();
-    if all_files.is_empty() {
-        anyhow::bail!("No ABI files loaded");
-    }
-
-    if verbose {
-        println!("  Resolved {} local packages", resolver.loaded_file_count());
-    }
-
-    /* Enforce that local dependencies do not contain remote imports */
-    if all_files.len() > 1 {
-        for abi_file in &all_files[..all_files.len() - 1] {
-            for import in abi_file.imports() {
-                if !matches!(import, ImportSource::Path { .. }) {
-                    anyhow::bail!(
-                        "Remote import found in local dependency '{}': {:?}",
-                        abi_file.package(),
-                        import
-                    );
-                }
-            }
-        }
-    }
-
-    /* Collect all types from local files */
-    let mut all_types = resolver.get_all_types().to_vec();
-    normalize_type_refs(&mut all_types, &resolver);
-
-    /* Get the root package's metadata */
-    let root_abi = all_files.last().unwrap();
-
-    /* Check for disallowed imports before filtering */
-    for import in root_abi.imports() {
-        match import {
-            ImportSource::Git { url, .. } => {
-                anyhow::bail!("Git imports not allowed for publishing: {}", url);
-            }
-            ImportSource::Http { url } => {
-                anyhow::bail!("HTTP imports not allowed for publishing: {}", url);
-            }
-            _ => {}
-        }
-    }
-
-    /* Keep same-network on-chain imports and fail on any mismatch. */
-    let mut remaining_imports: Vec<ImportSource> = Vec::new();
-    for import in root_abi.imports() {
-        match import {
-            ImportSource::Onchain {
-                address,
-                network: net,
-                ..
-            } => {
-                if net != &network {
-                    anyhow::bail!(
-                        "On-chain import '{}' uses network '{}' but prep-for-publish target is '{}'",
-                        address,
-                        net,
-                        network
-                    );
-                }
-                remaining_imports.push(import.clone());
-            }
-            ImportSource::Path { path } => {
-                if verbose {
-                    println!("  Inlining path import: {}", path);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    /* Create the output ABI file with inlined types and filtered imports */
-    let output_metadata = AbiMetadata {
-        package: root_abi.package().to_string(),
-        name: root_abi.name().map(|s| s.to_string()),
-        abi_version: root_abi.abi_version(),
-        package_version: root_abi.package_version().to_string(),
-        description: root_abi.description().to_string(),
-        imports: remaining_imports,
-        options: root_abi.options().clone(),
-    };
-
-    let output_abi = AbiFile {
-        abi: output_metadata,
-        types: all_types,
-    };
-
-    /* Write output */
-    let yaml = serde_yml::to_string(&output_abi)?;
+    let yaml = abi_gen::cmds::common::prepare_for_publish(&file, &include_dirs, &network, verbose)?;
     std::fs::write(&output, &yaml)?;
 
     if verbose {
         println!("  Written to: {}", output.display());
-        println!("  Total types: {}", output_abi.get_types().len());
     }
 
     Ok(())

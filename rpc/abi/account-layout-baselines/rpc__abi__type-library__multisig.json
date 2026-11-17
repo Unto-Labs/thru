@@ -1,0 +1,400 @@
+{
+  "abi": "rpc/abi/type-library/multisig.abi.yaml",
+  "account_root": "MultisigProgramAccount",
+  "values": {
+    "1": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "flags",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  },
+                  {
+                    "name": "member_cnt",
+                    "offset": 1,
+                    "type": {
+                      "alignment": 2,
+                      "kind": {
+                        "primitive": "Integral(U16)"
+                      },
+                      "size": 2
+                    }
+                  },
+                  {
+                    "name": "threshold_m",
+                    "offset": 3,
+                    "type": {
+                      "alignment": 2,
+                      "kind": {
+                        "primitive": "Integral(U16)"
+                      },
+                      "size": 2
+                    }
+                  },
+                  {
+                    "name": "live_request_cnt",
+                    "offset": 5,
+                    "type": {
+                      "alignment": 2,
+                      "kind": {
+                        "primitive": "Integral(U16)"
+                      },
+                      "size": 2
+                    }
+                  },
+                  {
+                    "name": "config_epoch",
+                    "offset": 7,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "next_request_id",
+                    "offset": 15,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "members",
+                    "offset": 23,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "layout": {
+                                "alignment": 1,
+                                "kind": {
+                                  "struct": {
+                                    "aligned": null,
+                                    "fields": [
+                                      {
+                                        "name": "bytes",
+                                        "offset": 0,
+                                        "type": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "array": {
+                                              "element": {
+                                                "alignment": 1,
+                                                "kind": {
+                                                  "primitive": "Integral(U8)"
+                                                },
+                                                "size": 1
+                                              },
+                                              "jagged": false,
+                                              "size": {
+                                                "literal": {
+                                                  "u64": 32
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "size": 32
+                                        }
+                                      }
+                                    ],
+                                    "packed": true
+                                  }
+                                },
+                                "size": 32
+                              },
+                              "ref": "Pubkey"
+                            },
+                            "size": 32
+                          },
+                          "jagged": false,
+                          "size": {
+                            "literal": {
+                              "u64": 32
+                            }
+                          }
+                        }
+                      },
+                      "size": 1024
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 1047
+          },
+          "ref": "MultisigAccount"
+        },
+        "size": 1047
+      },
+      "variant": "multisig_v1"
+    },
+    "2": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "kind",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  },
+                  {
+                    "name": "status",
+                    "offset": 1,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  },
+                  {
+                    "name": "reserved0",
+                    "offset": 2,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  },
+                  {
+                    "name": "member_cnt_snapshot",
+                    "offset": 3,
+                    "type": {
+                      "alignment": 2,
+                      "kind": {
+                        "primitive": "Integral(U16)"
+                      },
+                      "size": 2
+                    }
+                  },
+                  {
+                    "name": "required_approvals",
+                    "offset": 5,
+                    "type": {
+                      "alignment": 2,
+                      "kind": {
+                        "primitive": "Integral(U16)"
+                      },
+                      "size": 2
+                    }
+                  },
+                  {
+                    "name": "request_id",
+                    "offset": 7,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "config_epoch_snapshot",
+                    "offset": 15,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "approval_bitmap",
+                    "offset": 23,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "request_data_sz",
+                    "offset": 31,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "multisig_pubkey",
+                    "offset": 39,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "proposer_pubkey",
+                    "offset": 71,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "request_data",
+                    "offset": 103,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "primitive": "Integral(U8)"
+                            },
+                            "size": 1
+                          },
+                          "jagged": false,
+                          "size": {
+                            "field-ref": {
+                              "path": [
+                                "request_data_sz"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "size": "variable"
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": "variable"
+          },
+          "ref": "MultisigRequest"
+        },
+        "size": "variable"
+      },
+      "variant": "request_v1"
+    }
+  }
+}

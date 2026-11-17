@@ -145,6 +145,13 @@ describe("NativeSDK", () => {
     vi.restoreAllMocks();
   });
 
+  it("rejects bank deposits without opening the native wallet", async () => {
+    await expect(sdk.deposits.open({ method: "bank" })).rejects.toThrow(
+      "Bank deposits are not available in the native wallet",
+    );
+    expect(webView.injected).toEqual([]);
+  });
+
   it("exposes the grouped deposit lifecycle API", () => {
     expect(sdk.connection.getState).toBeTypeOf("function");
     expect(sdk.accounts.getSelected).toBeTypeOf("function");
@@ -173,7 +180,7 @@ describe("NativeSDK", () => {
       tokenAccountAddress: "ta_token_account",
       mintAddress: "ta_mint",
       tokenProgramAddress: "ta_token_program",
-      symbol: "THRUSD",
+      symbol: "UUSD",
       decimals: 6,
     };
     const internals = sdk as unknown as {
@@ -221,7 +228,7 @@ describe("NativeSDK", () => {
       tokenAccountAddress: "ta_first_token_account",
       mintAddress: "ta_mint",
       tokenProgramAddress: "ta_token_program",
-      symbol: "THRUSD",
+      symbol: "UUSD",
       decimals: 6,
     };
     const secondDestination = {

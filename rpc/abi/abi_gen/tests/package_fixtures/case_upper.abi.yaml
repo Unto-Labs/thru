@@ -1,0 +1,15 @@
+abi:
+  package: "cases.Foo"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Package cases.Foo (directory cases/Foo)"
+
+types:
+  - name: "Upper"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "v"
+            field-type:
+              primitive: u8

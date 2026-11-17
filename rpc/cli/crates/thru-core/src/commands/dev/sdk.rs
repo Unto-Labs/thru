@@ -212,6 +212,10 @@ pub async fn install_sdk(
     custom_path: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
+    /* The config update below must not be refused after files change
+    (inline signing keys block config writes until migrated). */
+    config.require_writable()?;
+
     validate_language(language)?;
 
     /* Get repository from config or use default */
@@ -339,18 +343,19 @@ pub async fn install_sdk(
         println!("{}", verify_msg.green());
     }
 
-    /* Update config */
-    if custom_path.is_some() || config.sdk_paths.is_some() {
-        let mut paths = config.sdk_paths.clone().unwrap_or_default();
-        paths.insert(language.to_string(), install_path.clone());
-        config.sdk_paths = Some(paths);
-    }
-
-    let mut versions = config.sdk_versions.clone().unwrap_or_default();
-    versions.insert(language.to_string(), version_to_install.clone());
-    config.sdk_versions = Some(versions);
-
-    config.save().await?;
+    /* Merge this language's installation into the latest config. */
+    let saved = Config::update(|latest| {
+        if custom_path.is_some() || latest.sdk_paths.is_some() {
+            latest.sdk_paths.get_or_insert_with(Default::default)
+                .insert(language.to_string(), install_path.clone());
+        }
+        latest.sdk_versions.get_or_insert_with(Default::default)
+            .insert(language.to_string(), version_to_install.clone());
+        Ok(())
+    })
+    .await?;
+    config.sdk_paths = saved.sdk_paths;
+    config.sdk_versions = saved.sdk_versions;
 
     if json_format {
         println!(
@@ -376,6 +381,10 @@ pub async fn update_sdk(
     custom_path: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
+    /* The config update below must not be refused after files change
+    (inline signing keys block config writes until migrated). */
+    config.require_writable()?;
+
     validate_language(language)?;
 
     /* Get repository from config or use default */
@@ -505,6 +514,10 @@ pub async fn uninstall_sdk(
     force: bool,
     json_format: bool,
 ) -> Result<(), CliError> {
+    /* The config update below must not be refused after files change
+    (inline signing keys block config writes until migrated). */
+    config.require_writable()?;
+
     validate_language(language)?;
 
     let install_path = get_sdk_path(config, language, custom_path).map_err(|e| {
@@ -563,14 +576,19 @@ pub async fn uninstall_sdk(
             message: format!("Failed to remove SDK: {}", e),
         })?;
 
-    /* Clear config */
-    if let Some(ref mut paths) = config.sdk_paths {
-        paths.remove(language);
-    }
-    if let Some(ref mut versions) = config.sdk_versions {
-        versions.remove(language);
-    }
-    config.save().await?;
+    /* Remove only this language, preserving concurrent registrations. */
+    let saved = Config::update(|latest| {
+        if let Some(paths) = &mut latest.sdk_paths {
+            paths.remove(language);
+        }
+        if let Some(versions) = &mut latest.sdk_versions {
+            versions.remove(language);
+        }
+        Ok(())
+    })
+    .await?;
+    config.sdk_paths = saved.sdk_paths;
+    config.sdk_versions = saved.sdk_versions;
 
     if json_format {
         println!("{{\"status\":\"success\",\"language\":\"{}\"}}", language);
@@ -634,4 +652,24 @@ pub async fn get_sdk_path_command(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn uninstall_keeps_the_sdk_when_the_config_cannot_be_updated() {
+        let directory = tempfile::tempdir().unwrap();
+        let install = directory.path().join("sdk");
+        std::fs::create_dir_all(install.join("include")).unwrap();
+        let mut config = Config::default();
+        config.keys.set_unmigrated(["default".to_string()]);
+        let error = uninstall_sdk(&mut config, "c", install.to_str(), true, true)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("thru keys migrate"), "{error}");
+        assert!(install.join("include").exists());
+    }
 }

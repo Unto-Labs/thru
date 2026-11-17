@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MANAGER_ACCOUNT_TYPE_PROGRAM_META_V1,
+  MANAGER_META_SIZE,
   MANAGER_PROGRAM_ADDRESS,
   MANAGER_STATE_OPEN,
   buildManagerInstructionBytes,
@@ -35,6 +37,8 @@ describe('manager SDK', () => {
     });
   });
 
+  const digest = Uint8Array.from({ length: 32 }, (_, i) => 0xa0 + i);
+
   it('encodes ephemeral create exactly', () => {
     const encoded = buildManagerInstructionBytes({
       kind: 'createEphemeral',
@@ -43,6 +47,7 @@ describe('manager SDK', () => {
       sourceBufferAccountIdx: 3,
       sourceOffset: 4,
       sourceSize: 5,
+      sourceSha256: digest,
       authorityAccountIdx: 6,
       seed: Uint8Array.of(7, 8, 9),
     });
@@ -53,6 +58,7 @@ describe('manager SDK', () => {
       3, 0,
       4, 0, 0, 0,
       5, 0, 0, 0,
+      ...digest,
       6, 0,
       3, 0, 0, 0,
       7, 8, 9,
@@ -68,27 +74,61 @@ describe('manager SDK', () => {
       programAccountIdx: 2,
       sourceBufferAccountIdx: 3,
       sourceSize: 10,
+      sourceSha256: digest,
       authorityAccountIdx: 4,
       seed: 'x',
       metaStateProof: metaProof,
       programStateProof: programProof,
     });
     expect(encoded[0]).toBe(0);
-    expect(encoded.length).toBe(1 + 20 + 1 + metaProof.length + programProof.length);
+    expect(encoded.length).toBe(1 + 52 + 1 + metaProof.length + programProof.length);
+    expect(Array.from(encoded.slice(15, 47))).toEqual(Array.from(digest));
+  });
+
+  it('commits the upgrade to the source digest', () => {
+    const encoded = buildManagerInstructionBytes({
+      kind: 'upgrade',
+      metaAccountIdx: 1,
+      programAccountIdx: 2,
+      sourceBufferAccountIdx: 3,
+      sourceSize: 10,
+      sourceSha256: digest,
+    });
+    expect(encoded.length).toBe(47);
+    expect(encoded[0]).toBe(2);
+    expect(Array.from(encoded.slice(15, 47))).toEqual(Array.from(digest));
+    expect(() =>
+      buildManagerInstructionBytes({
+        kind: 'upgrade',
+        metaAccountIdx: 1,
+        programAccountIdx: 2,
+        sourceBufferAccountIdx: 3,
+        sourceSize: 10,
+        sourceSha256: new Uint8Array(31),
+      })
+    ).toThrow();
   });
 
   it('parses metadata and rejects unknown states', () => {
-    const data = new Uint8Array(73);
-    data.fill(1, 0, 32);
-    data.fill(2, 32, 64);
-    new DataView(data.buffer).setBigUint64(64, 9n, true);
-    data[72] = MANAGER_STATE_OPEN;
+    const data = new Uint8Array(MANAGER_META_SIZE);
+    data[0] = MANAGER_ACCOUNT_TYPE_PROGRAM_META_V1;
+    data.fill(1, 1, 33);
+    data.fill(2, 33, 65);
+    new DataView(data.buffer).setBigUint64(65, 9n, true);
+    data[73] = MANAGER_STATE_OPEN;
     expect(parseManagerProgramMeta(data)).toMatchObject({
       version: 9n,
       state: MANAGER_STATE_OPEN,
     });
-    data[72] = 9;
+    data[73] = 9;
     expect(() => parseManagerProgramMeta(data)).toThrow('invalid state');
+    data[73] = MANAGER_STATE_OPEN;
+    data[0] = 2;
+    expect(() => parseManagerProgramMeta(data)).toThrow('not a manager program metadata account');
+    data[0] = MANAGER_ACCOUNT_TYPE_PROGRAM_META_V1;
+    expect(() => parseManagerProgramMeta(data.subarray(0, 73))).toThrow(
+      'not a manager program metadata account'
+    );
   });
 
   it('validates managed program images', () => {

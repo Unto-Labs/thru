@@ -64,7 +64,7 @@ const CONSENSUS_VALIDATOR_DEFAULT_EXPIRY_AFTER: u32 = 100;
 const CONSENSUS_VALIDATOR_COMPUTE_UNITS: u32 = 500_000_000;
 const CONSENSUS_VALIDATOR_PROOF_COMPUTE_UNITS: u32 = 1_000_000_000;
 const CONSENSUS_VALIDATOR_STATE_UNITS: u16 = 0;
-const CONSENSUS_VALIDATOR_MEMORY_UNITS: u16 = 50_000;
+const CONSENSUS_VALIDATOR_MEMORY_UNITS: u16 = 10_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConsensusValidatorAccounts {
@@ -116,7 +116,7 @@ fn bp_base_tx(
         .with_expiry_after(100)
         .with_compute_units(50_000_000)
         .with_state_units(0)
-        .with_memory_units(50_000)
+        .with_memory_units(10_000)
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -134,7 +134,7 @@ pub fn account_state_units(data_size: u64) -> Result<u16> {
 }
 
 // Packed abi_account_t payload header: pubkey, revision, state, content size.
-const ABI_ACCOUNT_HEADER_SIZE: u64 = 32 + 8 + 1 + 4;
+pub const ABI_ACCOUNT_HEADER_SIZE: u64 = 32 + 8 + 1 + 4;
 
 #[derive(Debug, Clone)]
 pub struct TransactionBuilder {
@@ -992,6 +992,118 @@ mod tests {
     }
 
     #[test]
+    fn token_transfer_checked_instruction_matches_reference_vector() {
+        let instruction =
+            build_token_transfer_checked_instruction(2, 3, 4, 1_000_000, 6, b"USDC").unwrap();
+        let expected: [u8; 25] = [
+            0x08, 0x02, 0x00, 0x03, 0x00, 0x04, 0x00, 0x40, 0x42, 0x0f, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x06, 0x04, 0x55, 0x53, 0x44, 0x43, 0x00, 0x00, 0x00, 0x00,
+        ];
+        assert_eq!(instruction.len(), 25);
+        assert_eq!(instruction, expected);
+    }
+
+    #[test]
+    fn token_transfer_checked_instruction_ticker_forms() {
+        // Empty ticker: length 0, eight zero bytes.
+        let empty = build_token_transfer_checked_instruction(2, 3, 4, 1, 6, b"").unwrap();
+        assert_eq!(empty.len(), 25);
+        assert_eq!(&empty[16..25], &[0u8; 9]);
+
+        // Eight raw bytes (zero and 0xff included) are copied verbatim.
+        let raw = [0xde, 0xad, 0xbe, 0xef, 0x00, 0x01, 0x02, 0xff];
+        let full = build_token_transfer_checked_instruction(2, 3, 4, 1, 6, &raw).unwrap();
+        assert_eq!(full.len(), 25);
+        assert_eq!(full[16], 8);
+        assert_eq!(&full[17..25], &raw);
+
+        // Seven characters stored with length 8 (trailing NUL counted).
+        let nul = build_token_transfer_checked_instruction(2, 3, 4, 1, 6, b"EVECOIN\0").unwrap();
+        assert_eq!(nul[16], 8);
+        assert_eq!(&nul[17..25], b"EVECOIN\0");
+
+        // Nine bytes do not fit.
+        assert!(build_token_transfer_checked_instruction(2, 3, 4, 1, 6, &[1u8; 9]).is_err());
+
+        // Extreme values land at their offsets; indices are little-endian.
+        let max =
+            build_token_transfer_checked_instruction(0x0102, 0x0304, 0x0506, u64::MAX, 255, b"AB")
+                .unwrap();
+        assert_eq!(&max[1..7], &[0x02, 0x01, 0x04, 0x03, 0x06, 0x05]);
+        assert_eq!(&max[7..15], &u64::MAX.to_le_bytes());
+        assert_eq!(max[15], 255);
+        assert_eq!(max[16], 2);
+        assert_eq!(&max[17..25], b"AB\0\0\0\0\0\0");
+    }
+
+    #[test]
+    fn build_token_transfer_checked_orders_accounts_and_indices() {
+        let (fp, prog) = (key(1), key(2));
+        let mint = key(3);
+
+        // Destination sorts before the source, the mint before both.
+        let (source, dest) = (key(9), key(5));
+        let tx = TransactionBuilder::build_token_transfer_checked(
+            fp, prog, source, dest, mint, 7, 6, b"USDC", 1, 0, 0,
+        )
+        .unwrap();
+        assert_eq!(tx.fee_payer, fp);
+        assert_eq!(tx.program, prog);
+        assert_eq!(tx.rw_accs.as_deref(), Some(&[dest, source][..]));
+        assert_eq!(tx.r_accs.as_deref(), Some(&[mint][..]));
+        let ix = tx.instructions.as_ref().unwrap();
+        assert_eq!(ix[0], 8);
+        assert_eq!(u16::from_le_bytes([ix[1], ix[2]]), 3, "source index");
+        assert_eq!(u16::from_le_bytes([ix[3], ix[4]]), 2, "destination index");
+        assert_eq!(u16::from_le_bytes([ix[5], ix[6]]), 4, "mint index");
+
+        // Source sorts first.
+        let (source, dest) = (key(5), key(9));
+        let tx = TransactionBuilder::build_token_transfer_checked(
+            fp, prog, source, dest, mint, 7, 6, b"USDC", 1, 0, 0,
+        )
+        .unwrap();
+        assert_eq!(tx.rw_accs.as_deref(), Some(&[source, dest][..]));
+        let ix = tx.instructions.as_ref().unwrap();
+        assert_eq!(u16::from_le_bytes([ix[1], ix[2]]), 2, "source index");
+        assert_eq!(u16::from_le_bytes([ix[3], ix[4]]), 3, "destination index");
+        assert_eq!(u16::from_le_bytes([ix[5], ix[6]]), 4, "mint index");
+    }
+
+    #[test]
+    fn build_token_transfer_checked_same_source_and_destination() {
+        let (fp, prog, acct, mint) = (key(1), key(2), key(5), key(3));
+        let tx = TransactionBuilder::build_token_transfer_checked(
+            fp, prog, acct, acct, mint, 7, 6, b"USDC", 1, 0, 0,
+        )
+        .unwrap();
+        assert_eq!(tx.rw_accs.as_deref(), Some(&[acct][..]));
+        assert_eq!(tx.r_accs.as_deref(), Some(&[mint][..]));
+        let ix = tx.instructions.as_ref().unwrap();
+        assert_eq!(u16::from_le_bytes([ix[1], ix[2]]), 2, "source index");
+        assert_eq!(u16::from_le_bytes([ix[3], ix[4]]), 2, "destination index");
+        assert_eq!(u16::from_le_bytes([ix[5], ix[6]]), 3, "mint index");
+    }
+
+    #[test]
+    fn build_token_transfer_checked_rejects_long_ticker() {
+        let result = TransactionBuilder::build_token_transfer_checked(
+            key(1),
+            key(2),
+            key(5),
+            key(9),
+            key(3),
+            7,
+            6,
+            &[b'A'; 9],
+            1,
+            0,
+            0,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_build_token_initialize_mint_instruction_format() {
         let mint_account_idx = 2u16;
         let decimals = 9u8;
@@ -1438,6 +1550,7 @@ mod tests {
             5,
         )
         .expect("mode1 create should build");
+        assert!(tx.req_memory_units <= 10_000, "default thrud admission");
 
         let instr = tx.instructions.expect("instruction bytes");
         assert_eq!(
@@ -1495,6 +1608,7 @@ mod tests {
             5,
         )
         .expect("mode2 create should build");
+        assert!(tx.req_memory_units <= 10_000, "default thrud admission");
 
         let instr = tx.instructions.expect("instruction bytes");
         assert_eq!(instr[14], 1u8, "Mode 2 create_signer_eoa must be 1");
@@ -1578,6 +1692,17 @@ mod tests {
 
     fn key(byte: u8) -> TnPubkey {
         [byte; 32]
+    }
+
+    #[test]
+    fn validator_and_bond_requests_fit_default_thrud_memory_limit() {
+        let (payer, program) = (key(1), key(2));
+        for tx in [
+            build_consensus_validator_tx(payer, program, 1, 0, 0),
+            bp_base_tx(payer, program, 1, 0, 0),
+        ] {
+            assert!(tx.req_memory_units <= 10_000);
+        }
     }
 
     /// A request above zero is rejected whenever the chain has no active-state
@@ -1678,6 +1803,13 @@ mod tests {
             (
                 "build_token_transfer",
                 TransactionBuilder::build_token_transfer(fp, prog, a, b, fp, 5, 1, 0, 0).unwrap(),
+            ),
+            (
+                "build_token_transfer_checked",
+                TransactionBuilder::build_token_transfer_checked(
+                    fp, prog, a, b, c, 5, 6, b"USDC", 1, 0, 0,
+                )
+                .unwrap(),
             ),
             (
                 "build_token_mint_to",
@@ -2073,6 +2205,9 @@ pub struct ManagerCreateArgs {
     pub srcbuf_account_idx: u16,
     pub srcbuf_offset: u32,
     pub srcbuf_size: u32,
+    /// SHA-256 of exactly `srcbuf[offset, offset + size)`; the manager rejects
+    /// any other bytes, so the buffer cannot be swapped after approval.
+    pub srcbuf_sha256: [u8; 32],
     pub authority_account_idx: u16,
     pub seed_len: u32,
     // seed bytes and proof bytes follow
@@ -2088,6 +2223,8 @@ pub struct ManagerUpgradeArgs {
     pub srcbuf_account_idx: u16,
     pub srcbuf_offset: u32,
     pub srcbuf_size: u32,
+    /// SHA-256 of exactly `srcbuf[offset, offset + size)`.
+    pub srcbuf_sha256: [u8; 32],
 }
 
 /// ABI manager program CREATE META (official) instruction arguments (matches C struct)
@@ -2119,6 +2256,8 @@ pub struct AbiManagerCreateAbiOfficialArgs {
     pub srcbuf_account_idx: u16,
     pub srcbuf_offset: u32,
     pub srcbuf_size: u32,
+    /// SHA-256 of exactly `srcbuf[offset, offset + size)`.
+    pub srcbuf_sha256: [u8; 32],
     pub authority_account_idx: u16,
 }
 
@@ -2131,6 +2270,8 @@ pub struct AbiManagerCreateAbiExternalArgs {
     pub srcbuf_account_idx: u16,
     pub srcbuf_offset: u32,
     pub srcbuf_size: u32,
+    /// SHA-256 of exactly `srcbuf[offset, offset + size)`.
+    pub srcbuf_sha256: [u8; 32],
     pub authority_account_idx: u16,
 }
 
@@ -2144,6 +2285,8 @@ pub struct AbiManagerUpgradeAbiOfficialArgs {
     pub srcbuf_account_idx: u16,
     pub srcbuf_offset: u32,
     pub srcbuf_size: u32,
+    /// SHA-256 of exactly `srcbuf[offset, offset + size)`.
+    pub srcbuf_sha256: [u8; 32],
     pub authority_account_idx: u16,
 }
 
@@ -2156,6 +2299,8 @@ pub struct AbiManagerUpgradeAbiExternalArgs {
     pub srcbuf_account_idx: u16,
     pub srcbuf_offset: u32,
     pub srcbuf_size: u32,
+    /// SHA-256 of exactly `srcbuf[offset, offset + size)`.
+    pub srcbuf_sha256: [u8; 32],
     pub authority_account_idx: u16,
 }
 
@@ -2478,6 +2623,7 @@ impl TransactionBuilder {
         authority_account: TnPubkey,
         srcbuf_offset: u32,
         srcbuf_size: u32,
+        srcbuf_sha256: [u8; 32],
         seed: &[u8],
         is_ephemeral: bool,
         meta_proof: Option<&[u8]>,
@@ -2572,6 +2718,7 @@ impl TransactionBuilder {
             authority_account_idx,
             srcbuf_offset,
             srcbuf_size,
+            srcbuf_sha256,
             seed,
             combined_proof.as_deref(),
         )?;
@@ -2753,6 +2900,7 @@ impl TransactionBuilder {
         authority_account: TnPubkey,
         srcbuf_offset: u32,
         srcbuf_size: u32,
+        srcbuf_sha256: [u8; 32],
         is_ephemeral: bool,
         abi_proof: Option<&[u8]>,
         fee: u64,
@@ -2840,6 +2988,7 @@ impl TransactionBuilder {
             srcbuf_account_idx,
             srcbuf_offset,
             srcbuf_size,
+            srcbuf_sha256,
             authority_idx,
             abi_proof,
         )?;
@@ -2859,6 +3008,7 @@ impl TransactionBuilder {
         authority_account: TnPubkey,
         srcbuf_offset: u32,
         srcbuf_size: u32,
+        srcbuf_sha256: [u8; 32],
         is_ephemeral: bool,
         abi_proof: Option<&[u8]>,
         fee: u64,
@@ -2936,6 +3086,7 @@ impl TransactionBuilder {
             srcbuf_account_idx,
             srcbuf_offset,
             srcbuf_size,
+            srcbuf_sha256,
             authority_idx,
             abi_proof,
         )?;
@@ -2956,6 +3107,7 @@ impl TransactionBuilder {
         authority_account: TnPubkey,
         srcbuf_offset: u32,
         srcbuf_size: u32,
+        srcbuf_sha256: [u8; 32],
         fee: u64,
         nonce: u64,
         start_slot: u64,
@@ -3035,6 +3187,7 @@ impl TransactionBuilder {
             srcbuf_account_idx,
             srcbuf_offset,
             srcbuf_size,
+            srcbuf_sha256,
             authority_idx,
         )?;
 
@@ -3053,6 +3206,7 @@ impl TransactionBuilder {
         authority_account: TnPubkey,
         srcbuf_offset: u32,
         srcbuf_size: u32,
+        srcbuf_sha256: [u8; 32],
         fee: u64,
         nonce: u64,
         start_slot: u64,
@@ -3122,6 +3276,7 @@ impl TransactionBuilder {
             srcbuf_account_idx,
             srcbuf_offset,
             srcbuf_size,
+            srcbuf_sha256,
             authority_idx,
         )?;
 
@@ -3446,6 +3601,7 @@ impl TransactionBuilder {
         srcbuf_account: TnPubkey,
         srcbuf_offset: u32,
         srcbuf_size: u32,
+        srcbuf_sha256: [u8; 32],
         fee: u64,
         nonce: u64,
         start_slot: u64,
@@ -3501,6 +3657,7 @@ impl TransactionBuilder {
             srcbuf_account_idx,
             srcbuf_offset,
             srcbuf_size,
+            srcbuf_sha256,
         )?;
 
         tx = tx.with_instructions(instruction_data);
@@ -3923,7 +4080,7 @@ fn build_uploader_destroy_instruction(
 }
 
 /// Build manager CREATE instruction data
-fn build_manager_create_instruction(
+pub fn build_manager_create_instruction(
     discriminant: u8,
     meta_account_idx: u16,
     program_account_idx: u16,
@@ -3931,6 +4088,7 @@ fn build_manager_create_instruction(
     authority_account_idx: u16,
     srcbuf_offset: u32,
     srcbuf_size: u32,
+    srcbuf_sha256: [u8; 32],
     seed: &[u8],
     proof: Option<&[u8]>,
 ) -> Result<Vec<u8>> {
@@ -3944,6 +4102,7 @@ fn build_manager_create_instruction(
         srcbuf_account_idx,
         srcbuf_offset,
         srcbuf_size,
+        srcbuf_sha256,
         authority_account_idx,
         seed_len: seed.len() as u32,
     };
@@ -3969,7 +4128,7 @@ fn build_manager_create_instruction(
 }
 
 /// Build ABI manager CREATE META (official) instruction data
-fn build_abi_manager_create_meta_official_instruction(
+pub fn build_abi_manager_create_meta_official_instruction(
     discriminant: u8,
     abi_meta_account_idx: u16,
     program_meta_account_idx: u16,
@@ -4035,7 +4194,7 @@ fn build_abi_manager_create_meta_external_instruction(
 }
 
 /// Build ABI manager CREATE ABI (official) instruction data
-fn build_abi_manager_create_abi_official_instruction(
+pub fn build_abi_manager_create_abi_official_instruction(
     discriminant: u8,
     abi_meta_account_idx: u16,
     program_meta_account_idx: u16,
@@ -4043,6 +4202,7 @@ fn build_abi_manager_create_abi_official_instruction(
     srcbuf_account_idx: u16,
     srcbuf_offset: u32,
     srcbuf_size: u32,
+    srcbuf_sha256: [u8; 32],
     authority_account_idx: u16,
     proof: Option<&[u8]>,
 ) -> Result<Vec<u8>> {
@@ -4056,6 +4216,7 @@ fn build_abi_manager_create_abi_official_instruction(
         srcbuf_account_idx,
         srcbuf_offset,
         srcbuf_size,
+        srcbuf_sha256,
         authority_account_idx,
     };
 
@@ -4082,6 +4243,7 @@ fn build_abi_manager_create_abi_external_instruction(
     srcbuf_account_idx: u16,
     srcbuf_offset: u32,
     srcbuf_size: u32,
+    srcbuf_sha256: [u8; 32],
     authority_account_idx: u16,
     proof: Option<&[u8]>,
 ) -> Result<Vec<u8>> {
@@ -4094,6 +4256,7 @@ fn build_abi_manager_create_abi_external_instruction(
         srcbuf_account_idx,
         srcbuf_offset,
         srcbuf_size,
+        srcbuf_sha256,
         authority_account_idx,
     };
 
@@ -4112,13 +4275,14 @@ fn build_abi_manager_create_abi_external_instruction(
     Ok(instruction)
 }
 
-fn build_abi_manager_upgrade_abi_official_instruction(
+pub fn build_abi_manager_upgrade_abi_official_instruction(
     abi_meta_account_idx: u16,
     program_meta_account_idx: u16,
     abi_account_idx: u16,
     srcbuf_account_idx: u16,
     srcbuf_offset: u32,
     srcbuf_size: u32,
+    srcbuf_sha256: [u8; 32],
     authority_account_idx: u16,
 ) -> Result<Vec<u8>> {
     let mut instruction = Vec::new();
@@ -4131,6 +4295,7 @@ fn build_abi_manager_upgrade_abi_official_instruction(
         srcbuf_account_idx,
         srcbuf_offset,
         srcbuf_size,
+        srcbuf_sha256,
         authority_account_idx,
     };
 
@@ -4151,6 +4316,7 @@ fn build_abi_manager_upgrade_abi_external_instruction(
     srcbuf_account_idx: u16,
     srcbuf_offset: u32,
     srcbuf_size: u32,
+    srcbuf_sha256: [u8; 32],
     authority_account_idx: u16,
 ) -> Result<Vec<u8>> {
     let mut instruction = Vec::new();
@@ -4162,6 +4328,7 @@ fn build_abi_manager_upgrade_abi_external_instruction(
         srcbuf_account_idx,
         srcbuf_offset,
         srcbuf_size,
+        srcbuf_sha256,
         authority_account_idx,
     };
 
@@ -4281,12 +4448,15 @@ fn build_abi_manager_close_abi_external_instruction(
 }
 
 /// Build manager UPGRADE instruction data
-fn build_manager_upgrade_instruction(
+/// Build manager UPGRADE instruction data. `srcbuf_sha256` is the SHA-256 of
+/// exactly `srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size)`.
+pub fn build_manager_upgrade_instruction(
     meta_account_idx: u16,
     program_account_idx: u16,
     srcbuf_account_idx: u16,
     srcbuf_offset: u32,
     srcbuf_size: u32,
+    srcbuf_sha256: [u8; 32],
 ) -> Result<Vec<u8>> {
     let mut instruction = Vec::new();
 
@@ -4297,6 +4467,7 @@ fn build_manager_upgrade_instruction(
         srcbuf_account_idx,
         srcbuf_offset,
         srcbuf_size,
+        srcbuf_sha256,
     };
 
     let args_bytes = unsafe {
@@ -4311,7 +4482,7 @@ fn build_manager_upgrade_instruction(
 }
 
 /// Build manager SET_PAUSE instruction data
-fn build_manager_set_pause_instruction(
+pub fn build_manager_set_pause_instruction(
     meta_account_idx: u16,
     program_account_idx: u16,
     is_paused: bool,
@@ -4337,7 +4508,7 @@ fn build_manager_set_pause_instruction(
 }
 
 /// Build manager header-only instruction data (DESTROY, FINALIZE, CLAIM_AUTHORITY)
-fn build_manager_header_instruction(
+pub fn build_manager_header_instruction(
     discriminant: u8,
     meta_account_idx: u16,
     program_account_idx: u16,
@@ -4362,7 +4533,7 @@ fn build_manager_header_instruction(
 }
 
 /// Build manager SET_AUTHORITY instruction data
-fn build_manager_set_authority_instruction(
+pub fn build_manager_set_authority_instruction(
     meta_account_idx: u16,
     program_account_idx: u16,
     authority_candidate: [u8; 32],
@@ -4506,6 +4677,10 @@ pub const TOKEN_INSTRUCTION_BURN: u8 = 0x04;
 pub const TOKEN_INSTRUCTION_CLOSE_ACCOUNT: u8 = 0x05;
 pub const TOKEN_INSTRUCTION_FREEZE_ACCOUNT: u8 = 0x06;
 pub const TOKEN_INSTRUCTION_THAW_ACCOUNT: u8 = 0x07;
+pub const TOKEN_INSTRUCTION_TRANSFER_CHECKED: u8 = 0x08;
+
+/// Longest ticker a token mint stores, in bytes.
+pub const TOKEN_TICKER_MAX_LEN: usize = 8;
 
 /* WTHRU instruction discriminants */
 pub const TN_WTHRU_INSTRUCTION_INITIALIZE_MINT: u32 = 0;
@@ -4861,6 +5036,50 @@ impl TransactionBuilder {
 
         let instruction_data =
             build_token_transfer_instruction(source_account_idx, dest_account_idx, amount)?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build token program TransferChecked transaction.
+    ///
+    /// Like [`Self::build_token_transfer`], but the instruction also names the
+    /// mint account (read-only) and carries the mint's decimals and ticker.
+    /// The token program reverts unless they equal the values stored in the
+    /// mint account. `ticker` is the stored ticker: the first `ticker_len`
+    /// bytes of the mint's ticker field, at most [`TOKEN_TICKER_MAX_LEN`].
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_token_transfer_checked(
+        fee_payer: TnPubkey,
+        token_program: TnPubkey,
+        source_account: TnPubkey,
+        dest_account: TnPubkey,
+        mint_account: TnPubkey,
+        amount: u64,
+        decimals: u8,
+        ticker: &[u8],
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let tx = Transaction::new(fee_payer, token_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(100)
+            .with_compute_units(300_000)
+            .with_state_units(0)
+            .with_memory_units(10_000);
+
+        // Source and dest are read-write, the mint is read-only. A repeated
+        // account (source == dest) reuses its index.
+        let accounts = &[
+            (source_account, true),
+            (dest_account, true),
+            (mint_account, false),
+        ];
+        let (tx, indices) = add_sorted_accounts(tx, accounts);
+
+        let instruction_data = build_token_transfer_checked_instruction(
+            indices[0], indices[1], indices[2], amount, decimals, ticker,
+        )?;
 
         Ok(tx.with_instructions(instruction_data))
     }
@@ -5278,7 +5497,7 @@ impl TransactionBuilder {
             .with_expiry_after(100)
             .with_compute_units(50_000_000)
             .with_state_units(2 + u16::from(create_signer_eoa)) // Bond, token account, optional EOA.
-            .with_memory_units(50_000);
+            .with_memory_units(10_000);
 
         let mut accounts: Vec<(TnPubkey, bool)> = vec![
             (bond_account, true),
@@ -6581,7 +6800,7 @@ fn build_token_initialize_account_instruction(
 }
 
 /// Build token Transfer instruction data
-fn build_token_transfer_instruction(
+pub fn build_token_transfer_instruction(
     source_account_idx: u16,
     dest_account_idx: u16,
     amount: u64,
@@ -6603,8 +6822,53 @@ fn build_token_transfer_instruction(
     Ok(instruction_data)
 }
 
+/// Build token TransferChecked instruction data
+pub fn build_token_transfer_checked_instruction(
+    source_account_idx: u16,
+    dest_account_idx: u16,
+    mint_account_idx: u16,
+    amount: u64,
+    decimals: u8,
+    ticker: &[u8],
+) -> Result<Vec<u8>> {
+    if ticker.len() > TOKEN_TICKER_MAX_LEN {
+        return Err(anyhow::anyhow!("Ticker must be 8 bytes or less"));
+    }
+
+    // 17 fixed bytes, then the ticker bytes
+    let mut instruction_data = Vec::with_capacity(17 + TOKEN_TICKER_MAX_LEN);
+
+    // Instruction tag
+    instruction_data.push(TOKEN_INSTRUCTION_TRANSFER_CHECKED);
+
+    // source_account_index (u16)
+    instruction_data.extend_from_slice(&source_account_idx.to_le_bytes());
+
+    // dest_account_index (u16)
+    instruction_data.extend_from_slice(&dest_account_idx.to_le_bytes());
+
+    // mint_account_index (u16)
+    instruction_data.extend_from_slice(&mint_account_idx.to_le_bytes());
+
+    // amount (u64)
+    instruction_data.extend_from_slice(&amount.to_le_bytes());
+
+    // decimals (u8)
+    instruction_data.push(decimals);
+
+    // ticker_len (u8)
+    instruction_data.push(ticker.len() as u8);
+
+    // ticker_bytes (8 bytes, zero padded)
+    let mut ticker_bytes = [0u8; TOKEN_TICKER_MAX_LEN];
+    ticker_bytes[..ticker.len()].copy_from_slice(ticker);
+    instruction_data.extend_from_slice(&ticker_bytes);
+
+    Ok(instruction_data)
+}
+
 /// Build token MintTo instruction data
-fn build_token_mint_to_instruction(
+pub fn build_token_mint_to_instruction(
     mint_account_idx: u16,
     dest_account_idx: u16,
     authority_idx: u16,
@@ -6631,7 +6895,7 @@ fn build_token_mint_to_instruction(
 }
 
 /// Build token Burn instruction data
-fn build_token_burn_instruction(
+pub fn build_token_burn_instruction(
     token_account_idx: u16,
     mint_account_idx: u16,
     authority_idx: u16,
@@ -6658,7 +6922,7 @@ fn build_token_burn_instruction(
 }
 
 /// Build token FreezeAccount instruction data
-fn build_token_freeze_account_instruction(
+pub fn build_token_freeze_account_instruction(
     token_account_idx: u16,
     mint_account_idx: u16,
     authority_idx: u16,
@@ -6681,7 +6945,7 @@ fn build_token_freeze_account_instruction(
 }
 
 /// Build token ThawAccount instruction data
-fn build_token_thaw_account_instruction(
+pub fn build_token_thaw_account_instruction(
     token_account_idx: u16,
     mint_account_idx: u16,
     authority_idx: u16,
@@ -6704,7 +6968,7 @@ fn build_token_thaw_account_instruction(
 }
 
 /// Build token CloseAccount instruction data
-fn build_token_close_account_instruction(
+pub fn build_token_close_account_instruction(
     token_account_idx: u16,
     destination_idx: u16,
     authority_idx: u16,
@@ -7448,4 +7712,102 @@ fn build_thru_registrar_claim_expired_domain_instruction(
     instruction_data.push(years);
 
     Ok(instruction_data)
+}
+
+#[cfg(test)]
+mod srcbuf_digest_wire_tests {
+    use super::*;
+
+    const DIGEST: [u8; 32] = [0xA5; 32];
+
+    #[test]
+    fn manager_create_commits_digest_after_srcbuf_size() {
+        let seed = b"seed";
+        let d = build_manager_create_instruction(
+            MANAGER_INSTRUCTION_CREATE_EPHEMERAL,
+            2,
+            3,
+            4,
+            0,
+            0x0102_0304,
+            0x1000,
+            DIGEST,
+            seed,
+            None,
+        )
+        .unwrap();
+        assert_eq!(std::mem::size_of::<ManagerCreateArgs>(), 53);
+        assert_eq!(d.len(), 53 + seed.len());
+        assert_eq!(&d[7..11], &0x0102_0304u32.to_le_bytes());
+        assert_eq!(&d[11..15], &0x1000u32.to_le_bytes());
+        assert_eq!(&d[15..47], &DIGEST);
+        assert_eq!(&d[47..49], &0u16.to_le_bytes());
+        assert_eq!(&d[49..53], &(seed.len() as u32).to_le_bytes());
+        assert_eq!(&d[53..], seed);
+    }
+
+    #[test]
+    fn manager_upgrade_commits_digest() {
+        let d = build_manager_upgrade_instruction(2, 3, 4, 8, 6664, DIGEST).unwrap();
+        assert_eq!(d.len(), 47);
+        assert_eq!(d[0], MANAGER_INSTRUCTION_UPGRADE);
+        assert_eq!(&d[5..7], &4u16.to_le_bytes());
+        assert_eq!(&d[11..15], &6664u32.to_le_bytes());
+        assert_eq!(&d[15..47], &DIGEST);
+    }
+
+    #[test]
+    fn abi_official_create_and_upgrade_commit_digest() {
+        let c = build_abi_manager_create_abi_official_instruction(
+            ABI_MANAGER_INSTRUCTION_CREATE_ABI_OFFICIAL_EPHEMERAL,
+            2,
+            3,
+            4,
+            5,
+            0,
+            77,
+            DIGEST,
+            9,
+            None,
+        )
+        .unwrap();
+        let u = build_abi_manager_upgrade_abi_official_instruction(2, 3, 4, 5, 0, 77, DIGEST, 9)
+            .unwrap();
+        for d in [&c, &u] {
+            assert_eq!(d.len(), 51);
+            assert_eq!(&d[13..17], &77u32.to_le_bytes());
+            assert_eq!(&d[17..49], &DIGEST);
+            assert_eq!(&d[49..51], &9u16.to_le_bytes());
+        }
+        assert_eq!(c[0], ABI_MANAGER_INSTRUCTION_CREATE_ABI_OFFICIAL_EPHEMERAL);
+        assert_eq!(u[0], ABI_MANAGER_INSTRUCTION_UPGRADE_ABI_OFFICIAL);
+    }
+
+    #[test]
+    fn abi_external_create_and_upgrade_commit_digest() {
+        let c = build_abi_manager_create_abi_external_instruction(
+            ABI_MANAGER_INSTRUCTION_CREATE_ABI_EXTERNAL_EPHEMERAL,
+            2,
+            4,
+            5,
+            0,
+            77,
+            DIGEST,
+            9,
+            None,
+        )
+        .unwrap();
+        let u =
+            build_abi_manager_upgrade_abi_external_instruction(2, 4, 5, 0, 77, DIGEST, 9).unwrap();
+        assert_eq!(std::mem::size_of::<AbiManagerCreateAbiExternalArgs>(), 48);
+        assert_eq!(std::mem::size_of::<AbiManagerUpgradeAbiExternalArgs>(), 48);
+        for d in [&c, &u] {
+            assert_eq!(d.len(), 49);
+            assert_eq!(&d[11..15], &77u32.to_le_bytes());
+            assert_eq!(&d[15..47], &DIGEST);
+            assert_eq!(&d[47..49], &9u16.to_le_bytes());
+        }
+        assert_eq!(c[0], ABI_MANAGER_INSTRUCTION_CREATE_ABI_EXTERNAL_EPHEMERAL);
+        assert_eq!(u[0], ABI_MANAGER_INSTRUCTION_UPGRADE_ABI_EXTERNAL);
+    }
 }

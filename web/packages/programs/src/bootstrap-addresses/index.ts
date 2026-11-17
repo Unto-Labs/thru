@@ -1,6 +1,13 @@
 import { deriveManagedProgramAddresses } from '../manager/derivation.js';
+import { CORE_MANAGER_PROGRAM_ADDRESS, MANAGER_PROGRAM_ADDRESS } from '../manager/constants.js';
+import type { ManagedProgramAddresses } from '../manager/types.js';
 import { deriveAddress, deriveProgramAddress, Pubkey } from '@thru/sdk';
-
+import { hashBytes } from '../utils/helpers.js';
+import {
+  CANONICAL_PROGRAMS, E2E_PROGRAMS, CORE_CONFIG_SEED,
+  FEATURE_GATE_GLOBAL_SEED, programAuthoritySeed, type CanonicalProgramName,
+} from './registry.js';
+export * from './registry.js';
 function withDeprecatedPasskeyManagerAlias<T extends { wallet: string }>(values: T) {
   return Object.freeze(Object.defineProperty(values, 'passkey_manager', {
     value: values.wallet,
@@ -11,62 +18,71 @@ function withDeprecatedPasskeyManagerAlias<T extends { wallet: string }>(values:
   });
 }
 
-/** Permanent seeds used by programs/bootstrap. Changing a seed changes every
- * managed program and ABI address derived from it. */
-export const BOOTSTRAP_PROGRAM_SEEDS = withDeprecatedPasskeyManagerAlias({
-  noop: 'thru-program:22654259',
-  faucet: 'thru-program:310129',
-  name_service: 'thru-program:2236909',
-  oracle: 'thru-program:87959905',
-  multicall: 'thru-program:3153525730',
-  abi_manager: 'thru-program:167497',
-  token: 'thru-program:3767426089',
-  amm: 'thru-program:4614050',
-  clob: 'thru-program:79287062',
-  thru_registrar: 'thru-program:449594',
-  wthru: 'thru-program:1687299648',
-  wallet: 'thru-program:1746189',
-  nft: 'thru-program:1654635',
-  block_producer: 'thru-program:8222',
-  consensus_validator: 'thru-program:35555736',
-  eoa: 'thru-program:207434',
-  uploader: 'thru-program:1073768',
-  compression: 'thru-compression:v1',
-} as const);
+export { CORE_MANAGER_PROGRAM_ADDRESS } from '../manager/constants.js';
 
-function managedProgramAddress(seed: string): string {
-  return deriveManagedProgramAddresses(seed).programAccountAddress;
-}
-
-/** EOA is installed by genesis; bootstrap only publishes its ABI. */
+/** Canonical genesis children always select Core explicitly. The eight
+ * applications (parent `public`, UNTO-3561) are deployed after genesis under
+ * the Public program manager, so their pair is Public's derivation of the
+ * same seed. */
+// Object.fromEntries erases the literal registry keys; every non-root record
+// below produces the same concrete managed-pair type.
+const managedProgramPairs = Object.fromEntries(
+  CANONICAL_PROGRAMS.flatMap((record) => record.seed === null ? [] : [
+    [record.name, deriveManagedProgramAddresses(record.seed, false,
+      record.parent === 'public' ? MANAGER_PROGRAM_ADDRESS : CORE_MANAGER_PROGRAM_ADDRESS)] as const,
+  ]),
+) as Record<Exclude<CanonicalProgramName, 'core_manager'>, ManagedProgramAddresses>;
+export const BOOTSTRAP_PROGRAM_PAIRS = Object.freeze({
+  core_manager: {
+    programAccountAddress: CORE_MANAGER_PROGRAM_ADDRESS,
+    programMetaAccountAddress: null,
+  },
+  ...managedProgramPairs,
+});
+export const BOOTSTRAP_PROGRAM_SEEDS = withDeprecatedPasskeyManagerAlias(Object.fromEntries(
+  CANONICAL_PROGRAMS.filter((record) => record.seed !== null).map((record) => [record.name, record.seed!]),
+) as Record<Exclude<CanonicalProgramName, 'core_manager'>, string>);
+export const BOOTSTRAP_PROGRAM_ADDRESSES = withDeprecatedPasskeyManagerAlias(Object.fromEntries(
+  CANONICAL_PROGRAMS.map((record) => [record.name, BOOTSTRAP_PROGRAM_PAIRS[record.name].programAccountAddress]),
+) as Record<CanonicalProgramName, string>);
+/** Core B executable: an ordinary Core A-managed pair that owns Core A (UNTO-3561). */
+export const CORE_PEER_MANAGER_PROGRAM_ADDRESS = BOOTSTRAP_PROGRAM_ADDRESSES.core_peer_manager;
+export const E2E_PROGRAM_PAIRS = Object.freeze(Object.fromEntries(
+  E2E_PROGRAMS.map((record) => [record.name, deriveManagedProgramAddresses(record.seed!, false, CORE_MANAGER_PROGRAM_ADDRESS)]),
+));
 export const GENESIS_EOA_PROGRAM_SEED = BOOTSTRAP_PROGRAM_SEEDS.eoa;
-export const GENESIS_EOA_PROGRAM_ADDRESS = managedProgramAddress(GENESIS_EOA_PROGRAM_SEED);
+export const GENESIS_EOA_PROGRAM_ADDRESS = BOOTSTRAP_PROGRAM_ADDRESSES.eoa;
 
-/** Canonical application-facing addresses for bootstrap-managed programs. */
-export const BOOTSTRAP_PROGRAM_ADDRESSES = withDeprecatedPasskeyManagerAlias({
-  noop: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.noop),
-  faucet: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.faucet),
-  name_service: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.name_service),
-  oracle: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.oracle),
-  multicall: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.multicall),
-  abi_manager: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.abi_manager),
-  token: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.token),
-  amm: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.amm),
-  clob: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.clob),
-  thru_registrar: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.thru_registrar),
-  wthru: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.wthru),
-  wallet: managedProgramAddress(
-    BOOTSTRAP_PROGRAM_SEEDS.wallet,
-  ),
-  nft: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.nft),
-  block_producer: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.block_producer),
-  consensus_validator: managedProgramAddress(
-    BOOTSTRAP_PROGRAM_SEEDS.consensus_validator,
-  ),
-  eoa: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.eoa),
-  uploader: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.uploader),
-  compression: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.compression),
-} as const);
+/** Avoid importing abi-manager/constants here: it consumes this module. */
+export const BOOTSTRAP_ABI_ADDRESSES = Object.freeze(Object.fromEntries(
+  CANONICAL_PROGRAMS.filter((record) => record.abi !== null).map((record) => {
+    const body = new Uint8Array(96);
+    body.set(Pubkey.from(BOOTSTRAP_PROGRAM_ADDRESSES[record.name]).toBytes());
+    const kind = Uint8Array.of(0);
+    const derive = (seed: Uint8Array) => deriveProgramAddress({
+      programAddress: BOOTSTRAP_PROGRAM_ADDRESSES.abi_manager, seed,
+    }).address;
+    return [record.name, {
+      abiMetaAccountAddress: derive(hashBytes(kind, body)),
+      abiAccountAddress: derive(hashBytes(kind, body, new TextEncoder().encode('_abi_account'))),
+    }];
+  }),
+));
+
+/** Each Public application's own program-authority multisig (UNTO-3561): the
+ * Multisig program PDA of its `<name>:v1` seed, initialized at genesis. */
+export const PUBLIC_PROGRAM_AUTHORITY_ADDRESSES = Object.freeze(Object.fromEntries(
+  CANONICAL_PROGRAMS.flatMap((record) => 'programAuthority' in record && record.programAuthority ? [[record.name, {
+    name: record.programAuthority, seed: programAuthoritySeed(record.programAuthority),
+    address: stateAddress(BOOTSTRAP_PROGRAM_ADDRESSES.multisig, programAuthoritySeed(record.programAuthority)),
+  }]] : []),
+) as Record<string, { readonly name: string; readonly seed: string; readonly address: string }>);
+
+/** Native Token Vault PDA seeds (tn_native_token_vault_program.h). */
+export const NATIVE_TOKEN_VAULT_RECEIVER_SEED = 'absent-producer-fees:v1';
+export const NATIVE_TOKEN_VAULT_CONFIG_SEED = 'native-token-vault-config:v1';
+/** The vault authority multisig (seed `native-token-vault-authority:v1`). */
+export const NATIVE_TOKEN_VAULT_AUTHORITY_MULTISIG = 'native-token-vault-authority';
 
 function stateAddress(program: string, label: string): string {
   const seed = new Uint8Array(32);
@@ -86,6 +102,9 @@ const wthruMintSeed = deriveAddress([
 /** State pre-created by mksnap before the managed executables are deployed.
  * Consensus state uses its own namespace; WTHRU matches program initialization. */
 export const BOOTSTRAP_STATE_ADDRESSES = Object.freeze({
+  core_config: stateAddress(CORE_MANAGER_PROGRAM_ADDRESS, CORE_CONFIG_SEED),
+  core_peer_config: stateAddress(CORE_PEER_MANAGER_PROGRAM_ADDRESS, CORE_CONFIG_SEED),
+  feature_gate_global_account: stateAddress(BOOTSTRAP_PROGRAM_ADDRESSES.feature_gate, FEATURE_GATE_GLOBAL_SEED),
   attestor_table: stateAddress(BOOTSTRAP_PROGRAM_ADDRESSES.consensus_validator, 'attestor_table'),
   attestor_mint: stateAddress(BOOTSTRAP_PROGRAM_ADDRESSES.consensus_validator, 'attestor_mint'),
   converted_vault: stateAddress(BOOTSTRAP_PROGRAM_ADDRESSES.consensus_validator, 'converted_vault'),
@@ -95,17 +114,25 @@ export const BOOTSTRAP_STATE_ADDRESSES = Object.freeze({
     programAddress: BOOTSTRAP_PROGRAM_ADDRESSES.token, seed: wthruMintSeed,
   }).address,
   wthru_vault: stateAddress(BOOTSTRAP_PROGRAM_ADDRESSES.wthru, 'vault'),
+  /* UNTO-3561: genesis-only Native Token Vault accounts. The receiver is the
+     runtime's TN_ABSENT_BLOCK_PRODUCER_FEE_RECEIVER_ADDR_BYTES. */
+  native_token_vault_receiver: stateAddress(BOOTSTRAP_PROGRAM_ADDRESSES.native_token_vault, NATIVE_TOKEN_VAULT_RECEIVER_SEED),
+  native_token_vault_config: stateAddress(BOOTSTRAP_PROGRAM_ADDRESSES.native_token_vault, NATIVE_TOKEN_VAULT_CONFIG_SEED),
 });
 
-/** Alphanet production THRUSD mint after the approved fresh-network reset.
- * Keep the legacy CREDITS export names for consumers. The seed is SHA-256 of
- * thru:credits:app-wide-mint:v1, matching the wallet mint setup default.
- * Application mints are initialized separately, not by core ensure all. */
+/** Separately configured application mint identity, not a genesis account or
+ * bootstrap initialization hook. Preserve the authority/seed, while deriving
+ * its address under the current canonical Token executable. */
 export const CREDITS_MINT_AUTHORITY_ADDRESS =
   'taDOTQyYDVPvYqIFKNBFbOIstmBXeY7Ne06JnUAjmHa4VI';
 export const CREDITS_MINT_SEED_HEX =
   '93dd69ed3fd6776d814430ec1d9de70716cdac46f89184d88251cabc4865f211';
-export const CREDITS_MINT_ADDRESS =
-  'taRfWjryqWSRRp6ZU_ahCHXKhEA0oRVKWZlE4Us86vnOOt';
+export const CREDITS_MINT_ADDRESS = deriveProgramAddress({
+  programAddress: BOOTSTRAP_PROGRAM_ADDRESSES.token,
+  seed: deriveAddress([
+    Pubkey.from(CREDITS_MINT_AUTHORITY_ADDRESS).toBytes(),
+    Pubkey.from(CREDITS_MINT_SEED_HEX).toBytes(),
+  ]).bytes,
+}).address;
 
-export type BootstrapProgramName = keyof typeof BOOTSTRAP_PROGRAM_SEEDS;
+export type BootstrapProgramName = CanonicalProgramName;

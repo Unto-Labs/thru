@@ -42,7 +42,7 @@ type __TnIrNode =
   | {
       readonly op: "switch";
       readonly tag: string;
-      readonly cases: readonly { readonly value: number; readonly node: __TnIrNode }[];
+      readonly cases: readonly { readonly value: number | bigint; readonly node: __TnIrNode }[];
       readonly default?: __TnIrNode;
     }
   | {
@@ -55,6 +55,7 @@ type __TnIrNode =
       readonly count: __TnIrNode;
       readonly elementTypeName: string;
       readonly fieldName: string;
+      readonly payloadParam?: string;
     };
 
 type __TnIrContext = {
@@ -81,7 +82,8 @@ type __TnStructFieldInput =
   | { bytes?: () => Uint8Array };
 type __TnVariantDescriptor = {
   readonly name: string;
-  readonly tag: number;
+  /* A bigint for tags past 2^53 - 1, which a number cannot hold exactly. */
+  readonly tag: number | bigint;
   readonly payloadSize: number | null;
   readonly payloadType?: string;
   readonly createPayloadBuilder?: () => unknown | null;
@@ -122,6 +124,20 @@ function __tnWarnOnce(message: string): void {
     __tnWarnings.add(message);
     __tnLogWarn(message);
   }
+}
+
+/* Builders never return bytes their type's `validate` rejects. */
+function __tnBuilderValidateOrThrow(typeName: string, result: { ok: boolean; code?: string }): void {
+  if (!result.ok) throw new Error(`${typeName}Builder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
+}
+
+/* Packed params as a measuring walk's context: `T.kind` becomes `kind`. */
+function __tnParamsContext(record: Record<string, bigint>, prefix: string): Record<string, bigint> {
+  const ctx: Record<string, bigint> = Object.create(null);
+  for (const key of Object.keys(record)) {
+    ctx[key.startsWith(prefix) ? key.slice(prefix.length) : key] = record[key];
+  }
+  return ctx;
 }
 
 function __tnResolveBuilderInput(
@@ -289,11 +305,19 @@ function __tnBigIntGreaterThan(lhs: bigint, rhs: bigint): boolean {
   return (lhs as unknown as number) > (rhs as unknown as number);
 }
 
+/* Set bits of a u64 (a bigint is read as its low 64 bits; a number as
+   its low 32, as before). */
 function __tnPopcount(value: number | bigint): number {
-  let v =
-    typeof value === "bigint"
-      ? Number(value & BigInt(0xffffffff))
-      : Number(value) >>> 0;
+  if (typeof value === "bigint") {
+    let v = BigInt.asUintN(64, value);
+    let count = 0;
+    while (v !== BigInt(0)) {
+      v &= v - BigInt(1);
+      count++;
+    }
+    return count;
+  }
+  let v = Number(value) >>> 0;
   v = v - ((v >>> 1) & 0x55555555);
   v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
   return (((v + (v >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24;
@@ -308,10 +332,10 @@ function __tnRaiseIrError(code: string, message: string): never {
 function __tnCheckedAdd(lhs: bigint, rhs: bigint): bigint {
   if (__tnHasNativeBigInt) {
     const result = (lhs as bigint) + (rhs as bigint);
-    if (result < BigInt(0)) {
+    if (result < BigInt(0) || result > __tnU64(-BigInt(1))) {
       __tnRaiseIrError(
         "tn.ir.overflow",
-        "IR runtime detected negative size via addition"
+        "IR runtime detected an addition outside u64"
       );
     }
     return result;
@@ -360,10 +384,10 @@ function __tnCheckedSub(lhs: bigint, rhs: bigint): bigint {
 function __tnCheckedMul(lhs: bigint, rhs: bigint): bigint {
   if (__tnHasNativeBigInt) {
     const result = (lhs as bigint) * (rhs as bigint);
-    if (result < BigInt(0)) {
+    if (result < BigInt(0) || result > __tnU64(-BigInt(1))) {
       __tnRaiseIrError(
         "tn.ir.overflow",
-        "IR runtime detected negative size via multiplication"
+        "IR runtime detected a multiplication outside u64"
       );
     }
     return result;
@@ -437,13 +461,23 @@ function __tnCheckedShift(
   rhs: bigint,
   direction: "left" | "right"
 ): bigint {
+  /* As C and Rust: shifting 0, or shifting right by 64 or more, is 0;
+     shifting a non-zero value left by 64 or more overflows. */
+  if (__tnBigIntEquals(lhs, __tnToBigInt(0))) return lhs;
+  if (direction === "right" && __tnBigIntGreaterThan(rhs, __tnToBigInt(63))) {
+    return __tnToBigInt(0);
+  }
   const amount = __tnBigIntToNumber(rhs, "IR shift amount");
   if (amount < 0 || amount >= 64 || !Number.isInteger(amount)) {
     __tnRaiseIrError("tn.ir.overflow", "IR runtime invalid shift amount");
   }
   if (__tnHasNativeBigInt) {
     const shift = BigInt(amount);
-    return direction === "left" ? (lhs as bigint) << shift : (lhs as bigint) >> shift;
+    const shifted = direction === "left" ? (lhs as bigint) << shift : (lhs as bigint) >> shift;
+    if (shifted > __tnU64(-BigInt(1))) {
+      __tnRaiseIrError("tn.ir.overflow", "IR runtime shift overflows u64");
+    }
+    return shifted;
   }
   const value = lhs as unknown as number;
   const result = direction === "left" ? value * 2 ** amount : Math.floor(value / 2 ** amount);
@@ -451,6 +485,100 @@ function __tnCheckedShift(
     __tnWarnOnce("[thru-net] Precision loss while polyfilling BigInt shift");
   }
   return (result as unknown) as bigint;
+}
+
+/* 2^64: no u64 value, so no enum tag and no buffer size. */
+const __tnMeasureLimit = __tnHasNativeBigInt
+  ? BigInt(1) << BigInt(64)
+  : ((2 ** 64) as unknown as bigint);
+
+/* Checked u64 arithmetic for size, enum tag and derived-parameter expressions over
+   buffer values, as C and Rust evaluate them: operands are read as u64, and a
+   result outside u64 (an overflowing add/mul/pow/shift, a negative sub, a
+   shift of 64 or more of a non-zero value, a division by zero) is `null`,
+   which propagates. No operation builds a value wider than 128 bits. */
+function __tnU64(value: bigint): bigint {
+  return BigInt.asUintN(64, value);
+}
+
+function __tnU64Op(op: string, lhs: bigint | null, rhs: bigint | null): bigint | null {
+  if (lhs === null || rhs === null) return null;
+  const a = __tnU64(lhs);
+  const b = __tnU64(rhs);
+  const zero = BigInt(0);
+  const one = BigInt(1);
+  const max = __tnU64(-one);
+  let result: bigint;
+  switch (op) {
+    case "add": result = a + b; break;
+    case "sub": result = a - b; break;
+    case "mul": result = a * b; break;
+    case "div": if (b === zero) return null; result = a / b; break;
+    case "mod": if (b === zero) return null; result = a % b; break;
+    case "and": result = a & b; break;
+    case "or": result = a | b; break;
+    case "xor": result = a ^ b; break;
+    case "shl":
+      if (a === zero) return zero;
+      if (b > BigInt(63)) return null;
+      result = a << b;
+      break;
+    case "shr": result = b > BigInt(63) ? zero : a >> b; break;
+    case "pow": {
+      if (b === zero) return one;
+      if (a === zero || a === one) return a;
+      if (b > BigInt(64)) return null;
+      result = one;
+      for (let i = zero; i < b; i++) {
+        result *= a;
+        if (result > max) return null;
+      }
+      break;
+    }
+    case "eq": return a === b ? one : zero;
+    case "ne": return a !== b ? one : zero;
+    case "lt": return a < b ? one : zero;
+    case "gt": return a > b ? one : zero;
+    case "le": return a <= b ? one : zero;
+    case "ge": return a >= b ? one : zero;
+    case "land": return a !== zero && b !== zero ? one : zero;
+    case "lor": return a !== zero || b !== zero ? one : zero;
+    case "lxor": return (a !== zero) !== (b !== zero) ? one : zero;
+    default: return null;
+  }
+  return result < zero || result > max ? null : result;
+}
+
+function __tnU64Unary(op: string, operand: bigint | null): bigint | null {
+  if (operand === null) return null;
+  const a = __tnU64(operand);
+  const zero = BigInt(0);
+  switch (op) {
+    case "bitnot": return __tnU64(~a);
+    case "neg": return a === zero ? zero : null;
+    case "not": return a === zero ? BigInt(1) : zero;
+    case "popcount": return BigInt(__tnPopcount(a));
+    default: return null;
+  }
+}
+
+/* A checked count as a number (views read validated bytes: an overflow
+   means they changed since). */
+function __tnCountNumber(count: bigint | null): number {
+  if (count === null) throw new Error("array count overflows u64");
+  return __tnBigIntToNumber(count, "array count");
+}
+
+/* Whether two enum tags are the same u64 (numbers and bigints compared
+   exactly; a null tag equals nothing). */
+function __tnTagEquals(lhs: number | bigint | null, rhs: number | bigint): boolean {
+  if (lhs === null) return false;
+  return __tnToBigInt(lhs) === __tnToBigInt(rhs);
+}
+
+/* A checked tag as a number; an overflow (`null`) selects no variant. */
+function __tnTagNumber(tag: bigint | null): number {
+  return tag === null || tag > BigInt(Number.MAX_SAFE_INTEGER) ? -1 : Number(tag);
 }
 
 function __tnAlign(value: bigint, alignment: number): bigint {
@@ -740,6 +868,17 @@ function __tnValidateIrTree(
   return { ok: true, consumed: required };
 }
 
+/* A parameter as the u64 C and Rust evaluate: a value read from a signed
+   field is its two's complement (i8 -1 is 2^64-1); a derived value past
+   u64 (an overflowed computed count or tag) is an overflow. */
+function __tnIrU64(value: bigint, name: string): bigint {
+  if (!__tnHasNativeBigInt) return value;
+  if (value > __tnU64(-BigInt(1))) {
+    __tnRaiseIrError("tn.ir.overflow", `IR parameter '${name}' overflows u64`);
+  }
+  return __tnU64(value);
+}
+
 function __tnEvalIrNode(
   node: __TnIrNode,
   ctx: __TnIrContext,
@@ -762,7 +901,7 @@ function __tnEvalIrNode(
           `${prefix}Missing IR parameter '${node.param}'`
         );
       }
-      return val;
+      return __tnIrU64(val, node.param);
     }
     case "add":
       {
@@ -779,11 +918,13 @@ function __tnEvalIrNode(
         __tnEvalIrNode(node.left, ctx, baseOffset),
         __tnEvalIrNode(node.right, ctx, baseOffset)
       );
-    case "mul":
-      return __tnCheckedMul(
-        __tnEvalIrNode(node.left, ctx, baseOffset),
-        __tnEvalIrNode(node.right, ctx, baseOffset)
-      );
+    case "mul": {
+      /* `count * element`: no elements select no variant (an unknown tag
+         with a zero count is valid), so a zero left side ends here. */
+      const left = __tnEvalIrNode(node.left, ctx, baseOffset);
+      if (__tnBigIntEquals(left, __tnToBigInt(0))) return left;
+      return __tnCheckedMul(left, __tnEvalIrNode(node.right, ctx, baseOffset));
+    }
     case "div":
       return __tnCheckedDiv(
         __tnEvalIrNode(node.left, ctx, baseOffset),
@@ -827,7 +968,8 @@ function __tnEvalIrNode(
     case "align":
       return __tnAlign(__tnEvalIrNode(node.node, ctx, baseOffset), node.alignment);
     case "switch": {
-      const tagVal = ctx.params[node.tag];
+      const rawTag = ctx.params[node.tag];
+      const tagVal = rawTag === undefined ? rawTag : __tnIrU64(rawTag, node.tag);
       if (tagVal === undefined) {
         const prefix = ctx.typeName ? `${ctx.typeName}: ` : "";
         __tnRaiseIrError(
@@ -835,16 +977,16 @@ function __tnEvalIrNode(
           `${prefix}Missing IR switch tag '${node.tag}'`
         );
       }
-      const tagNumber = Number(tagVal);
+      /* Case values past 2^53 - 1 are bigints: compare exact u64s. */
       for (const caseNode of node.cases) {
-        if (caseNode.value === tagNumber) {
+        if (__tnTagEquals(tagVal, caseNode.value)) {
           return __tnEvalIrNode(caseNode.node, ctx, baseOffset);
         }
       }
       if (node.default) return __tnEvalIrNode(node.default, ctx, baseOffset);
       __tnRaiseIrError(
         "tn.ir.invalid_tag",
-        `Unhandled IR switch value ${tagNumber} for '${node.tag}'`
+        `Unhandled IR switch value ${tagVal} for '${node.tag}'`
       );
     }
     case "call": {
@@ -885,6 +1027,11 @@ function __tnEvalIrNode(
       return __tnInvokeFootprint(node.typeName, nestedParams);
     }
     case "sumOverArray": {
+      if (!ctx.buffer && node.payloadParam !== undefined) {
+        /* Sizing from params: the array's byte total is a parameter. */
+        const total = ctx.params[node.payloadParam];
+        if (total !== undefined) return total;
+      }
       if (!ctx.buffer) {
         __tnRaiseIrError(
           "tn.ir.missing_buffer",
@@ -1047,11 +1194,14 @@ export class CreateBooleanFeedDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("CreateBooleanFeedData", CreateBooleanFeedData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("CreateBooleanFeedData", CreateBooleanFeedData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -1210,11 +1360,14 @@ export class CreatePriceFeedDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("CreatePriceFeedData", CreatePriceFeedData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("CreatePriceFeedData", CreatePriceFeedData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -1449,11 +1602,14 @@ export class OracleErrorBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("OracleError", OracleError.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("OracleError", OracleError.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -1637,11 +1793,14 @@ export class PostBooleanUpdateArgsBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("PostBooleanUpdateArgs", PostBooleanUpdateArgs.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("PostBooleanUpdateArgs", PostBooleanUpdateArgs.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -1826,11 +1985,14 @@ export class PostPriceUpdateArgsBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("PostPriceUpdateArgs", PostPriceUpdateArgs.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("PostPriceUpdateArgs", PostPriceUpdateArgs.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -1978,6 +2140,13 @@ export class PostUpdateArgs {
       const extracted = this.__tnExtractParams(view, buffer);
       if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
       params = extracted.params;
+    } else {
+      const extracted = this.__tnExtractParams(view, buffer);
+      if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
+      const supplied = params as unknown as Record<string, bigint>;
+      for (const [key, value] of Object.entries(extracted.params as unknown as Record<string, bigint>)) {
+        if (supplied[key] === undefined || __tnToBigInt(supplied[key]) !== __tnToBigInt(value)) return { ok: false, code: "tn.param_mismatch" };
+      }
     }
     const __tnParamsRec = this.__tnPackParams(params);
     const irResult = this.__tnValidateInternal(buffer, __tnParamsRec);
@@ -1985,7 +2154,18 @@ export class PostUpdateArgs {
       return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'PostUpdateArgs::validate') : undefined, params };
     }
     const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'PostUpdateArgs::validate') : undefined;
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed, params };
+  }
+
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+const a2 = b.length - c; if (![18, 11].includes(a2)) return null;
+c += a2;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array, opts?: { params?: PostUpdateArgs.Params }): PostUpdateArgs | null {
@@ -2289,11 +2469,14 @@ export class SetAdminArgsBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("SetAdminArgs", SetAdminArgs.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("SetAdminArgs", SetAdminArgs.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -2477,11 +2660,14 @@ export class SetParamsArgsBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("SetParamsArgs", SetParamsArgs.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("SetParamsArgs", SetParamsArgs.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -2640,11 +2826,14 @@ export class SetReporterArgsBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("SetReporterArgs", SetReporterArgs.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("SetReporterArgs", SetReporterArgs.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -2870,11 +3059,14 @@ export class BooleanUpdateEventDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("BooleanUpdateEventData", BooleanUpdateEventData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("BooleanUpdateEventData", BooleanUpdateEventData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -2894,7 +3086,7 @@ __tnRegisterDynamicValidate("BooleanUpdateEventData", (buffer) => { const result
 
 const __tn_ir_CreateFeedArgs = {
   typeName: "CreateFeedArgs",
-  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "align", alignment: 8, node: { op: "const", value: 8n } }, right: { op: "align", alignment: 8, node: { op: "const", value: 8n } } }, right: { op: "align", alignment: 8, node: { op: "const", value: 8n } } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 1n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 64n } } }, right: { op: "align", alignment: 1, node: { op: "switch", tag: "CreateFeedArgs::type_specific.feed_type", cases: [{ value: 1, node: { op: "align", alignment: 1, node: { op: "const", value: 8n } } }, { value: 2, node: { op: "zero" } }] } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "field", param: "proof.proof_size" }, right: { op: "const", value: 1n } } } } }
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 8n } }, right: { op: "align", alignment: 1, node: { op: "const", value: 8n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 8n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 1n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 64n } } }, right: { op: "align", alignment: 1, node: { op: "switch", tag: "CreateFeedArgs::type_specific.feed_type", cases: [{ value: 1, node: { op: "align", alignment: 1, node: { op: "const", value: 8n } } }, { value: 2, node: { op: "zero" } }] } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "field", param: "proof.proof_size" }, right: { op: "const", value: 1n } } } } }
 } as const;
 
 export class CreateFeedArgs_type_specific_Inner {
@@ -2909,6 +3101,16 @@ export class CreateFeedArgs_type_specific_Inner {
     return new CreateFeedArgs_type_specific_Inner(new Uint8Array(payload), descriptor, fieldContext);
   }
 
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CreateFeedArgs_type_specific_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["feed_type"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 1)) descriptor = { name: "price", tag: 1, payloadSize: 8 };
+      if (__tnTagEquals(tag, 2)) descriptor = { name: "boolean", tag: 2, payloadSize: 0 };
+    }
+    return new CreateFeedArgs_type_specific_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
   bytes(): Uint8Array {
     return new Uint8Array(this.buffer);
   }
@@ -2918,12 +3120,12 @@ export class CreateFeedArgs_type_specific_Inner {
   }
 
   asPrice(): CreatePriceFeedData | null {
-    if (!this.descriptor || this.descriptor.tag !== 1) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1)) return null;
     return CreatePriceFeedData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asBoolean(): CreateBooleanFeedData | null {
-    if (!this.descriptor || this.descriptor.tag !== 2) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2)) return null;
     return CreateBooleanFeedData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
@@ -2971,18 +3173,32 @@ export class CreateFeedArgs {
     return this;
   }
 
-  private __tnResolveFieldRef(path: string): number {
+  private __tnResolveFieldRefRaw(path: string): number | bigint {
     const getterName = `get_${path.replace(/[.]/g, '_')}`;
     const getter = (this as any)[getterName];
     if (typeof getter === "function") {
       const value = getter.call(this);
-      return typeof value === "bigint" ? __tnBigIntToNumber(value, "CreateFeedArgs::__tnResolveFieldRef") : value;
+      return value;
     }
     if (this.__tnFieldContext && Object.prototype.hasOwnProperty.call(this.__tnFieldContext, path)) {
       const contextValue = this.__tnFieldContext[path];
-      return typeof contextValue === "bigint" ? __tnBigIntToNumber(contextValue, "CreateFeedArgs::__tnResolveFieldRef") : contextValue;
+      return contextValue;
     }
     throw new Error("CreateFeedArgs: field reference '" + path + "' is not available; provide fieldContext when creating this view");
+  }
+
+  private __tnResolveFieldRef(path: string): number {
+    const value = this.__tnResolveFieldRefRaw(path);
+    return typeof value === "bigint" ? __tnBigIntToNumber(value, "CreateFeedArgs::__tnResolveFieldRef") : value;
+  }
+
+  private __tnResolveFieldRefU64(path: string): bigint {
+    return __tnU64(__tnToBigInt(this.__tnResolveFieldRefRaw(path)));
+  }
+
+  private __tnResolveContextU64(path: string): bigint {
+    if (this.__tnFieldContext && Object.prototype.hasOwnProperty.call(this.__tnFieldContext, path)) return __tnU64(__tnToBigInt(this.__tnFieldContext[path]));
+    throw new Error("CreateFeedArgs: enclosing field '" + path + "' is not available; provide fieldContext when creating this view");
   }
 
   static readonly type_specificVariantDescriptors = Object.freeze([
@@ -3052,17 +3268,19 @@ export class CreateFeedArgs {
     const __tnEnumTagValue_type_specific = __tnFieldValue_feed_type;
     if (__tnEnumTagValue_type_specific === null) return null;
     let __tnEnumSize_type_specific = 0;
-    switch (Number(__tnEnumTagValue_type_specific)) {
-      case 1: __tnEnumSize_type_specific = 8; break;
-      case 2: __tnEnumSize_type_specific = 0; break;
+    switch (__tnToBigInt(__tnEnumTagValue_type_specific)) {
+      case 1n: __tnEnumSize_type_specific = 8; break;
+      case 2n: __tnEnumSize_type_specific = 0; break;
       default: return null;
     }
     if (__tnCursorMutable + __tnEnumSize_type_specific > __tnLength) return null;
     __tnCursorMutable += __tnEnumSize_type_specific;
     if (__tnFieldValue_proof_size === null) return null;
-    const __tnArrayCount_proof = Math.trunc(Number(__tnFieldValue_proof_size));
-    if (!Number.isFinite(__tnArrayCount_proof) || __tnArrayCount_proof < 0) return null;
-    const __tnArrayBytes_proof = __tnArrayCount_proof * 1;
+    const __tnArrayCount_proof = __tnU64(__tnToBigInt(__tnFieldValue_proof_size as number | bigint));
+    if (__tnArrayCount_proof === null) return null;
+    const __tnArrayBytesBig_proof = __tnArrayCount_proof * BigInt(1);
+    if (BigInt(__tnCursorMutable) + __tnArrayBytesBig_proof > BigInt(__tnLength)) return null;
+    const __tnArrayBytes_proof = Number(__tnArrayBytesBig_proof);
     offsets["proof"] = __tnCursorMutable;
     if (__tnCursorMutable + __tnArrayBytes_proof > __tnLength) return null;
     __tnCursorMutable += __tnArrayBytes_proof;
@@ -3275,7 +3493,7 @@ export class CreateFeedArgs {
   }
 
   get_proof_length(): number {
-    return this.__tnResolveFieldRef("proof_size");
+    return __tnCountNumber(this.__tnResolveFieldRefU64("proof_size"));
   }
 
   get_proof_at(index: number): number {
@@ -3313,15 +3531,15 @@ export class CreateFeedArgs {
   }
 
   typeSpecificVariant(): typeof CreateFeedArgs.type_specificVariantDescriptors[number] | null {
-    const tag = this.view.getUint8(30);
-    return CreateFeedArgs.type_specificVariantDescriptors.find((variant) => variant.tag === tag) ?? null;
+    const tag: number | bigint | null = this.get_feed_type();
+    return CreateFeedArgs.type_specificVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
   }
 
   type_specific(): CreateFeedArgs_type_specific_Inner {
     const descriptor = this.typeSpecificVariant();
     if (!descriptor) throw new Error("CreateFeedArgs: unknown type_specific variant");
     const offset = CreateFeedArgs.__tnFieldOffset_type_specific;
-    const remaining = this.buffer.length - offset;
+    const remaining = (this.__tnGetDynamicOffset("proof")) - offset;
     const payloadLength = descriptor.payloadSize ?? remaining;
     if (payloadLength < 0 || offset + payloadLength > this.buffer.length) throw new Error("CreateFeedArgs: payload exceeds buffer bounds");
     const slice = this.buffer.subarray(offset, offset + payloadLength);
@@ -3397,7 +3615,34 @@ export class CreateFeedArgs {
       return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'CreateFeedArgs::validate') : undefined, params };
     }
     const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'CreateFeedArgs::validate') : undefined;
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed, params };
+  }
+
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 8 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+if (c + 8 > b.length) return null; const x3 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+if (c + 8 > b.length) return null; const x4 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+if (c + 2 > b.length) return null; const x5 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 2 > b.length) return null; const x6 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 2 > b.length) return null; const x7 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 1 > b.length) return null; const x8 = __tnU64(__tnToBigInt(v.getUint8(c))); c += 1;
+if (c + 32 > b.length) return null; c += 32;
+if (c + 64 > b.length) return null; c += 64;
+let t9: number | null = null;
+switch ((x8) as bigint | null) {
+  case 1n: t9 = 8; break;
+  case 2n: t9 = 0; break;
+  default: return null;
+}
+if (t9 === null || c + t9 > b.length) return null; c += t9;
+const n10 = x3; if (n10 === null || n10 < 0n) return null;
+if (BigInt(c) + n10 * 1n > BigInt(b.length)) return null; c += Number(n10 * 1n);
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array, opts?: { params?: CreateFeedArgs.Params }): CreateFeedArgs | null {
@@ -3678,11 +3923,14 @@ export class OracleFeedCommonDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("OracleFeedCommonData", OracleFeedCommonData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("OracleFeedCommonData", OracleFeedCommonData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -3702,7 +3950,7 @@ __tnRegisterDynamicValidate("OracleFeedCommonData", (buffer) => { const result =
 
 const __tn_ir_OracleInstruction = {
   typeName: "OracleInstruction",
-  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 4, node: { op: "const", value: 4n } }, right: { op: "align", alignment: 1, node: { op: "field", param: "payload.payload_size" } } } }
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 4n } }, right: { op: "align", alignment: 1, node: { op: "field", param: "payload.payload_size" } } } }
 } as const;
 
 export class OracleInstruction_payload_Inner {
@@ -3717,6 +3965,19 @@ export class OracleInstruction_payload_Inner {
     return new OracleInstruction_payload_Inner(new Uint8Array(payload), descriptor, fieldContext);
   }
 
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): OracleInstruction_payload_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["discriminant"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 0)) descriptor = { name: "create_feed", tag: 0, payloadSize: null };
+      if (__tnTagEquals(tag, 1)) descriptor = { name: "post_update", tag: 1, payloadSize: null };
+      if (__tnTagEquals(tag, 2)) descriptor = { name: "set_params", tag: 2, payloadSize: 14 };
+      if (__tnTagEquals(tag, 3)) descriptor = { name: "set_admin", tag: 3, payloadSize: 4 };
+      if (__tnTagEquals(tag, 4)) descriptor = { name: "set_reporter", tag: 4, payloadSize: 4 };
+    }
+    return new OracleInstruction_payload_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
   bytes(): Uint8Array {
     return new Uint8Array(this.buffer);
   }
@@ -3726,27 +3987,27 @@ export class OracleInstruction_payload_Inner {
   }
 
   asCreateFeed(): CreateFeedArgs | null {
-    if (!this.descriptor || this.descriptor.tag !== 0) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 0)) return null;
     return CreateFeedArgs.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asPostUpdate(): PostUpdateArgs | null {
-    if (!this.descriptor || this.descriptor.tag !== 1) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1)) return null;
     return PostUpdateArgs.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asSetParams(): SetParamsArgs | null {
-    if (!this.descriptor || this.descriptor.tag !== 2) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2)) return null;
     return SetParamsArgs.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asSetAdmin(): SetAdminArgs | null {
-    if (!this.descriptor || this.descriptor.tag !== 3) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 3)) return null;
     return SetAdminArgs.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asSetReporter(): SetReporterArgs | null {
-    if (!this.descriptor || this.descriptor.tag !== 4) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4)) return null;
     return SetReporterArgs.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
@@ -3847,12 +4108,12 @@ export class OracleInstruction {
     const __tnEnumTagValue_payload = __tnFieldValue_discriminant;
     if (__tnEnumTagValue_payload === null) return null;
     let __tnEnumSize_payload = 0;
-    switch (Number(__tnEnumTagValue_payload)) {
-      case 0: break;
-      case 1: break;
-      case 2: break;
-      case 3: break;
-      case 4: break;
+    switch (__tnToBigInt(__tnEnumTagValue_payload)) {
+      case 0n: break;
+      case 1n: break;
+      case 2n: break;
+      case 3n: break;
+      case 4n: break;
       default: return null;
     }
     if (__tnCursorMutable > __tnLength) return null;
@@ -3901,8 +4162,8 @@ export class OracleInstruction {
   }
 
   payloadVariant(): typeof OracleInstruction.payloadVariantDescriptors[number] | null {
-    const tag = this.view.getUint8(0);
-    return OracleInstruction.payloadVariantDescriptors.find((variant) => variant.tag === tag) ?? null;
+    const tag: number | bigint | null = this.get_discriminant();
+    return OracleInstruction.payloadVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
   }
 
   payload(): OracleInstruction_payload_Inner {
@@ -3977,6 +4238,13 @@ export class OracleInstruction {
       const extracted = this.__tnExtractParams(view, buffer);
       if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
       params = extracted.params;
+    } else {
+      const extracted = this.__tnExtractParams(view, buffer);
+      if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
+      const supplied = params as unknown as Record<string, bigint>;
+      for (const [key, value] of Object.entries(extracted.params as unknown as Record<string, bigint>)) {
+        if (supplied[key] === undefined || __tnToBigInt(supplied[key]) !== __tnToBigInt(value)) return { ok: false, code: "tn.param_mismatch" };
+      }
     }
     const __tnParamsRec = this.__tnPackParams(params);
     const irResult = this.__tnValidateInternal(buffer, __tnParamsRec);
@@ -3984,7 +4252,51 @@ export class OracleInstruction {
       return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'OracleInstruction::validate') : undefined, params };
     }
     const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'OracleInstruction::validate') : undefined;
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed, params };
+  }
+
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 4 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getUint32(c, true))); c += 4;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 0n: t3 = ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s4 = c;
+if (c + 8 > b.length) return null; const x5 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+if (c + 8 > b.length) return null; const x6 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+if (c + 8 > b.length) return null; const x7 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+if (c + 2 > b.length) return null; const x8 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 2 > b.length) return null; const x9 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 2 > b.length) return null; const x10 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 1 > b.length) return null; const x11 = __tnU64(__tnToBigInt(v.getUint8(c))); c += 1;
+if (c + 32 > b.length) return null; c += 32;
+if (c + 64 > b.length) return null; c += 64;
+let t12: number | null = null;
+switch ((x11) as bigint | null) {
+  case 1n: t12 = 8; break;
+  case 2n: t12 = 0; break;
+  default: return null;
+}
+if (t12 === null || c + t12 > b.length) return null; c += t12;
+const n13 = x6; if (n13 === null || n13 < 0n) return null;
+if (BigInt(c) + n13 * 1n > BigInt(b.length)) return null; c += Number(n13 * 1n);
+void s4;
+return c; })(b.subarray(c)); break;
+  case 1n: t3 = ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s14 = c;
+const a15 = b.length - c; if (![18, 11].includes(a15)) return null;
+c += a15;
+void s14;
+return c; })(b.subarray(c)); break;
+  case 2n: t3 = 14; break;
+  case 3n: t3 = 4; break;
+  case 4n: t3 = 4; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array, opts?: { params?: OracleInstruction.Params }): OracleInstruction | null {
@@ -4348,11 +4660,14 @@ export class OraclePriceFeedDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("OraclePriceFeedData", OraclePriceFeedData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("OraclePriceFeedData", OraclePriceFeedData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -4580,11 +4895,14 @@ export class PriceUpdateEventDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("PriceUpdateEventData", PriceUpdateEventData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("PriceUpdateEventData", PriceUpdateEventData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -4736,11 +5054,14 @@ export class OracleBooleanFeedDataBuilder {
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("OracleBooleanFeedData", OracleBooleanFeedData.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("OracleBooleanFeedData", OracleBooleanFeedData.validate(this.buffer));
     target.set(this.buffer, offset);
     return target;
   }
@@ -4775,6 +5096,16 @@ export class OracleEvent_data_Inner {
     return new OracleEvent_data_Inner(new Uint8Array(payload), descriptor, fieldContext);
   }
 
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): OracleEvent_data_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["event_type"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 1)) descriptor = { name: "price_update", tag: 1, payloadSize: 120 };
+      if (__tnTagEquals(tag, 2)) descriptor = { name: "boolean_update", tag: 2, payloadSize: 106 };
+    }
+    return new OracleEvent_data_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
   bytes(): Uint8Array {
     return new Uint8Array(this.buffer);
   }
@@ -4784,12 +5115,12 @@ export class OracleEvent_data_Inner {
   }
 
   asPriceUpdate(): PriceUpdateEventData | null {
-    if (!this.descriptor || this.descriptor.tag !== 1) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1)) return null;
     return PriceUpdateEventData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asBooleanUpdate(): BooleanUpdateEventData | null {
-    if (!this.descriptor || this.descriptor.tag !== 2) return null;
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2)) return null;
     return BooleanUpdateEventData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
@@ -4887,8 +5218,8 @@ export class OracleEvent {
   }
 
   dataVariant(): typeof OracleEvent.dataVariantDescriptors[number] | null {
-    const tag = this.view.getUint8(0);
-    return OracleEvent.dataVariantDescriptors.find((variant) => variant.tag === tag) ?? null;
+    const tag: number | bigint | null = this.get_event_type();
+    return OracleEvent.dataVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
   }
 
   data(): OracleEvent_data_Inner {
@@ -4969,7 +5300,24 @@ export class OracleEvent {
       return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'OracleEvent::validate') : undefined, params };
     }
     const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'OracleEvent::validate') : undefined;
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed, params };
+  }
+
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 1 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getUint8(c))); c += 1;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 1n: t3 = 120; break;
+  case 2n: t3 = 106; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array, opts?: { params?: OracleEvent.Params }): OracleEvent | null {
@@ -5149,10 +5497,10 @@ __tnRegisterDynamicValidate("OracleEvent", (buffer) => { const result = OracleEv
 
 const __tn_ir_OracleFeedAccount = {
   typeName: "OracleFeedAccount",
-  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 1n } }, right: { op: "align", alignment: 1, node: { op: "switch", tag: "OracleFeedAccount::data.feed_type", cases: [{ value: 1, node: { op: "align", alignment: 1, node: { op: "const", value: 160n } } }, { value: 2, node: { op: "align", alignment: 1, node: { op: "const", value: 145n } } }] } } } }
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 1n } }, right: { op: "align", alignment: 1, node: { op: "switch", tag: "OracleFeedAccount::payload.account_type", cases: [{ value: 1, node: { op: "align", alignment: 1, node: { op: "const", value: 160n } } }, { value: 2, node: { op: "align", alignment: 1, node: { op: "const", value: 145n } } }] } } } }
 } as const;
 
-export class OracleFeedAccount_data_Inner {
+export class OracleFeedAccount_payload_Inner {
   private view: DataView;
   private __tnFieldContext: Record<string, number | bigint> | null = null;
   private constructor(private buffer: Uint8Array, private descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>) {
@@ -5160,8 +5508,18 @@ export class OracleFeedAccount_data_Inner {
     this.__tnFieldContext = fieldContext ?? null;
   }
 
-  static __tnCreate(payload: Uint8Array, descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>): OracleFeedAccount_data_Inner {
-    return new OracleFeedAccount_data_Inner(new Uint8Array(payload), descriptor, fieldContext);
+  static __tnCreate(payload: Uint8Array, descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>): OracleFeedAccount_payload_Inner {
+    return new OracleFeedAccount_payload_Inner(new Uint8Array(payload), descriptor, fieldContext);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): OracleFeedAccount_payload_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["account_type"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 1)) descriptor = { name: "price_feed_v1", tag: 1, payloadSize: 160 };
+      if (__tnTagEquals(tag, 2)) descriptor = { name: "bool_feed_v1", tag: 2, payloadSize: 145 };
+    }
+    return new OracleFeedAccount_payload_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
   }
 
   bytes(): Uint8Array {
@@ -5172,13 +5530,13 @@ export class OracleFeedAccount_data_Inner {
     return this.descriptor;
   }
 
-  asPrice(): OraclePriceFeedData | null {
-    if (!this.descriptor || this.descriptor.tag !== 1) return null;
+  asPriceFeedV1(): OraclePriceFeedData | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1)) return null;
     return OraclePriceFeedData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
-  asBoolean(): OracleBooleanFeedData | null {
-    if (!this.descriptor || this.descriptor.tag !== 2) return null;
+  asBoolFeedV1(): OracleBooleanFeedData | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2)) return null;
     return OracleBooleanFeedData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
@@ -5186,7 +5544,7 @@ export class OracleFeedAccount_data_Inner {
 
 export class OracleFeedAccount {
   private view: DataView;
-  private static readonly __tnFieldOffset_data = 1;
+  private static readonly __tnFieldOffset_payload = 1;
   private __tnParams: OracleFeedAccount.Params;
 
   private constructor(private buffer: Uint8Array, params?: OracleFeedAccount.Params) {
@@ -5229,19 +5587,19 @@ export class OracleFeedAccount {
     return OracleFeedAccount.from_array(buffer, { params });
   }
 
-  static readonly dataVariantDescriptors = Object.freeze([
+  static readonly payloadVariantDescriptors = Object.freeze([
     {
-      name: "price",
+      name: "price_feed_v1",
       tag: 1,
       payloadSize: 160,
-      payloadType: "OracleFeedAccount::data::price",
+      payloadType: "OracleFeedAccount::payload::price_feed_v1",
       createPayloadBuilder: () => __tnMaybeCallBuilder(OraclePriceFeedData),
     },
     {
-      name: "boolean",
+      name: "bool_feed_v1",
       tag: 2,
       payloadSize: 145,
-      payloadType: "OracleFeedAccount::data::boolean",
+      payloadType: "OracleFeedAccount::payload::bool_feed_v1",
       createPayloadBuilder: () => __tnMaybeCallBuilder(OracleBooleanFeedData),
     },
   ] as const);
@@ -5250,45 +5608,45 @@ export class OracleFeedAccount {
     if (buffer.length < 1) {
       return null;
     }
-    const __tnParam_data_feed_type = __tnToBigInt(view.getUint8(0));
+    const __tnParam_payload_account_type = __tnToBigInt(view.getUint8(0));
     const __tnExtractedParams = OracleFeedAccount.Params.fromValues({
-      data_feed_type: __tnParam_data_feed_type,
+      payload_account_type: __tnParam_payload_account_type,
     });
     return { params: __tnExtractedParams, derived: null };
   }
 
-  get_feed_type(): number {
+  get_account_type(): number {
     const offset = 0;
     return this.view.getUint8(offset);
   }
 
-  set_feed_type(value: number): void {
+  set_account_type(value: number): void {
     const offset = 0;
     this.view.setUint8(offset, value);
   }
 
-  get feed_type(): number {
-    return this.get_feed_type();
+  get account_type(): number {
+    return this.get_account_type();
   }
 
-  set feed_type(value: number) {
-    this.set_feed_type(value);
+  set account_type(value: number) {
+    this.set_account_type(value);
   }
 
-  dataVariant(): typeof OracleFeedAccount.dataVariantDescriptors[number] | null {
-    const tag = this.view.getUint8(0);
-    return OracleFeedAccount.dataVariantDescriptors.find((variant) => variant.tag === tag) ?? null;
+  payloadVariant(): typeof OracleFeedAccount.payloadVariantDescriptors[number] | null {
+    const tag: number | bigint | null = this.get_account_type();
+    return OracleFeedAccount.payloadVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
   }
 
-  data(): OracleFeedAccount_data_Inner {
-    const descriptor = this.dataVariant();
-    if (!descriptor) throw new Error("OracleFeedAccount: unknown data variant");
-    const offset = OracleFeedAccount.__tnFieldOffset_data;
+  payload(): OracleFeedAccount_payload_Inner {
+    const descriptor = this.payloadVariant();
+    if (!descriptor) throw new Error("OracleFeedAccount: unknown payload variant");
+    const offset = OracleFeedAccount.__tnFieldOffset_payload;
     const remaining = this.buffer.length - offset;
     const payloadLength = descriptor.payloadSize ?? remaining;
     if (payloadLength < 0 || offset + payloadLength > this.buffer.length) throw new Error("OracleFeedAccount: payload exceeds buffer bounds");
     const slice = this.buffer.subarray(offset, offset + payloadLength);
-    return OracleFeedAccount_data_Inner.__tnCreate(slice, descriptor, undefined);
+    return OracleFeedAccount_payload_Inner.__tnCreate(slice, descriptor, undefined);
   }
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
     return __tnEvalFootprint(__tn_ir_OracleFeedAccount.root, { params: __tnParams });
@@ -5306,17 +5664,17 @@ export class OracleFeedAccount {
     return this.__tnValidateInternal(buffer, __tnParams);
   }
 
-  static footprintIr(data_feed_type: number | bigint): bigint {
+  static footprintIr(payload_account_type: number | bigint): bigint {
     const params = OracleFeedAccount.Params.fromValues({
-      data_feed_type: data_feed_type,
+      payload_account_type: payload_account_type,
     });
     return this.footprintIrFromParams(params);
   }
 
   private static __tnPackParams(params: OracleFeedAccount.Params): Record<string, bigint> {
     const record: Record<string, bigint> = Object.create(null);
-    record["data.feed_type"] = params.data_feed_type;
-    record["OracleFeedAccount::data.feed_type"] = params.data_feed_type;
+    record["payload.account_type"] = params.payload_account_type;
+    record["OracleFeedAccount::payload.account_type"] = params.payload_account_type;
     return record;
   }
 
@@ -5332,7 +5690,7 @@ export class OracleFeedAccount {
     return __tnBigIntToNumber(irResult, 'OracleFeedAccount::footprintFromParams');
   }
 
-  static footprintFromValues(input: { data_feed_type: number | bigint }): number {
+  static footprintFromValues(input: { payload_account_type: number | bigint }): number {
     const params = OracleFeedAccount.params(input);
     return this.footprintFromParams(params);
   }
@@ -5358,7 +5716,24 @@ export class OracleFeedAccount {
       return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'OracleFeedAccount::validate') : undefined, params };
     }
     const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'OracleFeedAccount::validate') : undefined;
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed, params };
+  }
+
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 1 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getUint8(c))); c += 1;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 1n: t3 = 160; break;
+  case 2n: t3 = 145; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array, opts?: { params?: OracleFeedAccount.Params }): OracleFeedAccount | null {
@@ -5386,18 +5761,18 @@ export class OracleFeedAccount {
 
 export namespace OracleFeedAccount {
   export type Params = {
-    /** ABI path: data.feed_type */
-    readonly data_feed_type: bigint;
+    /** ABI path: payload.account_type */
+    readonly payload_account_type: bigint;
   };
 
   export const ParamKeys = Object.freeze({
-    data_feed_type: "data.feed_type",
+    payload_account_type: "payload.account_type",
   } as const);
 
   export const Params = {
-    fromValues(input: { data_feed_type: number | bigint }): Params {
+    fromValues(input: { payload_account_type: number | bigint }): Params {
       return {
-        data_feed_type: __tnToBigInt(input.data_feed_type),
+        payload_account_type: __tnToBigInt(input.payload_account_type),
       };
     },
     fromBuilder(source: { dynamicParams(): Params } | { params: Params } | Params): Params {
@@ -5411,7 +5786,7 @@ export namespace OracleFeedAccount {
     }
   };
 
-  export function params(input: { data_feed_type: number | bigint }): Params {
+  export function params(input: { payload_account_type: number | bigint }): Params {
     return Params.fromValues(input);
   }
 }
@@ -5419,12 +5794,12 @@ export namespace OracleFeedAccount {
 export class OracleFeedAccountBuilder {
   private __tnPrefixBuffer: Uint8Array;
   private __tnPrefixView: DataView;
-  private __tnField_feed_type: number | null = null;
-  private __tnPayload_data: { descriptor: typeof OracleFeedAccount.dataVariantDescriptors[number]; bytes: Uint8Array } | null = null;
+  private __tnField_account_type: number | null = null;
+  private __tnPayload_payload: { descriptor: typeof OracleFeedAccount.payloadVariantDescriptors[number]; bytes: Uint8Array } | null = null;
   private __tnCachedParams: OracleFeedAccount.Params | null = null;
   private __tnLastBuffer: Uint8Array | null = null;
   private __tnLastParams: OracleFeedAccount.Params | null = null;
-  private __tnVariantSelector_data?: __TnVariantSelectorResult<OracleFeedAccountBuilder>;
+  private __tnVariantSelector_payload?: __TnVariantSelectorResult<OracleFeedAccountBuilder>;
 
   constructor() {
     this.__tnPrefixBuffer = new Uint8Array(1);
@@ -5437,31 +5812,31 @@ export class OracleFeedAccountBuilder {
     this.__tnLastParams = null;
   }
 
-  private __tnAssign_feed_type(value: number): void {
-    this.__tnField_feed_type = value;
+  private __tnAssign_account_type(value: number): void {
+    this.__tnField_account_type = value;
     this.__tnInvalidate();
   }
 
-  set_feed_type(value: number): this {
-    this.__tnAssign_feed_type(value);
+  set_account_type(value: number): this {
+    this.__tnAssign_account_type(value);
     return this;
   }
 
-  data(): __TnVariantSelectorResult<OracleFeedAccountBuilder> {
-    if (!this.__tnVariantSelector_data) {
-      this.__tnVariantSelector_data = __tnCreateVariantSelector(this, OracleFeedAccount.dataVariantDescriptors, (descriptor, payload) => {
-        this.__tnPayload_data = { descriptor, bytes: new Uint8Array(payload) };
-        this.__tnAssign_feed_type(descriptor.tag);
+  payload(): __TnVariantSelectorResult<OracleFeedAccountBuilder> {
+    if (!this.__tnVariantSelector_payload) {
+      this.__tnVariantSelector_payload = __tnCreateVariantSelector(this, OracleFeedAccount.payloadVariantDescriptors, (descriptor, payload) => {
+        this.__tnPayload_payload = { descriptor, bytes: new Uint8Array(payload) };
+        this.__tnAssign_account_type(descriptor.tag);
       });
     }
-    return this.__tnVariantSelector_data!;
+    return this.__tnVariantSelector_payload!;
   }
 
   build(): Uint8Array {
     const params = this.__tnComputeParams();
-    if (this.__tnField_feed_type === null) throw new Error("OracleFeedAccountBuilder: field 'feed_type' must be set before build");
-    if (!this.__tnPayload_data) throw new Error("OracleFeedAccountBuilder: payload variant not selected");
-    const payloadLength = this.__tnPayload_data.bytes.length;
+    if (this.__tnField_account_type === null) throw new Error("OracleFeedAccountBuilder: field 'account_type' must be set before build");
+    if (!this.__tnPayload_payload) throw new Error("OracleFeedAccountBuilder: payload variant not selected");
+    const payloadLength = this.__tnPayload_payload.bytes.length;
     const requiredSize = 1 + payloadLength;
     const footprintSize = OracleFeedAccount.footprintFromParams(params);
     const size = Math.max(requiredSize, footprintSize);
@@ -5473,9 +5848,9 @@ export class OracleFeedAccountBuilder {
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
     const params = this.__tnComputeParams();
-    if (this.__tnField_feed_type === null) throw new Error("OracleFeedAccountBuilder: field 'feed_type' must be set before build");
-    if (!this.__tnPayload_data) throw new Error("OracleFeedAccountBuilder: payload variant not selected");
-    const payloadLength = this.__tnPayload_data.bytes.length;
+    if (this.__tnField_account_type === null) throw new Error("OracleFeedAccountBuilder: field 'account_type' must be set before build");
+    if (!this.__tnPayload_payload) throw new Error("OracleFeedAccountBuilder: payload variant not selected");
+    const payloadLength = this.__tnPayload_payload.bytes.length;
     const requiredSize = 1 + payloadLength;
     const footprintSize = OracleFeedAccount.footprintFromParams(params);
     const size = Math.max(requiredSize, footprintSize);
@@ -5505,19 +5880,19 @@ export class OracleFeedAccountBuilder {
   private __tnComputeParams(): OracleFeedAccount.Params {
     if (this.__tnCachedParams) return this.__tnCachedParams;
     const params = OracleFeedAccount.Params.fromValues({
-      data_feed_type: (() => { if (this.__tnField_feed_type === null) throw new Error("OracleFeedAccountBuilder: missing enum tag"); return __tnToBigInt(this.__tnField_feed_type); })(),
+      payload_account_type: (() => { if (this.__tnField_account_type === null) throw new Error("OracleFeedAccountBuilder: missing enum tag"); return __tnToBigInt(this.__tnField_account_type); })(),
     });
     this.__tnCachedParams = params;
     return params;
   }
 
   private __tnWriteInto(target: Uint8Array): void {
-    if (this.__tnField_feed_type === null) throw new Error("OracleFeedAccountBuilder: field 'feed_type' must be set before build");
-    if (!this.__tnPayload_data) throw new Error("OracleFeedAccountBuilder: payload variant not selected");
+    if (this.__tnField_account_type === null) throw new Error("OracleFeedAccountBuilder: field 'account_type' must be set before build");
+    if (!this.__tnPayload_payload) throw new Error("OracleFeedAccountBuilder: payload variant not selected");
     const view = new DataView(target.buffer, target.byteOffset, target.byteLength);
     target.set(this.__tnPrefixBuffer, 0);
-    view.setUint8(0, this.__tnField_feed_type);
-    target.set(this.__tnPayload_data.bytes, 1);
+    view.setUint8(0, this.__tnField_account_type);
+    target.set(this.__tnPayload_payload.bytes, 1);
   }
 
   private __tnValidateOrThrow(buffer: Uint8Array, params: OracleFeedAccount.Params): void {

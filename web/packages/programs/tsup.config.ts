@@ -15,6 +15,8 @@ const entry: Record<string, string> = {
   "clob/index": "src/clob/index.ts",
   "oracle/index": "src/oracle/index.ts",
   "manager/index": "src/manager/index.ts",
+  "core-manager/index": "src/core-manager/index.ts",
+  "multisig/index": "src/multisig/index.ts",
   "abi-manager/index": "src/abi-manager/index.ts",
   "uploader/index": "src/uploader/index.ts",
   "deploy/index": "src/deploy/index.ts",

@@ -4,7 +4,6 @@ use crate::cli::NetworkCommands;
 use crate::config::{Config, NetworkConfig};
 use crate::error::CliError;
 use crate::output;
-use url::Url;
 
 /// Handle network subcommands
 pub async fn handle_network_command(
@@ -38,27 +37,25 @@ async fn add_network(
 ) -> Result<(), CliError> {
     let normalized = name.to_lowercase();
 
-    // Validate URL
-    Url::parse(url).map_err(|e| CliError::Validation(format!("Invalid URL: {}", e)))?;
+    Config::update(|config| {
+        if config.networks.contains_key(&normalized) {
+            return Err(CliError::Validation(format!(
+                "Network '{}' already exists. Use 'network set' to update it",
+                normalized
+            )));
+        }
 
-    let mut config = Config::load().await?;
+        config.networks.insert(
+            normalized.clone(),
+            NetworkConfig {
+                url: url.to_string(),
+                auth_token: auth_token.map(|s| s.to_string()),
+            },
+        );
 
-    if config.networks.contains_key(&normalized) {
-        return Err(CliError::Validation(format!(
-            "Network '{}' already exists. Use 'network set' to update it",
-            normalized
-        )));
-    }
-
-    config.networks.insert(
-        normalized.clone(),
-        NetworkConfig {
-            url: url.to_string(),
-            auth_token: auth_token.map(|s| s.to_string()),
-        },
-    );
-
-    config.save().await?;
+        Ok(())
+    })
+    .await?;
 
     let response =
         output::create_network_operation_response("add", &normalized, "success", Some(url));
@@ -70,23 +67,24 @@ async fn add_network(
 /// Mark a network profile as the active network
 async fn use_network(name: &str, json_format: bool) -> Result<(), CliError> {
     let normalized = name.to_lowercase();
-    let mut config = Config::load().await?;
+    Config::update(|config| {
+        if !config.networks.contains_key(&normalized) {
+            let available = config.list_network_names();
+            return Err(CliError::Validation(format!(
+                "Network '{}' not found. Available networks: {}",
+                normalized,
+                if available.is_empty() {
+                    "(none)".to_string()
+                } else {
+                    available.join(", ")
+                }
+            )));
+        }
 
-    if !config.networks.contains_key(&normalized) {
-        let available = config.list_network_names();
-        return Err(CliError::Validation(format!(
-            "Network '{}' not found. Available networks: {}",
-            normalized,
-            if available.is_empty() {
-                "(none)".to_string()
-            } else {
-                available.join(", ")
-            }
-        )));
-    }
-
-    config.default_network = Some(normalized.clone());
-    config.save().await?;
+        config.default_network = Some(normalized.clone());
+        Ok(())
+    })
+    .await?;
 
     let response = output::create_network_operation_response("use", &normalized, "success", None);
     output::print_output(response, json_format);
@@ -102,41 +100,38 @@ async fn set_network(
     json_format: bool,
 ) -> Result<(), CliError> {
     let normalized = name.to_lowercase();
-    let mut config = Config::load().await?;
-
-    if !config.networks.contains_key(&normalized) {
-        let available = config.list_network_names();
-        return Err(CliError::Validation(format!(
-            "Network '{}' not found. Available networks: {}",
-            normalized,
-            if available.is_empty() {
-                "(none)".to_string()
-            } else {
-                available.join(", ")
-            }
-        )));
-    }
-
-    if let Some(u) = url {
-        Url::parse(u).map_err(|e| CliError::Validation(format!("Invalid URL: {}", e)))?;
-    }
-
-    let network = config.networks.get_mut(&normalized).unwrap();
-
-    if let Some(u) = url {
-        network.url = u.to_string();
-    }
-
-    if let Some(token) = auth_token {
-        if token.is_empty() {
-            network.auth_token = None;
-        } else {
-            network.auth_token = Some(token.to_string());
+    let config = Config::update(|config| {
+        if !config.networks.contains_key(&normalized) {
+            let available = config.list_network_names();
+            return Err(CliError::Validation(format!(
+                "Network '{}' not found. Available networks: {}",
+                normalized,
+                if available.is_empty() {
+                    "(none)".to_string()
+                } else {
+                    available.join(", ")
+                }
+            )));
         }
-    }
 
-    let display_url = network.url.clone();
-    config.save().await?;
+        let network = config.networks.get_mut(&normalized).unwrap();
+
+        if let Some(u) = url {
+            network.url = u.to_string();
+        }
+
+        if let Some(token) = auth_token {
+            if token.is_empty() {
+                network.auth_token = None;
+            } else {
+                network.auth_token = Some(token.to_string());
+            }
+        }
+
+        Ok(())
+    })
+    .await?;
+    let display_url = &config.networks[&normalized].url;
 
     let response = output::create_network_operation_response(
         "set",
@@ -160,29 +155,30 @@ async fn list_networks(json_format: bool) -> Result<(), CliError> {
 /// Remove a network profile
 async fn remove_network(name: &str, json_format: bool) -> Result<(), CliError> {
     let normalized = name.to_lowercase();
-    let mut config = Config::load().await?;
+    Config::update(|config| {
+        if !config.networks.contains_key(&normalized) {
+            let available = config.list_network_names();
+            return Err(CliError::Validation(format!(
+                "Network '{}' not found. Available networks: {}",
+                normalized,
+                if available.is_empty() {
+                    "(none)".to_string()
+                } else {
+                    available.join(", ")
+                }
+            )));
+        }
 
-    if !config.networks.contains_key(&normalized) {
-        let available = config.list_network_names();
-        return Err(CliError::Validation(format!(
-            "Network '{}' not found. Available networks: {}",
-            normalized,
-            if available.is_empty() {
-                "(none)".to_string()
-            } else {
-                available.join(", ")
-            }
-        )));
-    }
+        config.networks.remove(&normalized);
 
-    config.networks.remove(&normalized);
+        // Clear default if it was the removed network
+        if config.default_network.as_deref() == Some(&normalized) {
+            config.default_network = None;
+        }
 
-    // Clear default if it was the removed network
-    if config.default_network.as_deref() == Some(&normalized) {
-        config.default_network = None;
-    }
-
-    config.save().await?;
+        Ok(())
+    })
+    .await?;
 
     let response =
         output::create_network_operation_response("remove", &normalized, "success", None);

@@ -36,7 +36,7 @@ fn state_proof_existing_variant_parses_correctly() {
      *     - path_bitset: Hash (32 bytes)
      *   - proof_body: enum (variable size based on tag)
      *     - existing variant: sibling_hashes array
-     *       - array size = popcount(bytes[0]) + popcount(bytes[1]) + popcount(bytes[2]) + popcount(bytes[3])
+     *       - array size = popcount of all 32 path_bitset bytes (256 bits)
      */
     let mut buffer = Vec::new();
 
@@ -327,4 +327,44 @@ fn state_proof_popcount_sums_multiple_bytes() {
     } else {
         panic!("StateProof should be a struct");
     }
+}
+
+/* The sibling count covers all 256 path bits, as the node counts them
+(4 u64 popcounts in tn_state_proof.c and grpc/pkg/crypto/state_proof.go).
+The ABI once counted only bytes 0..3, so a proof with path bits above 31
+was read too short. */
+#[test]
+fn state_proof_counts_path_bits_above_31() {
+    let resolver = load_state_proof_resolver();
+    let state_proof_type = resolver
+        .get_type_info("StateProof")
+        .expect("StateProof type resolved");
+
+    let mut buffer = Vec::new();
+    buffer.extend_from_slice(&0u64.to_le_bytes()); /* existing */
+    let mut path_bitset = [0u8; 32];
+    path_bitset[0] = 0x01; /* bit 0 */
+    path_bitset[4] = 0x80; /* bit 39 */
+    path_bitset[31] = 0xff; /* bits 248..255 */
+    buffer.extend_from_slice(&path_bitset);
+    for i in 0..10u8 {
+        buffer.extend_from_slice(&[i + 1; 32]);
+    }
+    assert_eq!(buffer.len(), 8 + 32 + 10 * 32);
+
+    let mut parser = Parser::new(&resolver, ParamMap::new());
+    let reflected = parser
+        .parse(&buffer, state_proof_type)
+        .expect("a proof with 10 siblings parses");
+    let text = format!("{reflected:?}");
+    assert!(
+        text.matches("Hash").count() >= 10,
+        "expected 10 sibling hashes, got: {text}"
+    );
+
+    /* One sibling short must not parse. */
+    let mut short = Parser::new(&resolver, ParamMap::new());
+    assert!(short
+        .parse(&buffer[..buffer.len() - 32], state_proof_type)
+        .is_err());
 }

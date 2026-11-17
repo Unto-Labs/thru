@@ -1,5 +1,5 @@
-import { ThruUsdLogo } from "../../../ThruUsdLogo";
-import { isThruUsdSymbol, THRUSD_RED } from "../../../../../tokens/src/thrusd";
+import { UusdLogo } from "../../../UusdLogo";
+import { isUusdSymbol, UUSD_PLACEHOLDER_COLOR } from "../../../../../tokens/src/uusd";
 import * as React from "react";
 import { Disc, type DiscSize } from "../Disc/Disc";
 import { tokenMeta } from "../registry";
@@ -29,7 +29,7 @@ export function TokenIcon({
 }: TokenIconProps) {
   const t = tokenMeta(symbol);
   const branded =
-    isThruUsdSymbol(symbol) && !src && glyph == null && color == null;
+    isUusdSymbol(symbol) && !src && glyph == null && color == null;
   const px =
     typeof size === "number"
       ? size
@@ -41,12 +41,12 @@ export function TokenIcon({
       className={className}
       size={size}
       border={border}
-      title={branded ? "ThruUSD" : t.name}
-      color={color ?? (branded ? THRUSD_RED : t.color)}
+      title={branded ? "USD" : t.name}
+      color={color ?? (branded ? UUSD_PLACEHOLDER_COLOR : t.color)}
       src={src}
       glyph={
         glyph ??
-        (branded ? <ThruUsdLogo size={Math.max(0, px - inset * 2)} /> : t.glyph)
+        (branded ? <UusdLogo size={Math.max(0, px - inset * 2)} /> : t.glyph)
       }
       fallback={t.short[0] ?? "?"}
     />

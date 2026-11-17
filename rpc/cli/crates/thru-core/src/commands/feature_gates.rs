@@ -7,25 +7,26 @@
 
 use crate::cli::{FeatureGateAdminRole, FeatureGateListKind, FeatureGatesCommands};
 use crate::config::Config;
+#[cfg(test)]
 use crate::crypto;
 use crate::error::CliError;
 use crate::feature_gate_account::{
-    decode_feature_gate_account, feature_gate_global_account_pubkey, feature_gate_program_pubkey,
     DecodedFeatureGateAccount, DecodedFeatureGateEntry, FEATURE_GATE_ACCOUNT_HEADER_SIZE,
     FEATURE_GATE_ARMED_SLOT_SENTINEL, FEATURE_GATE_ENTRY_SIZE, FEATURE_GATE_VALUE_SIZE,
+    decode_feature_gate_account, feature_gate_global_account_pubkey, feature_gate_program_pubkey,
 };
 use crate::feature_gate_registry::{
-    load_feature_gate_registry, FeatureGateRegistry, FeatureGateRegistryCategory,
-    FeatureGateRegistryEntry, FeatureGateRegistryKind, FeatureGateRegistryStatus,
-    FeatureGateRegistryType,
+    FeatureGateRegistry, FeatureGateRegistryCategory, FeatureGateRegistryEntry,
+    FeatureGateRegistryKind, FeatureGateRegistryStatus, FeatureGateRegistryType,
+    load_feature_gate_registry,
 };
 use crate::output;
 use crate::utils::{format_vm_error, validate_address_or_hex};
 use base64::Engine;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::Path;
 use std::time::Duration;
-use thru_base::tn_tools::{KeyPair, Pubkey};
+use thru_base::tn_tools::Pubkey;
 use thru_base::txn_lib::Transaction;
 use thru_client::{
     Account as ChainAccount, Client, ClientBuilder, TransactionDetails, VersionContext,
@@ -97,6 +98,7 @@ pub async fn handle_feature_gates_command(
             value,
             next_change_lead_slots,
             fee_payer,
+            via,
         } => {
             let (registry, live_account) =
                 load_registry_and_live_account(&client, registry_path).await?;
@@ -108,6 +110,7 @@ pub async fn handle_feature_gates_command(
                 &target,
                 &value,
                 next_change_lead_slots,
+                &via,
                 fee_payer.as_deref(),
                 json_format,
             )
@@ -118,6 +121,7 @@ pub async fn handle_feature_gates_command(
             value,
             slot,
             fee_payer,
+            via,
         } => {
             let (registry, live_account) =
                 load_registry_and_live_account(&client, registry_path).await?;
@@ -130,12 +134,17 @@ pub async fn handle_feature_gates_command(
                 &target,
                 &value,
                 slot,
+                &via,
                 fee_payer.as_deref(),
                 json_format,
             )
             .await
         }
-        FeatureGatesCommands::Disarm { target, fee_payer } => {
+        FeatureGatesCommands::Disarm {
+            target,
+            fee_payer,
+            via,
+        } => {
             let (registry, live_account) =
                 load_registry_and_live_account(&client, registry_path).await?;
             validate_registry_account_alignment(&registry, &live_account)?;
@@ -145,6 +154,7 @@ pub async fn handle_feature_gates_command(
                 &registry,
                 &live_account,
                 &target,
+                &via,
                 fee_payer.as_deref(),
                 json_format,
             )
@@ -156,6 +166,7 @@ pub async fn handle_feature_gates_command(
             min_dwell_slots,
             no_disarm_window_slots,
             fee_payer,
+            via,
         } => {
             update_timing_knobs(
                 config,
@@ -164,6 +175,7 @@ pub async fn handle_feature_gates_command(
                 min_gap_between_armings_slots,
                 min_dwell_slots,
                 no_disarm_window_slots,
+                &via,
                 fee_payer.as_deref(),
                 json_format,
             )
@@ -173,7 +185,19 @@ pub async fn handle_feature_gates_command(
             role,
             new_admin,
             fee_payer,
+            via,
         } => {
+            if via.via_multisig.is_some() {
+                return crate::commands::multisig::via::feature_gate_propose_admin(
+                    config,
+                    &via,
+                    fee_payer.as_deref(),
+                    role,
+                    &new_admin,
+                    json_format,
+                )
+                .await;
+            }
             propose_admin(
                 config,
                 &client,
@@ -184,7 +208,17 @@ pub async fn handle_feature_gates_command(
             )
             .await
         }
-        FeatureGatesCommands::AcceptAdmin { role, fee_payer } => {
+        FeatureGatesCommands::AcceptAdmin { role, fee_payer, via } => {
+            if via.via_multisig.is_some() {
+                return crate::commands::multisig::via::feature_gate_accept_admin(
+                    config,
+                    &via,
+                    fee_payer.as_deref(),
+                    role,
+                    json_format,
+                )
+                .await;
+            }
             accept_admin(config, &client, role, fee_payer.as_deref(), json_format).await
         }
     }
@@ -376,6 +410,7 @@ async fn create_entry(
     target: &str,
     value: &str,
     next_change_lead_slots: u64,
+    via: &crate::cli::ViaMultisigArgs,
     fee_payer: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
@@ -411,6 +446,17 @@ async fn create_entry(
         eprintln!("{}", warning);
     }
     let instruction = encode_create_gate_instruction(&initial_value, next_change_lead_slots);
+    if via.via_multisig.is_some() {
+        return crate::commands::multisig::via::feature_gate_instruction(
+            config,
+            via,
+            fee_payer,
+            "create-entry",
+            instruction,
+            json_format,
+        )
+        .await;
+    }
     let state_units = create_gate_state_units(live_account.entries.len())?;
     let details =
         submit_feature_gate_instruction(config, client, instruction, state_units, fee_payer)
@@ -436,6 +482,7 @@ async fn arm_entry(
     target: &str,
     value: &str,
     slot: u64,
+    via: &crate::cli::ViaMultisigArgs,
     fee_payer: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
@@ -469,6 +516,17 @@ async fn arm_entry(
     }
 
     let instruction = encode_arm_instruction(entry.index, slot, &armed_value);
+    if via.via_multisig.is_some() {
+        return crate::commands::multisig::via::feature_gate_instruction(
+            config,
+            via,
+            fee_payer,
+            "arm",
+            instruction,
+            json_format,
+        )
+        .await;
+    }
     let details = submit_feature_gate_instruction(
         config,
         client,
@@ -496,11 +554,23 @@ async fn disarm_entry(
     registry: &FeatureGateRegistry,
     live_account: &DecodedFeatureGateAccount,
     target: &str,
+    via: &crate::cli::ViaMultisigArgs,
     fee_payer: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
     let entry = validate_disarm_target(registry, live_account, target)?;
     let instruction = encode_disarm_instruction(entry.index);
+    if via.via_multisig.is_some() {
+        return crate::commands::multisig::via::feature_gate_instruction(
+            config,
+            via,
+            fee_payer,
+            "disarm",
+            instruction,
+            json_format,
+        )
+        .await;
+    }
     let details = submit_feature_gate_instruction(
         config,
         client,
@@ -527,6 +597,7 @@ async fn update_timing_knobs(
     min_gap_between_armings_slots: u64,
     min_dwell_slots: u64,
     no_disarm_window_slots: u64,
+    via: &crate::cli::ViaMultisigArgs,
     fee_payer: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
@@ -536,6 +607,17 @@ async fn update_timing_knobs(
         min_dwell_slots,
         no_disarm_window_slots,
     );
+    if via.via_multisig.is_some() {
+        return crate::commands::multisig::via::feature_gate_instruction(
+            config,
+            via,
+            fee_payer,
+            "update-timing-knobs",
+            instruction,
+            json_format,
+        )
+        .await;
+    }
     let details = submit_feature_gate_instruction(
         config,
         client,
@@ -619,7 +701,7 @@ async fn submit_feature_gate_instruction(
     state_units: u16,
     fee_payer: Option<&str>,
 ) -> Result<TransactionDetails, CliError> {
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer)?;
     let fee_payer_account = client
         .get_account_info(
             &fee_payer_keypair.address_string,
@@ -675,7 +757,7 @@ async fn submit_feature_gate_instruction(
 // create-entry resizes the global account from `entry_count` to `entry_count + 1`
 // entries; it needs a state unit only when that crosses a 4096-byte unit of the
 // account footprint (tn_feature_gate_account_footprint plus 64 bytes of meta).
-fn create_gate_state_units(entry_count: usize) -> Result<u16, CliError> {
+pub(crate) fn create_gate_state_units(entry_count: usize) -> Result<u16, CliError> {
     let units = |entries: usize| -> Result<u16, CliError> {
         let data_size = entries
             .checked_mul(FEATURE_GATE_ENTRY_SIZE)
@@ -729,20 +811,6 @@ fn build_feature_gate_transaction(
             .add_rw_account(global_pubkey)
             .with_instructions(instruction),
     )
-}
-
-fn resolve_fee_payer_keypair(
-    config: &Config,
-    fee_payer: Option<&str>,
-) -> Result<KeyPair, CliError> {
-    let key_name = fee_payer.unwrap_or("default");
-    let key_hex = config.keys.get_key(key_name).map_err(|_| {
-        CliError::Validation(format!(
-            "Fee payer key '{}' not found in configuration",
-            key_name
-        ))
-    })?;
-    crypto::keypair_from_hex(key_hex)
 }
 
 fn check_transaction_result(details: &TransactionDetails) -> Result<(), CliError> {
@@ -985,9 +1053,25 @@ fn encode_update_timing_knobs_instruction(
 }
 
 fn encode_propose_admin_instruction(role: u8, new_admin_pubkey: &[u8; 32]) -> Vec<u8> {
+    encode_propose_admin_instruction_at(
+        FEATURE_GATE_GLOBAL_ACCOUNT_IDX,
+        FEATURE_GATE_AUTHORITY_ACCOUNT_IDX,
+        role,
+        new_admin_pubkey,
+    )
+}
+
+/// `propose_admin` with explicit account indices (used by `--via-multisig`).
+pub(crate) fn encode_propose_admin_instruction_at(
+    global_idx: u16,
+    authority_idx: u16,
+    role: u8,
+    new_admin_pubkey: &[u8; 32],
+) -> Vec<u8> {
     let mut instruction = Vec::with_capacity(44);
     instruction.extend_from_slice(&FEATURE_GATE_INSTR_PROPOSE_ADMIN.to_le_bytes());
-    append_instruction_account_indices(&mut instruction);
+    instruction.extend_from_slice(&global_idx.to_le_bytes());
+    instruction.extend_from_slice(&authority_idx.to_le_bytes());
     instruction.push(role);
     instruction.extend_from_slice(&[0u8; 3]);
     instruction.extend_from_slice(new_admin_pubkey);
@@ -995,15 +1079,29 @@ fn encode_propose_admin_instruction(role: u8, new_admin_pubkey: &[u8; 32]) -> Ve
 }
 
 fn encode_accept_admin_instruction(role: u8) -> Vec<u8> {
+    encode_accept_admin_instruction_at(
+        FEATURE_GATE_GLOBAL_ACCOUNT_IDX,
+        FEATURE_GATE_AUTHORITY_ACCOUNT_IDX,
+        role,
+    )
+}
+
+/// `accept_admin` with explicit account indices (used by `--via-multisig`).
+pub(crate) fn encode_accept_admin_instruction_at(
+    global_idx: u16,
+    authority_idx: u16,
+    role: u8,
+) -> Vec<u8> {
     let mut instruction = Vec::with_capacity(12);
     instruction.extend_from_slice(&FEATURE_GATE_INSTR_ACCEPT_ADMIN.to_le_bytes());
-    append_instruction_account_indices(&mut instruction);
+    instruction.extend_from_slice(&global_idx.to_le_bytes());
+    instruction.extend_from_slice(&authority_idx.to_le_bytes());
     instruction.push(role);
     instruction.extend_from_slice(&[0u8; 3]);
     instruction
 }
 
-fn role_discriminant(role: FeatureGateAdminRole) -> u8 {
+pub(crate) fn role_discriminant(role: FeatureGateAdminRole) -> u8 {
     match role {
         FeatureGateAdminRole::Creation => FEATURE_GATE_ROLE_CREATION,
         FeatureGateAdminRole::Management => FEATURE_GATE_ROLE_MANAGEMENT,
@@ -1895,8 +1993,8 @@ tracking = "UNTO-1818"
 
     #[test]
     fn create_gate_requests_state_units_only_when_growth_crosses_a_unit() {
-        // Footprint = 64 B meta + 240 B header + 152 B per entry; 24 entries
-        // occupy 3952 B (one unit) and 25 entries 4104 B (two units).
+        // Footprint = 64 B meta + 241 B header + 152 B per entry; 24 entries
+        // occupy 3953 B (one unit) and 25 entries 4105 B (two units).
         assert_eq!(create_gate_state_units(0).unwrap(), 0);
         assert_eq!(create_gate_state_units(7).unwrap(), 0);
         assert_eq!(create_gate_state_units(24).unwrap(), 1);

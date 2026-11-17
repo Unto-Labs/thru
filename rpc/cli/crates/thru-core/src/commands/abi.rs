@@ -2,11 +2,12 @@
 
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 
 use base64::{Engine as _, engine::general_purpose};
 use thru_base::rpc_types::{MakeStateProofConfig, ProofType};
-use thru_base::tn_tools::{KeyPair, Pubkey};
+use thru_base::tn_tools::Pubkey;
 use thru_base::txn_lib::Transaction;
 use thru_base::txn_tools::TransactionBuilder;
 use thru_client::Client as RpcClient;
@@ -17,6 +18,7 @@ use crate::commands::uploader::UploaderManager;
 use crate::config::Config;
 use crate::crypto;
 use crate::error::CliError;
+use crate::keys::LoadedKey;
 use crate::output;
 use crate::utils::format_vm_error;
 use serde_json::json;
@@ -49,12 +51,14 @@ pub async fn handle_abi_command(
             language,
             output_dir,
             verbose,
+            go_module,
         } => abi_toolchain::handle_codegen_command(
             files,
             include_dirs,
             language,
             output_dir,
             verbose,
+            go_module,
         ),
         AbiCommands::Analyze {
             files,
@@ -428,7 +432,7 @@ fn create_rpc_client(config: &Config) -> Result<RpcClient, CliError> {
 
 struct AbiProgramManager {
     rpc_client: RpcClient,
-    fee_payer_keypair: KeyPair,
+    fee_payer_keypair: Arc<LoadedKey>,
     chain_id: u16,
     timeout_seconds: u64,
 }
@@ -441,12 +445,7 @@ impl AbiProgramManager {
         // Ensure the configured manager program key is valid even if unused directly
         let _ = config.get_manager_pubkey()?;
 
-        let fee_payer_key_hex = if let Some(name) = fee_payer_name {
-            config.keys.get_key(name)?
-        } else {
-            config.keys.get_default_key()?
-        };
-        let fee_payer_keypair = crypto::keypair_from_hex(fee_payer_key_hex)?;
+        let fee_payer_keypair = config.keys.load_key(fee_payer_name.unwrap_or("default"))?;
 
         let chain_info = rpc_client.get_chain_info().await.map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
@@ -460,7 +459,7 @@ impl AbiProgramManager {
         })
     }
 
-    fn fee_payer(&self) -> &KeyPair {
+    fn fee_payer(&self) -> &Arc<LoadedKey> {
         &self.fee_payer_keypair
     }
 
@@ -584,7 +583,7 @@ fn seed_with_suffix(base_seed: &str, suffix: &str) -> (String, bool) {
     }
 }
 
-fn read_abi_file(abi_file: &str, json_format: bool) -> Result<Vec<u8>, CliError> {
+pub(crate) fn read_abi_file(abi_file: &str, json_format: bool) -> Result<Vec<u8>, CliError> {
     let abi_path = Path::new(abi_file);
     if !abi_path.exists() {
         let error_msg = format!("ABI file not found: {}", abi_file);
@@ -677,36 +676,141 @@ fn derive_abi_account_seed_bytes(kind: u8, body: &[u8; ABI_META_BODY_LEN]) -> [u
     crypto::calculate_sha256(&data)
 }
 
+/// Address of the official (non-ephemeral) ABI account for `program_bytes`.
+pub(crate) fn official_abi_account(
+    program_bytes: &[u8; 32],
+    abi_manager_program: &Pubkey,
+) -> Result<Pubkey, CliError> {
+    let body = abi_meta_body_official(program_bytes);
+    let seed = derive_abi_account_seed_bytes(ABI_META_KIND_OFFICIAL, &body);
+    thru_base::crypto_utils::derive_program_address(&seed, abi_manager_program, false)
+        .map_err(|e| CliError::Crypto(e.to_string()))
+}
+
+/// ABI meta and ABI account addresses of the official ABI for `program_bytes`.
+pub(crate) fn official_abi_accounts(
+    program_bytes: &[u8; 32],
+    abi_manager_program: &Pubkey,
+    ephemeral: bool,
+) -> Result<(Pubkey, Pubkey), CliError> {
+    let body = abi_meta_body_official(program_bytes);
+    let derive = |seed: [u8; 32]| {
+        thru_base::crypto_utils::derive_program_address(&seed, abi_manager_program, ephemeral)
+            .map_err(|e| CliError::Crypto(e.to_string()))
+    };
+    Ok((
+        derive(derive_abi_meta_seed_bytes(ABI_META_KIND_OFFICIAL, &body))?,
+        derive(derive_abi_account_seed_bytes(ABI_META_KIND_OFFICIAL, &body))?,
+    ))
+}
+
+/// ABI account state value for a finalized (immutable) ABI.
+pub(crate) const ABI_STATE_FINALIZED: u8 = 0x01;
+
+/// Account discriminator of an ABI content account
+/// (`TN_ABI_MANAGER_ACCOUNT_TYPE_CONTENT_V1`, byte 0).
+pub(crate) const ABI_ACCOUNT_TYPE_CONTENT_V1: u8 = 2;
+
+/// Packed `abi_account` header (tn_abi_manager_program.h): account_type,
+/// ABI meta account, revision, state, content size; the YAML follows.
+pub(crate) const ABI_ACCOUNT_HEADER_LEN: usize = 1 + 32 + 8 + 1 + 4;
+
+/// Decoded header of an ABI content account.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AbiAccountHeader {
+    pub(crate) abi_meta: [u8; 32],
+    pub(crate) revision: u64,
+    pub(crate) state: u8,
+    pub(crate) content_sz: u32,
+}
+
+/// Header of an ABI content account, if `data` starts with one: the content
+/// account discriminator and a complete header.
+pub(crate) fn parse_abi_account_header(data: &[u8]) -> Option<AbiAccountHeader> {
+    if data.len() < ABI_ACCOUNT_HEADER_LEN || data[0] != ABI_ACCOUNT_TYPE_CONTENT_V1 {
+        return None;
+    }
+    Some(AbiAccountHeader {
+        abi_meta: data[1..33].try_into().ok()?,
+        revision: u64::from_le_bytes(data[33..41].try_into().ok()?),
+        state: data[41],
+        content_sz: u32::from_le_bytes(data[42..46].try_into().ok()?),
+    })
+}
+
+/// Header of an ABI account: (revision, state, content size).
+pub(crate) fn abi_account_header(data: &[u8]) -> Option<(u64, u8, u32)> {
+    parse_abi_account_header(data).map(|h| (h.revision, h.state, h.content_sz))
+}
+
+/// Check that an ABI file can be published on chain as-is: non-empty UTF-8
+/// YAML without local `path` imports (which only resolve on the author's
+/// machine). Mirrors `validateABI` in the TypeScript deploy SDK.
+pub(crate) fn validate_publishable_abi(abi_file: &str, data: &[u8]) -> Result<(), CliError> {
+    let yaml = std::str::from_utf8(data).map_err(|_| {
+        CliError::Validation(format!("ABI file {abi_file} is not valid UTF-8 YAML"))
+    })?;
+    if yaml.trim().is_empty() {
+        return Err(CliError::Validation(format!("ABI file {abi_file} is empty")));
+    }
+    let doc = serde_yml::from_str::<serde_yml::Value>(yaml).map_err(|e| {
+        CliError::Validation(format!("ABI file {abi_file} is not valid YAML: {e}"))
+    })?;
+    // Imports live under `abi.imports`; check the parsed document so block,
+    // flow and reordered mappings are all caught.
+    let is_path_import = |import: &serde_yml::Value| {
+        import.get("type").and_then(serde_yml::Value::as_str) == Some("path")
+    };
+    let has_path_import = [doc.get("abi").and_then(|a| a.get("imports")), doc.get("imports")]
+        .into_iter()
+        .flatten()
+        .filter_map(serde_yml::Value::as_sequence)
+        .flatten()
+        .any(is_path_import);
+    if has_path_import {
+        return Err(CliError::Validation(format!(
+            "ABI file {abi_file} has local path imports, which can't be resolved on chain. \
+             Run `thru abi prep-for-publish -f {abi_file} -n <network> -o <out.yaml>` \
+             and pass the prepared file to --abi"
+        )));
+    }
+    Ok(())
+}
+
+/// The YAML stored in an ABI account's data, if well formed.
+pub(crate) fn abi_yaml_from_account_data(data: &[u8]) -> Option<String> {
+    let content_sz = parse_abi_account_header(data)?.content_sz as usize;
+    let content =
+        data.get(ABI_ACCOUNT_HEADER_LEN..ABI_ACCOUNT_HEADER_LEN.checked_add(content_sz)?)?;
+    String::from_utf8(content.to_vec()).ok()
+}
+
 fn resolve_authority_pubkey(
     config: &Config,
     authority: Option<&str>,
     fee_payer: Option<&str>,
 ) -> Result<[u8; 32], CliError> {
     let fee_payer_name = fee_payer.unwrap_or("default");
-    let fee_payer_key = config.keys.get_key(fee_payer_name)?;
-    let fee_payer_keypair = crypto::keypair_from_hex(fee_payer_key)?;
+    let fee_payer_pubkey = config.keys.public_key(fee_payer_name)?;
 
     if let Some(auth_name) = authority {
-        let auth_key = config.keys.get_key(auth_name)?;
-        let auth_keypair = crypto::keypair_from_hex(auth_key)?;
-        if auth_keypair.public_key != fee_payer_keypair.public_key {
+        let authority_pubkey = config.keys.public_key(auth_name)?;
+        if authority_pubkey != fee_payer_pubkey {
             return Err(CliError::Validation(format!(
                 "ABI authority/publisher key '{auth_name}' must match fee payer key '{fee_payer_name}', as only the fee payer signature is included"
             )));
         }
     }
 
-    Ok(fee_payer_keypair.public_key)
+    Ok(fee_payer_pubkey)
 }
 
-fn resolve_target_program_bytes(target_program: Option<&str>) -> Result<[u8; 32], CliError> {
+fn resolve_target_program_bytes(
+    config: &Config,
+    target_program: Option<&str>,
+) -> Result<[u8; 32], CliError> {
     if let Some(target_program_str) = target_program {
-        let target_program_pubkey = Pubkey::new(target_program_str.to_string()).map_err(|e| {
-            CliError::Validation(format!("Invalid target program public key: {}", e))
-        })?;
-        target_program_pubkey
-            .to_bytes()
-            .map_err(|e| CliError::Crypto(e.to_string()))
+        config.keys.resolve_public_key(target_program_str)
     } else {
         Ok([0u8; 32])
     }
@@ -941,6 +1045,8 @@ async fn create_abi_account_official(
         authority_pubkey,
         0,
         abi_data.len() as u32,
+        // Commit to the uploaded bytes so the buffer can't be swapped after signing.
+        crypto::calculate_sha256(&abi_data),
         ephemeral,
         abi_proof.as_deref(),
         0,
@@ -1036,7 +1142,7 @@ async fn create_abi_account_external(
 
     let abi_manager_program_pubkey = config.get_abi_manager_pubkey()?;
     let authority_pubkey = resolve_authority_pubkey(config, authority, fee_payer)?;
-    let target_program_bytes = resolve_target_program_bytes(target_program)?;
+    let target_program_bytes = resolve_target_program_bytes(config, target_program)?;
     let external_seed = parse_external_seed(external_seed_input, seed_format)?;
 
     let (temp_seed, temp_seed_hashed) = seed_with_suffix(external_seed_input, "abi_temp");
@@ -1226,6 +1332,8 @@ async fn create_abi_account_external(
         authority_pubkey,
         0,
         abi_data.len() as u32,
+        // Commit to the uploaded bytes so the buffer can't be swapped after signing.
+        crypto::calculate_sha256(&abi_data),
         ephemeral,
         abi_proof.as_deref(),
         0,
@@ -1411,6 +1519,8 @@ async fn upgrade_abi_account_official(
         authority_pubkey,
         0,
         abi_data.len() as u32,
+        // Commit to the uploaded bytes so the buffer can't be swapped after signing.
+        crypto::calculate_sha256(&abi_data),
         0,
         nonce,
         start_slot,
@@ -1504,7 +1614,7 @@ async fn upgrade_abi_account_external(
 
     let abi_manager_program_pubkey = config.get_abi_manager_pubkey()?;
     let authority_pubkey = resolve_authority_pubkey(config, authority, fee_payer)?;
-    let target_program_bytes = resolve_target_program_bytes(target_program)?;
+    let target_program_bytes = resolve_target_program_bytes(config, target_program)?;
     let external_seed = parse_external_seed(external_seed_input, seed_format)?;
 
     let (temp_seed, temp_seed_hashed) = seed_with_suffix(external_seed_input, "abi_upgrade");
@@ -1584,6 +1694,8 @@ async fn upgrade_abi_account_external(
         authority_pubkey,
         0,
         abi_data.len() as u32,
+        // Commit to the uploaded bytes so the buffer can't be swapped after signing.
+        crypto::calculate_sha256(&abi_data),
         0,
         nonce,
         start_slot,
@@ -1776,7 +1888,7 @@ async fn finalize_abi_account_external(
 
     let abi_manager_program_pubkey = config.get_abi_manager_pubkey()?;
     let authority_pubkey = resolve_authority_pubkey(config, authority, fee_payer)?;
-    let target_program_bytes = resolve_target_program_bytes(target_program)?;
+    let target_program_bytes = resolve_target_program_bytes(config, target_program)?;
     let external_seed = parse_external_seed(external_seed_input, seed_format)?;
 
     let abi_program_manager = AbiProgramManager::new(config, fee_payer).await?;
@@ -1982,7 +2094,7 @@ async fn close_abi_account_external(
 
     let abi_manager_program_pubkey = config.get_abi_manager_pubkey()?;
     let authority_pubkey = resolve_authority_pubkey(config, authority, fee_payer)?;
-    let target_program_bytes = resolve_target_program_bytes(target_program)?;
+    let target_program_bytes = resolve_target_program_bytes(config, target_program)?;
     let external_seed = parse_external_seed(external_seed_input, seed_format)?;
 
     let abi_program_manager = AbiProgramManager::new(config, fee_payer).await?;
@@ -2069,8 +2181,7 @@ async fn get_abi_account_info(
 ) -> Result<(), CliError> {
     let rpc_client = create_rpc_client(config)?;
 
-    let abi_account = Pubkey::new(abi_account_str.to_string())
-        .map_err(|e| CliError::Validation(format!("Invalid ABI account public key: {}", e)))?;
+    let abi_account = Pubkey::from_bytes(&config.keys.resolve_public_key(abi_account_str)?);
 
     let account_info_opt = rpc_client
         .get_account_info(&abi_account, None, None)
@@ -2102,7 +2213,7 @@ async fn get_abi_account_info(
             message: format!("Failed to decode ABI account data: {}", e),
         })?;
 
-    const HEADER_LEN: usize = 32 + 8 + 1 + 4;
+    const HEADER_LEN: usize = ABI_ACCOUNT_HEADER_LEN;
     if data_bytes.len() < HEADER_LEN {
         return Err(CliError::Generic {
             message: format!(
@@ -2112,19 +2223,22 @@ async fn get_abi_account_info(
             ),
         });
     }
+    let header = parse_abi_account_header(&data_bytes).ok_or_else(|| CliError::Generic {
+        message: format!(
+            "Account {} is not an ABI content account (account type {}, expected {})",
+            abi_account, data_bytes[0], ABI_ACCOUNT_TYPE_CONTENT_V1
+        ),
+    })?;
 
-    let mut meta_bytes = [0u8; 32];
-    meta_bytes.copy_from_slice(&data_bytes[0..32]);
-    let abi_meta_account = Pubkey::from_bytes(&meta_bytes);
-    let revision = u64::from_le_bytes(data_bytes[32..40].try_into().expect("slice length checked"));
-    let state_raw = data_bytes[40];
+    let abi_meta_account = Pubkey::from_bytes(&header.abi_meta);
+    let revision = header.revision;
+    let state_raw = header.state;
     let state_label = match state_raw {
         0 => "OPEN",
         1 => "FINALIZED",
         _ => "UNKNOWN",
     };
-    let content_sz =
-        u32::from_le_bytes(data_bytes[41..45].try_into().expect("slice length checked")) as usize;
+    let content_sz = header.content_sz as usize;
 
     if HEADER_LEN + content_sz > data_bytes.len() {
         return Err(CliError::Generic {
@@ -2194,11 +2308,52 @@ mod tests {
     use super::*;
 
     #[test]
+    fn abi_actor_and_target_use_public_metadata_without_loading_secrets() {
+        let (_guard, keys) = crate::keys::KeyManager::test_fixture(&[("signer", [1u8; 32])]);
+        let mut config = Config {
+            keys,
+            ..Config::default()
+        };
+        let expected = config.keys.public_key("signer").unwrap();
+        let mut entry = config.keys.get_entry("signer").unwrap().clone();
+        entry.source = crate::keys::KeySource::MacosKeychain {
+            id: "unavailable-abi-public-metadata-test".to_string(),
+        };
+        config.keys.insert_entry("signer", entry, true).unwrap();
+
+        assert_eq!(
+            resolve_authority_pubkey(&config, Some("signer"), Some("signer")).unwrap(),
+            expected
+        );
+        assert_eq!(
+            resolve_target_program_bytes(&config, Some("signer")).unwrap(),
+            expected
+        );
+    }
+
+    #[test]
+    fn abi_actor_accepts_unregistered_file_reference() {
+        let (_guard, keys) = crate::keys::KeyManager::test_fixture(&[("signer", [1u8; 32])]);
+        let mut config = Config {
+            keys,
+            ..Config::default()
+        };
+        let expected = config.keys.public_key("signer").unwrap();
+        let reference = config.keys.get_entry("signer").unwrap().reference();
+        config.keys.remove_key("signer").unwrap();
+
+        assert_eq!(
+            resolve_authority_pubkey(&config, Some(&reference), Some(&reference)).unwrap(),
+            expected
+        );
+    }
+
+    #[test]
     fn abi_actor_defaults_to_named_fee_payer_without_default_key() {
         let mut config = Config::default();
         let signer_key = hex::encode([1u8; 32]);
-        config.keys.add_key("signer", &signer_key, false).unwrap();
-        config.keys.remove_key("default").unwrap();
+        let (_guard, keys) = crate::keys::KeyManager::test_fixture(&[("signer", [1u8; 32])]);
+        config.keys = keys;
 
         let actor = resolve_authority_pubkey(&config, None, Some("signer")).unwrap();
         let expected = crypto::keypair_from_hex(&signer_key).unwrap().public_key;
@@ -2209,14 +2364,9 @@ mod tests {
     #[test]
     fn abi_actor_must_match_fee_payer() {
         let mut config = Config::default();
-        config
-            .keys
-            .add_key("signer", &hex::encode([1u8; 32]), false)
-            .unwrap();
-        config
-            .keys
-            .add_key("other", &hex::encode([2u8; 32]), false)
-            .unwrap();
+        let (_guard, keys) =
+            crate::keys::KeyManager::test_fixture(&[("signer", [1u8; 32]), ("other", [2u8; 32])]);
+        config.keys = keys;
 
         let error = resolve_authority_pubkey(&config, Some("other"), Some("signer"))
             .expect_err("a separately supplied ABI actor cannot sign the transaction");

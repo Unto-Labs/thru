@@ -1,0 +1,87 @@
+abi:
+  package: "compliance.enum_nesting"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Inline enums whose variants differ in size, used as array elements and as another enum's payload"
+
+types:
+  # Every element is an enum selected by the shared `kind` field.
+  - name: "EnumList"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "kind"
+            field-type:
+              primitive: u8
+          - name: "count"
+            field-type:
+              primitive: u8
+          - name: "items"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  enum:
+                    packed: true
+                    tag-ref:
+                      field-ref:
+                        path: ["kind"]
+                    variants:
+                      - name: "Small"
+                        tag-value: 0
+                        variant-type:
+                          primitive: u8
+                      - name: "Wide"
+                        tag-value: 1
+                        variant-type:
+                          primitive: u32
+          - name: "trail"
+            field-type:
+              primitive: u8
+  # The `Nested` payload of `body` is itself an enum (tag `inner`).
+  - name: "EnumInEnum"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "outer"
+            field-type:
+              primitive: u8
+          - name: "inner"
+            field-type:
+              primitive: u8
+          - name: "body"
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  field-ref:
+                    path: ["outer"]
+                variants:
+                  - name: "Plain"
+                    tag-value: 0
+                    variant-type:
+                      primitive: u16
+                  - name: "Nested"
+                    tag-value: 1
+                    variant-type:
+                      enum:
+                        packed: true
+                        tag-ref:
+                          field-ref:
+                            path: ["inner"]
+                        variants:
+                          - name: "Byte"
+                            tag-value: 0
+                            variant-type:
+                              primitive: u8
+                          - name: "Quad"
+                            tag-value: 1
+                            variant-type:
+                              primitive: u64
+          - name: "trail"
+            field-type:
+              primitive: u8

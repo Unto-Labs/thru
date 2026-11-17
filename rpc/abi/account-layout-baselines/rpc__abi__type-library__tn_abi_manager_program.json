@@ -1,0 +1,419 @@
+{
+  "abi": "rpc/abi/type-library/tn_abi_manager_program.abi.yaml",
+  "account_root": "AbiManagerProgramAccount",
+  "values": {
+    "1": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "kind",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  },
+                  {
+                    "name": "flags",
+                    "offset": 1,
+                    "type": {
+                      "alignment": 2,
+                      "kind": {
+                        "primitive": "Integral(U16)"
+                      },
+                      "size": 2
+                    }
+                  },
+                  {
+                    "name": "body",
+                    "offset": 3,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "union": [
+                              {
+                                "name": "official",
+                                "type": {
+                                  "alignment": 1,
+                                  "kind": {
+                                    "layout": {
+                                      "alignment": 1,
+                                      "kind": {
+                                        "struct": {
+                                          "aligned": null,
+                                          "fields": [
+                                            {
+                                              "name": "program",
+                                              "offset": 0,
+                                              "type": {
+                                                "alignment": 1,
+                                                "kind": {
+                                                  "layout": {
+                                                    "alignment": 1,
+                                                    "kind": {
+                                                      "struct": {
+                                                        "aligned": null,
+                                                        "fields": [
+                                                          {
+                                                            "name": "bytes",
+                                                            "offset": 0,
+                                                            "type": {
+                                                              "alignment": 1,
+                                                              "kind": {
+                                                                "array": {
+                                                                  "element": {
+                                                                    "alignment": 1,
+                                                                    "kind": {
+                                                                      "primitive": "Integral(U8)"
+                                                                    },
+                                                                    "size": 1
+                                                                  },
+                                                                  "jagged": false,
+                                                                  "size": {
+                                                                    "literal": {
+                                                                      "u64": 32
+                                                                    }
+                                                                  }
+                                                                }
+                                                              },
+                                                              "size": 32
+                                                            }
+                                                          }
+                                                        ],
+                                                        "packed": true
+                                                      }
+                                                    },
+                                                    "size": 32
+                                                  },
+                                                  "ref": "Pubkey"
+                                                },
+                                                "size": 32
+                                              }
+                                            }
+                                          ],
+                                          "packed": true
+                                        }
+                                      },
+                                      "size": 32
+                                    },
+                                    "ref": "AbiMetaBodyOfficial"
+                                  },
+                                  "size": 32
+                                }
+                              },
+                              {
+                                "name": "external",
+                                "type": {
+                                  "alignment": 1,
+                                  "kind": {
+                                    "layout": {
+                                      "alignment": 1,
+                                      "kind": {
+                                        "struct": {
+                                          "aligned": null,
+                                          "fields": [
+                                            {
+                                              "name": "publisher",
+                                              "offset": 0,
+                                              "type": {
+                                                "alignment": 1,
+                                                "kind": {
+                                                  "layout": {
+                                                    "alignment": 1,
+                                                    "kind": {
+                                                      "struct": {
+                                                        "aligned": null,
+                                                        "fields": [
+                                                          {
+                                                            "name": "bytes",
+                                                            "offset": 0,
+                                                            "type": {
+                                                              "alignment": 1,
+                                                              "kind": {
+                                                                "array": {
+                                                                  "element": {
+                                                                    "alignment": 1,
+                                                                    "kind": {
+                                                                      "primitive": "Integral(U8)"
+                                                                    },
+                                                                    "size": 1
+                                                                  },
+                                                                  "jagged": false,
+                                                                  "size": {
+                                                                    "literal": {
+                                                                      "u64": 32
+                                                                    }
+                                                                  }
+                                                                }
+                                                              },
+                                                              "size": 32
+                                                            }
+                                                          }
+                                                        ],
+                                                        "packed": true
+                                                      }
+                                                    },
+                                                    "size": 32
+                                                  },
+                                                  "ref": "Pubkey"
+                                                },
+                                                "size": 32
+                                              }
+                                            },
+                                            {
+                                              "name": "target_program",
+                                              "offset": 32,
+                                              "type": {
+                                                "alignment": 1,
+                                                "kind": {
+                                                  "layout": {
+                                                    "alignment": 1,
+                                                    "kind": {
+                                                      "struct": {
+                                                        "aligned": null,
+                                                        "fields": [
+                                                          {
+                                                            "name": "bytes",
+                                                            "offset": 0,
+                                                            "type": {
+                                                              "alignment": 1,
+                                                              "kind": {
+                                                                "array": {
+                                                                  "element": {
+                                                                    "alignment": 1,
+                                                                    "kind": {
+                                                                      "primitive": "Integral(U8)"
+                                                                    },
+                                                                    "size": 1
+                                                                  },
+                                                                  "jagged": false,
+                                                                  "size": {
+                                                                    "literal": {
+                                                                      "u64": 32
+                                                                    }
+                                                                  }
+                                                                }
+                                                              },
+                                                              "size": 32
+                                                            }
+                                                          }
+                                                        ],
+                                                        "packed": true
+                                                      }
+                                                    },
+                                                    "size": 32
+                                                  },
+                                                  "ref": "Pubkey"
+                                                },
+                                                "size": 32
+                                              }
+                                            },
+                                            {
+                                              "name": "seed",
+                                              "offset": 64,
+                                              "type": {
+                                                "alignment": 1,
+                                                "kind": {
+                                                  "layout": {
+                                                    "alignment": 1,
+                                                    "kind": {
+                                                      "array": {
+                                                        "element": {
+                                                          "alignment": 1,
+                                                          "kind": {
+                                                            "primitive": "Integral(U8)"
+                                                          },
+                                                          "size": 1
+                                                        },
+                                                        "jagged": false,
+                                                        "size": {
+                                                          "literal": {
+                                                            "u64": 32
+                                                          }
+                                                        }
+                                                      }
+                                                    },
+                                                    "size": 32
+                                                  },
+                                                  "ref": "Seed32"
+                                                },
+                                                "size": 32
+                                              }
+                                            }
+                                          ],
+                                          "packed": true
+                                        }
+                                      },
+                                      "size": 96
+                                    },
+                                    "ref": "AbiMetaBodyExternal"
+                                  },
+                                  "size": 96
+                                }
+                              }
+                            ]
+                          },
+                          "size": 96
+                        },
+                        "ref": "AbiMetaBody"
+                      },
+                      "size": 96
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 99
+          },
+          "ref": "AbiMetaAccount"
+        },
+        "size": 99
+      },
+      "variant": "meta_v1"
+    },
+    "2": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "abi_meta_acc",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "revision",
+                    "offset": 32,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "state",
+                    "offset": 40,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  },
+                  {
+                    "name": "content_sz",
+                    "offset": 41,
+                    "type": {
+                      "alignment": 4,
+                      "kind": {
+                        "primitive": "Integral(U32)"
+                      },
+                      "size": 4
+                    }
+                  },
+                  {
+                    "name": "contents",
+                    "offset": 45,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "primitive": "Integral(U8)"
+                            },
+                            "size": 1
+                          },
+                          "jagged": false,
+                          "size": {
+                            "field-ref": {
+                              "path": [
+                                "content_sz"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "size": "variable"
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": "variable"
+          },
+          "ref": "AbiAccount"
+        },
+        "size": "variable"
+      },
+      "variant": "content_v1"
+    }
+  }
+}

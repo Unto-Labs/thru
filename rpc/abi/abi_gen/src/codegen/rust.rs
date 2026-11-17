@@ -1,25 +1,29 @@
 use crate::abi::resolved::{ResolvedType, ResolvedTypeKind, TypeResolver};
-use crate::codegen::rust_gen::{
-    emit_builder, emit_ir_footprint_fn, emit_ir_validate_fn, emit_opaque_functions,
-    types::emit_type_params,
-};
+use crate::codegen::rust_gen::emit::Emitter;
+use crate::codegen::rust_gen::emit_builder::emit_builders;
+use crate::codegen::rust_gen::model::{Model, prim_rust};
+use crate::codegen::rust_gen::{emit_ir_footprint_fn_named, emit_ir_validate_fn_named};
 use crate::codegen::shared::builder::IrBuilder;
-use crate::codegen::shared::ir::TypeIr;
-use std::collections::{BTreeMap, BTreeSet};
+use crate::codegen::shared::ir::{CallNestedNode, IrNode};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 
-/* Generate the runtime module content (emitted as runtime.rs) */
-fn generate_runtime_module() -> &'static str {
-    RUNTIME_MODULE_CONTENT
-}
+/* Runtime shared by all generated packages (views, walkers, errors). */
+pub const RUNTIME_MODULE_CONTENT: &str = include_str!("rust_gen/runtime_template.rs");
+
+/* Name of the shared runtime module written at the output root by `abi codegen`. */
+pub const SHARED_RUNTIME_MODULE: &str = "tn_abi_runtime";
 
 /* Public function to get the runtime module content for testing */
 pub fn get_runtime_module_content() -> &'static str {
     RUNTIME_MODULE_CONTENT
 }
 
+const FILE_HEADER: &str = "#![allow(dead_code, non_camel_case_types, non_snake_case, unused_imports, unused_mut, unused_variables, unused_parens, clippy::all)]\n";
+
 pub struct RustCodeGenerator<'a> {
     options: RustCodeGeneratorOptions<'a>,
+    resolver: &'a TypeResolver,
     ir_builder: IrBuilder<'a>,
 }
 
@@ -49,14 +53,14 @@ impl<'a> RustCodeGenerator<'a> {
     pub fn new(resolver: &'a TypeResolver, options: RustCodeGeneratorOptions<'a>) -> Self {
         Self {
             options,
+            resolver,
             ir_builder: IrBuilder::new(resolver),
         }
     }
 
     pub fn emit_code(self, resolved_types: &[&ResolvedType]) -> String {
-        let mut types_output = String::new();
+        let mut types_output = String::from(FILE_HEADER);
         let mut functions_output = String::new();
-        let mut include_ir_runtime = false;
 
         /* Add use statements for dependencies */
         if let (Some(current_package), Some(import_resolver)) =
@@ -81,117 +85,118 @@ impl<'a> RustCodeGenerator<'a> {
             }
 
             if !dependencies.is_empty() {
-                types_output.push_str("\n");
+                types_output.push('\n');
             }
         }
+
+        let model = Model::new(self.resolver);
+        /* Each package names its items from its own table (`rust_gen/names.rs`). */
+        let mut pkg_of = HashMap::new();
+        if let Some(import_resolver) = &self.options.import_resolver {
+            for name in self.resolver.types.keys() {
+                if let Some(package) = import_resolver.get_package_for_type(name) {
+                    pkg_of.insert(name.clone(), package);
+                }
+            }
+        }
+        let current = self
+            .options
+            .package
+            .clone()
+            .filter(|_| self.options.import_resolver.is_some());
+        let emitter = Emitter::new(&model).with_packages(pkg_of, current);
+        let ir_names = |type_name: &str| (*emitter.ir_names(type_name)).clone();
+        let mut helper_support_cache = BTreeMap::new();
 
         for resolved_type in resolved_types {
-            let mut type_ir: Option<TypeIr> = None;
-            let mut ir_error: Option<String> = None;
-            match self.ir_builder.build_type(resolved_type) {
-                Ok(ir) => {
-                    type_ir = Some(ir);
-                }
-                Err(err) => {
-                    ir_error = Some(err.to_string());
-                }
-            }
-
-            types_output.push_str(&emit_resolved_type(resolved_type, type_ir.as_ref()));
-            types_output.push_str("\n");
-
-            if self.options.emit_accessors {
-                let mut helper_support_cache = BTreeMap::new();
-                let helper_type_ir = type_ir.as_ref().filter(|ir| {
-                    static_ir_helpers_supported(
-                        &self.ir_builder,
-                        &ir.type_name,
-                        &mut helper_support_cache,
-                        &mut BTreeSet::new(),
-                    )
-                });
-                let helper_ir_error = if type_ir.is_some() && helper_type_ir.is_none() {
-                    Some("jagged array sizes require instance data")
-                } else {
-                    ir_error.as_deref()
-                };
-
-                if helper_type_ir.is_some() {
-                    include_ir_runtime = true;
-                }
-
-                functions_output.push_str(&emit_opaque_functions(
-                    resolved_type,
-                    helper_type_ir,
-                    helper_ir_error,
-                ));
-                functions_output.push_str("\n");
-
-                if let Some(ir) = helper_type_ir {
-                    match emit_ir_footprint_fn(ir) {
-                        Ok(ir_fn) => functions_output.push_str(&ir_fn),
-                        Err(err) => functions_output.push_str(&format!(
-                            "/* Failed to emit IR footprint for {}: {} */\n",
-                            resolved_type.name, err
-                        )),
-                    }
-                    match emit_ir_validate_fn(ir) {
-                        Ok(ir_fn) => functions_output.push_str(&ir_fn),
-                        Err(err) => functions_output.push_str(&format!(
-                            "/* Failed to emit IR validator for {}: {} */\n",
-                            resolved_type.name, err
-                        )),
-                    }
-                } else if let Some(msg) = helper_ir_error {
-                    functions_output.push_str(&format!(
-                        "/* IR helpers unavailable for {}: {} */\n",
-                        resolved_type.name, msg
+            match &resolved_type.kind {
+                ResolvedTypeKind::Primitive { prim_type } => {
+                    types_output.push_str(&format!(
+                        "/* Type: {} */\npub type {} = {};\n\n",
+                        resolved_type.name,
+                        emitter.nm(&resolved_type.name).ty,
+                        prim_rust(prim_type)
                     ));
                 }
+                ResolvedTypeKind::TypeRef { target_name, .. } => {
+                    emit_alias(&emitter, resolved_type, target_name, &mut types_output);
+                }
+                _ => {
+                    model.collect_named(&resolved_type.name);
+                    for cell in model.views_of_root(&resolved_type.name) {
+                        let name = cell.borrow().name.clone();
+                        let Some(info) = emitter.info(&name) else {
+                            continue;
+                        };
+                        emitter.emit_view_types(&info, &mut types_output);
+                        if self.options.emit_accessors {
+                            emitter.emit_view_functions(&info, &mut functions_output);
+                            functions_output.push_str(&emit_builders(&emitter, &info));
+                        }
+                    }
+                }
+            }
 
-                /* Emit builder if supported */
-                if let Some(builder_code) = emit_builder(resolved_type, type_ir.as_ref()) {
-                    functions_output.push_str(&builder_code);
-                    functions_output.push('\n');
+            if !self.options.emit_accessors {
+                continue;
+            }
+            /* IR-derived helpers (`<type>_footprint_ir`, `<type>_validate_ir`). */
+            if let Ok(ir) = self.ir_builder.build_type(resolved_type) {
+                if static_ir_helpers_supported(
+                    &self.ir_builder,
+                    &ir.type_name,
+                    &mut helper_support_cache,
+                    &mut BTreeSet::new(),
+                ) && !calls_buffer_sized(&self.ir_builder, &ir.root, 0)
+                {
+                    if let Ok(code) = emit_ir_footprint_fn_named(&ir, &ir_names) {
+                        functions_output.push_str(&code);
+                    }
+                    if let Ok(code) = emit_ir_validate_fn_named(&ir, &ir_names) {
+                        functions_output.push_str(&code);
+                    }
                 }
             }
         }
 
-        if !types_output.is_empty() {
-            let types_path = format!("{}/types.rs", self.options.output_dir);
-            if let Err(e) = fs::write(&types_path, &types_output) {
-                eprintln!("Warning: Failed to write types to {}: {}", types_path, e);
-            }
+        let types_path = format!("{}/types.rs", self.options.output_dir);
+        if let Err(e) = fs::write(&types_path, &types_output) {
+            eprintln!("Warning: Failed to write types to {}: {}", types_path, e);
         }
 
-        /* Emit runtime module if any type uses IR */
-        if include_ir_runtime {
-            let runtime_path = format!("{}/runtime.rs", self.options.output_dir);
-            if let Err(e) = fs::write(&runtime_path, generate_runtime_module()) {
-                eprintln!(
-                    "Warning: Failed to write runtime to {}: {}",
-                    runtime_path, e
-                );
+        /* Packages share one runtime at the output root; standalone output gets a copy. */
+        let runtime_path = format!("{}/runtime.rs", self.options.output_dir);
+        let runtime_content = match &self.options.package {
+            Some(package) => {
+                let depth = package.split('.').count() + 1;
+                format!(
+                    "/* Generated ABI runtime re-export - DO NOT EDIT */\npub use {}{}::*;\n",
+                    "super::".repeat(depth),
+                    SHARED_RUNTIME_MODULE
+                )
             }
+            None => RUNTIME_MODULE_CONTENT.to_string(),
+        };
+        if let Err(e) = fs::write(&runtime_path, runtime_content) {
+            eprintln!(
+                "Warning: Failed to write runtime to {}: {}",
+                runtime_path, e
+            );
         }
 
-        if !functions_output.is_empty() {
-            let mut complete_functions = String::new();
-            complete_functions.push_str("use super::types::*;\n");
-            if include_ir_runtime {
-                complete_functions.push_str("#[allow(unused_imports)]\n");
-                complete_functions.push_str("use super::runtime::*;\n");
-            }
-            complete_functions.push('\n');
-            complete_functions.push_str(&functions_output);
-
-            let functions_path = format!("{}/functions.rs", self.options.output_dir);
-            if let Err(e) = fs::write(&functions_path, &complete_functions) {
-                eprintln!(
-                    "Warning: Failed to write functions to {}: {}",
-                    functions_path, e
-                );
-            }
+        let mut complete_functions = String::from(FILE_HEADER);
+        /* Std items are spelled by absolute path (and `alloc` under a private
+         * name) so ABI types named `Result`, `Vec`, `alloc`, ... cannot shadow them. */
+        complete_functions.push_str("extern crate alloc as __tn_alloc;\n");
+        complete_functions.push_str("use super::types::*;\n");
+        complete_functions.push_str("use super::runtime::*;\n\n");
+        complete_functions.push_str(&functions_output);
+        let functions_path = format!("{}/functions.rs", self.options.output_dir);
+        if let Err(e) = fs::write(&functions_path, &complete_functions) {
+            eprintln!(
+                "Warning: Failed to write functions to {}: {}",
+                functions_path, e
+            );
         }
 
         types_output
@@ -283,39 +288,15 @@ impl<'a> RustCodeGenerator<'a> {
 
     /* Calculate Rust use path from current package to dependency package */
     fn get_rust_use_path(&self, from_package: &str, to_package: &str) -> String {
-        let from_parts: Vec<&str> = from_package.split('.').collect();
-        let to_parts: Vec<&str> = to_package.split('.').collect();
-
-        /* Find common prefix */
-        let mut common_len = 0;
-        for (i, (f, t)) in from_parts.iter().zip(to_parts.iter()).enumerate() {
-            if f == t {
-                common_len = i + 1;
-            } else {
-                break;
-            }
-        }
-
-        /* Build use path */
-        let mut path_parts = Vec::new();
-
-        /* Generated imports are emitted from the package's `types` module, so
-         * walk up once for `types` plus once per package component after the
-         * common ancestor. */
-        for _ in common_len..=from_parts.len() {
-            path_parts.push("super".to_string());
-        }
-
-        /* Add the unique parts of to_package */
-        for part in &to_parts[common_len..] {
-            path_parts.push(part.to_string());
-        }
-
-        path_parts.join("::")
+        crate::codegen::rust_gen::names::rust_use_path(
+            &self.options.all_packages,
+            from_package,
+            to_package,
+        )
     }
 }
 
-fn static_ir_helpers_supported(
+pub fn static_ir_helpers_supported(
     ir_builder: &IrBuilder<'_>,
     type_name: &str,
     cache: &mut BTreeMap<String, bool>,
@@ -337,10 +318,16 @@ fn static_ir_helpers_supported(
                 return false;
             }
 
-            let mut nested = Vec::new();
-            ir.collect_call_nested_type_names(&mut nested);
-            nested.into_iter().all(|nested_type| {
-                static_ir_helpers_supported(ir_builder, &nested_type, cache, visiting)
+            /* A call must pass every parameter of the callee's helper (the IR
+            of a union with variable-size variants selects one through a
+            parameter its callers do not supply), as in the C backend. */
+            let mut calls = Vec::new();
+            call_nested_nodes(&ir.root, &mut calls);
+            calls.into_iter().all(|call| {
+                ir_builder
+                    .build_type_name(&call.type_name)
+                    .is_ok_and(|callee| callee.parameters.len() == call.arguments.len())
+                    && static_ir_helpers_supported(ir_builder, &call.type_name, cache, visiting)
             })
         })
         .unwrap_or(false);
@@ -350,583 +337,108 @@ fn static_ir_helpers_supported(
     supported
 }
 
-/* Content emitted to runtime.rs - provides FAT pointer types and validation helpers */
-const RUNTIME_MODULE_CONTENT: &str = r#"/* Generated ABI runtime module - DO NOT EDIT */
-#![allow(dead_code)]
-
-/* ============================================================================
- * ABI Runtime - Error Types
- * ============================================================================ */
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AbiIrValidateError {
-    BufferTooSmall,
-    InvalidVariant,
-    MissingParam,
-    MissingSwitchCase,
-    UnknownNestedType,
-    ArithmeticOverflow,
-    OutOfBounds,
-    Misaligned,
-}
-
-impl AbiIrValidateError {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            AbiIrValidateError::BufferTooSmall => "buffer too small",
-            AbiIrValidateError::InvalidVariant => "invalid variant tag",
-            AbiIrValidateError::MissingParam => "missing parameter",
-            AbiIrValidateError::MissingSwitchCase => "missing switch case",
-            AbiIrValidateError::UnknownNestedType => "unknown nested type",
-            AbiIrValidateError::ArithmeticOverflow => "size arithmetic overflow",
-            AbiIrValidateError::OutOfBounds => "out of bounds access",
-            AbiIrValidateError::Misaligned => "misaligned access",
-        }
+/* Does `node` call (directly or through other calls) a helper that takes the
+buffer size? Its caller cannot pass one: the bytes left for a nested value are
+not an IR value. Such a type gets no IR helpers (the callee keeps its own). */
+fn calls_buffer_sized(ir_builder: &IrBuilder<'_>, node: &IrNode, depth: usize) -> bool {
+    if depth > 64 {
+        return true;
     }
-}
-
-impl std::fmt::Display for AbiIrValidateError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.as_str())
-    }
-}
-
-impl std::error::Error for AbiIrValidateError {}
-
-pub type TnIrParamResolver<'a> = &'a dyn Fn(&str) -> Option<u64>;
-pub type TnIrNestedCaller<'a> = &'a dyn Fn(&str, &[u64]) -> Result<u64, AbiIrValidateError>;
-
-#[allow(dead_code)]
-pub fn abi_ir_error_str(err: AbiIrValidateError) -> &'static str {
-    err.as_str()
-}
-
-pub fn tn_checked_add_u64(a: u64, b: u64) -> Result<u64, AbiIrValidateError> {
-    a.checked_add(b)
-        .ok_or(AbiIrValidateError::ArithmeticOverflow)
-}
-
-pub fn tn_checked_sub_u64(a: u64, b: u64) -> Result<u64, AbiIrValidateError> {
-    a.checked_sub(b)
-        .ok_or(AbiIrValidateError::ArithmeticOverflow)
-}
-
-pub fn tn_checked_mul_u64(a: u64, b: u64) -> Result<u64, AbiIrValidateError> {
-    a.checked_mul(b)
-        .ok_or(AbiIrValidateError::ArithmeticOverflow)
-}
-
-/* ============================================================================
- * ABI Runtime - FAT Pointer Types (Zero-copy views)
- * ============================================================================ */
-
-/// Immutable view into a byte buffer with bounds checking and endian-aware reads.
-#[derive(Debug, Clone, Copy)]
-pub struct TnView<'a> {
-    buf: &'a [u8],
-    offset: usize,
-    len: usize,
-}
-
-impl<'a> TnView<'a> {
-    /// Create a view over the entire buffer.
-    pub fn new(buf: &'a [u8]) -> Self {
-        Self {
-            buf,
-            offset: 0,
-            len: buf.len(),
-        }
-    }
-
-    /// Create a view over a range within the buffer.
-    pub fn with_range(buf: &'a [u8], offset: usize, len: usize) -> Result<Self, AbiIrValidateError> {
-        if offset.checked_add(len).map_or(true, |end| end > buf.len()) {
-            return Err(AbiIrValidateError::OutOfBounds);
-        }
-        Ok(Self { buf, offset, len })
-    }
-
-    /// Get the length of this view.
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.len
-    }
-
-    /// Check if this view is empty.
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-
-    /// Get the underlying buffer slice for this view.
-    #[inline]
-    pub fn as_slice(&self) -> &'a [u8] {
-        &self.buf[self.offset..self.offset + self.len]
-    }
-
-    /// Create a sub-view at a relative offset with the given length.
-    pub fn slice(&self, rel_offset: usize, len: usize) -> Result<Self, AbiIrValidateError> {
-        let start = self.offset.checked_add(rel_offset).ok_or(AbiIrValidateError::OutOfBounds)?;
-        let end = start.checked_add(len).ok_or(AbiIrValidateError::OutOfBounds)?;
-        if end > self.offset + self.len {
-            return Err(AbiIrValidateError::OutOfBounds);
-        }
-        Ok(Self { buf: self.buf, offset: start, len })
-    }
-
-    /// Read a u8 at the given relative offset.
-    #[inline]
-    pub fn read_u8(&self, rel_offset: usize) -> Result<u8, AbiIrValidateError> {
-        let idx = self.offset.checked_add(rel_offset).ok_or(AbiIrValidateError::OutOfBounds)?;
-        if idx >= self.offset + self.len {
-            return Err(AbiIrValidateError::OutOfBounds);
-        }
-        Ok(self.buf[idx])
-    }
-
-    /// Read a u16 (little-endian) at the given relative offset.
-    pub fn read_u16_le(&self, rel_offset: usize) -> Result<u16, AbiIrValidateError> {
-        let view = self.slice(rel_offset, 2)?;
-        Ok(u16::from_le_bytes([view.buf[view.offset], view.buf[view.offset + 1]]))
-    }
-
-    /// Read a u32 (little-endian) at the given relative offset.
-    pub fn read_u32_le(&self, rel_offset: usize) -> Result<u32, AbiIrValidateError> {
-        let view = self.slice(rel_offset, 4)?;
-        Ok(u32::from_le_bytes([
-            view.buf[view.offset],
-            view.buf[view.offset + 1],
-            view.buf[view.offset + 2],
-            view.buf[view.offset + 3],
-        ]))
-    }
-
-    /// Read a u64 (little-endian) at the given relative offset.
-    pub fn read_u64_le(&self, rel_offset: usize) -> Result<u64, AbiIrValidateError> {
-        let view = self.slice(rel_offset, 8)?;
-        Ok(u64::from_le_bytes([
-            view.buf[view.offset],
-            view.buf[view.offset + 1],
-            view.buf[view.offset + 2],
-            view.buf[view.offset + 3],
-            view.buf[view.offset + 4],
-            view.buf[view.offset + 5],
-            view.buf[view.offset + 6],
-            view.buf[view.offset + 7],
-        ]))
-    }
-
-    /// Read an i8 at the given relative offset.
-    #[inline]
-    pub fn read_i8(&self, rel_offset: usize) -> Result<i8, AbiIrValidateError> {
-        Ok(self.read_u8(rel_offset)? as i8)
-    }
-
-    /// Read an i16 (little-endian) at the given relative offset.
-    pub fn read_i16_le(&self, rel_offset: usize) -> Result<i16, AbiIrValidateError> {
-        Ok(self.read_u16_le(rel_offset)? as i16)
-    }
-
-    /// Read an i32 (little-endian) at the given relative offset.
-    pub fn read_i32_le(&self, rel_offset: usize) -> Result<i32, AbiIrValidateError> {
-        Ok(self.read_u32_le(rel_offset)? as i32)
-    }
-
-    /// Read an i64 (little-endian) at the given relative offset.
-    pub fn read_i64_le(&self, rel_offset: usize) -> Result<i64, AbiIrValidateError> {
-        Ok(self.read_u64_le(rel_offset)? as i64)
-    }
-
-    /// Read an f32 (little-endian) at the given relative offset.
-    pub fn read_f32_le(&self, rel_offset: usize) -> Result<f32, AbiIrValidateError> {
-        Ok(f32::from_bits(self.read_u32_le(rel_offset)?))
-    }
-
-    /// Read an f64 (little-endian) at the given relative offset.
-    pub fn read_f64_le(&self, rel_offset: usize) -> Result<f64, AbiIrValidateError> {
-        Ok(f64::from_bits(self.read_u64_le(rel_offset)?))
-    }
-}
-
-/// Mutable view into a byte buffer with bounds checking and endian-aware writes.
-#[derive(Debug)]
-pub struct TnViewMut<'a> {
-    buf: &'a mut [u8],
-    offset: usize,
-    len: usize,
-}
-
-impl<'a> TnViewMut<'a> {
-    /// Create a mutable view over the entire buffer.
-    pub fn new(buf: &'a mut [u8]) -> Self {
-        let len = buf.len();
-        Self { buf, offset: 0, len }
-    }
-
-    /// Create a mutable view over a range within the buffer.
-    pub fn with_range(buf: &'a mut [u8], offset: usize, len: usize) -> Result<Self, AbiIrValidateError> {
-        if offset.checked_add(len).map_or(true, |end| end > buf.len()) {
-            return Err(AbiIrValidateError::OutOfBounds);
-        }
-        Ok(Self { buf, offset, len })
-    }
-
-    /// Write a u8 at the given relative offset.
-    pub fn write_u8(&mut self, rel_offset: usize, value: u8) -> Result<(), AbiIrValidateError> {
-        let idx = self.checked_idx(rel_offset, 1)?;
-        self.buf[idx] = value;
-        Ok(())
-    }
-
-    /// Write a u16 (little-endian) at the given relative offset.
-    pub fn write_u16_le(&mut self, rel_offset: usize, value: u16) -> Result<(), AbiIrValidateError> {
-        let bytes = value.to_le_bytes();
-        let start = self.checked_idx(rel_offset, 2)?;
-        self.buf[start] = bytes[0];
-        self.buf[start + 1] = bytes[1];
-        Ok(())
-    }
-
-    /// Write a u32 (little-endian) at the given relative offset.
-    pub fn write_u32_le(&mut self, rel_offset: usize, value: u32) -> Result<(), AbiIrValidateError> {
-        let bytes = value.to_le_bytes();
-        let start = self.checked_idx(rel_offset, 4)?;
-        self.buf[start..start + 4].copy_from_slice(&bytes);
-        Ok(())
-    }
-
-    /// Write a u64 (little-endian) at the given relative offset.
-    pub fn write_u64_le(&mut self, rel_offset: usize, value: u64) -> Result<(), AbiIrValidateError> {
-        let bytes = value.to_le_bytes();
-        let start = self.checked_idx(rel_offset, 8)?;
-        self.buf[start..start + 8].copy_from_slice(&bytes);
-        Ok(())
-    }
-
-    fn checked_idx(&self, rel_offset: usize, len: usize) -> Result<usize, AbiIrValidateError> {
-        let start = self.offset.checked_add(rel_offset).ok_or(AbiIrValidateError::OutOfBounds)?;
-        let end = start.checked_add(len).ok_or(AbiIrValidateError::OutOfBounds)?;
-        if end > self.offset + self.len {
-            return Err(AbiIrValidateError::OutOfBounds);
-        }
-        Ok(start)
-    }
-}
-
-/* ============================================================================
- * ABI Runtime - Type Registry (for typeref dispatch)
- * ============================================================================ */
-
-/// Registry entry for a type's footprint function.
-pub type TnFootprintFn = fn(&[u64]) -> u64;
-
-/// Registry entry for a type's validate function.
-pub type TnValidateFn = fn(u64, &[u64]) -> Result<u64, AbiIrValidateError>;
-"#;
-
-/* Recursively emit nested anonymous types before the parent type */
-fn emit_recursive_types(resolved_type: &ResolvedType, output: &mut String) {
-    /* First emit all nested anonymous types */
-    match &resolved_type.kind {
-        ResolvedTypeKind::Struct { fields, .. } => {
-            for field in fields {
-                emit_recursive_types(&field.field_type, output);
-            }
-        }
-        ResolvedTypeKind::Union { variants } => {
-            for variant in variants {
-                emit_recursive_types(&variant.field_type, output);
-            }
-        }
-        ResolvedTypeKind::Enum { .. } => {
-            /* Skip enum variants - they're ghost fields in opaque wrapper approach */
-        }
-        ResolvedTypeKind::Array { element_type, .. } => {
-            emit_recursive_types(element_type, output);
-        }
-        ResolvedTypeKind::SizeDiscriminatedUnion { variants } => {
-            for variant in variants {
-                emit_recursive_types(&variant.variant_type, output);
-            }
-        }
-        _ => {}
-    }
-
-    /* Then emit this type if it has a concrete Rust representation. */
-    /* Skip enums - they're ghost fields in opaque wrapper approach */
-    /* Skip size-discriminated unions - they're ghost fields in opaque wrapper approach */
-    match &resolved_type.kind {
-        ResolvedTypeKind::Struct { .. }
-        | ResolvedTypeKind::Union { .. }
-        | ResolvedTypeKind::Array { .. } => {
-            output.push_str(&emit_single_type(resolved_type));
-            output.push('\n');
-        }
-        ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
-            /* Skip - SDUs are ghost fields, handled via accessor methods only */
-        }
-        _ => {}
-    }
-}
-
-/* Generate Rust code for a single type (non-recursive) */
-fn emit_single_type(resolved_type: &ResolvedType) -> String {
-    let mut output = String::new();
-
-    let type_name = sanitize_rust_type_name(&resolved_type.name);
-
-    output.push_str(&format!("/* Type: {} */\n", resolved_type.name));
-
-    match &resolved_type.kind {
-        ResolvedTypeKind::Struct { packed, .. } => {
-            /* Emit a repr stub so downstream code can assert attributes */
-            let repr_attr = if *packed {
-                "#[repr(C, packed)]"
-            } else {
-                "#[repr(C)]"
-            };
-            let layout_name = format!("{}__layout", type_name);
-            output.push_str("#[allow(dead_code)]\n");
-            output.push_str(repr_attr);
-            output.push('\n');
-            output.push_str(&format!(
-                "pub struct {} {{ _private: [u8; 0], }}\n\n",
-                layout_name
-            ));
-
-            /* Immutable wrapper */
-            output.push_str("#[allow(non_camel_case_types, non_snake_case)]\n");
-            output.push_str("#[derive(Copy, Clone)]\n");
-            output.push_str(&format!("pub struct {}<'a> {{\n", type_name));
-            output.push_str("    pub(crate) data: &'a [u8],\n");
-            output.push_str("}\n\n");
-
-            /* Mutable wrapper */
-            output.push_str("#[allow(non_camel_case_types, non_snake_case)]\n");
-            output.push_str(&format!("pub struct {}Mut<'a> {{\n", type_name));
-            output.push_str("    pub(crate) data: &'a mut [u8],\n");
-            output.push_str("}\n");
-        }
-        ResolvedTypeKind::Array { .. } => {
-            /* Arrays use the same zero-copy byte-view representation as structs.
-             * This keeps named ABI arrays usable through TypeRef fields. */
-            output.push_str("#[allow(non_camel_case_types, non_snake_case)]\n");
-            output.push_str("#[derive(Copy, Clone)]\n");
-            output.push_str(&format!("pub struct {}<'a> {{\n", type_name));
-            output.push_str("    pub(crate) data: &'a [u8],\n");
-            output.push_str("}\n\n");
-
-            output.push_str("#[allow(non_camel_case_types, non_snake_case)]\n");
-            output.push_str(&format!("pub struct {}Mut<'a> {{\n", type_name));
-            output.push_str("    pub(crate) data: &'a mut [u8],\n");
-            output.push_str("}\n");
-        }
-        ResolvedTypeKind::Enum { variants, .. } => {
-            /* Allow non-standard naming since this is FFI code matching ABI spec */
-            output.push_str("#[allow(non_camel_case_types, non_snake_case)]\n");
-            output.push_str("#[derive(Copy, Clone)]\n");
-            output.push_str("#[repr(C)]\n");
-            output.push_str(&format!("pub enum {} {{\n", type_name));
-            for variant in variants {
-                let rust_type = get_rust_type(&variant.variant_type);
-                output.push_str(&format!("    {}({}),\n", variant.name, rust_type));
-            }
-            output.push_str("}\n");
-        }
-        ResolvedTypeKind::Union { variants } => {
-            emit_union_type(
-                &mut output,
-                &type_name,
-                variants
-                    .iter()
-                    .map(|variant| (variant.name.as_str(), &variant.field_type)),
-            );
-        }
-        ResolvedTypeKind::SizeDiscriminatedUnion { variants } => {
-            emit_union_type(
-                &mut output,
-                &type_name,
-                variants
-                    .iter()
-                    .map(|variant| (variant.name.as_str(), &variant.variant_type)),
-            );
-        }
-        ResolvedTypeKind::Primitive { prim_type } => {
-            let rust_type = match prim_type {
-                crate::abi::types::PrimitiveType::Integral(int_type) => match int_type {
-                    crate::abi::types::IntegralType::U8 => "u8",
-                    crate::abi::types::IntegralType::U16 => "u16",
-                    crate::abi::types::IntegralType::U32 => "u32",
-                    crate::abi::types::IntegralType::U64 => "u64",
-                    crate::abi::types::IntegralType::I8 => "i8",
-                    crate::abi::types::IntegralType::I16 => "i16",
-                    crate::abi::types::IntegralType::I32 => "i32",
-                    crate::abi::types::IntegralType::I64 => "i64",
-                    crate::abi::types::IntegralType::Char => "u8",
-                },
-                crate::abi::types::PrimitiveType::FloatingPoint(float_type) => match float_type {
-                    crate::abi::types::FloatingPointType::F16 => "f16",
-                    crate::abi::types::FloatingPointType::F32 => "f32",
-                    crate::abi::types::FloatingPointType::F64 => "f64",
-                },
-            };
-            output.push_str(&format!("pub type {} = {};\n", type_name, rust_type));
-        }
-        _ => {
-            output.push_str(&format!(
-                "// TODO: Implement code generation for {:?}\n",
-                resolved_type.kind
-            ));
-        }
-    }
-
-    output
-}
-
-/* Generate Rust code for a resolved type (public API) */
-fn emit_resolved_type(resolved_type: &ResolvedType, type_ir: Option<&TypeIr>) -> String {
-    let mut output = String::new();
-    emit_recursive_types(resolved_type, &mut output);
-    if let Some(ir) = type_ir {
-        if let Some(params) = emit_type_params(resolved_type, ir) {
-            output.push_str(&params);
-        }
-    }
-    output
-}
-
-/* Escape Rust keywords by adding r# prefix */
-fn escape_rust_keyword(name: &str) -> String {
-    const RUST_KEYWORDS: &[&str] = &[
-        "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false", "fn",
-        "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref",
-        "return", "self", "Self", "static", "struct", "super", "trait", "true", "type", "unsafe",
-        "use", "where", "while", "async", "await", "dyn", "abstract", "become", "box", "do",
-        "final", "macro", "override", "priv", "typeof", "unsized", "virtual", "yield", "try",
-    ];
-
-    if RUST_KEYWORDS.contains(&name) {
-        format!("r#{}", name)
-    } else {
-        name.to_string()
-    }
-}
-
-/* Convert type name to valid Rust identifier */
-fn sanitize_rust_type_name(name: &str) -> String {
-    /* Replace :: with _ for anonymous nested types */
-    let name = name.replace("::", "_");
-    escape_rust_keyword(&name)
-}
-
-/* Get Rust type name for a resolved type */
-fn get_rust_type(resolved_type: &ResolvedType) -> String {
-    match &resolved_type.kind {
-        ResolvedTypeKind::Primitive { prim_type } => match prim_type {
-            crate::abi::types::PrimitiveType::Integral(int_type) => match int_type {
-                crate::abi::types::IntegralType::U8 => "u8".to_string(),
-                crate::abi::types::IntegralType::U16 => "u16".to_string(),
-                crate::abi::types::IntegralType::U32 => "u32".to_string(),
-                crate::abi::types::IntegralType::U64 => "u64".to_string(),
-                crate::abi::types::IntegralType::I8 => "i8".to_string(),
-                crate::abi::types::IntegralType::I16 => "i16".to_string(),
-                crate::abi::types::IntegralType::I32 => "i32".to_string(),
-                crate::abi::types::IntegralType::I64 => "i64".to_string(),
-                crate::abi::types::IntegralType::Char => "u8".to_string(),
-            },
-            crate::abi::types::PrimitiveType::FloatingPoint(float_type) => match float_type {
-                crate::abi::types::FloatingPointType::F16 => "f16".to_string(),
-                crate::abi::types::FloatingPointType::F32 => "f32".to_string(),
-                crate::abi::types::FloatingPointType::F64 => "f64".to_string(),
-            },
-        },
-        ResolvedTypeKind::Array {
-            element_type,
-            size_constant_status,
-            ..
-        } => {
-            use crate::abi::resolved::ConstantStatus;
-            let elem_type = get_rust_type(element_type);
-            match size_constant_status {
-                ConstantStatus::Constant => {
-                    if let crate::abi::resolved::Size::Const(size) = &resolved_type.size {
-                        let elem_size = match &element_type.size {
-                            crate::abi::resolved::Size::Const(s) => *s,
-                            _ => 1,
-                        };
-                        format!("[{}; {}]", elem_type, size / elem_size)
-                    } else {
-                        /* FAM: use zero-sized array for C FFI compatibility */
-                        format!("[{}; 0]", elem_type)
-                    }
-                }
-                _ => {
-                    /* FAM: use zero-sized array for C FFI compatibility */
-                    format!("[{}; 0]", elem_type)
-                }
-            }
-        }
-        ResolvedTypeKind::TypeRef { target_name, .. } => {
-            /* For TypeRef, use the target_name (just the simple type name, not FQDN) */
-            sanitize_rust_type_name(target_name)
-        }
-        _ => sanitize_rust_type_name(&resolved_type.name),
-    }
-}
-
-fn type_requires_lifetime(resolved_type: &ResolvedType) -> bool {
-    matches!(
-        resolved_type.kind,
-        ResolvedTypeKind::Struct { .. }
-            | ResolvedTypeKind::Union { .. }
-            | ResolvedTypeKind::SizeDiscriminatedUnion { .. }
-            | ResolvedTypeKind::TypeRef { .. }
-    )
-}
-
-fn rust_type_with_lifetime(resolved_type: &ResolvedType) -> String {
-    match &resolved_type.kind {
-        ResolvedTypeKind::Struct { .. }
-        | ResolvedTypeKind::Union { .. }
-        | ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
-            format!("{}<'a>", sanitize_rust_type_name(&resolved_type.name))
-        }
-        ResolvedTypeKind::TypeRef { target_name, .. } => {
-            format!("{}<'a>", sanitize_rust_type_name(target_name))
-        }
-        _ => get_rust_type(resolved_type),
-    }
-}
-
-fn emit_union_type<'a, I>(output: &mut String, type_name: &str, variants: I)
-where
-    I: IntoIterator<Item = (&'a str, &'a ResolvedType)>,
-{
-    let collected: Vec<(String, &'a ResolvedType)> = variants
+    let mut calls = Vec::new();
+    call_nested_nodes(node, &mut calls);
+    calls
         .into_iter()
-        .map(|(name, ty)| (sanitize_rust_type_name(name), ty))
-        .collect();
+        .any(|call| match ir_builder.build_type_name(&call.type_name) {
+            Ok(callee) => {
+                uses_buffer_size(&callee.root)
+                    || calls_buffer_sized(ir_builder, &callee.root, depth + 1)
+            }
+            Err(_) => true,
+        })
+}
 
-    let requires_lifetime = collected.iter().any(|(_, ty)| type_requires_lifetime(ty));
-
-    output.push_str("#[allow(non_camel_case_types, non_snake_case");
-    if requires_lifetime {
-        output.push_str(", unused_lifetimes");
+/* Does `node` itself read `__buffer_size`? */
+fn uses_buffer_size(node: &IrNode) -> bool {
+    match node {
+        IrNode::FieldRef(f) => f.parameter.is_none() && f.path == "__buffer_size",
+        IrNode::ZeroSize { .. } | IrNode::Const(_) | IrNode::CallNested(_) => false,
+        IrNode::AlignUp(n) => uses_buffer_size(&n.node),
+        IrNode::Switch(n) => {
+            n.cases.iter().any(|c| uses_buffer_size(&c.node))
+                || n.default.as_deref().is_some_and(uses_buffer_size)
+        }
+        IrNode::AddChecked(n)
+        | IrNode::SubChecked(n)
+        | IrNode::MulChecked(n)
+        | IrNode::DivChecked(n)
+        | IrNode::ModChecked(n)
+        | IrNode::BitAnd(n)
+        | IrNode::BitOr(n)
+        | IrNode::BitXor(n)
+        | IrNode::LeftShift(n)
+        | IrNode::RightShift(n) => uses_buffer_size(&n.left) || uses_buffer_size(&n.right),
+        IrNode::SumOverArray(n) => uses_buffer_size(&n.count),
     }
-    output.push_str(")]\n");
-    output.push_str("#[derive(Copy, Clone)]\n");
-    output.push_str("#[repr(C)]\n");
+}
 
-    let lifetime_decl = if requires_lifetime { "<'a>" } else { "" };
-    output.push_str(&format!("pub union {}{} {{\n", type_name, lifetime_decl));
-
-    for (variant_name, ty) in collected {
-        let rust_type = if requires_lifetime {
-            rust_type_with_lifetime(ty)
-        } else {
-            get_rust_type(ty)
-        };
-        output.push_str(&format!("    pub {}: {},\n", variant_name, rust_type));
+/* Every `CallNested` node in `node`, outermost first. */
+fn call_nested_nodes<'n>(node: &'n IrNode, out: &mut Vec<&'n CallNestedNode>) {
+    match node {
+        IrNode::ZeroSize { .. } | IrNode::Const(_) | IrNode::FieldRef(_) => {}
+        IrNode::AlignUp(n) => call_nested_nodes(&n.node, out),
+        IrNode::Switch(n) => {
+            for case in &n.cases {
+                call_nested_nodes(&case.node, out);
+            }
+            if let Some(default) = &n.default {
+                call_nested_nodes(default, out);
+            }
+        }
+        IrNode::CallNested(n) => out.push(n),
+        IrNode::AddChecked(n)
+        | IrNode::SubChecked(n)
+        | IrNode::MulChecked(n)
+        | IrNode::DivChecked(n)
+        | IrNode::ModChecked(n)
+        | IrNode::BitAnd(n)
+        | IrNode::BitOr(n)
+        | IrNode::BitXor(n)
+        | IrNode::LeftShift(n)
+        | IrNode::RightShift(n) => {
+            call_nested_nodes(&n.left, out);
+            call_nested_nodes(&n.right, out);
+        }
+        /* Jagged arrays are rejected before calls are checked. */
+        IrNode::SumOverArray(n) => call_nested_nodes(&n.count, out),
     }
-    output.push_str("}\n");
+}
+
+/* A named type that is just another name for an existing type. */
+fn emit_alias(e: &Emitter<'_, '_>, ty: &ResolvedType, target: &str, out: &mut String) {
+    let model = e.m;
+    let name = e.nm(&ty.name);
+    let target_ty = model.named(target).map(|t| model.deref(t));
+    out.push_str(&format!("/* Type: {} (alias of {}) */\n", ty.name, target));
+    match target_ty.map(|t| &t.kind) {
+        Some(ResolvedTypeKind::Primitive { prim_type }) => {
+            out.push_str(&format!(
+                "pub type {} = {};\n\n",
+                name.ty,
+                prim_rust(prim_type)
+            ));
+        }
+        Some(_) => {
+            let t = e.nm(&target_ty.unwrap().name);
+            out.push_str(&format!(
+                "#[allow(non_camel_case_types)]\npub type {nv}<B> = {tv}<B>;\n#[allow(non_camel_case_types)]\npub type {n}<'a> = {t}<'a>;\n#[allow(non_camel_case_types)]\npub type {nm}<'a> = {tm}<'a>;\n\n",
+                nv = name.view,
+                tv = t.view,
+                n = name.ty,
+                t = t.ty,
+                nm = name.mut_,
+                tm = t.mut_
+            ));
+        }
+        None => {}
+    }
 }

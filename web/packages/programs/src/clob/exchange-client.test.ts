@@ -7,8 +7,10 @@ import {
   TickerFieldBuilder,
   TokenAccountBuilder,
   TokenMintAccountBuilder,
+  TokenProgramAccount,
 } from '../token/abi/thru/program/token/types';
 import {
+  CLOB_ACCOUNT_TYPE_MARKET_V1,
   CLOB_PROGRAM_ADDRESS,
   CLOB_STATUS_FLAG_DEPOSITS_FROZEN,
   CLOB_STATUS_FLAG_PAUSED,
@@ -481,10 +483,10 @@ function createHarness({
         .set_length(symbolBytes.length)
         .set_bytes(Array.from(paddedSymbol))
         .build();
-      accounts.set(mint, new TokenMintAccountBuilder()
+      accounts.set(mint, tokenProgramAccount('mint_v1', new TokenMintAccountBuilder()
         .set_decimals(decimals)
         .set_ticker(ticker)
-        .build());
+        .build()));
     },
     setWalletBalance(mint: string, amount: bigint, owner = AUTHORITY) {
       const tokenAccount = deriveTokenAccountAddress(
@@ -493,12 +495,12 @@ function createHarness({
         mint,
         TOKEN_PROGRAM
       ).address;
-      accounts.set(tokenAccount, new TokenAccountBuilder()
+      accounts.set(tokenAccount, tokenProgramAccount('token_account_v1', new TokenAccountBuilder()
         .set_mint(bytesFor(mint))
         .set_owner(bytesFor(owner))
         .set_amount(amount)
         .set_is_frozen(0)
-        .build());
+        .build()));
     },
     setVaultMint(vault: string, mint: string) {
       accounts.set(vault, tokenAccount(mint, CLOB_PROGRAM_ADDRESS));
@@ -509,6 +511,7 @@ function createHarness({
       quote: bigint;
     }>) {
       const data = new Uint8Array(320 + (seats.length + 1) * 64);
+      data[0] = CLOB_ACCOUNT_TYPE_MARKET_V1;
       seats.forEach((seat, index) => {
         data.set(new SeatEntryBuilder()
           .set_seat_authority_pubkey(bytesFor(seat.authority))
@@ -525,11 +528,20 @@ function createHarness({
 }
 
 function tokenAccount(mint: string, owner: string): Uint8Array {
-  return new TokenAccountBuilder()
+  return tokenProgramAccount('token_account_v1', new TokenAccountBuilder()
     .set_mint(bytesFor(mint))
     .set_owner(bytesFor(owner))
     .set_amount(0n)
     .set_is_frozen(0)
+    .build());
+}
+
+function tokenProgramAccount(kind: 'mint_v1' | 'token_account_v1', payload: Uint8Array): Uint8Array {
+  return TokenProgramAccount.builder()
+    .payload()
+    .select(kind)
+    .writePayload(payload)
+    .finish()
     .build();
 }
 

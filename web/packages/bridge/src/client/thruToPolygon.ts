@@ -76,16 +76,78 @@ type ResolvedThruToPolygonDeposit = {
 
 const BRIDGE_INSTR_DEPOSIT = 2;
 const THRU_TXN_MTU = 32768;
-const BRIDGE_HEADER_SIZE = 68;
-const BRIDGE_RING_SLOT_COUNT = 256;
-/* Must match tn_bridge_ring_slot_t size in bridges/smart-contracts/thru/tn_bridge.h */
-const BRIDGE_RING_SLOT_SIZE = 90;
-const BRIDGE_ACCOUNT_BASE_SIZE = BRIDGE_HEADER_SIZE + BRIDGE_RING_SLOT_COUNT * BRIDGE_RING_SLOT_SIZE;
-const BRIDGE_FEE_COLLECTOR_OFFSET = BRIDGE_ACCOUNT_BASE_SIZE + 4;
-const BRIDGE_MINT_METADATA_SIZE = 34;
-const THRU_TOKEN_ACCOUNT_AMOUNT_OFFSET = 64;
-const THRU_TOKEN_ACCOUNT_MIN_SIZE = THRU_TOKEN_ACCOUNT_AMOUNT_OFFSET + 8;
 const BRIDGE_MAX_PAYLOAD_SIZE = 1024;
+
+/* Account layouts. Byte 0 of every account is its discriminator and the
+   payload follows (packed). Must match bridges/smart-contracts/thru/tn_bridge.h
+   (bridges/smart-contracts/thru/abi/tn_bridge.abi.yaml) and the token program
+   (tn_token_program_types.h). */
+const BRIDGE_ACCOUNT_TYPE_BRIDGE_V1 = 2;
+const BRIDGE_ACCOUNT_TYPE_MINT_METADATA_V1 = 3;
+const TOKEN_ACCOUNT_TYPE_TOKEN_ACCOUNT_V1 = 2;
+
+/* tn_bridge_account_t: account_type(1) + 55-byte header + ring + fee_config(36) + program_config(64) */
+const BRIDGE_HEADER_SIZE = 1 + 55;
+const BRIDGE_RING_SLOT_COUNT = 256;
+const BRIDGE_RING_SLOT_SIZE = 90;
+const BRIDGE_FEE_CONFIG_OFFSET = BRIDGE_HEADER_SIZE + BRIDGE_RING_SLOT_COUNT * BRIDGE_RING_SLOT_SIZE;
+const BRIDGE_FEE_COLLECTOR_OFFSET = BRIDGE_FEE_CONFIG_OFFSET + 4;
+export const BRIDGE_ACCOUNT_SIZE = BRIDGE_FEE_CONFIG_OFFSET + 36 + 64;
+
+/* tn_bridge_mint_metadata_t: account_type(1) + origin_chain_id(2) + origin_token_address(32) */
+export const BRIDGE_MINT_METADATA_SIZE = 35;
+
+/* tn_token_account_data_t: account_type(1) + mint(32) + owner(32) + amount(8) + is_frozen(1) */
+const THRU_TOKEN_ACCOUNT_MINT_OFFSET = 1;
+const THRU_TOKEN_ACCOUNT_OWNER_OFFSET = 33;
+const THRU_TOKEN_ACCOUNT_AMOUNT_OFFSET = 65;
+export const THRU_TOKEN_ACCOUNT_SIZE = 74;
+
+/** Decodes a bridge mint metadata account; throws unless the size and discriminator match. */
+export function parseThruBridgeMintMetadata(data: Uint8Array | undefined): {
+  originChainId: number;
+  originTokenBytes: Uint8Array;
+} {
+  if (
+    !data ||
+    data.length !== BRIDGE_MINT_METADATA_SIZE ||
+    data[0] !== BRIDGE_ACCOUNT_TYPE_MINT_METADATA_V1
+  ) {
+    throw new Error('bridge mint metadata account is missing or malformed');
+  }
+  return {
+    originChainId: readU16LE(data, 1),
+    originTokenBytes: data.slice(3, 35),
+  };
+}
+
+/** Returns the fee collector bytes of a bridge account; throws unless the size and discriminator match. */
+export function parseThruBridgeFeeCollector(data: Uint8Array | undefined): Uint8Array {
+  if (!data || data.length !== BRIDGE_ACCOUNT_SIZE || data[0] !== BRIDGE_ACCOUNT_TYPE_BRIDGE_V1) {
+    throw new Error('bridge manager account data is missing or malformed');
+  }
+  const feeCollectorBytes = data.slice(BRIDGE_FEE_COLLECTOR_OFFSET, BRIDGE_FEE_COLLECTOR_OFFSET + 32);
+  if (isZeroBytes(feeCollectorBytes)) {
+    throw new Error('bridge fee collector is not configured');
+  }
+  return feeCollectorBytes;
+}
+
+/** Decodes a token account; throws unless the size and discriminator match. */
+export function parseThruTokenAccount(data: Uint8Array | undefined): {
+  mintBytes: Uint8Array;
+  ownerBytes: Uint8Array;
+  amount: bigint;
+} {
+  if (!data || data.length !== THRU_TOKEN_ACCOUNT_SIZE || data[0] !== TOKEN_ACCOUNT_TYPE_TOKEN_ACCOUNT_V1) {
+    throw new Error('token account is missing or malformed');
+  }
+  return {
+    mintBytes: data.slice(THRU_TOKEN_ACCOUNT_MINT_OFFSET, THRU_TOKEN_ACCOUNT_MINT_OFFSET + 32),
+    ownerBytes: data.slice(THRU_TOKEN_ACCOUNT_OWNER_OFFSET, THRU_TOKEN_ACCOUNT_OWNER_OFFSET + 32),
+    amount: readU64LE(data, THRU_TOKEN_ACCOUNT_AMOUNT_OFFSET),
+  };
+}
 
 export async function getThruPolygonTokenRoute(
   state: BridgeClientState,
@@ -350,13 +412,8 @@ async function loadThruMintMetadataRoute(
     view: AccountView.DATA_ONLY,
   });
 
-  const metadataBytes = metadataAccount.data?.data;
-  if (!metadataBytes || metadataBytes.length < BRIDGE_MINT_METADATA_SIZE) {
-    throw new Error('bridge mint metadata account is missing or malformed');
-  }
-
-  const destinationChainId = readU16LE(metadataBytes, 0);
-  const destinationTokenBytes = metadataBytes.slice(2, 34);
+  const { originChainId: destinationChainId, originTokenBytes: destinationTokenBytes } =
+    parseThruBridgeMintMetadata(metadataAccount.data?.data);
   const polygonTokenAddress = bytes32ToEvmAddress(destinationTokenBytes);
   const polygonTokenAddressBytes32 = normalizeHex(bytesToHex(destinationTokenBytes));
 
@@ -384,20 +441,7 @@ async function readThruFeeCollectorAddress(thru: ThruConfigState, bridgeManagerA
     view: AccountView.DATA_ONLY,
   });
 
-  const data = bridgeAccount.data?.data;
-  if (!data) {
-    throw new Error('bridge manager account data is missing or malformed');
-  }
-  if (data.length < BRIDGE_FEE_COLLECTOR_OFFSET + 32) {
-    throw new Error('bridge manager account is missing fee collector extension; configure fee collector on-chain first');
-  }
-
-  const feeCollectorBytes = data.slice(BRIDGE_FEE_COLLECTOR_OFFSET, BRIDGE_FEE_COLLECTOR_OFFSET + 32);
-  if (isZeroBytes(feeCollectorBytes)) {
-    throw new Error('bridge fee collector is not configured');
-  }
-
-  return encodeAddress(feeCollectorBytes);
+  return encodeAddress(parseThruBridgeFeeCollector(bridgeAccount.data?.data));
 }
 
 function deriveThruTokenAccountAddress(
@@ -432,14 +476,7 @@ async function assertThruTokenAccountBalance(
     view: AccountView.DATA_ONLY,
   });
 
-  const data = account.data?.data;
-  if (!data || data.length < THRU_TOKEN_ACCOUNT_MIN_SIZE) {
-    throw new Error('token account is missing or malformed');
-  }
-
-  const mintBytes = data.slice(0, 32);
-  const ownerBytes = data.slice(32, 64);
-  const amount = readU64LE(data, THRU_TOKEN_ACCOUNT_AMOUNT_OFFSET);
+  const { mintBytes, ownerBytes, amount } = parseThruTokenAccount(account.data?.data);
 
   if (!bytesEqual(mintBytes, expectedMintBytes)) {
     throw new Error('token account mint does not match thruTokenMintAddress');

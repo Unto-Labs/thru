@@ -21,10 +21,10 @@ npx thru --help   # or node_modules/.bin/thru
 
 ```bash
 thru auth login
-thru --network betanet faucet withdraw thrusd ta... 100
+thru --network betanet faucet withdraw uusd ta... 100
 ```
 
-Replace `ta...` with an existing THRUSD token-account address. Your Developers account shares 5 requests per minute across browser, CLI, and API keys. Native THRU uses `thru faucet withdraw native <account> <amount>` with a local signing key.
+Replace `ta...` with an existing UUSD token-account address. Your Developers account shares 5 requests per minute across browser, CLI, and API keys. Native THRU uses `thru faucet withdraw native <account> <amount>` with a local signing key.
 
 [Authentication and API keys](https://thru.org/docs/cli-reference/global-flags-and-config#developers-authentication) · [Faucet reference](https://thru.org/docs/cli-reference/faucet-commands)
 

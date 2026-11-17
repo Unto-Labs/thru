@@ -128,16 +128,9 @@ fn format_node_with_options(
             node.type_info.size,
             options,
         ),
-        Value::Union {
-            variant_name,
-            variant_value,
-        } => format_variant_with_options(
-            variant_name,
-            variant_value.as_ref(),
-            base_offset,
-            node.type_info.size,
-            options,
-        ),
+        Value::Union { variants } => {
+            format_union_with_options(variants, base_offset, node.type_info.size, options)
+        }
         Value::SizeDiscriminatedUnion {
             variant_name,
             variant_value,
@@ -168,7 +161,9 @@ fn format_struct_with_options(
     /* Also get field sizes for tracking running offset */
     let field_sizes = get_struct_field_sizes(&node.type_info.kind);
 
-    /* Track running offset for variable-size fields */
+    /* Track running offset for variable-size fields. Offsets can come from a
+     * caller's JSON (`format_reflection(raw_json)`), so they wrap rather than
+     * panic. */
     let mut running_offset = 0u64;
 
     for (name, value) in fields {
@@ -176,7 +171,7 @@ fn format_struct_with_options(
         let field_offset = if options.include_byte_offsets {
             if let Some(rel_off) = relative_offset {
                 /* Field has known offset - use it and update running offset */
-                let abs_offset = base_offset + rel_off;
+                let abs_offset = base_offset.wrapping_add(rel_off);
                 /* Update running offset to after this field */
                 if let Some(size) = field_sizes
                     .get(name.as_str())
@@ -184,15 +179,15 @@ fn format_struct_with_options(
                     .flatten()
                     .or_else(|| reflected_runtime_size(value))
                 {
-                    running_offset = rel_off + size;
+                    running_offset = rel_off.wrapping_add(size);
                 }
                 abs_offset
             } else {
                 /* Variable-size field - use running offset */
-                let abs_offset = base_offset + running_offset;
+                let abs_offset = base_offset.wrapping_add(running_offset);
                 /* Update running offset based on the value's size */
                 if let Some(size) = reflected_runtime_size(value) {
-                    running_offset += size;
+                    running_offset = running_offset.wrapping_add(size);
                 }
                 abs_offset
             }
@@ -319,7 +314,9 @@ fn reflected_runtime_size(value: &ReflectedValue) -> Option<u64> {
             }
             Some(running_offset)
         }
-        Value::Union { variant_value, .. } => reflected_runtime_size(variant_value),
+        Value::Union { variants } => variants.iter().try_fold(0u64, |acc, (_, variant)| {
+            reflected_runtime_size(variant).map(|size| acc.max(size))
+        }),
         Value::Enum { variant_value, .. } => reflected_runtime_size(variant_value),
         Value::SizeDiscriminatedUnion { variant_value, .. } => {
             reflected_runtime_size(variant_value)
@@ -542,12 +539,42 @@ fn format_array_with_options(
         .map(|elem| {
             let elem_offset = cumulative_offset;
             let elem_size = reflected_runtime_size(elem).unwrap_or(0);
-            cumulative_offset += elem_size;
+            cumulative_offset = cumulative_offset.wrapping_add(elem_size);
             format_node_with_options(elem, None, elem_offset, options)
         })
         .collect();
 
     JsonValue::Array(formatted)
+}
+
+/* Every variant of a union, by name, each at the union's offset. */
+fn format_union_with_options(
+    variants: &[(String, ReflectedValue)],
+    base_offset: u64,
+    size: Option<u64>,
+    options: &FormatOptions,
+) -> JsonValue {
+    let mut map = Map::new();
+    for (name, value) in variants {
+        map.insert(
+            name.clone(),
+            format_node_with_options(value, None, base_offset, options),
+        );
+    }
+
+    if options.include_byte_offsets {
+        if let Some(s) = size {
+            map.insert(
+                "_byteRange".to_string(),
+                json!({
+                    "offset": base_offset,
+                    "size": s
+                }),
+            );
+        }
+    }
+
+    JsonValue::Object(map)
 }
 
 fn format_variant_with_options(

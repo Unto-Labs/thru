@@ -1,0 +1,410 @@
+{
+  "abi": "rpc/abi/type-library/tn_name_service_program.abi.yaml",
+  "account_root": "NameServiceAccount",
+  "values": {
+    "1": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "authority",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "root_name",
+                    "offset": 32,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "primitive": "Integral(U8)"
+                            },
+                            "size": 1
+                          },
+                          "jagged": false,
+                          "size": {
+                            "literal": {
+                              "u64": 64
+                            }
+                          }
+                        }
+                      },
+                      "size": 64
+                    }
+                  },
+                  {
+                    "name": "root_name_length",
+                    "offset": 96,
+                    "type": {
+                      "alignment": 4,
+                      "kind": {
+                        "primitive": "Integral(U32)"
+                      },
+                      "size": 4
+                    }
+                  },
+                  {
+                    "name": "total_subdomains",
+                    "offset": 100,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 108
+          },
+          "ref": "RootRegistrar"
+        },
+        "size": 108
+      },
+      "variant": "root_registrar_v1"
+    },
+    "2": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "parent",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "owner",
+                    "offset": 32,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "name",
+                    "offset": 64,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "primitive": "Integral(U8)"
+                            },
+                            "size": 1
+                          },
+                          "jagged": false,
+                          "size": {
+                            "literal": {
+                              "u64": 64
+                            }
+                          }
+                        }
+                      },
+                      "size": 64
+                    }
+                  },
+                  {
+                    "name": "name_length",
+                    "offset": 128,
+                    "type": {
+                      "alignment": 4,
+                      "kind": {
+                        "primitive": "Integral(U32)"
+                      },
+                      "size": 4
+                    }
+                  },
+                  {
+                    "name": "registration_time",
+                    "offset": 132,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "record_count",
+                    "offset": 140,
+                    "type": {
+                      "alignment": 4,
+                      "kind": {
+                        "primitive": "Integral(U32)"
+                      },
+                      "size": 4
+                    }
+                  },
+                  {
+                    "name": "records",
+                    "offset": 144,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "layout": {
+                                "alignment": 1,
+                                "kind": {
+                                  "struct": {
+                                    "aligned": null,
+                                    "fields": [
+                                      {
+                                        "name": "key_length",
+                                        "offset": 0,
+                                        "type": {
+                                          "alignment": 4,
+                                          "kind": {
+                                            "primitive": "Integral(U32)"
+                                          },
+                                          "size": 4
+                                        }
+                                      },
+                                      {
+                                        "name": "key",
+                                        "offset": 4,
+                                        "type": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "array": {
+                                              "element": {
+                                                "alignment": 1,
+                                                "kind": {
+                                                  "primitive": "Integral(U8)"
+                                                },
+                                                "size": 1
+                                              },
+                                              "jagged": false,
+                                              "size": {
+                                                "literal": {
+                                                  "u64": 32
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "size": 32
+                                        }
+                                      },
+                                      {
+                                        "name": "value_length",
+                                        "offset": 36,
+                                        "type": {
+                                          "alignment": 4,
+                                          "kind": {
+                                            "primitive": "Integral(U32)"
+                                          },
+                                          "size": 4
+                                        }
+                                      },
+                                      {
+                                        "name": "value",
+                                        "offset": 40,
+                                        "type": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "array": {
+                                              "element": {
+                                                "alignment": 1,
+                                                "kind": {
+                                                  "primitive": "Integral(U8)"
+                                                },
+                                                "size": 1
+                                              },
+                                              "jagged": false,
+                                              "size": {
+                                                "literal": {
+                                                  "u64": 256
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "size": 256
+                                        }
+                                      }
+                                    ],
+                                    "packed": true
+                                  }
+                                },
+                                "size": 296
+                              },
+                              "ref": "KvRecord"
+                            },
+                            "size": 296
+                          },
+                          "jagged": false,
+                          "size": {
+                            "field-ref": {
+                              "path": [
+                                "record_count"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "size": "variable"
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": "variable"
+          },
+          "ref": "Domain"
+        },
+        "size": "variable"
+      },
+      "variant": "domain_v1"
+    }
+  }
+}

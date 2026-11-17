@@ -1,0 +1,84 @@
+abi:
+  package: "compliance.nested_ref_after_variable"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "An outer array sized by a child field that follows variable-size data in the child"
+
+types:
+  - name: "Child"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "n"
+            field-type:
+              primitive: u8
+          - name: "bytes"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["n"]
+                element-type:
+                  primitive: u8
+          - name: "count"
+            field-type:
+              primitive: u8
+  - name: "RefOuter"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "lead"
+            field-type:
+              primitive: u8
+          - name: "child"
+            field-type:
+              type-ref:
+                name: "Child"
+          - name: "items"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["child", "count"]
+                element-type:
+                  primitive: u16
+          - name: "tail"
+            field-type:
+              primitive: u8
+  - name: "InlineOuter"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "child"
+            field-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "n"
+                    field-type:
+                      primitive: u8
+                  - name: "bytes"
+                    field-type:
+                      array:
+                        size:
+                          field-ref:
+                            path: ["n"]
+                        element-type:
+                          primitive: u8
+                  - name: "count"
+                    field-type:
+                      primitive: u8
+          - name: "items"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["child", "count"]
+                element-type:
+                  primitive: u16
+          - name: "tail"
+            field-type:
+              primitive: u8

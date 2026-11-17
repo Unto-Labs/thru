@@ -9,9 +9,18 @@ The `abi_reflect` library provides runtime reflection capabilities for ABI types
 - **Recursive Structure**: Get back a complete recursive structure with both type metadata and parsed values
 - **Broad Type Coverage**: Handles primitives, structs, unions, enums, arrays, and size-discriminated unions (see _Current Limitations_ for known gaps)
 
-## Current Limitations
+## Semantics and Limits
 
-- **Computed-tag enums** (where the tag expression is a non-trivial arithmetic/bitwise expression) are not yet represented in the shared Layout IR. When the CLI encounters one of these types (`ComputedTagEnum` in the compliance suite), IR construction fails with an “unsupported tag expression” error and reflection stops. Every other compliance type—including structs with flexible arrays, nested structs, SDUs, and classic tagged enums—is fully supported today. Support for computed-tag enums will land once the shared IR grows an expression node for those tag formulas.
+- **`__buffer_size`** is the number of bytes available to the struct that reads it (the whole buffer at the top level), as in the code generators.
+- **Computed-tag enums** (a `tag-ref` that is an expression, unary `bit-not` and `popcount` included) validate: the interpreter derives `<enum>.computed_tag` from the expression over the type's parameters with the parser's u64 tag arithmetic.
+- **Unions** carry no tag, so every variant is decoded over the union's bytes (`Value::Union { variants }`) and formatted as an object of variant name to value.
+- **Overflow** in size, offset or expression evaluation is an error, never a panic or a wrapped value.
+- **`validate_buffer`** checks the IR footprint and then parses the bytes, so structural errors (an SDU payload matching no variant) fail; a non-struct type with dynamic parameters fails with `UnsupportedOperation`.
+- **`reflect_instruction`** rejects bytes the decoded root does not cover (`TrailingBytes`), since programs such as the CLOB run every instruction packed into the buffer; `reflect_account` and `reflect_event` still accept spare capacity.
+- **Decode limits** (`limits.rs`): 256 levels of nesting, 65,536 values plus 8 per buffer byte per decode, and 2^20 IR evaluation steps per validation (`LimitExceeded`), so zero-byte type graphs cannot expand exponentially.
+- Known gaps: a struct whose enum field has a constant size (all variants the same size) does not reflect, and a struct holding a type reference to a variable-size struct with a self-tagged enum fails validation.
+
+The Go port in `sdks/go/abi` matches this crate byte for byte; after changing reflection output, run `sdks/go/abi/scripts/regen-goldens.sh`.
 
 ## Usage
 

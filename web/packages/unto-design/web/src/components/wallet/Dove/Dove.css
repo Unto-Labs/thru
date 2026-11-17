@@ -1,0 +1,102 @@
+/* Color rides on a custom property so the caller can pass `currentColor`. */
+.uds-dove {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  vertical-align: middle;
+  line-height: 0;
+  color: var(--uds-dove-color, var(--color-surface-brick));
+  flex: none;
+}
+.uds-dove__tilt,
+.uds-dove__bob {
+  display: inline-block;
+  line-height: 0;
+}
+.uds-dove__svg {
+  display: block;
+  overflow: visible;
+}
+
+.uds-dove__body,
+.uds-dove__wing {
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-linejoin: round;
+  stroke-width: 0;
+  fill-opacity: 1;
+}
+.uds-dove__hinge {
+  transform-box: view-box;
+  transform-origin: 80px 72px;
+}
+
+.uds-dove--draw .uds-dove__body,
+.uds-dove--draw .uds-dove__wing {
+  fill-opacity: 0;
+  animation:
+    uds-dove-draw 1.4s ease-out forwards,
+    uds-dove-fill 0.6s ease 1.15s forwards;
+}
+
+.uds-dove--fly .uds-dove__tilt {
+  animation: uds-dove-tilt 1.6s ease-in-out infinite;
+}
+.uds-dove--fly .uds-dove__bob {
+  animation: uds-dove-bob 0.8s ease-in-out infinite;
+}
+.uds-dove--fly.uds-dove--small .uds-dove__bob {
+  animation-name: uds-dove-bob-sm;
+}
+.uds-dove--fly .uds-dove__hinge {
+  animation: uds-dove-wing 0.8s ease-in-out infinite;
+}
+
+.uds-dove__streak {
+  position: absolute;
+  height: 1px;
+  background: var(--color-border-secondary);
+  animation: uds-dove-streak 1.1s linear infinite;
+}
+
+@keyframes uds-dove-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes uds-dove-fill {
+  to { fill-opacity: 1; }
+}
+@keyframes uds-dove-tilt {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+@keyframes uds-dove-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@keyframes uds-dove-bob-sm {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.2px); }
+}
+@keyframes uds-dove-wing {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-15deg); }
+}
+@keyframes uds-dove-streak {
+  0% { transform: translateX(24px); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: translateX(-96px); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uds-dove--fly .uds-dove__tilt,
+  .uds-dove--fly .uds-dove__bob,
+  .uds-dove--fly .uds-dove__hinge,
+  .uds-dove__streak {
+    animation: none;
+  }
+  .uds-dove--draw .uds-dove__body,
+  .uds-dove--draw .uds-dove__wing {
+    animation-duration: 0.01ms;
+    animation-delay: 0ms;
+  }
+}

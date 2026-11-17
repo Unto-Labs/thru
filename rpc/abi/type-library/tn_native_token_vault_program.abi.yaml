@@ -1,0 +1,179 @@
+abi:
+  package: thru.program.native_token_vault
+  name: "NativeTokenVault"
+  abi-version: 1
+  package-version: "0.2.0"
+  description: >-
+    ABI for the Native Token Vault (UNTO-3561): custody of the absent-block-producer
+    fee receiver, withdrawable by the configured authority. Its receiver and config
+    accounts exist only at genesis; there is no create or initialize instruction.
+  imports: []
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: "NativeTokenVaultInstruction"
+        account-root: "NativeTokenVaultAccount"
+        errors: "NativeTokenVaultError"
+types:
+- name: Pubkey
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+- name: WithdrawArgs
+  kind:
+    struct:
+      packed: true
+      comment: >-
+        Moves amount native balance from the canonical receiver PDA to destination. The authority account must equal config.authority and be authorized (signer, or invoke-auth from its owner such as a Multisig request).
+      fields:
+      - name: receiver_account_idx
+        field-type:
+          primitive: u16
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: destination_account_idx
+        field-type:
+          primitive: u16
+      - name: amount
+        field-type:
+          primitive: u64
+- name: ProposeAuthorityArgs
+  kind:
+    struct:
+      packed: true
+      comment: >-
+        The current authority proposes a nonzero candidate (not the vault program, not itself).
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: candidate
+        field-type:
+          type-ref:
+            name: Pubkey
+- name: AcceptAuthorityArgs
+  kind:
+    struct:
+      packed: true
+      comment: >-
+        The pending candidate, authorized, becomes the authority.
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: candidate_account_idx
+        field-type:
+          primitive: u16
+- name: CancelProposalArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+- name: NativeTokenVaultInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: tag
+        field-type:
+          primitive: u32
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - tag
+            variants:
+            - name: withdraw
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: WithdrawArgs
+            - name: propose_authority
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: ProposeAuthorityArgs
+            - name: accept_authority
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: AcceptAuthorityArgs
+            - name: cancel_proposal
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: CancelProposalArgs
+# Account root. Byte 0 of every structured account the vault owns is
+# account_type. Values are never reused; a new layout takes the next unused
+# value. The receiver holds only a balance (no data) and has no layout.
+- name: NativeTokenVaultAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: account_type
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - account_type
+            variants:
+            - name: config_v1
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: NativeTokenVaultConfig
+- name: NativeTokenVaultConfig
+  kind:
+    struct:
+      packed: true
+      comment: >-
+        Config PDA(vault, "native-token-vault-config:v1") after account_type 1, written at genesis only.
+        pending_authority is zero when nothing is proposed.
+      fields:
+      - name: authority
+        field-type:
+          type-ref:
+            name: Pubkey
+      - name: pending_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+- name: NativeTokenVaultError
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: code
+        field-type:
+          primitive: u64

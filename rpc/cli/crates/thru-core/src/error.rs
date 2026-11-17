@@ -97,6 +97,12 @@ pub enum CliError {
         seed: String,
     },
 
+    /// The RPC endpoint rejected the request for exceeding a rate limit.
+    /// `unkeyed` is set for the limit on requests without an API key, which a
+    /// free API key lifts.
+    #[error("RPC error: {}", thru_client::escape_controls(.message))]
+    RateLimited { message: String, unkeyed: bool },
+
     /// Account not found errors
     #[error("Account not found: {0}")]
     AccountNotFound(String),
@@ -153,13 +159,33 @@ impl From<anyhow::Error> for CliError {
 
 impl From<tonic::Status> for CliError {
     fn from(status: tonic::Status) -> Self {
-        CliError::Rpc(status.to_string())
+        match thru_client::ClientError::rate_limited_from_status(&status) {
+            Some(rate_limited) => rate_limited.into(),
+            None => CliError::Rpc(status.to_string()),
+        }
     }
 }
 
 impl From<tonic::transport::Error> for CliError {
     fn from(err: tonic::transport::Error) -> Self {
         CliError::Transport(err.to_string())
+    }
+}
+
+impl CliError {
+    /// Converts a client error for a command that reports RPC failures in its
+    /// own words: a rate limit stays [`CliError::RateLimited`], so the shared
+    /// handler can point a keyless caller to an API key; anything else goes
+    /// through `other`.
+    pub fn rate_limited_or(
+        err: thru_client::ClientError,
+        other: impl FnOnce(thru_client::ClientError) -> CliError,
+    ) -> CliError {
+        if err.is_rate_limited() {
+            CliError::from(err)
+        } else {
+            other(err)
+        }
     }
 }
 
@@ -212,8 +238,70 @@ impl From<thru_client::ClientError> for CliError {
             thru_client::ClientError::StreamLagged(msg) => {
                 CliError::Rpc(format!("stream dropped for falling behind: {}", msg))
             }
+            thru_client::ClientError::RateLimited {
+                message, unkeyed, ..
+            } => CliError::RateLimited { message, unkeyed },
             thru_client::ClientError::AccountNotFound(msg) => CliError::AccountNotFound(msg),
             thru_client::ClientError::Generic { message } => CliError::Generic { message },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const UNKEYED: &str = "rate limit for requests without an API key exceeded (10 weighted \
+        requests/s per IP). Get a free key with higher limits at \
+        https://dev.thru.org/keys?ref=edge-429 and send it as \"Authorization: Bearer thru_...\". \
+        Docs: https://thru.org/docs/api-ref/rate-limits/";
+
+    #[test]
+    fn rate_limited_or_keeps_rate_limits_for_the_hint() {
+        let limited = thru_client::ClientError::from(tonic::Status::resource_exhausted(UNKEYED));
+        assert!(matches!(
+            CliError::rate_limited_or(limited, |_| CliError::Rpc("other".into())),
+            CliError::RateLimited { unkeyed: true, .. }
+        ));
+        let failed = thru_client::ClientError::Rpc("boom".into());
+        assert!(matches!(
+            CliError::rate_limited_or(failed, |e| CliError::TransactionSubmission(e.to_string())),
+            CliError::TransactionSubmission(_)
+        ));
+    }
+
+    #[test]
+    fn rate_limit_status_keeps_its_kind() {
+        match CliError::from(tonic::Status::resource_exhausted(UNKEYED)) {
+            CliError::RateLimited { message, unkeyed } => {
+                assert_eq!(message, UNKEYED);
+                assert!(unkeyed);
+            }
+            other => panic!("expected RateLimited, got {other:?}"),
+        }
+        match CliError::from(tonic::Status::resource_exhausted("rate limit exceeded")) {
+            CliError::RateLimited { message, unkeyed } => {
+                assert_eq!(message, "rate limit exceeded");
+                assert!(!unkeyed);
+            }
+            other => panic!("expected RateLimited, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rate_limit_client_error_keeps_its_kind() {
+        let client = thru_client::ClientError::from(tonic::Status::resource_exhausted(UNKEYED));
+        match CliError::from(client) {
+            CliError::RateLimited { unkeyed, .. } => assert!(unkeyed),
+            other => panic!("expected RateLimited, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn other_resource_exhausted_stays_rpc() {
+        match CliError::from(tonic::Status::resource_exhausted("message too large")) {
+            CliError::Rpc(_) => {}
+            other => panic!("expected Rpc, got {other:?}"),
         }
     }
 }

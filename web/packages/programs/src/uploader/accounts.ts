@@ -1,27 +1,31 @@
 import type { Account } from '@thru/sdk';
-import { UploaderProgramMeta } from './abi/thru/program/uploader/types';
+import { UploaderProgramAccount } from './abi/thru/program/uploader/types';
 import {
   accountData,
   pubkeyAddress,
 } from '../utils/helpers';
+import { decodeAccountRoot } from '../utils/account-root';
 import {
-  UPLOADER_META_SIZE,
   UPLOADER_STATE_FINALIZED,
   UPLOADER_STATE_OPEN,
 } from './constants';
 import type { UploaderProgramMetaInfo } from './types';
 
+/**
+ * Decodes Uploader program account data through its account root (byte 0 is
+ * the account type). Source buffers are raw bytes and are not decoded here.
+ * Returns null for any other type or size.
+ */
+export function decodeUploaderProgramAccount(data: Uint8Array): UploaderProgramAccount | null {
+  return decodeAccountRoot(data, (bytes) => UploaderProgramAccount.from_array(bytes));
+}
+
 export function parseUploaderProgramMeta(
   account: Account | Uint8Array
 ): UploaderProgramMetaInfo {
   const data = accountData(account, 'uploader metadata account');
-  if (data.length !== UPLOADER_META_SIZE) {
-    throw new Error(
-      `uploader metadata account must be ${UPLOADER_META_SIZE} bytes, got ${data.length}`
-    );
-  }
-  const parsed = UploaderProgramMeta.from_array(data);
-  if (!parsed) throw new Error('uploader metadata account is malformed');
+  const parsed = decodeUploaderProgramAccount(data)?.payload().asMetaV1();
+  if (!parsed) throw new Error('account data is not an uploader metadata account');
   const state = parsed.get_state();
   if (state !== UPLOADER_STATE_OPEN && state !== UPLOADER_STATE_FINALIZED) {
     throw new Error(`uploader metadata account has invalid state ${state}`);

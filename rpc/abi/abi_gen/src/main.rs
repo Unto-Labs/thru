@@ -46,6 +46,10 @@ enum Commands {
         /* Enable verbose output */
         #[arg(short = 'v', long = "verbose")]
         verbose: bool,
+
+        /* Go module path of the output root (written to go.mod; Go only) */
+        #[arg(long = "go-module", value_name = "PATH")]
+        go_module: Option<String>,
     },
 
     /* Analyze ABI type definitions and show detailed type information */
@@ -85,6 +89,8 @@ enum Language {
     /* Generate TypeScript code (.ts files) */
     #[value(name = "typescript")]
     TypeScript,
+    /* Generate Go code (one package per ABI package plus a shared runtime) */
+    Go,
 }
 
 impl From<Language> for cmds::codegen::Language {
@@ -93,6 +99,7 @@ impl From<Language> for cmds::codegen::Language {
             Language::C => cmds::codegen::Language::C,
             Language::Rust => cmds::codegen::Language::Rust,
             Language::TypeScript => cmds::codegen::Language::TypeScript,
+            Language::Go => cmds::codegen::Language::Go,
         }
     }
 }
@@ -107,8 +114,16 @@ fn main() -> anyhow::Result<()> {
             language,
             output_dir,
             verbose,
+            go_module,
         } => {
-            cmds::codegen::run(files, include_dirs, language.into(), output_dir, verbose)?;
+            cmds::codegen::run_with_options(
+                files,
+                include_dirs,
+                language.into(),
+                output_dir,
+                verbose,
+                &cmds::codegen::CodegenOptions { go_module },
+            )?;
         }
 
         Commands::Analyze {

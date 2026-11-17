@@ -8,6 +8,7 @@
 pub mod errors;
 pub mod formatter;
 pub mod ir;
+pub mod limits;
 pub mod nested_instruction_data;
 pub mod params;
 pub mod parser;
@@ -25,7 +26,7 @@ pub use formatter::{
 pub use ir::{IrInterpreter, IrValidationResult, ParamMap};
 pub use nested_instruction_data::{
     resolve_nested_instruction_data, resolve_nested_instruction_data_with_options,
-    NestedInstructionDecodeOptions, MAX_NESTED_INSTRUCTION_DEPTH,
+    NestedInstructionDecodeOptions, MAX_NESTED_INSTRUCTION_DECODES, MAX_NESTED_INSTRUCTION_DEPTH,
 };
 pub use parser::Parser;
 pub use reflect::{Reflector, ReflectorConfig};

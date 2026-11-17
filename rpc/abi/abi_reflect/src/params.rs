@@ -1,5 +1,7 @@
 use crate::errors::{ReflectError, ReflectResult};
 use crate::ir::ParamMap;
+use crate::limits::{decode_value_budget, DECODE_VALUE_BASE, MAX_DECODE_DEPTH};
+use crate::parser::BUFFER_SIZE_REF;
 use abi_gen::abi::expr::{ExprKind, FieldRefExpr, LiteralExpr};
 use abi_gen::abi::resolved::{ResolvedType, ResolvedTypeKind, Size, TypeResolver};
 use abi_gen::abi::types::{FloatingPointType, IntegralType, PrimitiveType};
@@ -29,7 +31,8 @@ impl<'a> ParamExtractor<'a> {
             });
         };
 
-        let (field_params, payload_targets) = build_param_mapping(resolved_type, type_ir)?;
+        let (field_params, payload_targets) =
+            build_param_mapping(resolver, resolved_type, type_ir)?;
 
         Ok(Self {
             type_name: &resolved_type.name,
@@ -47,6 +50,8 @@ impl<'a> ParamExtractor<'a> {
             &self.field_params,
             &self.payload_targets,
         );
+        walker.value_budget = decode_value_budget(data.len());
+        walker.values_left = walker.value_budget;
         let mut path = Vec::new();
         walker.process_struct(self.resolved_type, &mut path, data)?;
         walker.finish()
@@ -54,6 +59,7 @@ impl<'a> ParamExtractor<'a> {
 }
 
 fn build_param_mapping<'a>(
+    resolver: &TypeResolver,
     resolved_type: &'a ResolvedType,
     type_ir: &'a TypeIr,
 ) -> ReflectResult<(BTreeMap<String, Vec<&'a str>>, BTreeMap<&'a str, String>)> {
@@ -69,13 +75,20 @@ fn build_param_mapping<'a>(
                 trimmed.ends_with("payload_size") || normalized.ends_with("payload_size");
             let target_path = if normalized.is_empty() {
                 owner_trimmed.to_string()
+            } else if let Some(target) = parent_ref_binding(trimmed, resolved_type, resolver) {
+                trim_type_prefix(&target, &resolved_type.name).to_string()
             } else {
                 trim_type_prefix(&normalized, &resolved_type.name).to_string()
             };
-            dynamic_lookup.insert(
-                canonical,
-                (target_path, owner_trimmed.to_string(), is_payload),
-            );
+            /* A payload size measures the field it names. At the top level
+            that is the owner; in an inline struct the owner is the inline
+            struct and the field is inside it (`inner.body.payload_size`). */
+            let payload_owner = target_path
+                .strip_suffix(".payload_size")
+                .filter(|field| field.starts_with(&format!("{owner_trimmed}.")))
+                .unwrap_or(owner_trimmed)
+                .to_string();
+            dynamic_lookup.insert(canonical, (target_path, payload_owner, is_payload));
         }
     }
 
@@ -135,6 +148,70 @@ fn canonical_param_name(owner: &str, path: &str) -> String {
         format!("{owner}.{stripped}")
     } else {
         format!("{owner}.{path}")
+    }
+}
+
+/* A parent reference is named after the field holding it, then the
+ * reference joined with `.`: `["..", "count"]` in `inner.items` is
+ * `inner.items....count`. Binds it to the field it names, searched as the
+ * resolver and the walker do: from the struct holding the field, one struct
+ * outwards per `..` (stopping at the root), then on outwards to the first
+ * struct that has the field (`count`). A struct whose layout cannot be
+ * followed from `root` ends the search there. None if `path` has no parent
+ * step. */
+fn parent_ref_binding(path: &str, root: &ResolvedType, resolver: &TypeResolver) -> Option<String> {
+    let start = path.find("...")?;
+    let mut segments: Vec<&str> = path[..start].split('.').filter(|s| !s.is_empty()).collect();
+    let mut rest = &path[start + 1..];
+    let mut steps = 0;
+    while let Some(stripped) = rest.strip_prefix("..") {
+        steps += 1;
+        rest = stripped.strip_prefix('.').unwrap_or(stripped);
+    }
+    let rest = normalize_binding_path(rest);
+    let head = rest.split('.').next().unwrap_or_default();
+    /* Drop the holding field, then one struct per parent step. */
+    let mut depth = segments.len().saturating_sub(1 + steps);
+    while depth > 0 && !head.is_empty() {
+        match struct_has_field(root, resolver, &segments[..depth], head) {
+            Some(false) => depth -= 1,
+            Some(true) | None => break,
+        }
+    }
+    segments.truncate(depth);
+    if !rest.is_empty() {
+        segments.push(&rest);
+    }
+    Some(segments.join("."))
+}
+
+/* Whether the struct reached from `root` through the fields `scope` has a
+ * field `name`; None if `scope` does not lead to a struct. */
+fn struct_has_field(
+    root: &ResolvedType,
+    resolver: &TypeResolver,
+    scope: &[&str],
+    name: &str,
+) -> Option<bool> {
+    let mut current = root;
+    for segment in scope {
+        let ResolvedTypeKind::Struct { fields, .. } = &struct_target(current, resolver)?.kind
+        else {
+            return None;
+        };
+        current = &fields.iter().find(|f| f.name == *segment)?.field_type;
+    }
+    match &struct_target(current, resolver)?.kind {
+        ResolvedTypeKind::Struct { fields, .. } => Some(fields.iter().any(|f| f.name == name)),
+        _ => None,
+    }
+}
+
+/* `ty`, or the type a type reference names. */
+fn struct_target<'a>(ty: &'a ResolvedType, resolver: &'a TypeResolver) -> Option<&'a ResolvedType> {
+    match &ty.kind {
+        ResolvedTypeKind::TypeRef { target_name, .. } => resolver.get_type_info(target_name),
+        _ => Some(ty),
     }
 }
 
@@ -605,6 +682,14 @@ struct StructWalker<'a> {
     value_lookup: HashMap<String, i128>,
     remaining_payload: BTreeMap<&'a str, String>,
     scope_stack: Vec<String>,
+    /* Bytes available to each struct being walked, innermost last
+     * (`__buffer_size`). */
+    buffer_sizes: Vec<usize>,
+    /* Values the walk may still visit, out of `value_budget`, and the
+     * current nesting depth (see `limits`) */
+    value_budget: usize,
+    values_left: usize,
+    depth: usize,
 }
 
 impl<'a> StructWalker<'a> {
@@ -622,6 +707,10 @@ impl<'a> StructWalker<'a> {
             value_lookup: HashMap::new(),
             remaining_payload: payload_targets.clone(),
             scope_stack: vec![String::new()],
+            buffer_sizes: Vec::new(),
+            value_budget: DECODE_VALUE_BASE,
+            values_left: DECODE_VALUE_BASE,
+            depth: 0,
         }
     }
 
@@ -633,7 +722,9 @@ impl<'a> StructWalker<'a> {
     ) -> ReflectResult<usize> {
         let scope_marker = path_key(path);
         self.scope_stack.push(scope_marker);
+        self.buffer_sizes.push(data.len());
         let result = self.process_struct_inner(ty, path, data);
+        self.buffer_sizes.pop();
         self.scope_stack.pop();
         result
     }
@@ -686,7 +777,35 @@ impl<'a> StructWalker<'a> {
         Ok(cursor)
     }
 
+    /* Visit one value, within the decode limits */
     fn process_field(
+        &mut self,
+        ty: &ResolvedType,
+        path: &mut Vec<String>,
+        data: &[u8],
+        is_last: bool,
+    ) -> ReflectResult<usize> {
+        if self.depth >= MAX_DECODE_DEPTH {
+            return Err(self.limit_error(format!("nesting deeper than {MAX_DECODE_DEPTH} levels")));
+        }
+        if self.values_left == 0 {
+            return Err(self.limit_error(format!("more than {} values", self.value_budget)));
+        }
+        self.values_left -= 1;
+        self.depth += 1;
+        let result = self.process_field_unbounded(ty, path, data, is_last);
+        self.depth -= 1;
+        result
+    }
+
+    fn limit_error(&self, reason: String) -> ReflectError {
+        ReflectError::LimitExceeded {
+            type_name: self.type_name.to_string(),
+            reason,
+        }
+    }
+
+    fn process_field_unbounded(
         &mut self,
         ty: &ResolvedType,
         path: &mut Vec<String>,
@@ -746,7 +865,8 @@ impl<'a> StructWalker<'a> {
             _ => unreachable!(),
         };
 
-        let count = self.eval_expr(size_expression)? as usize;
+        let count = usize::try_from(self.eval_expr(size_expression)?)
+            .map_err(|_| self.overflow("array count conversion"))?;
         if count == 0 {
             return Ok(0);
         }
@@ -860,7 +980,8 @@ impl<'a> StructWalker<'a> {
             _ => unreachable!(),
         };
 
-        let tag_value = self.eval_expr(tag_expression)? as u64;
+        let tag_value = u64::try_from(self.eval_expr(tag_expression)?)
+            .map_err(|_| self.overflow("enum tag conversion"))?;
         let variant = variants
             .iter()
             .find(|variant| variant.tag_value == tag_value)
@@ -1006,16 +1127,17 @@ impl<'a> StructWalker<'a> {
         }
     }
 
-    fn lookup_field_value(&self, key: &str) -> Option<i128> {
-        if let Some(val) = self.value_lookup.get(key) {
-            return Some(*val);
-        }
-
-        for scope in self.scope_stack.iter().rev() {
-            if scope.is_empty() {
-                continue;
-            }
-            let candidate = if key.is_empty() {
+    /* Resolves `key` from the innermost struct being walked outwards, so a
+     * nested field shadows an outer field of the same name. Each parent step
+     * (`..`) first skips one struct scope outwards; steps past the root stop
+     * at the root. The root scope is empty and matches `key` itself, which
+     * also covers absolute paths. */
+    fn lookup_field_value(&self, parents: usize, key: &str) -> Option<i128> {
+        let skip = parents.min(self.scope_stack.len().saturating_sub(1));
+        for scope in self.scope_stack.iter().rev().skip(skip) {
+            let candidate = if scope.is_empty() {
+                key.to_string()
+            } else if key.is_empty() {
                 scope.clone()
             } else {
                 format!("{}.{}", scope, key)
@@ -1054,7 +1176,12 @@ impl<'a> StructWalker<'a> {
             }),
             ExprKind::FieldRef(field_ref) => {
                 let key = flatten_field_ref(field_ref);
-                self.lookup_field_value(&key)
+                if key == BUFFER_SIZE_REF {
+                    if let Some(size) = self.buffer_sizes.last() {
+                        return Ok(*size as i128);
+                    }
+                }
+                self.lookup_field_value(parent_steps(field_ref), &key)
                     .ok_or_else(|| ReflectError::UnsupportedDynamicParam {
                         type_name: self.type_name.to_string(),
                         parameter: key,
@@ -1090,23 +1217,17 @@ impl<'a> StructWalker<'a> {
                     })?;
                 Ok(ty.alignment as i128)
             }
-            ExprKind::Add(expr) => self.binary(&expr.left, &expr.right, |l, r| Ok(l + r)),
-            ExprKind::Sub(expr) => self.binary(&expr.left, &expr.right, |l, r| Ok(l - r)),
-            ExprKind::Mul(expr) => self.binary(&expr.left, &expr.right, |l, r| Ok(l * r)),
-            ExprKind::Div(expr) => self.binary(&expr.left, &expr.right, |l, r| {
-                if r == 0 {
-                    Err("division by zero")
-                } else {
-                    Ok(l / r)
-                }
-            }),
-            ExprKind::Mod(expr) => self.binary(&expr.left, &expr.right, |l, r| {
-                if r == 0 {
-                    Err("modulo by zero")
-                } else {
-                    Ok(l % r)
-                }
-            }),
+            ExprKind::Add(expr) => {
+                self.checked(&expr.left, &expr.right, "addition", i128::checked_add)
+            }
+            ExprKind::Sub(expr) => {
+                self.checked(&expr.left, &expr.right, "subtraction", i128::checked_sub)
+            }
+            ExprKind::Mul(expr) => {
+                self.checked(&expr.left, &expr.right, "multiplication", i128::checked_mul)
+            }
+            ExprKind::Div(expr) => self.division(&expr.left, &expr.right, "division"),
+            ExprKind::Mod(expr) => self.division(&expr.left, &expr.right, "modulo"),
             ExprKind::Pow(expr) => {
                 let left = self.eval_expr_signed(&expr.left)?;
                 let right = self.eval_expr_signed(&expr.right)?;
@@ -1117,28 +1238,25 @@ impl<'a> StructWalker<'a> {
                         reason: "negative exponent unsupported".into(),
                     });
                 }
-                let exp = right as u32;
-                Ok(left.pow(exp))
+                u32::try_from(right)
+                    .ok()
+                    .and_then(|exp| left.checked_pow(exp))
+                    .ok_or_else(|| self.overflow("exponentiation"))
             }
             ExprKind::BitAnd(expr) => self.binary(&expr.left, &expr.right, |l, r| Ok(l & r)),
             ExprKind::BitOr(expr) => self.binary(&expr.left, &expr.right, |l, r| Ok(l | r)),
             ExprKind::BitXor(expr) => self.binary(&expr.left, &expr.right, |l, r| Ok(l ^ r)),
-            ExprKind::LeftShift(expr) => self.binary(&expr.left, &expr.right, |l, r| {
-                if r < 0 {
-                    Err("negative shift")
-                } else {
-                    Ok(l << r)
-                }
-            }),
-            ExprKind::RightShift(expr) => self.binary(&expr.left, &expr.right, |l, r| {
-                if r < 0 {
-                    Err("negative shift")
-                } else {
-                    Ok(l >> r)
-                }
-            }),
+            ExprKind::LeftShift(expr) => {
+                self.shift(&expr.left, &expr.right, "left shift", i128::checked_shl)
+            }
+            ExprKind::RightShift(expr) => {
+                self.shift(&expr.left, &expr.right, "right shift", i128::checked_shr)
+            }
             ExprKind::BitNot(expr) => Ok(!self.eval_expr_signed(&expr.operand)?),
-            ExprKind::Neg(expr) => Ok(-self.eval_expr_signed(&expr.operand)?),
+            ExprKind::Neg(expr) => self
+                .eval_expr_signed(&expr.operand)?
+                .checked_neg()
+                .ok_or_else(|| self.overflow("negation")),
             ExprKind::Not(expr) => {
                 let v = self.eval_expr_signed(&expr.operand)?;
                 Ok(if v == 0 { 1 } else { 0 })
@@ -1172,6 +1290,71 @@ impl<'a> StructWalker<'a> {
             parameter: "expression".into(),
             reason: reason.into(),
         })
+    }
+
+    fn overflow(&self, op: &'static str) -> ReflectError {
+        ReflectError::ArithmeticOverflow {
+            type_name: self.type_name.to_string(),
+            op,
+        }
+    }
+
+    fn checked(
+        &self,
+        left: &ExprKind,
+        right: &ExprKind,
+        op: &'static str,
+        f: fn(i128, i128) -> Option<i128>,
+    ) -> ReflectResult<i128> {
+        let left = self.eval_expr_signed(left)?;
+        let right = self.eval_expr_signed(right)?;
+        f(left, right).ok_or_else(|| self.overflow(op))
+    }
+
+    fn division(&self, left: &ExprKind, right: &ExprKind, op: &'static str) -> ReflectResult<i128> {
+        let l = self.eval_expr_signed(left)?;
+        let r = self.eval_expr_signed(right)?;
+        if r == 0 {
+            return Err(ReflectError::UnsupportedDynamicParam {
+                type_name: self.type_name.to_string(),
+                parameter: "expression".into(),
+                reason: if op == "division" {
+                    "division by zero".into()
+                } else {
+                    "modulo by zero".into()
+                },
+            });
+        }
+        let result = if op == "division" {
+            l.checked_div(r)
+        } else {
+            l.checked_rem(r)
+        };
+        result.ok_or_else(|| self.overflow(op))
+    }
+
+    /* A shift by at least the width of i128 is an overflow, not a masked
+     * shift (as in the IR interpreter). */
+    fn shift(
+        &self,
+        left: &ExprKind,
+        right: &ExprKind,
+        op: &'static str,
+        f: fn(i128, u32) -> Option<i128>,
+    ) -> ReflectResult<i128> {
+        let l = self.eval_expr_signed(left)?;
+        let r = self.eval_expr_signed(right)?;
+        if r < 0 {
+            return Err(ReflectError::UnsupportedDynamicParam {
+                type_name: self.type_name.to_string(),
+                parameter: "expression".into(),
+                reason: "negative shift".into(),
+            });
+        }
+        u32::try_from(r)
+            .ok()
+            .and_then(|r| f(l, r))
+            .ok_or_else(|| self.overflow(op))
     }
 
     fn compare<F>(&self, left: &ExprKind, right: &ExprKind, cmp: F) -> ReflectResult<i128>
@@ -1243,6 +1426,20 @@ fn flatten_field_ref(expr: &FieldRefExpr) -> String {
         .filter(|segment| !segment.is_empty())
         .collect::<Vec<_>>()
         .join(".")
+}
+
+/* Counts the leading parent steps (`..`) of a field reference, which
+ * `flatten_field_ref` drops from the key. */
+fn parent_steps(expr: &FieldRefExpr) -> usize {
+    let mut steps = 0;
+    for segment in expr.path.iter().flat_map(|segment| segment.split('/')) {
+        let rest = segment.trim_start_matches("..");
+        steps += (segment.len() - rest.len()) / 2;
+        if !rest.is_empty() {
+            break;
+        }
+    }
+    steps
 }
 
 fn path_key(path: &[String]) -> String {

@@ -1,0 +1,40 @@
+{
+  "description": "Thru HD derivation vectors: BIP-39 seed, SLIP-0010 ed25519, path m/44'/8478'/<account>'/<change>'. Every implementation (TS SDK, CLI, hardware wallets) must reproduce these exactly.",
+  "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+  "passphrase": "",
+  "seed": "5eb00bbddcf069084889a8ab9155568165f5c453ccb85e70811aaed6f6da5fc19a5ac40b389cd370d086206dec8aa6c43daea6690f20ad3d8d48b2d2ce9e38e4",
+  "vectors": [
+    {
+      "account": 0,
+      "change": 0,
+      "path": "m/44'/8478'/0'/0'",
+      "privateKey": "9d101609be65180f2d7fbdf0b632a0dc14500652552ba76c1ac5f357f733c1e0",
+      "publicKey": "1d65dd4d10f4f8a392d9e17c4d8cdea7c68e2a3eadc35997bbb6738e39cc0e6e",
+      "address": "taHWXdTRD0-KOS2eF8TYzep8aOKj6tw1mXu7ZzjjnMDm6A"
+    },
+    {
+      "account": 1,
+      "change": 0,
+      "path": "m/44'/8478'/1'/0'",
+      "privateKey": "bf1271acfd3dce5c859c57418bdbf8515afadb654f585b9dff825c32a0afc38e",
+      "publicKey": "546fdb52f2026f707260cf7c9c8ffdacd4c3c05624487893f6426168b5a1eb63",
+      "address": "taVG_bUvICb3ByYM98nI_9rNTDwFYkSHiT9kJhaLWh62N9"
+    },
+    {
+      "account": 2,
+      "change": 0,
+      "path": "m/44'/8478'/2'/0'",
+      "privateKey": "c5a17f670e451a76ba018a9675710290584d56fed0f4cca0e3956b63b4c80da0",
+      "publicKey": "29a5c7522a69fa3c8034e5868e1be5907da80a037f26724587c6d5ca270ba236",
+      "address": "taKaXHUipp-jyANOWGjhvlkH2oCgN_JnJFh8bVyicLojZx"
+    },
+    {
+      "account": 0,
+      "change": 1,
+      "path": "m/44'/8478'/0'/1'",
+      "privateKey": "6ef859edbf09e436c7ed03b4277f1dddf0fef404a928799d15896c61103ffd7b",
+      "publicKey": "f3a62c6dcf6da34f38ba4c504609284890fa5680e7a3d90508830b68024eb5bf",
+      "address": "ta86Ysbc9to084ukxQRgkoSJD6VoDno9kFCIMLaAJOtb83"
+    }
+  ]
+}

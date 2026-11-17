@@ -1,4 +1,5 @@
 export {
+  UPLOADER_ACCOUNT_TYPE_META_V1,
   UPLOADER_PROGRAM_SEED,
   UPLOADER_DEFAULT_CHUNK_SIZE,
   UPLOADER_MAX_CHUNK_SIZE,
@@ -10,7 +11,7 @@ export {
   UPLOADER_STATE_OPEN,
 } from "./constants";
 export { deriveUploadAddresses } from "./derivation";
-export { parseUploaderProgramMeta } from "./accounts";
+export { decodeUploaderProgramAccount, parseUploaderProgramMeta } from "./accounts";
 export {
   buildUploaderInstructionBytes,
   createDestroyUploadInstruction,

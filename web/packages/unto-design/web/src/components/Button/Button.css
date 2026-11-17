@@ -1,0 +1,86 @@
+.uds-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-family: var(--font-sans);
+  font-weight: var(--fw-semibold);
+  line-height: 1;
+  border: 1px solid transparent;
+  border-radius: var(--radius-none);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    opacity var(--duration-fast) var(--ease-standard);
+}
+
+.uds-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.uds-btn:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+}
+.uds-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* `lg` is the 48px touch size for embedded and mobile surfaces. */
+.uds-btn--lg {
+  box-sizing: border-box;
+  min-height: 48px;
+  width: 100%;
+  padding: 0 var(--space-4);
+  font-size: 14px;
+}
+.uds-btn--md { padding: var(--space-2) var(--space-4); font-size: 13px; }
+.uds-btn--sm { padding: var(--space-2) var(--space-3); font-size: 12px; }
+.uds-btn--xs { padding: var(--space-1) var(--space-2);  font-size: 11px; }
+
+.uds-btn--primary {
+  background: var(--color-surface-lower-inverse);
+  color: var(--color-text-primary-inverse);
+}
+.uds-btn--primary:hover:not(:disabled),
+.uds-btn--primary:focus-visible {
+  background: var(--color-surface-higher-inverse);
+}
+
+.uds-btn--secondary {
+  background: var(--color-surface-brick);
+  color: var(--color-text-primary-inverse);
+}
+.uds-btn--secondary:hover:not(:disabled),
+.uds-btn--secondary:focus-visible {
+  opacity: 0.9;
+}
+
+.uds-btn--outline {
+  background: transparent;
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong);
+}
+.uds-btn--outline:hover:not(:disabled),
+.uds-btn--outline:focus-visible {
+  border-color: var(--color-text-primary);
+  background: var(--color-surface-primary);
+}
+
+/* The hover fill waits for a real pointer: touch browsers keep :hover on
+   whatever was under the last tap. */
+.uds-btn--ghost {
+  background: transparent;
+  color: var(--color-text-primary);
+}
+.uds-btn--ghost:focus-visible {
+  background: var(--color-surface-lower);
+}
+@media (hover: hover) {
+  .uds-btn--ghost:hover:not(:disabled) {
+    background: var(--color-surface-lower);
+  }
+}

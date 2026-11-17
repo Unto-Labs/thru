@@ -377,7 +377,7 @@ export async function uploadArtifact(
         uploadStep: "write",
         completedChunks: chunkIndex + 1,
         totalChunks,
-        signature: upload.result.transactionSignatures.at(-1),
+        signature: upload.result.transactionSignatures[upload.result.transactionSignatures.length - 1],
       }),
     );
   }

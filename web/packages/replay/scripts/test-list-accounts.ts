@@ -22,14 +22,26 @@ import { ChainClient } from "../src";
 const BASE_URL = process.env.GRPC_URL || "https://rpc.alphanet.thru.org";
 const TOKEN_PROGRAM = process.env.TOKEN_PROGRAM ?? TOKEN_PROGRAM_ADDRESS;
 
-// Account data sizes from token_program.abi.yaml
-const TOKEN_ACCOUNT_SIZE = 73;
-const MINT_ACCOUNT_SIZE = 115;
+// Byte 0 of every token program account is the account type (TokenProgramAccount
+// root in token_program.abi.yaml); sizes are only a server-side prefilter.
+const MINT_ACCOUNT_TYPE = 1;
+const TOKEN_ACCOUNT_TYPE = 2;
+const TOKEN_ACCOUNT_SIZE = 74;
+const MINT_ACCOUNT_SIZE = 116;
 
-function getAccountType(dataSize: number): string {
-  if (dataSize === TOKEN_ACCOUNT_SIZE) return "TokenAccount";
-  if (dataSize === MINT_ACCOUNT_SIZE) return "MintAccount";
-  return `Unknown(${dataSize})`;
+function getAccountType(data: Uint8Array | undefined): string {
+  if (!data) return "Unknown(no data)";
+  if (data[0] === TOKEN_ACCOUNT_TYPE && data.length === TOKEN_ACCOUNT_SIZE) return "TokenAccount";
+  if (data[0] === MINT_ACCOUNT_TYPE && data.length === MINT_ACCOUNT_SIZE) return "MintAccount";
+  return `Unknown(type=${data[0]}, size=${data.length})`;
+}
+
+function describeMint(data: Uint8Array): string {
+  const decimals = data[1];
+  const supply = new DataView(data.buffer, data.byteOffset + 2, 8).getBigUint64(0, true);
+  const tickerLen = data[107];
+  const ticker = new TextDecoder().decode(data.slice(108, 108 + tickerLen));
+  return `decimals=${decimals} supply=${supply} ticker="${ticker}"`;
 }
 
 async function main(): Promise<void> {
@@ -137,7 +149,7 @@ async function main(): Promise<void> {
       const hasData = !!account.data?.data && account.data.data.length > 0;
       const dataLen = account.data?.data?.length ?? 0;
       const metaDataSize = account.meta?.dataSize ?? 0;
-      const accountType = getAccountType(metaDataSize);
+      const accountType = getAccountType(account.data?.data);
 
       if (hasData) {
         hasDataCount++;
@@ -159,32 +171,20 @@ async function main(): Promise<void> {
       // Parse the data if available
       if (hasData && account.data?.data) {
         const data = account.data.data;
-        if (accountType === "TokenAccount" && data.length >= 73) {
-          const mint = encodeAddress(data.slice(0, 32));
-          const owner = encodeAddress(data.slice(32, 64));
+        if (accountType === "TokenAccount") {
+          const mint = encodeAddress(data.slice(1, 33));
+          const owner = encodeAddress(data.slice(33, 65));
           const amount = new DataView(
             data.buffer,
-            data.byteOffset + 64,
+            data.byteOffset + 65,
             8
           ).getBigUint64(0, true);
-          const isFrozen = data[72] !== 0;
+          const isFrozen = data[73] !== 0;
           console.log(
             `  Parsed: mint=${mint.slice(0, 16)}... owner=${owner.slice(0, 16)}... amount=${amount} frozen=${isFrozen}`
           );
-        } else if (accountType === "MintAccount" && data.length >= 115) {
-          const decimals = data[0];
-          const supply = new DataView(
-            data.buffer,
-            data.byteOffset + 1,
-            8
-          ).getBigUint64(0, true);
-          const tickerLen = data[105];
-          const ticker = new TextDecoder().decode(
-            data.slice(106, 106 + tickerLen)
-          );
-          console.log(
-            `  Parsed: decimals=${decimals} supply=${supply} ticker="${ticker}"`
-          );
+        } else if (accountType === "MintAccount") {
+          console.log(`  Parsed: ${describeMint(data)}`);
         }
       }
       console.log();
@@ -216,7 +216,7 @@ async function main(): Promise<void> {
   try {
     const filter = create(FilterSchema, {
       expression:
-        "account.meta.owner.value == params.owner_bytes && account.meta.data_size == uint(115)",
+        `account.meta.owner.value == params.owner_bytes && account.meta.data_size == uint(${MINT_ACCOUNT_SIZE})`,
       params: {
         owner_bytes: create(FilterParamValueSchema, {
           kind: { case: "bytesValue", value: tokenProgramBytes },
@@ -240,21 +240,8 @@ async function main(): Promise<void> {
 
       console.log(`  ${address.slice(0, 20)}... dataLen=${dataLen}`);
 
-      if (dataLen >= 115 && account.data?.data) {
-        const data = account.data.data;
-        const decimals = data[0];
-        const supply = new DataView(
-          data.buffer,
-          data.byteOffset + 1,
-          8
-        ).getBigUint64(0, true);
-        const tickerLen = data[105];
-        const ticker = new TextDecoder().decode(
-          data.slice(106, 106 + tickerLen)
-        );
-        console.log(
-          `    decimals=${decimals} supply=${supply} ticker="${ticker}"`
-        );
+      if (account.data?.data && getAccountType(account.data.data) === "MintAccount") {
+        console.log(`    ${describeMint(account.data.data)}`);
       }
     }
   } catch (error) {

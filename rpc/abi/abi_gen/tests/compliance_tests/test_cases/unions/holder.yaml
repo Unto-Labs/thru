@@ -1,0 +1,7 @@
+test-case:
+  name: "unions_holder"
+  abi-file: "../../abi_definitions/unions.abi.yaml"
+  type: "UnionHolder"
+  description: "Union as a struct field followed by another field"
+  tags: ["unions", "field"]
+  binary-hex: "01 deadbeef 3412"

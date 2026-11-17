@@ -623,6 +623,9 @@ If 16 bytes available → LargeMessage is active
 
 #### 3.5.3 Use Cases
 
+Programs following the account discriminator convention (Section 12.5) tell
+account layouts apart by a discriminator byte, not a size-discriminated union.
+
 **1. Variable-size protocol fields**:
 ```
 struct Packet {
@@ -1034,6 +1037,79 @@ Semantic versioning for package contents:
 - Changing field order
 - Removing fields
 - Changing structure packing
+
+Under the account discriminator convention, program account layouts are
+stricter: they are never edited in place, not even by appending a field. A changed layout takes a new discriminator value
+(Section 12.5).
+
+### 12.5 Program Account Discriminator (Convention)
+
+This is a convention, not something the ABI format or the runtime
+enforces: Thru strongly recommends it, and its own programs follow it. A
+program that follows it starts each structured account it owns with a
+one-byte discriminator, `account_type: u8`. The payload follows immediately; the
+account is packed (no padding).
+
+**Rules**:
+- One value per (account kind, layout) pair, per program, starting at 1.
+- 0 is invalid, so a zeroed or closed account never decodes.
+- A layout is never edited in place. A changed layout of an existing kind
+  and a new kind of account both take the next unused value. Retired values
+  are never reused. Reserved bytes are frozen (giving one meaning is an
+  edit).
+- Nothing else selects a layout: no magic numbers, no in-payload `version`
+  fields, no size-discriminated unions (Section 3.5), no program-hash
+  detection.
+- Exempt: program code accounts, Uploader source buffers, and accounts with
+  no data (balance only).
+
+Example: Perps exchange meta is value 1. A new exchange meta layout would
+take 6, the next unused Perps value.
+
+**Root shape**: the program's account root is a packed struct with
+`account_type` followed by `payload`, an enum keyed on it (Section 3.3.2).
+Variants are named `<kind>_v<n>`; payload types describe the bytes after the
+discriminator. Every account kind the program owns is a variant, and
+`program-metadata.root-types.account-root` names the root.
+
+```yaml
+# Account values are never reused. A new layout or a new kind of account
+# takes the next unused value.
+- name: TokenProgramAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: account_type
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - account_type
+            variants:
+            - name: mint_v1
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: TokenMintAccount
+            - name: token_account_v1
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: TokenAccount
+```
+
+A later token account layout adds `token_account_v2` with `tag-value: 3`
+and a new payload type; `token_account_v1` stays unchanged.
+
+Programs write the discriminator when they create an account and check the
+owner and the discriminator (and the size) on every load, including loads of
+other programs' accounts. Background: `specs/account-discriminator-plan.md`.
 
 ## 13. Best Practices
 

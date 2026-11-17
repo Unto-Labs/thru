@@ -7,7 +7,7 @@ abi:
     Thru VM addresses, not host pointers.
   imports:
     - type: path
-      path: ../../../../../rpc/abi/type-library/state_proof_flat.abi.yaml
+      path: ../../../../../rpc/abi/type-library/state_proof.abi.yaml
   options:
     program-metadata:
       root-types:

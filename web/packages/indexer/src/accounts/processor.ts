@@ -206,8 +206,8 @@ export async function runAccountStreamProcessor(
           );
         }
 
-        if (account.isDelete) {
-          log("debug", `Account deleted: ${account.addressHex}`);
+        if (account.isDelete || stream.isClosed?.(account)) {
+          log("debug", `Account deleted or closed: ${account.addressHex}`);
           const idValue = encodeAddress(account.address);
           buffered.delete(idValue);
           observer?.onPhase?.({ phase: "commit", slot: account.slot });

@@ -1,0 +1,23 @@
+abi:
+  package: "nest"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "A package that is also the parent of another package (`nest.inner`)"
+  imports:
+    - type: path
+      path: "nest_inner.abi.yaml"
+
+types:
+  - name: "Outer"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "tag"
+            field-type:
+              primitive: u8
+          - name: "item"
+            field-type:
+              type-ref:
+                name: "InnerItem"
+                package: "nest.inner"

@@ -1,0 +1,112 @@
+abi:
+  package: "compliance.zero_size_elements"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Arrays whose elements take no bytes: a count past the input cannot cost a walk"
+
+types:
+  - name: "EmptyEnumList"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "tag"
+            field-type:
+              primitive: u8
+          - name: "count"
+            field-type:
+              primitive: u64
+          - name: "items"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  enum:
+                    packed: true
+                    tag-ref:
+                      field-ref:
+                        path: ["tag"]
+                    variants:
+                      - name: "none"
+                        tag-value: 0
+                        variant-type:
+                          struct:
+                            packed: true
+                            fields: []
+                      - name: "nothing"
+                        tag-value: 1
+                        variant-type:
+                          struct:
+                            packed: true
+                            fields: []
+  - name: "JaggedEmptyList"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "tag"
+            field-type:
+              primitive: u8
+          - name: "count"
+            field-type:
+              primitive: u64
+          - name: "items"
+            field-type:
+              array:
+                jagged: true
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  enum:
+                    packed: true
+                    tag-ref:
+                      field-ref:
+                        path: ["tag"]
+                    variants:
+                      - name: "none"
+                        tag-value: 0
+                        variant-type:
+                          struct:
+                            packed: true
+                            fields: []
+                      - name: "byte"
+                        tag-value: 1
+                        variant-type:
+                          primitive: u8
+  - name: "StrideEmptyList"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "tag"
+            field-type:
+              primitive: u8
+          - name: "count"
+            field-type:
+              primitive: u64
+          - name: "items"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  enum:
+                    packed: true
+                    tag-ref:
+                      field-ref:
+                        path: ["tag"]
+                    variants:
+                      - name: "none"
+                        tag-value: 0
+                        variant-type:
+                          struct:
+                            packed: true
+                            fields: []
+                      - name: "byte"
+                        tag-value: 1
+                        variant-type:
+                          primitive: u8

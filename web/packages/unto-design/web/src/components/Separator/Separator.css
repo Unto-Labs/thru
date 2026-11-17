@@ -1,0 +1,15 @@
+.uds-sep {
+  background: var(--color-border-tertiary);
+  border: none;
+}
+
+.uds-sep--horizontal {
+  height: 1px;
+  width: 100%;
+}
+
+.uds-sep--vertical {
+  width: 1px;
+  height: 20px;
+  align-self: center;
+}

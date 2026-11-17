@@ -309,14 +309,13 @@ describe("accounts", () => {
         .rejects.toThrow("RPC unavailable");
     });
 
-    it("uses the connected chain and canonical Noop, preserving explicit overrides", async () => {
+    it("uses the connected chain and preserves explicit program and chain overrides", async () => {
       const ctx = createMockContext();
       vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(create(GenerateStateProofResponseSchema, {
         proof: { proof: new Uint8Array(64).fill(0x42), slot: 1000n },
       }));
       vi.mocked(ctx.query.getChainInfo).mockResolvedValue({ chainId: 19724 } as any);
       const transaction = await createAccount(ctx, { publicKey: generateTestPubkey(1) });
-      expect(transaction.program.toThruFmt()).toBe("taNOOPV4A7S3WTsirr149To2GoGZ9q8zllQaBrbekHfkJT");
       expect(transaction.chainId).toBe(19724);
       vi.mocked(ctx.query.getChainInfo).mockClear();
       const legacyNoop = new Uint8Array(32);

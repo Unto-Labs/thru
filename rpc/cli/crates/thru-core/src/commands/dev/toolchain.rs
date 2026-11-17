@@ -144,6 +144,10 @@ pub async fn install_toolchain(
     custom_path: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
+    /* The config update below must not be refused after files change
+    (inline signing keys block config writes until migrated). */
+    config.require_writable()?;
+
     /* Get repository from config or use default */
     let repo = config.github_repo.as_deref();
 
@@ -258,12 +262,17 @@ pub async fn install_toolchain(
         println!("{}", format!("GCC: {}", gcc_version).green());
     }
 
-    /* Update config */
-    if custom_path.is_some() {
-        config.toolchain_path = Some(install_path.clone());
-    }
-    config.toolchain_version = Some(version_to_install.clone());
-    config.save().await?;
+    /* Apply installation intent to the latest config. */
+    let saved = Config::update(|latest| {
+        if custom_path.is_some() {
+            latest.toolchain_path = Some(install_path.clone());
+        }
+        latest.toolchain_version = Some(version_to_install.clone());
+        Ok(())
+    })
+    .await?;
+    config.toolchain_path = saved.toolchain_path;
+    config.toolchain_version = saved.toolchain_version;
 
     if json_format {
         println!(
@@ -286,6 +295,10 @@ pub async fn update_toolchain(
     custom_path: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
+    /* The config update below must not be refused after files change
+    (inline signing keys block config writes until migrated). */
+    config.require_writable()?;
+
     /* Get repository from config or use default */
     let repo = config.github_repo.as_deref();
 
@@ -403,6 +416,10 @@ pub async fn uninstall_toolchain(
     force: bool,
     json_format: bool,
 ) -> Result<(), CliError> {
+    /* The config update below must not be refused after files change
+    (inline signing keys block config writes until migrated). */
+    config.require_writable()?;
+
     let install_path = get_toolchain_path(config, custom_path).map_err(|e| CliError::Generic {
         message: format!("Failed to determine installation path: {}", e),
     })?;
@@ -447,10 +464,14 @@ pub async fn uninstall_toolchain(
             message: format!("Failed to remove toolchain: {}", e),
         })?;
 
-    /* Clear config */
-    config.toolchain_path = None;
-    config.toolchain_version = None;
-    config.save().await?;
+    let saved = Config::update(|latest| {
+        latest.toolchain_path = None;
+        latest.toolchain_version = None;
+        Ok(())
+    })
+    .await?;
+    config.toolchain_path = saved.toolchain_path;
+    config.toolchain_version = saved.toolchain_version;
 
     if json_format {
         println!("{{\"status\":\"success\"}}");
@@ -504,4 +525,24 @@ pub async fn get_path(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn uninstall_keeps_the_installation_when_the_config_cannot_be_updated() {
+        let directory = tempfile::tempdir().unwrap();
+        let install = directory.path().join("toolchain");
+        std::fs::create_dir_all(install.join("bin")).unwrap();
+        let mut config = Config::default();
+        config.keys.set_unmigrated(["default".to_string()]);
+        let error = uninstall_toolchain(&mut config, install.to_str(), true, true)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("thru keys migrate"), "{error}");
+        assert!(install.join("bin").exists());
+    }
 }

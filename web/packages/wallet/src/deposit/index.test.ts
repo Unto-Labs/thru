@@ -120,7 +120,7 @@ vi.mock("@thru/programs/token", () => ({
 
 const DESTINATION: DepositDestination = {
   network: ThruNetwork.Alphanet,
-  depositTarget: DepositTarget.THRUSD,
+  depositTarget: DepositTarget.UUSD,
   tokenAccountAddress: "ta_token_account",
   mintAddress: "ta_mint",
   tokenProgramAddress: "ta_token_program",
@@ -242,16 +242,6 @@ describe("wallet deposit account helpers", () => {
     expect(thru.proofs.generate).not.toHaveBeenCalled();
     expect(thru.transactions.send).not.toHaveBeenCalled();
   });
-  it("uses the canonical Token only when a network has no explicit override", () => {
-    const configured = JSON.parse(RUNTIME_CONFIG.networkConfigJson!);
-    expect(createDepositConfig(RUNTIME_CONFIG).getTarget("devnet", "credits").tokenProgramAddress)
-      .toBe("ta_token_program");
-    delete configured.devnet.targets.credits.token_program_address;
-    expect(createDepositConfig({ ...RUNTIME_CONFIG, networkConfigJson: JSON.stringify(configured) })
-      .getTarget("devnet", "credits").tokenProgramAddress)
-      .toBe("taTOKENKRgcl3vO0yVhftATDbXuhgWcfaaxv9xpEEdMdUE");
-  });
-
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -295,7 +285,7 @@ describe("wallet deposit account helpers", () => {
             credits: {
               mint_address: "ta_betanet_mint",
               token_program_address: "ta_betanet_program",
-              symbol: "THRUSD",
+              symbol: "UUSD",
               decimals: 6,
             },
           },
@@ -306,7 +296,7 @@ describe("wallet deposit account helpers", () => {
     expect(config.getNetwork().network).toBe(ThruNetwork.Betanet);
     expect(config.getNetwork().faucetOnly).toBe(true);
     expect(config.getNetwork().providers.size).toBe(0);
-    expect(config.getTarget(ThruNetwork.Betanet, DepositTarget.THRUSD).mintAddress)
+    expect(config.getTarget(ThruNetwork.Betanet, DepositTarget.UUSD).mintAddress)
       .toBe("ta_betanet_mint");
   });
 

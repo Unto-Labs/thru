@@ -18,3 +18,16 @@ thru-core = { version = "0.1.0", path = "../thru-core" }
 anyhow = "1.0"
 tokio = { version = "1.52", features = ["full"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
+
+[dev-dependencies]
+base64 = "0.22"
+hex = "0.4"
+libc = "0.2"
+serde_json = "1.0"
+serde_yaml = "0.9"
+tempfile = "3.8"
+thru-base = { version = "0.1.0", path = "../../../thru-base" }
+thru-client = { version = "0.1.0", path = "../../../thru-client" }
+tokio-stream = { version = "0.1", features = ["net"] }
+tonic = { version = "0.14.6", features = ["transport"] }
+tonic-prost = "0.14.5"

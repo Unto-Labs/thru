@@ -1,9 +1,12 @@
 /* High-level reflection API */
 
 use crate::errors::{ReflectError, ReflectResult};
-use crate::ir::{build_layout_ir, IrInterpreter, IrValidationResult, ParamMap};
+use crate::ir::{
+    build_derived_params, build_layout_ir, DerivedParams, IrInterpreter, IrValidationResult,
+    ParamMap,
+};
 use crate::params::ParamExtractor;
-use crate::parser::Parser;
+use crate::parser::{reflected_runtime_size, Parser, BUFFER_SIZE_REF};
 use crate::types::ReflectedType;
 use crate::value::ReflectedValue;
 use abi_gen::abi::file::RootTypes;
@@ -26,6 +29,8 @@ pub struct Reflector {
     layout_ir: LayoutIr,
     /* Name -> index mapping for quick IR lookups */
     ir_index: BTreeMap<String, usize>,
+    /* Computed enum tags per type, evaluated from the type's parameters */
+    derived_params: DerivedParams,
     /* Runtime configuration */
     config: ReflectorConfig,
     /* Root type names for program reflection */
@@ -54,11 +59,13 @@ impl Reflector {
         for (idx, type_ir) in layout_ir.types.iter().enumerate() {
             ir_index.insert(type_ir.type_name.clone(), idx);
         }
+        let derived_params = build_derived_params(&resolver, &layout_ir);
 
         Ok(Self {
             resolver,
             layout_ir,
             ir_index,
+            derived_params,
             config,
             root_types,
         })
@@ -95,6 +102,10 @@ impl Reflector {
         self.validate_with_params(type_ir, buffer, params)
     }
 
+    /* Validate a buffer: its IR footprint fits and its bytes parse as the
+     * type (enum tags, size-discriminated union sizes, nested values). A type
+     * with dynamic parameters that are not extracted from a struct root
+     * cannot be checked, so it fails rather than passing unchecked. */
     pub fn validate_buffer(
         &self,
         type_name: &str,
@@ -102,33 +113,34 @@ impl Reflector {
     ) -> ReflectResult<IrValidationResult> {
         let resolved_type = self.get_resolved_type(type_name)?;
         let type_ir = self.type_ir(type_name)?;
-        if self.requires_byte_backed_validation(type_ir) {
-            let params = if Self::supports_param_extraction(resolved_type) {
-                self.extract_params(resolved_type, type_ir, buffer)?
-            } else {
-                ParamMap::new()
-            };
-            let mut parser = Parser::new(&self.resolver, params);
-            parser
-                .parse(buffer, resolved_type)
-                .map_err(|source| ReflectError::Parse {
-                    type_name: resolved_type.name.clone(),
-                    source,
-                })?;
-            return Ok(IrValidationResult {
-                bytes_consumed: buffer.len() as u128,
-            });
-        }
-        if Self::supports_param_extraction(resolved_type) {
-            let params = self.extract_params(resolved_type, type_ir, buffer)?;
-            self.validate_with_params(type_ir, buffer, &params)
+        let params = if Self::supports_param_extraction(resolved_type) {
+            self.extract_params(resolved_type, type_ir, buffer)?
         } else if type_ir.parameters.is_empty() {
-            self.validate_with_params(type_ir, buffer, &ParamMap::new())
+            ParamMap::new()
         } else {
-            Ok(IrValidationResult {
+            return Err(ReflectError::UnsupportedOperation {
+                operation: "validate_buffer".to_string(),
+                reason: format!(
+                    "type '{}' has dynamic parameters, which can only be extracted from a struct",
+                    resolved_type.name
+                ),
+            });
+        };
+        let result = if self.requires_byte_backed_validation(type_ir) {
+            IrValidationResult {
                 bytes_consumed: buffer.len() as u128,
-            })
-        }
+            }
+        } else {
+            self.validate_with_params(type_ir, buffer, &params)?
+        };
+        let mut parser = Parser::new(&self.resolver, params);
+        parser
+            .parse(buffer, resolved_type)
+            .map_err(|source| ReflectError::Parse {
+                type_name: resolved_type.name.clone(),
+                source,
+            })?;
+        Ok(result)
     }
 
     pub fn dynamic_params(&self, type_name: &str, data: &[u8]) -> ReflectResult<ParamMap> {
@@ -197,7 +209,12 @@ impl Reflector {
     }
 
     /* Reflect instruction data using the configured instruction-root type.
-     * Returns an error if instruction-root is not configured in the ABI. */
+     * Returns an error if instruction-root is not configured in the ABI.
+     *
+     * The decoded root must cover every byte. Programs such as the CLOB loop
+     * over the whole buffer, so bytes after the decoded value still execute;
+     * a preview that drops them would hide signed behavior. When the decoded
+     * size cannot be measured, this fails closed for the same reason. */
     pub fn reflect_instruction(&self, data: &[u8]) -> ReflectResult<ReflectedValue> {
         let type_name =
             self.root_types
@@ -206,7 +223,16 @@ impl Reflector {
                 .ok_or(ReflectError::MissingRootType {
                     root_kind: "instruction",
                 })?;
-        self.reflect(data, type_name)
+        let reflected = self.reflect(data, type_name)?;
+        let consumed = reflected_runtime_size(&reflected);
+        if consumed != Some(data.len()) {
+            return Err(ReflectError::TrailingBytes {
+                type_name: type_name.clone(),
+                consumed: consumed.map(|size| size as u64),
+                available: data.len() as u64,
+            });
+        }
+        Ok(reflected)
     }
 
     /* Reflect account data using the configured account-root type.
@@ -253,7 +279,7 @@ impl Reflector {
     }
 
     fn interpreter(&self) -> IrInterpreter<'_> {
-        IrInterpreter::new(&self.layout_ir, &self.ir_index)
+        IrInterpreter::with_derived_params(&self.layout_ir, &self.ir_index, &self.derived_params)
     }
 
     fn extract_params(
@@ -319,14 +345,45 @@ impl Reflector {
                     .get(&node.type_name)
                     .and_then(|idx| self.layout_ir.types.get(*idx))
                 {
+                    /* The bytes left for a nested `__buffer_size`-sized value
+                     * are not an IR value, so only the parser can size it. */
                     Some(type_ir) => {
-                        self.node_requires_byte_backed_validation(&type_ir.root, visited)
+                        node_reads_buffer_size(&type_ir.root)
+                            || self.node_requires_byte_backed_validation(&type_ir.root, visited)
                     }
                     None => false,
                 }
             }
             IrNode::SumOverArray(_) => true,
         }
+    }
+}
+
+/* Does `node` read `__buffer_size` itself (not through a nested call)? */
+fn node_reads_buffer_size(node: &IrNode) -> bool {
+    match node {
+        IrNode::FieldRef(field) => field.parameter.is_none() && field.path == BUFFER_SIZE_REF,
+        IrNode::ZeroSize { .. } | IrNode::Const(_) | IrNode::CallNested(_) => false,
+        IrNode::AlignUp(node) => node_reads_buffer_size(&node.node),
+        IrNode::AddChecked(node)
+        | IrNode::SubChecked(node)
+        | IrNode::MulChecked(node)
+        | IrNode::DivChecked(node)
+        | IrNode::ModChecked(node)
+        | IrNode::BitAnd(node)
+        | IrNode::BitOr(node)
+        | IrNode::BitXor(node)
+        | IrNode::LeftShift(node)
+        | IrNode::RightShift(node) => {
+            node_reads_buffer_size(&node.left) || node_reads_buffer_size(&node.right)
+        }
+        IrNode::Switch(node) => {
+            node.cases
+                .iter()
+                .any(|case| node_reads_buffer_size(&case.node))
+                || node.default.as_deref().is_some_and(node_reads_buffer_size)
+        }
+        IrNode::SumOverArray(_) => false,
     }
 }
 
@@ -488,6 +545,252 @@ mod tests {
             .reflect_instruction(&buffer)
             .expect("reflection succeeds");
         assert_eq!(reflected.type_name(), "MyInstruction");
+    }
+
+    fn u32_instruction_reflector() -> Reflector {
+        let mut resolver = TypeResolver::new();
+        resolver.add_typedef(TypeDef {
+            name: "MyInstruction".into(),
+            format: None,
+            kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
+        });
+        resolver.resolve_all().expect("resolver succeeds");
+        let root_types = RootTypes {
+            instruction_root: Some("MyInstruction".to_string()),
+            account_root: Some("MyInstruction".to_string()),
+            errors: None,
+            events: None,
+        };
+        Reflector::with_root_types(resolver, ReflectorConfig::default(), root_types)
+            .expect("reflector initializes")
+    }
+
+    fn dyn_instruction_reflector() -> Reflector {
+        let mut resolver = TypeResolver::new();
+        resolver.add_typedef(TypeDef {
+            name: "DynInstruction".into(),
+            format: None,
+            kind: TypeKind::Struct(StructType {
+                container_attributes: ContainerAttributes {
+                    packed: true,
+                    aligned: 0,
+                    comment: None,
+                },
+                fields: vec![
+                    StructField {
+                        name: "len".into(),
+                        format: None,
+                        field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
+                    },
+                    StructField {
+                        name: "data".into(),
+                        format: None,
+                        field_type: TypeKind::Array(ArrayType {
+                            container_attributes: ContainerAttributes::default(),
+                            size: ExprKind::FieldRef(FieldRefExpr {
+                                path: vec!["len".into()],
+                            }),
+                            element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
+                                IntegralType::U8,
+                            ))),
+                            jagged: false,
+                        }),
+                    },
+                ],
+            }),
+        });
+        resolver.resolve_all().expect("resolver succeeds");
+        let root_types = RootTypes {
+            instruction_root: Some("DynInstruction".to_string()),
+            account_root: None,
+            errors: None,
+            events: None,
+        };
+        Reflector::with_root_types(resolver, ReflectorConfig::default(), root_types)
+            .expect("reflector initializes")
+    }
+
+    #[test]
+    fn reflect_instruction_rejects_trailing_bytes() {
+        let reflector = u32_instruction_reflector();
+        let mut buffer = 42u32.to_le_bytes().to_vec();
+        buffer.push(0xFF);
+
+        match reflector.reflect_instruction(&buffer).unwrap_err() {
+            ReflectError::TrailingBytes {
+                type_name,
+                consumed,
+                available,
+            } => {
+                assert_eq!(type_name, "MyInstruction");
+                assert_eq!(consumed, Some(4));
+                assert_eq!(available, 5);
+            }
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn reflect_account_still_allows_trailing_capacity() {
+        /* Account data can be larger than its decoded root; only signed
+         * instruction data must be covered exactly. */
+        let reflector = u32_instruction_reflector();
+        let mut buffer = 42u32.to_le_bytes().to_vec();
+        buffer.extend_from_slice(&[0u8; 4]);
+        reflector
+            .reflect_account(&buffer)
+            .expect("account reflection ignores trailing capacity");
+    }
+
+    #[test]
+    fn reflect_instruction_accepts_exact_dynamic_struct() {
+        let reflector = dyn_instruction_reflector();
+        let mut buffer = 2u32.to_le_bytes().to_vec();
+        buffer.extend_from_slice(&[0xAA, 0xBB]);
+        reflector
+            .reflect_instruction(&buffer)
+            .expect("exact dynamic instruction reflects");
+    }
+
+    #[test]
+    fn reflect_instruction_rejects_bytes_after_dynamic_struct() {
+        let reflector = dyn_instruction_reflector();
+        let mut buffer = 2u32.to_le_bytes().to_vec();
+        buffer.extend_from_slice(&[0xAA, 0xBB, 0xCC]);
+        match reflector.reflect_instruction(&buffer).unwrap_err() {
+            ReflectError::TrailingBytes {
+                consumed,
+                available,
+                ..
+            } => {
+                assert_eq!(consumed, Some(6));
+                assert_eq!(available, 7);
+            }
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    /* Non-packed struct with a u64 `suffix`, a u32 `len` and `bytes: [u8; len]`.
+    With `suffix_first == false` the order is { len, bytes, suffix }: the parser
+    aligns `suffix` to 8 after the variable-length array. With
+    `suffix_first == true` the order is { suffix, len, bytes }: the struct
+    ends padded to 8, as the IR footprint requires. */
+    fn padded_instruction_reflector(suffix_first: bool) -> Reflector {
+        let suffix = StructField {
+            name: "suffix".into(),
+            format: None,
+            field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U64)),
+        };
+        let len = StructField {
+            name: "len".into(),
+            format: None,
+            field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
+        };
+        let bytes = StructField {
+            name: "bytes".into(),
+            format: None,
+            field_type: TypeKind::Array(ArrayType {
+                container_attributes: ContainerAttributes::default(),
+                size: ExprKind::FieldRef(FieldRefExpr {
+                    path: vec!["len".into()],
+                }),
+                element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
+                    IntegralType::U8,
+                ))),
+                jagged: false,
+            }),
+        };
+        let fields = if suffix_first {
+            vec![suffix, len, bytes]
+        } else {
+            vec![len, bytes, suffix]
+        };
+
+        let mut resolver = TypeResolver::new();
+        resolver.add_typedef(TypeDef {
+            name: "PaddedInstruction".into(),
+            format: None,
+            kind: TypeKind::Struct(StructType {
+                container_attributes: ContainerAttributes::default(),
+                fields,
+            }),
+        });
+        resolver.resolve_all().expect("resolver succeeds");
+        let root_types = RootTypes {
+            instruction_root: Some("PaddedInstruction".to_string()),
+            account_root: None,
+            errors: None,
+            events: None,
+        };
+        Reflector::with_root_types(resolver, ReflectorConfig::default(), root_types)
+            .expect("reflector initializes")
+    }
+
+    fn padded_instruction_bytes() -> Vec<u8> {
+        let mut buffer = 1u32.to_le_bytes().to_vec();
+        buffer.push(0xAA);
+        buffer.extend_from_slice(&[0u8; 3]);
+        buffer.extend_from_slice(&7u64.to_le_bytes());
+        buffer
+    }
+
+    #[test]
+    fn reflect_instruction_counts_tail_padding_in_non_packed_struct() {
+        let reflector = padded_instruction_reflector(true);
+        let mut buffer = 7u64.to_le_bytes().to_vec();
+        buffer.extend_from_slice(&1u32.to_le_bytes());
+        buffer.push(0xAA);
+        buffer.extend_from_slice(&[0u8; 3]);
+        assert_eq!(buffer.len(), 16);
+
+        reflector
+            .reflect_instruction(&buffer)
+            .expect("tail-padded non-packed instruction reflects");
+
+        buffer.push(0xFF);
+        assert!(matches!(
+            reflector.reflect_instruction(&buffer),
+            Err(ReflectError::TrailingBytes {
+                consumed: Some(16),
+                available: 17,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn reflect_instruction_counts_padding_in_non_packed_struct() {
+        let reflector = padded_instruction_reflector(false);
+        let buffer = padded_instruction_bytes();
+        assert_eq!(buffer.len(), 16);
+
+        let reflected = reflector
+            .reflect_instruction(&buffer)
+            .expect("padded non-packed instruction reflects");
+        let suffix = reflected.get_struct_field("suffix").expect("suffix field");
+        let Value::Primitive(prim) = suffix.get_value() else {
+            panic!("suffix is not primitive");
+        };
+        assert_eq!(prim.to_u64(), Some(7));
+    }
+
+    #[test]
+    fn reflect_instruction_rejects_bytes_after_non_packed_struct() {
+        let reflector = padded_instruction_reflector(false);
+        let mut buffer = padded_instruction_bytes();
+        buffer.push(0xFF);
+
+        match reflector.reflect_instruction(&buffer).unwrap_err() {
+            ReflectError::TrailingBytes {
+                consumed,
+                available,
+                ..
+            } => {
+                assert_eq!(consumed, Some(16));
+                assert_eq!(available, 17);
+            }
+            other => panic!("unexpected error: {:?}", other),
+        }
     }
 
     #[test]

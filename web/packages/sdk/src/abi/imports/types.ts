@@ -67,8 +67,14 @@ export class ResolutionError extends Error {
   }
 }
 
-/* ABI account header constants (matches Rust) */
-export const ABI_ACCOUNT_HEADER_SIZE = 45;
+/* ABI Manager account discriminators (byte 0 of every ABI Manager account).
+   Values are never reused; a new layout takes the next value. */
+export const ABI_ACCOUNT_TYPE_META_V1 = 1;
+export const ABI_ACCOUNT_TYPE_CONTENT_V1 = 2;
+
+/* ABI content account header: account_type, meta pubkey, revision, state,
+   content_sz (matches the ABI Manager program). */
+export const ABI_ACCOUNT_HEADER_SIZE = 46;
 export const ABI_STATE_OPEN = 0x00;
 export const ABI_STATE_FINALIZED = 0x01;
 

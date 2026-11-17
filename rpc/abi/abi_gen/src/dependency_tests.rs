@@ -1048,6 +1048,94 @@ mod dependency_tests {
         assert_eq!(duplicate_error.duplicate_name, "DuplicateName");
     }
 
+    /* Names and comments reach generated source; anything that could
+    break out of an identifier or block comment is rejected. */
+    #[test]
+    fn test_names_and_comments_cannot_inject_source() {
+        let mk = |type_name: &str, field_name: &str, comment: Option<&str>| TypeDef {
+            name: type_name.to_string(),
+            format: None,
+            kind: TypeKind::Struct(StructType {
+                container_attributes: ContainerAttributes {
+                    comment: comment.map(str::to_string),
+                    ..Default::default()
+                },
+                fields: vec![StructField {
+                    name: field_name.to_string(),
+                    format: None,
+                    field_type: create_u32_primitive(),
+                }],
+            }),
+        };
+        let errors = |t: TypeDef| -> Vec<String> {
+            DependencyAnalyzer::new()
+                .analyze_multiple_typedefs(&[t])
+                .validation_errors
+                .into_iter()
+                .map(|e| e.error_type)
+                .collect()
+        };
+
+        assert!(errors(mk("Good_1", "_ok", Some("multi\nline / * fine"))).is_empty());
+        assert_eq!(
+            errors(mk("T */func init(){panic(1)};/*", "x", None)),
+            vec!["InvalidName"]
+        );
+        assert_eq!(errors(mk("T", "a-b", None)), vec!["InvalidName"]);
+        assert_eq!(errors(mk("T", "1x", None)), vec!["InvalidName"]);
+        let with_ref = |name: &str| TypeDef {
+            name: "R".to_string(),
+            format: None,
+            kind: TypeKind::TypeRef(TypeRefType {
+                name: name.to_string(),
+                package: None,
+                comment: None,
+            }),
+        };
+        assert!(errors(with_ref("thru.common.primitives.Hash")).is_empty());
+        assert_eq!(errors(with_ref("a.*/x")), vec!["InvalidName"]);
+        assert_eq!(
+            errors(mk("T", "x", Some("ends */ int evil;"))),
+            vec!["InvalidComment"]
+        );
+    }
+
+    /* Variant indices are u8 in the bindings, so an SDU with more than
+    256 variants is rejected rather than generating code that cannot
+    compile. */
+    #[test]
+    fn test_size_discriminated_union_variant_limit() {
+        let sdu = |n: u64| TypeDef {
+            name: "Big".to_string(),
+            format: None,
+            kind: TypeKind::SizeDiscriminatedUnion(SizeDiscriminatedUnionType {
+                container_attributes: Default::default(),
+                variants: (0..n)
+                    .map(|i| SizeDiscriminatedVariant {
+                        name: format!("v{i}"),
+                        expected_size: i + 1,
+                        variant_type: TypeKind::Array(ArrayType {
+                            container_attributes: Default::default(),
+                            size: create_literal_expr(i + 1),
+                            element_type: Box::new(create_u8_primitive()),
+                            jagged: false,
+                        }),
+                    })
+                    .collect(),
+            }),
+        };
+        let errors = |t: TypeDef| -> Vec<String> {
+            DependencyAnalyzer::new()
+                .analyze_multiple_typedefs(&[t])
+                .validation_errors
+                .into_iter()
+                .map(|e| e.error_type)
+                .collect()
+        };
+        assert!(!errors(sdu(256)).contains(&"TooManyVariants".to_string()));
+        assert!(errors(sdu(257)).contains(&"TooManyVariants".to_string()));
+    }
+
     #[test]
     fn test_duplicate_struct_field_names() {
         let mut analyzer = DependencyAnalyzer::new();

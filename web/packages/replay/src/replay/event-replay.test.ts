@@ -469,6 +469,24 @@ describe("parallel history range sizing", () => {
     expect(chain.calls.filter((call) => call.high !== undefined && call.low! >= 90_000n)).toEqual([]);
   });
 
+  test("grows ranges across history the RPC answers with empty pages", async () => {
+    // The RPC scans at most 800 slots per page, so an empty stretch returns
+    // empty pages with a token. One event at slot 3, then none until slot
+    // 980,000: Betanet's CLOB history has this shape.
+    const events = [...eventsAtSlots([3n]), ...eventsAtSlots(slotsEvery(100n, 10_000n).map((slot) => slot + 980_000n))];
+    const chain = new FakeChain(events, [1_000_000n]);
+    chain.scanSlots = 800n;
+
+    const ids = await collectEventIds(
+      createEventReplay({ clientFactory: chain.clientFactory, startSlot: 0n, resubscribeOnEnd: false, historyConnections: 8, maxBufferedItems: 8_000 })
+    );
+
+    expect(ids).toEqual(events.map((event) => event.eventId));
+    // About 1,024 ranges of ~970 slots take two 800-slot pages each. Sizing
+    // ranges from an empty first page shrank them to a few slots: 5,400 calls.
+    expect(chain.calls.length).toBeLessThan(2_200);
+  });
+
   test("keeps ranges of 1/1024 of sparse history", async () => {
     const events = eventsAtSlots(slotsEvery(5_000n, 90_000n));
     const chain = new FakeChain(events, [100_000n]);
@@ -561,6 +579,9 @@ class FakeChain {
   heightError?: Error;
   visibleThrough?: bigint;
   delayMs: (client: number) => number = () => 0;
+  /* Slots one ListEvents page scans at most, like the RPC: a page whose
+     scanned slots hold no match comes back empty with a token. */
+  scanSlots?: bigint;
   hold: (client: number) => Promise<void> | undefined = () => undefined;
   onClose: () => void = () => {};
   live: (subscription: number) => AsyncIterable<StreamEventsResponse> = () => emptyStream();
@@ -622,6 +643,7 @@ class FakeChain {
   };
 
   private page(expression: string, pageSize = 1000, pageToken?: string) {
+    if (this.scanSlots !== undefined) return this.scannedPage(expression, pageSize, pageToken);
     const matches = compileFilter(expression);
     const limit = Math.min(pageSize || 1000, 1000);
     const page: Event[] = [];
@@ -635,6 +657,17 @@ class FakeChain {
       last = idx;
     }
     return this.response(page, "");
+  }
+
+  private scannedPage(expression: string, pageSize: number, pageToken?: string) {
+    const matches = compileFilter(expression);
+    const low = BigInt(/event\.slot >= uint\((\d+)\)/.exec(expression)?.[1] ?? "0");
+    const high = BigInt(/event\.slot < uint\((\d+)\)/.exec(expression)?.[1] ?? String(this.heights.at(-1)! + 1n));
+    const from = pageToken ? BigInt(pageToken) : low;
+    const to = from + this.scanSlots! < high ? from + this.scanSlots! : high;
+    const page = this.events.filter((event) => event.slot! >= from && event.slot! < to && matches(event));
+    if (page.length > Math.min(pageSize || 1000, 1000)) throw new Error("a scanned window holds more than one page");
+    return this.response(page, to < high ? String(to) : "");
   }
 
   private response(events: Event[], nextPageToken: string) {

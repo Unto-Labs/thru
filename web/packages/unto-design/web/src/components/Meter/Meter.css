@@ -1,0 +1,40 @@
+.uds-meter {
+  width: 100%;
+  max-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.uds-meter__head {
+  display: flex;
+  justify-content: space-between;
+}
+
+.uds-meter__label,
+.uds-meter__value {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.uds-meter__track {
+  width: 100%;
+  height: 6px;
+  background: var(--color-surface-lower);
+  border-radius: var(--radius-none);
+  overflow: hidden;
+}
+
+.uds-meter__ind {
+  height: 100%;
+  background: var(--grass-400);
+  transition: width var(--duration-med) var(--ease-standard);
+}
+@media (prefers-reduced-motion: reduce) {
+  .uds-meter__ind {
+    transition: none;
+  }
+}

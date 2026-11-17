@@ -1,0 +1,30 @@
+abi:
+  package: "compliance.variable_union"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Union with a variable-size variant"
+types:
+  - name: "VarUnion"
+    kind:
+      union:
+        packed: true
+        variants:
+          - name: "fixed"
+            variant-type:
+              primitive: u32
+          - name: "sized"
+            variant-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "len"
+                    field-type:
+                      primitive: u8
+                  - name: "data"
+                    field-type:
+                      array:
+                        size:
+                          field-ref:
+                            path: ["len"]
+                        element-type:
+                          primitive: u8

@@ -29,6 +29,10 @@ interface ManagerCreateIndices extends ManagerAccountIndices {
   sourceBufferAccountIdx: number;
   sourceOffset?: number;
   sourceSize: number;
+  /** SHA-256 of exactly the `sourceSize` bytes at `sourceOffset` in the source
+   * buffer. The manager rejects any other bytes, so a buffer rewritten after
+   * this instruction is signed or approved cannot be installed. */
+  sourceSha256: Uint8Array;
   authorityAccountIdx: number;
   seed: ProgramSeed;
 }
@@ -45,6 +49,7 @@ export type ManagerInstructionArgs =
       sourceBufferAccountIdx: number;
       sourceOffset?: number;
       sourceSize: number;
+      sourceSha256: Uint8Array;
     })
   | (ManagerAccountIndices & { kind: 'setPause'; paused: boolean })
   | (ManagerAccountIndices & { kind: 'destroy' })
@@ -64,6 +69,10 @@ interface ManagerCreateAccounts extends ManagerAccounts {
   sourceBufferAccount: Uint8Array;
   sourceOffset?: number;
   sourceSize: number;
+  /** SHA-256 of exactly the `sourceSize` bytes at `sourceOffset` in the source
+   * buffer. The manager rejects any other bytes, so a buffer rewritten after
+   * this instruction is signed or approved cannot be installed. */
+  sourceSha256: Uint8Array;
   authorityAccount: Uint8Array;
   seed: ProgramSeed;
 }
@@ -80,6 +89,10 @@ export interface UpgradeProgramInstructionArgs extends ManagerAccounts {
   sourceBufferAccount: Uint8Array;
   sourceOffset?: number;
   sourceSize: number;
+  /** SHA-256 of exactly the `sourceSize` bytes at `sourceOffset` in the source
+   * buffer. The manager rejects any other bytes, so a buffer rewritten after
+   * this instruction is signed or approved cannot be installed. */
+  sourceSha256: Uint8Array;
 }
 
 export interface SetPauseInstructionArgs extends ManagerAccounts {

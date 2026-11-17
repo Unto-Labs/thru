@@ -15,7 +15,7 @@ struct Args {
     #[arg(value_name = "TEST_CASE")]
     test_case: PathBuf,
 
-    /// Language to test (rust, c, typescript, or all)
+    /// Language to test (rust, c, typescript, go, or all)
     #[arg(short, long, value_name = "LANGUAGE", default_value = "all")]
     language: String,
 
@@ -145,6 +145,7 @@ fn main() -> Result<()> {
             "rust".to_string(),
             "c".to_string(),
             "typescript".to_string(),
+            "go".to_string(),
         ]
     } else {
         vec![args.language.clone()]
@@ -165,7 +166,7 @@ fn main() -> Result<()> {
             Some(r) => r,
             None => {
                 eprintln!("Unknown language: {}", language);
-                eprintln!("Supported languages: rust, c, typescript");
+                eprintln!("Supported languages: rust, c, typescript, go");
                 std::process::exit(1);
             }
         };
@@ -328,10 +329,9 @@ fn run_parity_mode(args: &Args) -> Result<()> {
         vec![args.test_case.clone()]
     };
 
-    let ts_runner = language_runner::get_runner("typescript")
-        .expect("TypeScript runner should be available");
-    let rust_runner =
-        language_runner::get_runner("rust").expect("Rust runner should be available");
+    let ts_runner =
+        language_runner::get_runner("typescript").expect("TypeScript runner should be available");
+    let rust_runner = language_runner::get_runner("rust").expect("Rust runner should be available");
 
     let start_time = Instant::now();
     let mut parity_passed = 0;

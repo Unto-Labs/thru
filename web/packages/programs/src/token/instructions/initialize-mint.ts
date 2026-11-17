@@ -1,12 +1,7 @@
-import {
-  InitializeMintInstructionBuilder,
-  TickerFieldBuilder,
-} from '../abi/thru/program/token/types';
-import { TICKER_MAX_LENGTH, ZERO_PUBKEY } from '../constants';
+import { InitializeMintInstructionBuilder } from '../abi/thru/program/token/types';
+import { ZERO_PUBKEY } from '../constants';
 import type { AccountLookupContext, InitializeMintArgs, InstructionData } from '../types';
-import { buildTokenInstructionBytes } from './shared';
-
-const TEXT_ENCODER = new TextEncoder();
+import { buildTokenInstructionBytes, encodeTickerField } from './shared';
 
 export function hexToBytes(hex: string): Uint8Array {
   const normalized = hex.startsWith('0x') ? hex.slice(2) : hex;
@@ -35,7 +30,7 @@ export function createInitializeMintInstruction({
   if (seedBytes.length !== 32) {
     throw new Error('Seed must be 32 bytes (64 hex characters)');
   }
-  const tickerFieldBytes = buildTickerFieldBytes(ticker);
+  const tickerFieldBytes = encodeTickerField(ticker.trim().toUpperCase());
   const creator = creatorBytes ?? mintAuthorityBytes;
 
   return async (context: AccountLookupContext): Promise<Uint8Array> => {
@@ -57,20 +52,4 @@ export function createInitializeMintInstruction({
 
     return buildTokenInstructionBytes('initialize_mint', payload);
   };
-}
-
-function buildTickerFieldBytes(ticker: string): Uint8Array {
-  const normalized = ticker.trim().toUpperCase();
-  const tickerBytes = TEXT_ENCODER.encode(normalized);
-  if (tickerBytes.length > TICKER_MAX_LENGTH) {
-    throw new Error('Ticker must be 8 characters or less');
-  }
-
-  const padded = new Uint8Array(TICKER_MAX_LENGTH);
-  padded.set(tickerBytes);
-
-  return new TickerFieldBuilder()
-    .set_length(tickerBytes.length)
-    .set_bytes(Array.from(padded))
-    .build();
 }

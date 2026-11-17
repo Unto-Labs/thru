@@ -2,26 +2,20 @@ abi:
   package: thru.program.manager
   name: "Manager Program"
   abi-version: 1
-  package-version: "0.1.0"
+  package-version: "0.2.0"
   description: ABI for the Thru manager program instruction envelopes and account state
   imports:
     # thru_primitives
-    - type: onchain
-      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
-      target: abi
-      network: mainnet
-      revision: latest
+    - type: path
+      path: thru_primitives.abi.yaml
     # state_proof
-    - type: onchain
-      address: ta1l4yBjT6a7PQ4Wu_sJPQwb8jJiJ8Ei71gOuE5Dnotfrl
-      target: abi
-      network: mainnet
-      revision: latest
+    - type: path
+      path: state_proof.abi.yaml
   options:
     program-metadata:
       root-types:
         instruction-root: "ManagerInstruction"
-        account-root: "ManagerProgramMeta"
+        account-root: "ManagerProgramAccount"
         errors: "ManagerError"
 types:
 - name: CreatePermanentArgs
@@ -44,6 +38,13 @@ types:
       - name: srcbuf_size
         field-type:
           primitive: u32
+      # SHA-256 of exactly srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size);
+      # the manager rejects any other bytes.
+      - name: srcbuf_sha256
+        field-type:
+          type-ref:
+            name: Hash
+            package: "thru.common.primitives"
       - name: authority_account_idx
         field-type:
           primitive: u16
@@ -88,6 +89,13 @@ types:
       - name: srcbuf_size
         field-type:
           primitive: u32
+      # SHA-256 of exactly srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size);
+      # the manager rejects any other bytes.
+      - name: srcbuf_sha256
+        field-type:
+          type-ref:
+            name: Hash
+            package: "thru.common.primitives"
       - name: authority_account_idx
         field-type:
           primitive: u16
@@ -122,6 +130,13 @@ types:
       - name: srcbuf_size
         field-type:
           primitive: u32
+      # SHA-256 of exactly srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size);
+      # the manager rejects any other bytes.
+      - name: srcbuf_sha256
+        field-type:
+          type-ref:
+            name: Hash
+            package: "thru.common.primitives"
 - name: SetPauseArgs
   kind:
     struct:
@@ -220,6 +235,33 @@ types:
               variant-type:
                 type-ref:
                   name: HeaderOnlyArgs
+# Account root. Byte 0 of every account this program owns (other than
+# program code accounts, which stay raw) is account_type. Values are never
+# reused; a new layout takes the next unused value. Core Manager writes the
+# same metadata layout with the same value.
+- name: ManagerProgramAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: account_type
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - account_type
+            variants:
+            - name: program_meta_v1
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: ManagerProgramMeta
+# Program metadata payload (73 bytes after account_type).
 - name: ManagerProgramMeta
   kind:
     struct:

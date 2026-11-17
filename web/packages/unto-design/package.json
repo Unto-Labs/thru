@@ -1,0 +1,57 @@
+{
+  "name": "@unto/design",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Unto design sandbox: a hard fork of @thru/design for iterating on tokens and web components.",
+  "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
+  "exports": {
+    "./assets/thrusd.svg": "./assets/thrusd.svg",
+    "./tokens/css": "./tokens/src/all.css",
+    "./tokens/neutral.css": "./tokens/src/neutral.css",
+    "./tokens/tokens.css": "./tokens/src/tokens.css",
+    "./tokens/typography.css": "./tokens/src/typography.css",
+    "./tokens/theme.css": "./tokens/src/theme.css",
+    "./web": {
+      "types": "./web/src/index.ts",
+      "import": "./web/src/index.ts"
+    },
+    "./web/next-fonts": {
+      "types": "./web/src/next-fonts.ts",
+      "import": "./web/src/next-fonts.ts"
+    },
+    "./web/styles.css": "./web/src/styles.css",
+    "./assets/brand/*": "./assets/brand/*"
+  },
+  "files": [
+    "tokens/src",
+    "web/src",
+    "assets/thrusd.svg",
+    "assets/brand",
+    "fonts"
+  ],
+  "scripts": {
+    "test": "vitest run --dir web/src",
+    "test:run": "vitest run --dir web/src",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  },
+  "peerDependencies": {
+    "@base-ui/react": "^1.6.0",
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@base-ui/react": "^1.6.0",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "typescript": "^6.0.3"
+  }
+}

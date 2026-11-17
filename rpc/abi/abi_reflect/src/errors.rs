@@ -81,7 +81,23 @@ pub enum ReflectError {
         source: ParseError,
     },
 
+    /// Decoding exceeded a bound in `limits` (values, nesting or IR steps).
+    #[error("type '{type_name}' exceeded a decode limit: {reason}")]
+    LimitExceeded { type_name: String, reason: String },
+
     /// Required root type is not configured in the ABI.
     #[error("{root_kind} root type is not configured in the ABI")]
     MissingRootType { root_kind: &'static str },
+
+    /// Instruction data has bytes the decoded root does not cover. Programs may
+    /// still execute those bytes, so a partial decode must not be shown as complete.
+    /// `consumed` is `None` when the decoded size could not be measured.
+    #[error(
+        "instruction type '{type_name}' does not cover all {available} bytes (decoded {consumed:?})"
+    )]
+    TrailingBytes {
+        type_name: String,
+        consumed: Option<u64>,
+        available: u64,
+    },
 }

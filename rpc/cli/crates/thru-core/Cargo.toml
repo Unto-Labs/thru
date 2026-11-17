@@ -8,6 +8,7 @@ homepage = "https://thru.org/docs/cli-reference/overview/"
 edition = "2024"
 keywords = ["thru", "cli", "blockchain", "rpc"]
 categories = ["command-line-utilities", "cryptography::cryptocurrencies"]
+include = ["Cargo.toml", "build.rs", "src/**", "registry/**", "templates/**", "abi/tn_token_program.abi.yaml"]
 
 [dependencies]
 # Thru dependencies
@@ -26,6 +27,7 @@ tokio = { version = "1.52", features = ["full"] }
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
+serde_path_to_error = "0.1"
 serde_yml = "0.0.12"
 serde_json = "1.0"
 toml = "0.9"
@@ -44,12 +46,13 @@ sha2 = "0.11"
 rand = "0.10.1"
 base64 = "0.22"
 blst = "0.3"
+ed25519-dalek = "2.2"
+zeroize = "1.8"
 
 # System utilities
 dirs = "6.0"
 fs2 = "0.4"
 libc = "0.2"
-keyring = { version = "3.6.3", default-features = false }
 # Machine name for the API key `thru auth login` provisions
 gethostname = "1.1"
 
@@ -96,12 +99,11 @@ tempfile = "3.8"
 wiremock = "0.6"
 assert_matches = "1.5"
 
+# Signing keys stored in the macOS Keychain (`--store keychain`); other
+# platforms have no Keychain signing backend.
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3.6.3", default-features = false, features = ["apple-native"] }
-
-[target.'cfg(target_os = "windows")'.dependencies]
-keyring = { version = "3.6.3", default-features = false, features = ["windows-native"] }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-# zbus + Rust crypto: no libdbus headers/library needed on CI or user machines.
-keyring = { version = "3.6.3", default-features = false, features = ["async-secret-service", "tokio", "crypto-rust"] }
+# Create-only signing credentials and binary-safe macOS secret buffers.
+security-framework = "3.7"
+# CFData over a zeroizing seed buffer for SecItemAdd (no extra seed copy).
+core-foundation = "0.10"

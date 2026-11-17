@@ -15,6 +15,10 @@ export {
   AUTHORITY_BYTES,
   AUTHORITY_RECORD_BYTES,
   LONG_LIVED_AUTHORITY_EXPIRY_SECONDS,
+  WALLET_ACCOUNT_HEADER_SIZE,
+  WALLET_ACCOUNT_TYPE_CREDENTIAL_LOOKUP_V1,
+  WALLET_ACCOUNT_TYPE_WALLET_V1,
+  WALLET_CREDENTIAL_LOOKUP_SIZE,
 } from './constants';
 
 // Types
@@ -77,6 +81,8 @@ export { decodeAddress, encodeAddress } from '@thru/sdk/helpers';
 
 // Account parsing
 export {
+  decodeWalletAccount,
+  decodeWalletProgramAccount,
   parseWalletNonce,
   fetchWalletNonce,
   parseCredentialLookupWallet,

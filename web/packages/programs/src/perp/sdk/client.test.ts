@@ -1,8 +1,6 @@
-import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { TransactionVmError } from '@thru/sdk/proto';
 import { PERP_CBOOK_MAX_PRICE_IN_TICKS, derivePerpMarginAccountAddress, perpSettleFunding } from '../index';
-import { PERP_ABI_V0_2, registerPerpProgramHash } from '../versions/registry';
 import { createPerpsClient, type PerpsClient } from './client';
 import {
   createPerpsIndexer,
@@ -32,11 +30,22 @@ const OTHER = address(41);
 const A = fixtureMarket(10);
 const B = fixtureMarket(20);
 const deployment = fixtureDeployment([
-  { symbol: 'BTC-THRUSD', market: A },
-  { symbol: 'ETH-THRUSD', market: B },
+  { symbol: 'BTC-UUSD', market: A },
+  { symbol: 'ETH-UUSD', market: B },
 ]);
-const PROGRAM_CODE = new TextEncoder().encode('perp program build for the client tests');
-registerPerpProgramHash(createHash('sha256').update(PROGRAM_CODE).digest('hex'), 'perp-abi@0.4.0');
+/* Indexer JSON of a market's funding, risk and fee state (all zero). */
+const FUNDING_JSON = {
+  index: '0', balance: '0', rateTicks: '0', premiumSum: '0', sampleCount: 0, lastRoundNs: '0', lastSampleNs: '0',
+  interestRate: 0, clampSmall: 0, clampBig: 0, premiumMultiplier: 0, impactNotional: '0',
+};
+const RISK_JSON = {
+  socializeCapBps: 0, ifEpochBudgetBps: 0, bankruptLiqRewardBps: 0, feeBalance: '0', insuranceBalance: '0', epochId: 0,
+  epochIfDrawn: '0', epochSocTicks: '0', badDebtBoth: '0', lossOffsetLong: '0', lossOffsetShort: '0',
+};
+const FEES_JSON = {
+  takerFeePpm: 0, makerRebatePpm: 0, builderFeeCapPpm: 0, feeInsuranceSharePpm: 0, liqInsuranceSharePpm: 0,
+  pendingTakerFeePpm: 0, pendingBuilderFeeCapPpm: 0, pendingActivationNs: '0',
+};
 
 /** The chain: OWNER is cross in BTC (seat 1, a resting bid) and ETH (seat 1),
     linked by margin account 0 on the shared vault; OTHER is isolated in BTC. */
@@ -44,7 +53,6 @@ async function chain() {
   const margin = await derivePerpMarginAccountAddress({ ownerAddress: OWNER, vaultAddress: A.quoteVault, accountId: 0, perpProgramAddress: deployment.perpProgram });
   const bestBid = PERP_CBOOK_MAX_PRICE_IN_TICKS - 84_000n;
   const accounts = new Map<string, Uint8Array>([
-    [deployment.perpProgram, PROGRAM_CODE],
     [A.seatArena, seatArenaBytes(A, [
       { authority: OWNER, quantityQuote: -5_000n, openBidLots: 1n, openBidNotional: 84_000_000n, headOrderEntryIndex: 1, cross: true },
       { authority: OTHER, quantityQuote: 10_000_000n },
@@ -84,51 +92,51 @@ async function client(extra: Record<string, unknown> = {}): Promise<{ client: Pe
 }
 
 describe('createPerpsClient', () => {
-  it('loads the record and detects the ABI version from the program hash', async () => {
-    const { client: perps } = await client();
-    expect(perps.version.id).toBe('perp-abi@0.4.0');
-    expect(perps.versionDetection?.source).toBe('program-hash');
-    expect(perps.features.crossMargin).toBe(true);
+  it('loads the record without reading the program account', async () => {
+    const { client: perps, env } = await client();
+    expect(perps.programAddress).toBe(deployment.perpProgram);
+    expect(env.reads).not.toContain(deployment.perpProgram);
     await expect(createPerpsClient({ network: 'nowhere' })).rejects.toThrow('no deployment record registered for network "nowhere"');
   });
 
   it('reads markets, seats, funding, margin accounts and open orders over RPC', async () => {
     const { client: perps, env } = await client();
-    const market = await perps.getMarket('btc-thrusd');
+    const market = await perps.getMarket('btc-uusd');
     expect(market.state).toMatchObject({ tickSize: 1_000n, initialMarginBps: 500, crossUpnlHaircutBps: 0 });
-    expect(await perps.getSeat('BTC-THRUSD', OWNER)).toMatchObject({ seatIndex: 1, cross: true, quantityQuote: -5_000n });
-    expect(await perps.getSeat('ETH-THRUSD', OTHER)).toBeNull();
-    expect(await perps.getFunding('BTC-THRUSD')).toMatchObject({ supported: true, enabled: true, nextRoundNs: 10_800_000_000_000n });
-    expect((await perps.getFunding('ETH-THRUSD')).enabled).toBe(false);
+    expect(await perps.getSeat('BTC-UUSD', OWNER)).toMatchObject({ seatIndex: 1, cross: true, quantityQuote: -5_000n });
+    expect(await perps.getSeat('ETH-UUSD', OTHER)).toBeNull();
+    expect(await perps.getFunding('BTC-UUSD')).toMatchObject({ enabled: true, nextRoundNs: 10_800_000_000_000n });
+    expect((await perps.getFunding('ETH-UUSD')).enabled).toBe(false);
     const accounts = await perps.getMarginAccounts(OWNER);
     expect(accounts).toEqual([{ address: env.margin, accountId: 0, owner: OWNER, vault: A.quoteVault, links: [{ market: B.seatArena, seatIndex: 1 }, { market: A.seatArena, seatIndex: 1 }] }]);
-    const orders = await perps.getOpenOrders('BTC-THRUSD', OWNER);
+    const orders = await perps.getOpenOrders('BTC-UUSD', OWNER);
     expect(orders).toEqual([
       expect.objectContaining({ orderId: 4n, orderEntryIndex: 1, seatIndex: 1, side: 'buy', price: 84_000_000n, priceTicks: 84_000n, lots: 1n, quantity: 1n }),
     ]);
-    const book = await perps.getBook('BTC-THRUSD');
+    const book = await perps.getBook('BTC-UUSD');
     expect(book.bids).toEqual([{ side: 'buy', price: 84_000_000n, priceTicks: 84_000n, lots: 1n, quantity: 1n, orderCount: 1 }]);
   });
 
   it('builds a cross order with the margin record and the state units the book needs', async () => {
     const { client: perps, env } = await client();
-    const built = await perps.placeOrder({ market: 'ETH-THRUSD', owner: OWNER, side: 'buy', price: '42000', size: '0.001', postOnly: true });
-    expect(built.meta).toMatchObject({ action: 'placeOrders', seatIndex: 1, cross: true, marginAccount: env.margin, abiVersion: 'perp-abi@0.4.0', stateUnits: 0 });
+    const built = await perps.placeOrder({ market: 'ETH-UUSD', owner: OWNER, side: 'buy', price: '42000', size: '0.001', postOnly: true });
+    expect(built.meta).toMatchObject({ action: 'placeOrders', seatIndex: 1, cross: true, marginAccount: env.margin, stateUnits: 0 });
+    expect(built.meta).not.toHaveProperty('abiVersion');
     expect(built.transaction.instructions.map((ix) => ix.ix)).toEqual(['margin_record', 'market_record', 'create_order_entry']);
     expect(built.transaction.instructions[2]).toMatchObject({ side: 'buy', orderType: 'alo', price: '42000000', quantity: '1' });
     expect(built.transaction.readOnly).toEqual([deployment.exchangeMeta, B.oracleFeed, env.margin, A.seatArena, A.oracleFeed]);
-    await expect(perps.placeOrder({ market: 'ETH-THRUSD', owner: OWNER, side: 'buy', price: '42000.5', size: '0.001' })).rejects.toThrow('not a multiple of 1000');
-    await expect(perps.placeOrder({ market: 'ETH-THRUSD', owner: OWNER, side: 'buy', price: '1', priceAtoms: '1000', size: '0.001' })).rejects.toThrow('exactly one of price, priceAtoms');
-    await expect(perps.placeOrder({ market: 'ETH-THRUSD', owner: OTHER, side: 'buy', price: '1', size: '0.001' })).rejects.toThrow('has no seat');
+    await expect(perps.placeOrder({ market: 'ETH-UUSD', owner: OWNER, side: 'buy', price: '42000.5', size: '0.001' })).rejects.toThrow('not a multiple of 1000');
+    await expect(perps.placeOrder({ market: 'ETH-UUSD', owner: OWNER, side: 'buy', price: '1', priceAtoms: '1000', size: '0.001' })).rejects.toThrow('exactly one of price, priceAtoms');
+    await expect(perps.placeOrder({ market: 'ETH-UUSD', owner: OTHER, side: 'buy', price: '1', size: '0.001' })).rejects.toThrow('has no seat');
   });
 
   it('cancels every open order, withdraws and settles through the right accounts', async () => {
     const { client: perps, env } = await client();
-    const cancelAll = await perps.cancelAll({ market: 'BTC-THRUSD', owner: OWNER });
+    const cancelAll = await perps.cancelAll({ market: 'BTC-UUSD', owner: OWNER });
     expect(cancelAll.transaction.instructions.map((ix) => ix.ix)).toEqual(['margin_record', 'market_record', 'modify_order_entry']);
     expect(cancelAll.transaction.instructions[2]).toMatchObject({ orderEntryIndex: 1, orderId: '4', quantity: '0' });
 
-    const withdraw = await perps.withdraw({ market: 'ETH-THRUSD', owner: OWNER, amount: '12.5' });
+    const withdraw = await perps.withdraw({ market: 'ETH-UUSD', owner: OWNER, amount: '12.5' });
     expect(withdraw.transaction.instructions[2]).toMatchObject({ ix: 'token_withdraw', amount: '12500000', from: A.quoteVault });
     expect(withdraw.meta.cross).toBe(true);
 
@@ -139,20 +147,12 @@ describe('createPerpsClient', () => {
       expect.objectContaining({ ix: 'market_record', marketRecordIndex: 2, seatArena: A.seatArena }),
       { ix: 'settle_funding', marketRecordIndex: 2, targetSeatIndex: 1 },
     ]);
-    const unlink = await perps.unlinkMargin({ market: 'ETH-THRUSD', owner: OWNER });
+    const unlink = await perps.unlinkMargin({ market: 'ETH-UUSD', owner: OWNER });
     expect(unlink.transaction.readWrite).toContain(env.margin);
 
-    const liquidate = await perps.liquidate({ market: 'BTC-THRUSD', owner: OTHER, targetSeatIndex: 1 });
+    const liquidate = await perps.liquidate({ market: 'BTC-UUSD', owner: OTHER, targetSeatIndex: 1 });
     expect(liquidate.transaction.instructions.map((ix) => ix.ix)).toEqual(['margin_record', 'market_record', 'liquidate']);
     expect(liquidate.meta.cross).toBe(false);
-  });
-
-  it('gates cross margin on the ABI version', async () => {
-    const { client: perps } = await client({ abiVersion: PERP_ABI_V0_2 });
-    expect(perps.features.crossMargin).toBe(false);
-    expect(await perps.getMarginAccounts(OWNER)).toEqual([]);
-    await expect(perps.linkMargin({ market: 'BTC-THRUSD', owner: OWNER })).rejects.toThrow('crossMargin');
-    await expect(perps.settleFunding({ market: 'BTC-THRUSD', seatIndexes: [1] })).rejects.toThrow('settleFunding');
   });
 
   it('reads through the indexer when given and falls back to RPC when it fails', async () => {
@@ -163,6 +163,7 @@ describe('createPerpsClient', () => {
             statusFlags: 0, exchangeStatusFlags: 0, lotSize: '1', tickSize: '5000', nextOrderId: '1', priceCap: '9', maxPositionLots: '9', openInterestLots: '0', badDebt: '0',
             orderArena: A.orderArena, bidsCbook: A.bidsCbook, asksCbook: A.asksCbook, quoteVault: A.quoteVault, marketAuthority: A.marketAuthority, oracleFeed: A.oracleFeed,
             markNum: '1', markDen: '1', initialMarginBps: 500, maintenanceMarginBps: 250, liquidationFeeBps: 100, oracleExponent: -8, maxMarkAgeNs: '0', crossUpnlHaircutBps: 1000,
+            funding: FUNDING_JSON, risk: RISK_JSON, fees: FEES_JSON,
           },
           meta: {},
         }), { status: 200 });
@@ -170,13 +171,13 @@ describe('createPerpsClient', () => {
       return new Response('{}', { status: 503 });
     });
     const { client: perps, env } = await client({ indexerUrl: 'https://indexer.example/', fetch });
-    expect((await perps.getMarket('BTC-THRUSD')).state).toMatchObject({ tickSize: 5_000n, crossUpnlHaircutBps: 1000 });
+    expect((await perps.getMarket('BTC-UUSD')).state).toMatchObject({ tickSize: 5_000n, crossUpnlHaircutBps: 1000 });
     expect(env.reads).not.toContain(A.seatArena);
-    expect((await perps.getMarket('ETH-THRUSD')).state.tickSize).toBe(1_000n);
+    expect((await perps.getMarket('ETH-UUSD')).state.tickSize).toBe(1_000n);
     expect(env.reads).toContain(B.seatArena);
     /* Builders read the seat, its account and the market from the chain, never the indexer. */
     const fetched = fetch.mock.calls.length;
-    const built = await perps.cancelAll({ market: 'BTC-THRUSD', owner: OWNER });
+    const built = await perps.cancelAll({ market: 'BTC-UUSD', owner: OWNER });
     expect(built.meta.cross).toBe(true);
     expect(fetch.mock.calls.length).toBe(fetched);
     expect(env.reads).toContain(A.seatArena);
@@ -210,7 +211,7 @@ describe('createPerpsClient', () => {
       [`/v1/owners/${OWNER}/margin`]: { total: 19, item: marginJson },
     });
     const { client: perps, env } = await client({ indexerUrl: 'https://indexer.example', fetch });
-    const orders = await perps.getOpenOrders('BTC-THRUSD', OWNER);
+    const orders = await perps.getOpenOrders('BTC-UUSD', OWNER);
     expect(orders).toHaveLength(405);
     expect(orders.map((order) => order.orderId)).toEqual(Array.from({ length: 405 }, (_, i) => BigInt(i + 1)));
     const orderCalls = calls.filter((url) => url.pathname.endsWith('/orders'));
@@ -233,7 +234,7 @@ describe('createPerpsClient', () => {
       [`/v1/owners/${OWNER}/margin`]: { total: 0, item: marginJson, endless: true },
     });
     const { client: perps, env } = await client({ indexerUrl: 'https://indexer.example', fetch });
-    expect(await perps.getOpenOrders('BTC-THRUSD', OWNER)).toEqual([expect.objectContaining({ orderId: 4n, orderEntryIndex: 1 })]);
+    expect(await perps.getOpenOrders('BTC-UUSD', OWNER)).toEqual([expect.objectContaining({ orderId: 4n, orderEntryIndex: 1 })]);
     expect(fetch.mock.calls.filter(([url]) => String(url).includes('/orders')).length).toBe(PERPS_INDEXER_MAX_PAGES);
     expect(env.reads).toContain(A.orderArena);
     expect(await perps.getMarginAccounts(OWNER)).toEqual([expect.objectContaining({ address: env.margin, accountId: 0 })]);
@@ -245,6 +246,7 @@ describe('perpMarketFromIndexer', () => {
     statusFlags: 0, exchangeStatusFlags: 0, lotSize: '1', tickSize: '5000', nextOrderId: '1', priceCap: '9', maxPositionLots: '9', openInterestLots: '2', badDebt: '0',
     orderArena: A.orderArena, bidsCbook: A.bidsCbook, asksCbook: A.asksCbook, quoteVault: A.quoteVault, marketAuthority: A.marketAuthority, oracleFeed: A.oracleFeed,
     markNum: '1', markDen: '1', initialMarginBps: 500, maintenanceMarginBps: 250, liquidationFeeBps: 100, oracleExponent: -8, maxMarkAgeNs: '0',
+    crossUpnlHaircutBps: 0, funding: FUNDING_JSON, risk: RISK_JSON, fees: FEES_JSON,
   };
   const risk = {
     socializeCapBps: 300, ifEpochBudgetBps: 2000, bankruptLiqRewardBps: 50, feeBalance: '7', insuranceBalance: '5000', epochId: 3,
@@ -267,22 +269,20 @@ describe('perpMarketFromIndexer', () => {
     expect(perpSettleFunding(m, { ...seat, fundingSnapshot: 1_000_000n }).seat.quantityQuote).toBe(100n);
   });
 
-  it('has no risk state for a market without the waterfall', () => {
-    expect('risk' in perpMarketFromIndexer({ ...market, risk: null })).toBe(false);
-    expect('risk' in perpMarketFromIndexer(market)).toBe(false);
+  it('refuses a market without its risk state', () => {
+    expect(() => perpMarketFromIndexer({ ...market, risk: null })).toThrow('indexer field risk is not an object');
+    expect(() => perpMarketFromIndexer({ ...market, risk: undefined })).toThrow('indexer field risk is not an object');
     expect(() => perpMarketFromIndexer({ ...market, risk: { ...risk, lossOffsetLong: 1.5 } })).toThrow('risk.lossOffsetLong');
-    /* Malformed, not absent: refused rather than read as a market without the waterfall. */
     for (const bad of ['invalid', false, 0, [], true]) expect(() => perpMarketFromIndexer({ ...market, risk: bad })).toThrow('indexer field risk is not an object');
   });
 
-  it('reads the fee rates, a seat\'s fee state and an order\'s builder code (0.5.0)', () => {
+  it('reads the fee rates, a seat\'s fee state and an order\'s builder code', () => {
     const fees = {
       takerFeePpm: 300, makerRebatePpm: 100, builderFeeCapPpm: 50, feeInsuranceSharePpm: 250_000, liqInsuranceSharePpm: 0,
       pendingTakerFeePpm: 400, pendingBuilderFeeCapPpm: 0, pendingActivationNs: '7200000000000',
     };
     expect(perpMarketFromIndexer({ ...market, fees }).fees).toEqual({ ...fees, pendingActivationNs: 7_200_000_000_000n });
-    expect('fees' in perpMarketFromIndexer({ ...market, fees: null })).toBe(false);
-    expect('fees' in perpMarketFromIndexer(market)).toBe(false);
+    expect(() => perpMarketFromIndexer({ ...market, fees: null })).toThrow('indexer field fees is not an object');
     expect(() => perpMarketFromIndexer({ ...market, fees: 'x' })).toThrow('indexer field fees is not an object');
     const seat = {
       seatIndex: 2, authority: A.marketAuthority, collateralAtoms: '0', cross: false, longLots: '0', shortLots: '0', openBidLots: '0', openAskLots: '0',
@@ -346,7 +346,7 @@ describe('PerpsClient.getMark', () => {
   it('gives the mark of a fresh feed, up to and including the boundary age', async () => {
     for (const age of [0n, 5_000_000_000n]) {
       const perps = await markClient({ price: 84_000_000n, lastUpdateNs: NOW - age, maxStalenessNs: 5_000_000_000n });
-      expect(await perps.getMark('BTC-THRUSD')).toEqual({
+      expect(await perps.getMark('BTC-UUSD')).toEqual({
         market: A.seatArena, mark: 84_000_000n, feedPrice: 84_000_000n, exponent: -8, lastUpdateNs: NOW - age, maxAgeNs: 5_000_000_000n, stale: false, error: null,
       });
     }
@@ -354,7 +354,7 @@ describe('PerpsClient.getMark', () => {
 
   it("is stale one nanosecond past the feed's max staleness when the market's max age is 0", async () => {
     const perps = await markClient({ price: 84_000_000n, lastUpdateNs: NOW - 5_000_000_001n, maxStalenessNs: 5_000_000_000n });
-    expect(await perps.getMark('BTC-THRUSD')).toEqual({
+    expect(await perps.getMark('BTC-UUSD')).toEqual({
       market: A.seatArena, mark: null, feedPrice: 84_000_000n, exponent: -8, lastUpdateNs: NOW - 5_000_000_001n, maxAgeNs: 5_000_000_000n, stale: true,
       error: 'oracle feed is stale: last updated 5000000001 ns ago, the market accepts at most 5000000000 ns',
     });
@@ -362,26 +362,26 @@ describe('PerpsClient.getMark', () => {
 
   it("applies the market's maxMarkAgeNs over the feed's staleness when it is set", async () => {
     const feed = { price: 84_000_000n, maxStalenessNs: 60_000_000_000n };
-    const atLimit = await (await markClient({ ...feed, lastUpdateNs: NOW - 2_000_000_000n }, 2_000_000_000n)).getMark('BTC-THRUSD');
+    const atLimit = await (await markClient({ ...feed, lastUpdateNs: NOW - 2_000_000_000n }, 2_000_000_000n)).getMark('BTC-UUSD');
     expect(atLimit).toMatchObject({ mark: 84_000_000n, maxAgeNs: 2_000_000_000n, stale: false, error: null });
-    const past = await (await markClient({ ...feed, lastUpdateNs: NOW - 2_000_000_001n }, 2_000_000_000n)).getMark('BTC-THRUSD');
+    const past = await (await markClient({ ...feed, lastUpdateNs: NOW - 2_000_000_001n }, 2_000_000_000n)).getMark('BTC-UUSD');
     expect(past).toMatchObject({ mark: null, maxAgeNs: 2_000_000_000n, stale: true });
     /* A shorter feed staleness does not apply once the market sets its own. */
-    const longer = await (await markClient({ price: 84_000_000n, maxStalenessNs: 1n, lastUpdateNs: NOW - 1_000_000_000n }, 2_000_000_000n)).getMark('BTC-THRUSD');
+    const longer = await (await markClient({ price: 84_000_000n, maxStalenessNs: 1n, lastUpdateNs: NOW - 1_000_000_000n }, 2_000_000_000n)).getMark('BTC-UUSD');
     expect(longer).toMatchObject({ mark: 84_000_000n, stale: false });
   });
 
   it('is stale when the feed is stamped after the current time', async () => {
     const perps = await markClient({ price: 84_000_000n, lastUpdateNs: NOW + 1n, maxStalenessNs: 5_000_000_000n });
-    expect(await perps.getMark('BTC-THRUSD')).toMatchObject({
+    expect(await perps.getMark('BTC-UUSD')).toMatchObject({
       mark: null, stale: true, error: `oracle feed is stale: its last update (${NOW + 1n} ns) is after the current time (${NOW} ns)`,
     });
   });
 
   it("reports a feed of the wrong exponent before its age, as the program does, and a missing feed", async () => {
     const perps = await markClient({ price: 84_000_000n, lastUpdateNs: 0n, maxStalenessNs: 1n, exponent: -6 });
-    expect(await perps.getMark('BTC-THRUSD')).toMatchObject({ mark: null, stale: false, error: expect.stringContaining('exponent -6 differs') });
-    expect(await (await markClient(null)).getMark('BTC-THRUSD')).toMatchObject({ mark: null, stale: false, maxAgeNs: null, error: expect.stringContaining('not found') });
+    expect(await perps.getMark('BTC-UUSD')).toMatchObject({ mark: null, stale: false, error: expect.stringContaining('exponent -6 differs') });
+    expect(await (await markClient(null)).getMark('BTC-UUSD')).toMatchObject({ mark: null, stale: false, maxAgeNs: null, error: expect.stringContaining('not found') });
   });
 });
 
@@ -409,7 +409,7 @@ describe('PerpsClient.send', () => {
   it('returns the signature of an executed transaction', async () => {
     const { client: perps, env } = await client();
     env.thru.transactions.sendAndTrack.mockImplementation(stream(0));
-    const built = await perps.createSeat({ market: 'ETH-THRUSD', owner: OTHER });
+    const built = await perps.createSeat({ market: 'ETH-UUSD', owner: OTHER });
     const signer = signerFor([{}]);
     const result = await perps.send(built, signer);
     expect(result.label).toBe('create seat');
@@ -421,7 +421,7 @@ describe('PerpsClient.send', () => {
     const { client: perps, env } = await client();
     env.thru.transactions.sendAndTrack.mockImplementationOnce(stream(-1, BigInt.asUintN(64, -213n)));
     const signer = signerFor([{}]);
-    const error = await perps.send(await perps.createSeat({ market: 'ETH-THRUSD', owner: OTHER }), signer).catch((e: unknown) => e);
+    const error = await perps.send(await perps.createSeat({ market: 'ETH-UUSD', owner: OTHER }), signer).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(TransactionFailedError);
     expect(error).toMatchObject({ code: 'ORACLE_STALE', kind: 'oracle', retryable: true });
     expect((error as TransactionFailedError).message).toContain('oracle feed is stale');
@@ -429,12 +429,12 @@ describe('PerpsClient.send', () => {
 
     env.thru.transactions.sendAndTrack.mockImplementationOnce(stream(TransactionVmError.TRANSACTION_VM_ERROR_NONCE_TOO_LOW)).mockImplementationOnce(stream(0));
     const retried = signerFor([{ nonceCached: true }, {}]);
-    await perps.send(await perps.createSeat({ market: 'ETH-THRUSD', owner: OTHER }), retried);
+    await perps.send(await perps.createSeat({ market: 'ETH-UUSD', owner: OTHER }), retried);
     expect(retried.calls).toEqual([false, true]);
 
     env.thru.transactions.sendAndTrack.mockImplementationOnce(stream(TransactionVmError.TRANSACTION_VM_ERROR_SU_EXHAUSTED));
     const exhausted = signerFor([{ nonceCached: true }]);
-    await expect(perps.send(await perps.createSeat({ market: 'ETH-THRUSD', owner: OTHER }), exhausted)).rejects.toMatchObject({ kind: 'state-units', vmErrorName: 'SU_EXHAUSTED' });
+    await expect(perps.send(await perps.createSeat({ market: 'ETH-UUSD', owner: OTHER }), exhausted)).rejects.toMatchObject({ kind: 'state-units', vmErrorName: 'SU_EXHAUSTED' });
     expect(exhausted.calls).toEqual([false]);
   });
 
@@ -450,7 +450,7 @@ describe('PerpsClient.send', () => {
         return btoa(String.fromCharCode(...new Uint8Array(176)));
       },
     };
-    const built = await perps.placeOrder({ market: 'ETH-THRUSD', owner: OWNER, side: 'sell', priceAtoms: 90_000_000n, lots: 2n });
+    const built = await perps.placeOrder({ market: 'ETH-UUSD', owner: OWNER, side: 'sell', priceAtoms: 90_000_000n, lots: 2n });
     await perps.send(built, createWalletSigner({ wallet, walletAddress: OWNER }));
     expect(intents).toHaveLength(1);
     expect(intents[0]).toMatchObject({ walletAddress: OWNER, programAddress: deployment.perpProgram, stateUnits: built.transaction.stateUnits });
@@ -461,7 +461,7 @@ describe('PerpsClient.send', () => {
 });
 
 describe('agent actions', () => {
-  it('describes every action with a JSON Schema, filtered by the ABI version', async () => {
+  it('describes every action with a JSON Schema', () => {
     const all = describePerpsActions();
     expect(all.map((action) => action.name)).toEqual([
       'getMarkets', 'getMarket', 'getBook', 'getMark', 'getFunding', 'getSeat', 'getMarginAccounts', 'getOpenOrders',
@@ -478,24 +478,20 @@ describe('agent actions', () => {
       required: ['market', 'owner', 'side'],
       properties: { side: { enum: ['buy', 'sell'] }, orderType: { enum: ['gtc', 'ioc', 'fok', 'alo', 'mtl'] } },
     });
-    const { client: old } = await client({ abiVersion: PERP_ABI_V0_2 });
-    const names = describePerpsActions(old).map((action) => action.name);
-    expect(names).not.toContain('linkMargin');
-    expect(names).not.toContain('settleFunding');
-    expect(perpsToolDefinitions(old)[0]).toEqual({ name: 'perps_getMarkets', description: expect.any(String), input_schema: expect.objectContaining({ type: 'object' }) });
+    expect(perpsToolDefinitions()[0]).toEqual({ name: 'perps_getMarkets', description: expect.any(String), input_schema: expect.objectContaining({ type: 'object' }) });
   });
 
   it('validates params and runs actions to JSON-safe results', async () => {
     const { client: perps, env } = await client();
-    expect(validatePerpsActionParams('placeOrder', { market: 'BTC-THRUSD', owner: OWNER, side: 'hold', bogus: 1 })).toEqual([
+    expect(validatePerpsActionParams('placeOrder', { market: 'BTC-UUSD', owner: OWNER, side: 'hold', bogus: 1 })).toEqual([
       'params.side must be one of buy, sell',
       'params.bogus is not a parameter',
     ]);
-    const seat = await runPerpsAction(perps, 'getSeat', { market: 'BTC-THRUSD', owner: OWNER });
+    const seat = await runPerpsAction(perps, 'getSeat', { market: 'BTC-UUSD', owner: OWNER });
     expect(seat).toMatchObject({ ok: true, result: { seatIndex: 1, quantityQuote: '-5000', cross: true } });
     expect(JSON.parse(JSON.stringify(seat))).toEqual(seat);
 
-    const unsigned = await runPerpsAction(perps, 'placeOrder', { market: 'ETH-THRUSD', owner: OWNER, side: 'buy', price: '42000', size: '0.001' });
+    const unsigned = await runPerpsAction(perps, 'placeOrder', { market: 'ETH-UUSD', owner: OWNER, side: 'buy', price: '42000', size: '0.001' });
     expect(unsigned.ok && (unsigned.result as { transaction: { instructions: Array<{ ix: string }> } }).transaction.instructions.map((ix) => ix.ix)).toEqual([
       'margin_record', 'market_record', 'create_order_entry',
     ]);
@@ -504,9 +500,9 @@ describe('agent actions', () => {
       yield { executionResult: { vmError: -1, userErrorCode: BigInt.asUintN(64, -403n) } };
     });
     const signer: PerpsSigner = { kind: 'test', address: OWNER, sign: async () => ({ raw: new Uint8Array(176) }) };
-    const failed = await runPerpsAction(perps, 'placeOrder', { market: 'ETH-THRUSD', owner: OWNER, side: 'buy', price: '42000', size: '0.001' }, { signer });
+    const failed = await runPerpsAction(perps, 'placeOrder', { market: 'ETH-UUSD', owner: OWNER, side: 'buy', price: '42000', size: '0.001' }, { signer });
     expect(failed).toMatchObject({ ok: false, error: { code: 'INSUFFICIENT_COLLATERAL', kind: 'insufficient-margin', retryable: false } });
-    expect(await runPerpsAction(perps, 'placeOrder', { market: 'ETH-THRUSD', owner: OTHER, side: 'buy', price: '1', size: '1' }, { signer })).toMatchObject({
+    expect(await runPerpsAction(perps, 'placeOrder', { market: 'ETH-UUSD', owner: OTHER, side: 'buy', price: '1', size: '1' }, { signer })).toMatchObject({
       ok: false,
       error: { message: expect.stringContaining('has no seat') },
     });

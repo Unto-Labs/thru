@@ -1,0 +1,7 @@
+test-case:
+  name: "wide_tag_enums_u32_high"
+  abi-file: "../../abi_definitions/wide_tag_enums.abi.yaml"
+  type: "U32TagEnum"
+  description: "u32 tag 65536 selects High (u64 payload); narrowing to u8 would pick Zero"
+  tags: ["enums", "wide-tag"]
+  binary-hex: "00000100 0102030405060708"

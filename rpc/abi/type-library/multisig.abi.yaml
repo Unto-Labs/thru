@@ -1,0 +1,422 @@
+abi:
+  package: thru.program.multisig
+  name: Multisig
+  abi-version: 1
+  package-version: 0.2.0
+  description: 'Canonical Multisig program. Account discriminators: multisig 1 (exactly
+    1048 bytes), request 2 (104-byte header plus request data). Members are sorted; maximum 32, request payload maximum
+    4096 bytes. Request kinds: invoke 0, threshold 1, membership 2, delete 3. Error
+    codes 1 invalid instruction, 2 account, 3 state, 4 unauthorized, 5 create failed,
+    6 resize failed, 7 write failed, 8 member count, 9 threshold, 10 duplicate member,
+    11 not member, 12 duplicate approval, 13 stale, 14 not open, 15 not approved,
+    16 request kind, 17 request data, 18 too large, 19 CPI failed, 20 not deletable,
+    21 outstanding requests, 22 too many requests, 23 request mismatch (an approval
+    whose expected request id or sha256 of the request data differs from the request).'
+  imports:
+  - type: path
+    path: thru_primitives.abi.yaml
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: MultisigInstruction
+        account-root: MultisigProgramAccount
+        errors: MultisigError
+types:
+- name: CreateMultisigArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: multisig_account_idx
+        field-type:
+          primitive: u16
+      - name: creator_account_idx
+        field-type:
+          primitive: u16
+      - name: member_cnt
+        field-type:
+          primitive: u16
+      - name: threshold_m
+        field-type:
+          primitive: u16
+      - name: seed
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+      - name: proof_sz
+        field-type:
+          primitive: u64
+      - name: members
+        field-type:
+          array:
+            size:
+              field-ref:
+                path:
+                - member_cnt
+            element-type:
+              type-ref:
+                name: Pubkey
+                package: thru.common.primitives
+      - name: proof
+        field-type:
+          array:
+            size:
+              field-ref:
+                path:
+                - proof_sz
+            element-type:
+              primitive: u8
+- name: CreateRequestArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: multisig_account_idx
+        field-type:
+          primitive: u16
+      - name: request_account_idx
+        field-type:
+          primitive: u16
+      - name: proposer_account_idx
+        field-type:
+          primitive: u16
+      - name: request_kind
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          primitive: u8
+      - name: seed
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+      - name: request_data_sz
+        field-type:
+          primitive: u64
+      - name: proof_sz
+        field-type:
+          primitive: u64
+      - name: request_data
+        field-type:
+          array:
+            size:
+              field-ref:
+                path:
+                - request_data_sz
+            element-type:
+              primitive: u8
+      - name: proof
+        field-type:
+          array:
+            size:
+              field-ref:
+                path:
+                - proof_sz
+            element-type:
+              primitive: u8
+- name: ApproveRequestArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: multisig_account_idx
+        field-type:
+          primitive: u16
+      - name: request_account_idx
+        field-type:
+          primitive: u16
+      - name: approver_account_idx
+        field-type:
+          primitive: u16
+      - name: expected_request_id
+        field-type:
+          primitive: u64
+      - name: expected_request_hash
+        field-type:
+          type-ref:
+            name: Hash
+            package: thru.common.primitives
+- name: ExecuteRequestArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: multisig_account_idx
+        field-type:
+          primitive: u16
+      - name: request_account_idx
+        field-type:
+          primitive: u16
+- name: DeleteRequestArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: multisig_account_idx
+        field-type:
+          primitive: u16
+      - name: request_account_idx
+        field-type:
+          primitive: u16
+      - name: requester_account_idx
+        field-type:
+          primitive: u16
+- name: MultisigInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: tag
+        field-type:
+          primitive: u32
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - tag
+            variants:
+            - name: create_multisig
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: CreateMultisigArgs
+            - name: create_request
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: CreateRequestArgs
+            - name: approve_request
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: ApproveRequestArgs
+            - name: execute_request
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: ExecuteRequestArgs
+            - name: delete_request
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: DeleteRequestArgs
+# Account root. Byte 0 of every account this program owns is account_type.
+# Values are never reused; a new layout takes the next unused value.
+- name: MultisigProgramAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: account_type
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - account_type
+            variants:
+            - name: multisig_v1
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: MultisigAccount
+            - name: request_v1
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: MultisigRequest
+# Multisig payload (1047 bytes after account_type).
+- name: MultisigAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: flags
+        field-type:
+          primitive: u8
+      - name: member_cnt
+        field-type:
+          primitive: u16
+      - name: threshold_m
+        field-type:
+          primitive: u16
+      - name: live_request_cnt
+        field-type:
+          primitive: u16
+      - name: config_epoch
+        field-type:
+          primitive: u64
+      - name: next_request_id
+        field-type:
+          primitive: u64
+      - name: members
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 32
+            element-type:
+              type-ref:
+                name: Pubkey
+                package: thru.common.primitives
+# Request payload (103-byte header after account_type, then request data).
+- name: MultisigRequest
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: kind
+        field-type:
+          primitive: u8
+      - name: status
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          primitive: u8
+      - name: member_cnt_snapshot
+        field-type:
+          primitive: u16
+      - name: required_approvals
+        field-type:
+          primitive: u16
+      - name: request_id
+        field-type:
+          primitive: u64
+      - name: config_epoch_snapshot
+        field-type:
+          primitive: u64
+      - name: approval_bitmap
+        field-type:
+          primitive: u64
+      - name: request_data_sz
+        field-type:
+          primitive: u64
+      - name: multisig_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: thru.common.primitives
+      - name: proposer_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: thru.common.primitives
+      - name: request_data
+        field-type:
+          array:
+            size:
+              field-ref:
+                path:
+                - request_data_sz
+            element-type:
+              primitive: u8
+- name: InvokeRequest
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: target_program_idx
+        field-type:
+          primitive: u16
+      - name: ref_account_cnt
+        field-type:
+          primitive: u16
+      - name: instr_data_sz
+        field-type:
+          primitive: u64
+      - name: target_program_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: thru.common.primitives
+      - name: ref_account_idxs
+        field-type:
+          array:
+            size:
+              field-ref:
+                path:
+                - ref_account_cnt
+            element-type:
+              primitive: u16
+      - name: ref_account_pubkeys
+        field-type:
+          array:
+            size:
+              field-ref:
+                path:
+                - ref_account_cnt
+            element-type:
+              type-ref:
+                name: Pubkey
+                package: thru.common.primitives
+      - name: instr_data
+        field-type:
+          array:
+            size:
+              field-ref:
+                path:
+                - instr_data_sz
+            element-type:
+              primitive: u8
+- name: UpdateThresholdRequest
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: new_threshold_m
+        field-type:
+          primitive: u16
+      - name: reserved0
+        field-type:
+          primitive: u16
+- name: UpdateMembershipRequest
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: new_member_cnt
+        field-type:
+          primitive: u16
+      - name: reserved0
+        field-type:
+          primitive: u16
+      - name: new_members
+        field-type:
+          array:
+            size:
+              field-ref:
+                path:
+                - new_member_cnt
+            element-type:
+              type-ref:
+                name: Pubkey
+                package: thru.common.primitives
+- name: DeleteMultisigRequest
+  kind:
+    struct:
+      packed: true
+      fields: []
+- name: MultisigError
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: code
+        field-type:
+          primitive: u64

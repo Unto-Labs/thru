@@ -2,7 +2,7 @@
    around the oracle mark in one atomic transaction (cancels, then posts).
 
      PERPS_DEPLOYMENT=deployment.betanet.json PERPS_KEY_FILE=key.json \
-       npx tsx market-maker-bot.ts BTC-THRUSD [SPREAD_BPS=20] [LOTS=1]
+       npx tsx market-maker-bot.ts BTC-UUSD [SPREAD_BPS=20] [LOTS=1]
 
    It works the same on an isolated or a cross-margined seat: the client
    adds the margin record when the seat is cross.  Failures are handled by
@@ -18,7 +18,7 @@ import {
   type PerpsOrderParams,
 } from '@thru/programs/perps';
 
-const [market = 'BTC-THRUSD', spreadArg = '20', lotsArg = '1'] = process.argv.slice(2);
+const [market = 'BTC-UUSD', spreadArg = '20', lotsArg = '1'] = process.argv.slice(2);
 const spreadBps = BigInt(spreadArg);
 const deployment = JSON.parse(readFileSync(process.env.PERPS_DEPLOYMENT ?? 'deployment.betanet.json', 'utf8'));
 const signer = keypairSignerFromJSON(JSON.parse(readFileSync(process.env.PERPS_KEY_FILE ?? 'key.json', 'utf8')));

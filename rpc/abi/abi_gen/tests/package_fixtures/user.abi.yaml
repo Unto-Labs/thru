@@ -1,0 +1,40 @@
+abi:
+  package: "pkguser"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Imports packages whose Go import names and directories would clash"
+  imports:
+    - type: path
+      path: "a_dot_b_c.abi.yaml"
+    - type: path
+      path: "a_b_dot_c.abi.yaml"
+    - type: path
+      path: "case_upper.abi.yaml"
+    - type: path
+      path: "case_lower.abi.yaml"
+types:
+  - name: "Both"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "x"
+            field-type:
+              type-ref:
+                name: "X"
+                package: "a.b_c"
+          - name: "y"
+            field-type:
+              type-ref:
+                name: "Y"
+                package: "a_b.c"
+          - name: "upper"
+            field-type:
+              type-ref:
+                name: "Upper"
+                package: "cases.Foo"
+          - name: "lower"
+            field-type:
+              type-ref:
+                name: "Lower"
+                package: "cases.foo"

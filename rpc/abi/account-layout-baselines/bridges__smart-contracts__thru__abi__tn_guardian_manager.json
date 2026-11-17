@@ -1,0 +1,599 @@
+{
+  "abi": "bridges/smart-contracts/thru/abi/tn_guardian_manager.abi.yaml",
+  "account_root": "GuardianManagerProgramAccount",
+  "values": {
+    "1": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "admin",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "current_set_id",
+                    "offset": 32,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "guardian_count",
+                    "offset": 40,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "total_weight",
+                    "offset": 48,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "last_set_update_ns",
+                    "offset": 56,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "max_change_bps",
+                    "offset": 64,
+                    "type": {
+                      "alignment": 2,
+                      "kind": {
+                        "primitive": "Integral(U16)"
+                      },
+                      "size": 2
+                    }
+                  },
+                  {
+                    "name": "set_update_cooldown_secs",
+                    "offset": 66,
+                    "type": {
+                      "alignment": 4,
+                      "kind": {
+                        "primitive": "Integral(U32)"
+                      },
+                      "size": 4
+                    }
+                  },
+                  {
+                    "name": "pending_sync_chain_id",
+                    "offset": 70,
+                    "type": {
+                      "alignment": 2,
+                      "kind": {
+                        "primitive": "Integral(U16)"
+                      },
+                      "size": 2
+                    }
+                  },
+                  {
+                    "name": "previous_set_id",
+                    "offset": 72,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "previous_guardian_count",
+                    "offset": 80,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "previous_total_weight",
+                    "offset": 88,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "previous_expiry_ns",
+                    "offset": 96,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "guardians",
+                    "offset": 104,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "layout": {
+                                "alignment": 1,
+                                "kind": {
+                                  "struct": {
+                                    "aligned": null,
+                                    "fields": [
+                                      {
+                                        "name": "id",
+                                        "offset": 0,
+                                        "type": {
+                                          "alignment": 8,
+                                          "kind": {
+                                            "primitive": "Integral(U64)"
+                                          },
+                                          "size": 8
+                                        }
+                                      },
+                                      {
+                                        "name": "name",
+                                        "offset": 8,
+                                        "type": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "layout": {
+                                              "alignment": 1,
+                                              "kind": {
+                                                "struct": {
+                                                  "aligned": null,
+                                                  "fields": [
+                                                    {
+                                                      "name": "bytes",
+                                                      "offset": 0,
+                                                      "type": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "array": {
+                                                            "element": {
+                                                              "alignment": 1,
+                                                              "kind": {
+                                                                "primitive": "Integral(U8)"
+                                                              },
+                                                              "size": 1
+                                                            },
+                                                            "jagged": false,
+                                                            "size": {
+                                                              "literal": {
+                                                                "u64": 64
+                                                              }
+                                                            }
+                                                          }
+                                                        },
+                                                        "size": 64
+                                                      }
+                                                    }
+                                                  ],
+                                                  "packed": true
+                                                }
+                                              },
+                                              "size": 64
+                                            },
+                                            "ref": "GuardianName"
+                                          },
+                                          "size": 64
+                                        }
+                                      },
+                                      {
+                                        "name": "bls_pubkey",
+                                        "offset": 72,
+                                        "type": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "layout": {
+                                              "alignment": 1,
+                                              "kind": {
+                                                "struct": {
+                                                  "aligned": null,
+                                                  "fields": [
+                                                    {
+                                                      "name": "bytes",
+                                                      "offset": 0,
+                                                      "type": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "array": {
+                                                            "element": {
+                                                              "alignment": 1,
+                                                              "kind": {
+                                                                "primitive": "Integral(U8)"
+                                                              },
+                                                              "size": 1
+                                                            },
+                                                            "jagged": false,
+                                                            "size": {
+                                                              "literal": {
+                                                                "u64": 96
+                                                              }
+                                                            }
+                                                          }
+                                                        },
+                                                        "size": 96
+                                                      }
+                                                    }
+                                                  ],
+                                                  "packed": true
+                                                }
+                                              },
+                                              "size": 96
+                                            },
+                                            "ref": "BlsPubkey"
+                                          },
+                                          "size": 96
+                                        }
+                                      },
+                                      {
+                                        "name": "weight",
+                                        "offset": 168,
+                                        "type": {
+                                          "alignment": 8,
+                                          "kind": {
+                                            "primitive": "Integral(U64)"
+                                          },
+                                          "size": 8
+                                        }
+                                      },
+                                      {
+                                        "name": "last_updated",
+                                        "offset": 176,
+                                        "type": {
+                                          "alignment": 8,
+                                          "kind": {
+                                            "primitive": "Integral(U64)"
+                                          },
+                                          "size": 8
+                                        }
+                                      }
+                                    ],
+                                    "packed": true
+                                  }
+                                },
+                                "size": 184
+                              },
+                              "ref": "GuardianRecord"
+                            },
+                            "size": 184
+                          },
+                          "jagged": false,
+                          "size": {
+                            "literal": {
+                              "u64": 1024
+                            }
+                          }
+                        }
+                      },
+                      "size": 188416
+                    }
+                  },
+                  {
+                    "name": "previous_guardians",
+                    "offset": 188520,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "layout": {
+                                "alignment": 1,
+                                "kind": {
+                                  "struct": {
+                                    "aligned": null,
+                                    "fields": [
+                                      {
+                                        "name": "id",
+                                        "offset": 0,
+                                        "type": {
+                                          "alignment": 8,
+                                          "kind": {
+                                            "primitive": "Integral(U64)"
+                                          },
+                                          "size": 8
+                                        }
+                                      },
+                                      {
+                                        "name": "name",
+                                        "offset": 8,
+                                        "type": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "layout": {
+                                              "alignment": 1,
+                                              "kind": {
+                                                "struct": {
+                                                  "aligned": null,
+                                                  "fields": [
+                                                    {
+                                                      "name": "bytes",
+                                                      "offset": 0,
+                                                      "type": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "array": {
+                                                            "element": {
+                                                              "alignment": 1,
+                                                              "kind": {
+                                                                "primitive": "Integral(U8)"
+                                                              },
+                                                              "size": 1
+                                                            },
+                                                            "jagged": false,
+                                                            "size": {
+                                                              "literal": {
+                                                                "u64": 64
+                                                              }
+                                                            }
+                                                          }
+                                                        },
+                                                        "size": 64
+                                                      }
+                                                    }
+                                                  ],
+                                                  "packed": true
+                                                }
+                                              },
+                                              "size": 64
+                                            },
+                                            "ref": "GuardianName"
+                                          },
+                                          "size": 64
+                                        }
+                                      },
+                                      {
+                                        "name": "bls_pubkey",
+                                        "offset": 72,
+                                        "type": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "layout": {
+                                              "alignment": 1,
+                                              "kind": {
+                                                "struct": {
+                                                  "aligned": null,
+                                                  "fields": [
+                                                    {
+                                                      "name": "bytes",
+                                                      "offset": 0,
+                                                      "type": {
+                                                        "alignment": 1,
+                                                        "kind": {
+                                                          "array": {
+                                                            "element": {
+                                                              "alignment": 1,
+                                                              "kind": {
+                                                                "primitive": "Integral(U8)"
+                                                              },
+                                                              "size": 1
+                                                            },
+                                                            "jagged": false,
+                                                            "size": {
+                                                              "literal": {
+                                                                "u64": 96
+                                                              }
+                                                            }
+                                                          }
+                                                        },
+                                                        "size": 96
+                                                      }
+                                                    }
+                                                  ],
+                                                  "packed": true
+                                                }
+                                              },
+                                              "size": 96
+                                            },
+                                            "ref": "BlsPubkey"
+                                          },
+                                          "size": 96
+                                        }
+                                      },
+                                      {
+                                        "name": "weight",
+                                        "offset": 168,
+                                        "type": {
+                                          "alignment": 8,
+                                          "kind": {
+                                            "primitive": "Integral(U64)"
+                                          },
+                                          "size": 8
+                                        }
+                                      },
+                                      {
+                                        "name": "last_updated",
+                                        "offset": 176,
+                                        "type": {
+                                          "alignment": 8,
+                                          "kind": {
+                                            "primitive": "Integral(U64)"
+                                          },
+                                          "size": 8
+                                        }
+                                      }
+                                    ],
+                                    "packed": true
+                                  }
+                                },
+                                "size": 184
+                              },
+                              "ref": "GuardianRecord"
+                            },
+                            "size": 184
+                          },
+                          "jagged": false,
+                          "size": {
+                            "literal": {
+                              "u64": 1024
+                            }
+                          }
+                        }
+                      },
+                      "size": 188416
+                    }
+                  },
+                  {
+                    "name": "pending_set_active",
+                    "offset": 376936,
+                    "type": {
+                      "alignment": 4,
+                      "kind": {
+                        "primitive": "Integral(U32)"
+                      },
+                      "size": 4
+                    }
+                  },
+                  {
+                    "name": "pending_set_id",
+                    "offset": 376940,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "pending_snapshot_hash",
+                    "offset": 376948,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Hash"
+                      },
+                      "size": 32
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 376980
+          },
+          "ref": "GuardianManagerAccount"
+        },
+        "size": 376980
+      },
+      "variant": "manager_v1"
+    }
+  }
+}

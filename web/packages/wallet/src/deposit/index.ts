@@ -47,18 +47,18 @@ export const DEFAULT_DEPOSIT_SYMBOL = "$";
 /** The deposit token's former name, still present in older deployed config. */
 export const LEGACY_DEPOSIT_SYMBOL = "CREDITS";
 export const DEFAULT_DEPOSIT_DECIMALS = 6;
-export const DEFAULT_DEPOSIT_TARGET = DepositTarget.THRUSD;
-export const THRUSD_TICKER = DEFAULT_DEPOSIT_SYMBOL;
-export const THRUSD_DECIMALS = DEFAULT_DEPOSIT_DECIMALS;
-/** @deprecated Use THRUSD_TICKER. */
-export const CREDITS_TICKER = THRUSD_TICKER;
-/** @deprecated Use THRUSD_DECIMALS. */
-export const CREDITS_DECIMALS = THRUSD_DECIMALS;
+export const DEFAULT_DEPOSIT_TARGET = DepositTarget.UUSD;
+export const UUSD_TICKER = DEFAULT_DEPOSIT_SYMBOL;
+export const UUSD_DECIMALS = DEFAULT_DEPOSIT_DECIMALS;
+/** @deprecated Use UUSD_TICKER. */
+export const CREDITS_TICKER = UUSD_TICKER;
+/** @deprecated Use UUSD_DECIMALS. */
+export const CREDITS_DECIMALS = UUSD_DECIMALS;
 
 /* Display-only name: the on-chain ticker and config target keep the legacy
    names, which deployed config may still carry. */
 export function normalizeDepositSymbol(symbol: string | undefined): string {
-  if (!symbol || /^(?:credits|thrusd|thru\s*usd)$/i.test(symbol))
+  if (!symbol || /^(?:credits|uusd|thrusd|(?:thru|unto)\s*usd)$/i.test(symbol))
     return DEFAULT_DEPOSIT_SYMBOL;
   return symbol;
 }
@@ -97,6 +97,9 @@ const TOKEN_PROGRAM_ERROR_LABELS: Record<number, string> = {
   18: "Invalid account",
   19: "Mint cannot freeze",
   20: "Syscall failed",
+  21: "Decimals mismatch",
+  22: "Ticker mismatch",
+  23: "Invalid ticker",
 };
 
 const VM_ERROR_LABELS: Record<number, string> = {
@@ -660,9 +663,9 @@ export function parseDepositAmount(
   return raw > 0n ? raw : null;
 }
 
-/** @deprecated Use parseDepositAmount(input, THRUSD_DECIMALS). */
+/** @deprecated Use parseDepositAmount(input, UUSD_DECIMALS). */
 export function parseCreditsAmount(input: string): bigint | null {
-  return parseDepositAmount(input, THRUSD_DECIMALS);
+  return parseDepositAmount(input, UUSD_DECIMALS);
 }
 
 export function formatDepositAmount(
@@ -679,9 +682,9 @@ export function formatDepositAmount(
   return fraction ? `${wholeLabel}.${fraction}` : wholeLabel;
 }
 
-/** @deprecated Use formatDepositAmount(amountRaw, THRUSD_DECIMALS). */
+/** @deprecated Use formatDepositAmount(amountRaw, UUSD_DECIMALS). */
 export function formatCreditsAmount(amountRaw: bigint): string {
-  return formatDepositAmount(amountRaw, THRUSD_DECIMALS);
+  return formatDepositAmount(amountRaw, UUSD_DECIMALS);
 }
 
 export function buildDepositDestination(params: {

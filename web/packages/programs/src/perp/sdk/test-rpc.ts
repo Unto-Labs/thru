@@ -59,6 +59,7 @@ export interface SimulatedRpc {
 /** A 10-level cbook with no orders (best price unset). */
 function emptyCbook(): Uint8Array {
   const data = new Uint8Array(16 + 10 * 8);
+  data[0] = 5; /* PERP_ACCOUNT_TYPE_CBOOK (kept literal: this entry stays free of the SDK) */
   new DataView(data.buffer).setBigUint64(8, (1n << 64n) - 1n, true);
   return data;
 }

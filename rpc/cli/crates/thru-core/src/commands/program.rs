@@ -2,17 +2,23 @@
 
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use thru_base::rpc_types::{MakeStateProofConfig, ProofType};
-use thru_base::tn_tools::{KeyPair, Pubkey};
+use thru_base::tn_tools::Pubkey;
 use thru_base::txn_lib::Transaction;
 use thru_base::txn_tools::TransactionBuilder;
 
 use crate::cli::ProgramCommands;
 use crate::commands::uploader::UploaderManager;
+use crate::commands::program_abi::{
+    AbiChoice, DeployMode, ProgramAbiDeploy, deploy_program_with_abi, resolve_abi_choice,
+    warn_abi_excluded,
+};
 use crate::config::Config;
 use crate::crypto;
 use crate::error::CliError;
+use crate::keys::LoadedKey;
 use crate::output;
 use crate::utils::format_vm_error;
 use thru_client::{Client as RpcClient, VersionContext};
@@ -106,7 +112,7 @@ fn validate_program_image(
     Ok(())
 }
 
-fn validate_program_file_or_report(
+pub(crate) fn validate_program_file_or_report(
     program_file: &str,
     program_data: &[u8],
     skip_program_image_validation: bool,
@@ -137,7 +143,7 @@ fn validate_program_file_or_report(
     Err(CliError::Reported)
 }
 
-fn seed_with_suffix(base_seed: &str, suffix: &str) -> (String, bool) {
+pub(crate) fn seed_with_suffix(base_seed: &str, suffix: &str) -> (String, bool) {
     let combined = format!("{}_{}", base_seed, suffix);
     if combined.len() <= PROGRAM_SEED_MAX_LEN {
         (combined, false)
@@ -148,26 +154,24 @@ fn seed_with_suffix(base_seed: &str, suffix: &str) -> (String, bool) {
     }
 }
 
-fn resolve_create_authority_pubkey(
+pub(crate) fn resolve_create_authority_pubkey(
     config: &Config,
     authority: Option<&str>,
     fee_payer: Option<&str>,
 ) -> Result<[u8; 32], CliError> {
     let fee_payer_name = fee_payer.unwrap_or("default");
-    let fee_payer_key = config.keys.get_key(fee_payer_name)?;
-    let fee_payer_keypair = crypto::keypair_from_hex(fee_payer_key)?;
+    let fee_payer_pubkey = config.keys.public_key(fee_payer_name)?;
 
     if let Some(authority_name) = authority {
-        let authority_key = config.keys.get_key(authority_name)?;
-        let authority_keypair = crypto::keypair_from_hex(authority_key)?;
-        if authority_keypair.public_key != fee_payer_keypair.public_key {
+        let authority_pubkey = config.keys.public_key(authority_name)?;
+        if authority_pubkey != fee_payer_pubkey {
             return Err(CliError::Validation(format!(
                 "Program authority key '{authority_name}' must match fee payer key '{fee_payer_name}', as only the fee payer signature is included"
             )));
         }
     }
 
-    Ok(fee_payer_keypair.public_key)
+    Ok(fee_payer_pubkey)
 }
 
 /// Handle program subcommands
@@ -176,6 +180,32 @@ pub async fn handle_program_command(
     subcommand: ProgramCommands,
     json_format: bool,
 ) -> Result<(), CliError> {
+    // A different owner address does not change the Public instruction ABI.
+    let mutation_manager = match &subcommand {
+        ProgramCommands::Create { manager, .. }
+        | ProgramCommands::Upgrade { manager, .. }
+        | ProgramCommands::SetPause { manager, .. }
+        | ProgramCommands::Destroy { manager, .. }
+        | ProgramCommands::Finalize { manager, .. }
+        | ProgramCommands::SetAuthority { manager, .. }
+        | ProgramCommands::ClaimAuthority { manager, .. } => Some(manager),
+        _ => None,
+    };
+    if let Some(selected) = mutation_manager {
+        let manager = if let Some(address) = selected {
+            config.keys.resolve_public_key(address)?
+        } else {
+            config
+                .get_manager_pubkey()?
+                .to_bytes()
+                .map_err(|e| CliError::Validation(e.to_string()))?
+        };
+        if manager == thru_base::bootstrap_addresses::CORE_MANAGER_PROGRAM_BYTES {
+            return Err(CliError::Validation(
+                "Core requires `thru governance plan` and the bound Core ABI, not Public manager instructions".into(),
+            ));
+        }
+    }
     match subcommand {
         ProgramCommands::Create {
             manager,
@@ -187,22 +217,48 @@ pub async fn handle_program_command(
             skip_program_image_validation,
             chunk_size,
             skip_elf_check,
-        } => {
-            create_program(
-                config,
-                manager.as_deref(),
-                ephemeral,
-                &seed,
-                authority.as_deref(),
-                fee_payer.as_deref(),
-                &program_file,
-                skip_program_image_validation,
-                chunk_size,
-                skip_elf_check,
-                json_format,
-            )
-            .await
-        }
+            abi,
+        } => match resolve_abi_choice(&abi, json_format)? {
+            AbiChoice::Publish { path, data } => {
+                deploy_program_with_abi(
+                    config,
+                    ProgramAbiDeploy {
+                        mode: DeployMode::Create {
+                            authority: authority.as_deref(),
+                        },
+                        manager: manager.as_deref(),
+                        seed: &seed,
+                        ephemeral,
+                        fee_payer: fee_payer.as_deref(),
+                        program_file: &program_file,
+                        skip_program_image_validation,
+                        chunk_size,
+                        skip_elf_check,
+                        abi_path: &path,
+                        abi_data: data,
+                    },
+                    json_format,
+                )
+                .await
+            }
+            AbiChoice::Exclude => {
+                warn_abi_excluded(json_format);
+                create_program(
+                    config,
+                    manager.as_deref(),
+                    ephemeral,
+                    &seed,
+                    authority.as_deref(),
+                    fee_payer.as_deref(),
+                    &program_file,
+                    skip_program_image_validation,
+                    chunk_size,
+                    skip_elf_check,
+                    json_format,
+                )
+                .await
+            }
+        },
         ProgramCommands::Upgrade {
             manager,
             ephemeral,
@@ -212,7 +268,55 @@ pub async fn handle_program_command(
             skip_program_image_validation,
             chunk_size,
             skip_elf_check,
+            abi,
+            via,
         } => {
+            let abi = resolve_abi_choice(&abi, json_format)?;
+            if via.via_multisig.is_some() {
+                let abi = match abi {
+                    AbiChoice::Publish { path, data } => Some((path, data)),
+                    AbiChoice::Exclude => {
+                        warn_abi_excluded(json_format);
+                        None
+                    }
+                };
+                return crate::commands::multisig::via::program_upgrade(
+                    config,
+                    &via,
+                    fee_payer.as_deref(),
+                    manager.as_deref(),
+                    &seed,
+                    ephemeral,
+                    &program_file,
+                    skip_program_image_validation,
+                    chunk_size,
+                    skip_elf_check,
+                    abi,
+                    json_format,
+                )
+                .await;
+            }
+            if let AbiChoice::Publish { path, data } = abi {
+                return deploy_program_with_abi(
+                    config,
+                    ProgramAbiDeploy {
+                        mode: DeployMode::Upgrade,
+                        manager: manager.as_deref(),
+                        seed: &seed,
+                        ephemeral,
+                        fee_payer: fee_payer.as_deref(),
+                        program_file: &program_file,
+                        skip_program_image_validation,
+                        chunk_size,
+                        skip_elf_check,
+                        abi_path: &path,
+                        abi_data: data,
+                    },
+                    json_format,
+                )
+                .await;
+            }
+            warn_abi_excluded(json_format);
             upgrade_program(
                 config,
                 manager.as_deref(),
@@ -233,6 +337,7 @@ pub async fn handle_program_command(
             seed,
             paused,
             fee_payer,
+            via,
         } => {
             // Parse paused string to boolean
             let paused_bool = match paused.to_lowercase().as_str() {
@@ -254,6 +359,20 @@ pub async fn handle_program_command(
                     return Err(CliError::Validation(error_msg));
                 }
             };
+
+            if via.via_multisig.is_some() {
+                return crate::commands::multisig::via::program_set_pause(
+                    config,
+                    &via,
+                    fee_payer.as_deref(),
+                    manager.as_deref(),
+                    &seed,
+                    ephemeral,
+                    paused_bool,
+                    json_format,
+                )
+                .await;
+            }
 
             set_pause_program(
                 config,
@@ -304,7 +423,21 @@ pub async fn handle_program_command(
             seed,
             authority_candidate,
             fee_payer,
+            via,
         } => {
+            if via.via_multisig.is_some() {
+                return crate::commands::multisig::via::program_set_authority(
+                    config,
+                    &via,
+                    fee_payer.as_deref(),
+                    manager.as_deref(),
+                    &seed,
+                    ephemeral,
+                    &authority_candidate,
+                    json_format,
+                )
+                .await;
+            }
             set_authority_program(
                 config,
                 manager.as_deref(),
@@ -321,7 +454,20 @@ pub async fn handle_program_command(
             seed,
             ephemeral,
             fee_payer,
+            via,
         } => {
+            if via.via_multisig.is_some() {
+                return crate::commands::multisig::via::program_claim_authority(
+                    config,
+                    &via,
+                    fee_payer.as_deref(),
+                    manager.as_deref(),
+                    &seed,
+                    ephemeral,
+                    json_format,
+                )
+                .await;
+            }
             claim_authority_program(
                 config,
                 manager.as_deref(),
@@ -336,7 +482,7 @@ pub async fn handle_program_command(
             program_id,
             seed,
             ephemeral,
-        } => derive_program_address(&program_id, &seed, ephemeral, json_format),
+        } => derive_program_address(config, &program_id, &seed, ephemeral, json_format),
         ProgramCommands::DeriveManagerAccounts {
             manager,
             seed,
@@ -358,9 +504,9 @@ pub async fn handle_program_command(
 
 /// Program manager for transaction building and execution
 pub struct ProgramManager {
-    rpc_client: RpcClient,
-    fee_payer_keypair: KeyPair,
-    chain_id: u16,
+    pub(crate) rpc_client: RpcClient,
+    pub(crate) fee_payer_keypair: Arc<LoadedKey>,
+    pub(crate) chain_id: u16,
     timeout_seconds: u64,
 }
 
@@ -388,13 +534,7 @@ impl ProgramManager {
         // Get manager program public key (though not stored in struct)
         let _manager_program_pubkey = config.get_manager_pubkey()?;
 
-        // Create fee payer keypair from config
-        let fee_payer_key_hex = if let Some(name) = fee_payer_name {
-            config.keys.get_key(name)?
-        } else {
-            config.keys.get_default_key()?
-        };
-        let fee_payer_keypair = crypto::keypair_from_hex(fee_payer_key_hex)?;
+        let fee_payer_keypair = config.keys.load_key(fee_payer_name.unwrap_or("default"))?;
 
         let chain_info = rpc_client.get_chain_info().await.map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
@@ -409,7 +549,7 @@ impl ProgramManager {
     }
 
     /// Convert manager program user error code to human-readable string
-    fn decode_manager_error(user_error_code: u64) -> String {
+    pub(crate) fn decode_manager_error(user_error_code: u64) -> String {
         if user_error_code == 0 {
             return "Success".to_string();
         }
@@ -475,6 +615,13 @@ impl ProgramManager {
             }
         };
 
+        if error_type == ERR_VALUE_ERROR && error_object == ERR_SRCBUF_ACC {
+            return format!(
+                "Source buffer bytes do not match the instruction's SHA-256 (buffer changed after the transaction was built) (0x{:04X})",
+                user_error_code
+            );
+        }
+
         // Combine error type and object
         if error_object == 0 || error_object_str.is_empty() {
             format!("{} (0x{:04X})", error_type_str, user_error_code)
@@ -532,10 +679,14 @@ impl ProgramManager {
     }
 
     /// Get current nonce for fee payer account
-    async fn get_current_nonce(&self) -> Result<u64, CliError> {
+    pub(crate) async fn get_current_nonce(&self) -> Result<u64, CliError> {
         match self
             .rpc_client
-            .get_account_info(&self.fee_payer_keypair.address_string, None, Some(VersionContext::Current))
+            .get_account_info(
+                &self.fee_payer_keypair.address_string,
+                None,
+                Some(VersionContext::Current),
+            )
             .await
         {
             Ok(Some(account)) => Ok(account.nonce),
@@ -550,7 +701,7 @@ impl ProgramManager {
     }
 
     /// Get current slot
-    async fn get_current_slot(&self) -> Result<u64, CliError> {
+    pub(crate) async fn get_current_slot(&self) -> Result<u64, CliError> {
         let block_height = self.rpc_client.get_block_height().await.map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get current slot: {}", e))
         })?;
@@ -558,12 +709,12 @@ impl ProgramManager {
     }
 
     /// Submit and verify transaction
-    async fn submit_and_verify_transaction(
+    pub(crate) async fn submit_and_verify_transaction(
         &self,
         transaction: &Transaction,
         json_format: bool,
         user_error_decoder: fn(u64) -> String,
-    ) -> Result<(), CliError> {
+    ) -> Result<String, CliError> {
         // Execute transaction and wait for completion
         let wire_bytes = transaction.to_wire();
         let timeout = Duration::from_secs(self.timeout_seconds);
@@ -636,9 +787,8 @@ impl ProgramManager {
             });
         }
 
-        Ok(())
+        Ok(transaction_details.signature.as_str().to_string())
     }
-
 }
 
 /// Create a new managed program from a program file
@@ -680,7 +830,12 @@ async fn create_program(
 
     // Read program data
     let program_data = fs::read(program_path).map_err(|e| CliError::Io(e))?;
-    validate_program_file_or_report(program_file, &program_data, skip_program_image_validation, json_format)?;
+    validate_program_file_or_report(
+        program_file,
+        &program_data,
+        skip_program_image_validation,
+        json_format,
+    )?;
 
     if !json_format {
         output::print_info(&format!(
@@ -694,8 +849,7 @@ async fn create_program(
 
     // Get manager program public key
     let manager_program_pubkey = if let Some(custom_manager) = manager_pubkey {
-        Pubkey::new(custom_manager.to_string())
-            .map_err(|e| CliError::Validation(format!("Invalid manager public key: {}", e)))?
+        Pubkey::from_bytes(&config.keys.resolve_public_key(custom_manager)?)
     } else {
         config.get_manager_pubkey()?
     };
@@ -825,6 +979,9 @@ async fn create_program(
         authority_pubkey,
         0,                         // source_offset
         program_data.len() as u32, // source_size
+        // The manager installs only these exact bytes; a buffer swapped after
+        // this transaction is built cannot be deployed under it.
+        crypto::calculate_sha256(&program_data),
         seed.as_bytes(),
         ephemeral,
         meta_proof.as_deref(),    // meta_proof
@@ -906,7 +1063,6 @@ async fn create_program(
     Ok(())
 }
 
-
 /// Upgrade an existing managed program from a program file
 async fn upgrade_program(
     config: &Config,
@@ -945,7 +1101,12 @@ async fn upgrade_program(
 
     // Read program data
     let program_data = fs::read(program_path).map_err(|e| CliError::Io(e))?;
-    validate_program_file_or_report(program_file, &program_data, skip_program_image_validation, json_format)?;
+    validate_program_file_or_report(
+        program_file,
+        &program_data,
+        skip_program_image_validation,
+        json_format,
+    )?;
 
     if !json_format {
         output::print_info(&format!(
@@ -958,8 +1119,7 @@ async fn upgrade_program(
 
     // Get manager program public key
     let manager_program_pubkey = if let Some(custom_manager) = manager_pubkey {
-        Pubkey::new(custom_manager.to_string())
-            .map_err(|e| CliError::Validation(format!("Invalid manager public key: {}", e)))?
+        Pubkey::from_bytes(&config.keys.resolve_public_key(custom_manager)?)
     } else {
         config.get_manager_pubkey()?
     };
@@ -1046,7 +1206,9 @@ async fn upgrade_program(
             .map_err(|e| CliError::Crypto(e.to_string()))?,
         0,                         // source_offset
         program_data.len() as u32, // source_size
-        0,                         // fee
+        // The manager installs only these exact bytes.
+        crypto::calculate_sha256(&program_data),
+        0, // fee
         nonce,
         start_slot,
     )
@@ -1131,8 +1293,7 @@ async fn set_pause_program(
     json_format: bool,
 ) -> Result<(), CliError> {
     let manager_program_pubkey = if let Some(custom_manager) = manager_pubkey {
-        Pubkey::new(custom_manager.to_string())
-            .map_err(|e| CliError::Validation(format!("Invalid manager public key: {}", e)))?
+        Pubkey::from_bytes(&config.keys.resolve_public_key(custom_manager)?)
     } else {
         config.get_manager_pubkey()?
     };
@@ -1228,8 +1389,7 @@ async fn destroy_program(
     use thru_base::txn_tools::MANAGER_INSTRUCTION_DESTROY;
 
     let manager_program_pubkey = if let Some(custom_manager) = manager_pubkey {
-        Pubkey::new(custom_manager.to_string())
-            .map_err(|e| CliError::Validation(format!("Invalid manager public key: {}", e)))?
+        Pubkey::from_bytes(&config.keys.resolve_public_key(custom_manager)?)
     } else {
         config.get_manager_pubkey()?
     };
@@ -1448,8 +1608,7 @@ async fn finalize_program(
     use thru_base::txn_tools::MANAGER_INSTRUCTION_FINALIZE;
 
     let manager_program_pubkey = if let Some(custom_manager) = manager_pubkey {
-        Pubkey::new(custom_manager.to_string())
-            .map_err(|e| CliError::Validation(format!("Invalid manager public key: {}", e)))?
+        Pubkey::from_bytes(&config.keys.resolve_public_key(custom_manager)?)
     } else {
         config.get_manager_pubkey()?
     };
@@ -1553,8 +1712,7 @@ async fn set_authority_program(
     json_format: bool,
 ) -> Result<(), CliError> {
     let manager_program_pubkey = if let Some(custom_manager) = manager_pubkey {
-        Pubkey::new(custom_manager.to_string())
-            .map_err(|e| CliError::Validation(format!("Invalid manager public key: {}", e)))?
+        Pubkey::from_bytes(&config.keys.resolve_public_key(custom_manager)?)
     } else {
         config.get_manager_pubkey()?
     };
@@ -1563,8 +1721,8 @@ async fn set_authority_program(
     let (meta_account_pubkey, program_account_pubkey) =
         crypto::derive_manager_accounts_from_seed(seed, &manager_program_pubkey, ephemeral)?;
 
-    let authority_candidate_pubkey = Pubkey::new(authority_candidate.to_string())
-        .map_err(|e| CliError::Validation(format!("Invalid authority candidate: {}", e)))?;
+    let authority_candidate_pubkey =
+        Pubkey::from_bytes(&config.keys.resolve_public_key(authority_candidate)?);
 
     if !json_format {
         output::print_info("Setting authority candidate for managed program...");
@@ -1650,8 +1808,7 @@ async fn claim_authority_program(
     use thru_base::txn_tools::MANAGER_INSTRUCTION_CLAIM_AUTHORITY;
 
     let manager_program_pubkey = if let Some(custom_manager) = manager_pubkey {
-        Pubkey::new(custom_manager.to_string())
-            .map_err(|e| CliError::Validation(format!("Invalid manager public key: {}", e)))?
+        Pubkey::from_bytes(&config.keys.resolve_public_key(custom_manager)?)
     } else {
         config.get_manager_pubkey()?
     };
@@ -1746,6 +1903,7 @@ async fn claim_authority_program(
 
 /// program derived address
 fn derive_program_address(
+    config: &Config,
     program_id: &str,
     seed: &str,
     ephemeral: bool,
@@ -1772,7 +1930,7 @@ fn derive_program_address(
     };
 
     // validate key
-    let bytes = crate::utils::validate_address_or_hex(program_id)?;
+    let bytes = config.keys.resolve_public_key(program_id)?;
     let program_pubkey = Pubkey::from_bytes(&bytes);
 
     let seed_array: [u8; 32] = seed_bytes
@@ -1842,7 +2000,7 @@ fn derive_program_account(
     json_format: bool,
 ) -> Result<(), CliError> {
     let manager_pubkey = if let Some(manager_str) = manager {
-        let bytes = crate::utils::validate_address_or_hex(manager_str)?;
+        let bytes = config.keys.resolve_public_key(manager_str)?;
         Pubkey::from_bytes(&bytes)
     } else {
         config.get_manager_pubkey()?
@@ -1881,7 +2039,7 @@ fn derive_manager_accounts(
 ) -> Result<(), CliError> {
     /* Get manager program pubkey */
     let manager_pubkey = if let Some(manager_str) = manager {
-        let bytes = crate::utils::validate_address_or_hex(manager_str)?;
+        let bytes = config.keys.resolve_public_key(manager_str)?;
         Pubkey::from_bytes(&bytes)
     } else {
         config.get_manager_pubkey()?
@@ -1927,7 +2085,11 @@ fn derive_manager_accounts(
         println!("  Program Account: {}", program_account.to_string());
         println!();
         println!("Uploader Accounts (temporary, used during create):");
-        println!("  Temp Seed: {}{}", temp_seed, if temp_seed_hashed { " (hashed)" } else { "" });
+        println!(
+            "  Temp Seed: {}{}",
+            temp_seed,
+            if temp_seed_hashed { " (hashed)" } else { "" }
+        );
         println!("  Meta Account: {}", uploader_meta_account.to_string());
         println!("  Buffer Account: {}", uploader_buffer_account.to_string());
     }
@@ -1954,7 +2116,7 @@ async fn get_program_status(
 ) -> Result<(), CliError> {
     /* Get manager program pubkey */
     let manager_pubkey = if let Some(manager_str) = manager {
-        let bytes = crate::utils::validate_address_or_hex(manager_str)?;
+        let bytes = config.keys.resolve_public_key(manager_str)?;
         Pubkey::from_bytes(&bytes)
     } else {
         config.get_manager_pubkey()?
@@ -2009,7 +2171,11 @@ async fn get_program_status(
         client.get_account_info(&meta_account, None, Some(VersionContext::Current)),
         client.get_account_info(&program_account, None, Some(VersionContext::Current)),
         client.get_account_info(&uploader_meta_account, None, Some(VersionContext::Current)),
-        client.get_account_info(&uploader_buffer_account, None, Some(VersionContext::Current)),
+        client.get_account_info(
+            &uploader_buffer_account,
+            None,
+            Some(VersionContext::Current)
+        ),
     );
 
     /* Convert to status */
@@ -2021,11 +2187,19 @@ async fn get_program_status(
     /* Detect corrupted accounts (exist but have 0 bytes) */
     let program_meta_corrupted = meta_status.exists && meta_status.data_size == 0;
     let program_account_corrupted = program_status.exists && program_status.data_size == 0;
-    let uploader_meta_corrupted = uploader_meta_status.exists && uploader_meta_status.data_size == 0;
-    let uploader_buffer_corrupted = uploader_buffer_status.exists && uploader_buffer_status.data_size == 0;
-    let any_corrupted = program_meta_corrupted || program_account_corrupted || uploader_meta_corrupted || uploader_buffer_corrupted;
+    let uploader_meta_corrupted =
+        uploader_meta_status.exists && uploader_meta_status.data_size == 0;
+    let uploader_buffer_corrupted =
+        uploader_buffer_status.exists && uploader_buffer_status.data_size == 0;
+    let any_corrupted = program_meta_corrupted
+        || program_account_corrupted
+        || uploader_meta_corrupted
+        || uploader_buffer_corrupted;
 
-    let program_deployed = meta_status.exists && program_status.exists && program_status.is_program && program_status.data_size > 0;
+    let program_deployed = meta_status.exists
+        && program_status.exists
+        && program_status.is_program
+        && program_status.data_size > 0;
 
     if json_format {
         let status = if program_deployed {
@@ -2098,12 +2272,24 @@ async fn get_program_status(
 
         println!("Program Accounts:");
         print_account_status("  Meta Account", &meta_account.to_string(), &meta_status);
-        print_account_status("  Program Account", &program_account.to_string(), &program_status);
+        print_account_status(
+            "  Program Account",
+            &program_account.to_string(),
+            &program_status,
+        );
         println!();
 
         println!("Uploader Accounts (temp_seed: {}):", temp_seed);
-        print_account_status("  Meta Account", &uploader_meta_account.to_string(), &uploader_meta_status);
-        print_account_status("  Buffer Account", &uploader_buffer_account.to_string(), &uploader_buffer_status);
+        print_account_status(
+            "  Meta Account",
+            &uploader_meta_account.to_string(),
+            &uploader_meta_status,
+        );
+        print_account_status(
+            "  Buffer Account",
+            &uploader_buffer_account.to_string(),
+            &uploader_buffer_status,
+        );
         println!();
 
         let upload_in_progress = uploader_meta_status.exists || uploader_buffer_status.exists;
@@ -2140,14 +2326,19 @@ async fn get_program_status(
         }
 
         if upload_in_progress && !any_corrupted {
-            println!("  Upload buffer exists (cleanup may be needed: thru uploader cleanup {})", temp_seed);
+            println!(
+                "  Upload buffer exists (cleanup may be needed: thru uploader cleanup {})",
+                temp_seed
+            );
         }
     }
 
     Ok(())
 }
 
-fn account_to_status(result: Result<Option<thru_client::Account>, thru_client::ClientError>) -> AccountStatus {
+fn account_to_status(
+    result: Result<Option<thru_client::Account>, thru_client::ClientError>,
+) -> AccountStatus {
     match result {
         Ok(Some(account)) => AccountStatus {
             exists: true,
@@ -2174,7 +2365,10 @@ fn print_account_status(label: &str, address: &str, status: &AccountStatus) {
     if status.exists {
         let program_flag = if status.is_program { " [PROGRAM]" } else { "" };
         println!("{}: {}", label, address);
-        println!("    Status: EXISTS{}, {} bytes", program_flag, status.data_size);
+        println!(
+            "    Status: EXISTS{}, {} bytes",
+            program_flag, status.data_size
+        );
         if let Some(owner) = &status.owner {
             println!("    Owner: {}", owner);
         }
@@ -2187,6 +2381,48 @@ fn print_account_status(label: &str, address: &str, status: &AccountStatus) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn create_authority_uses_public_metadata_without_loading_secrets() {
+        let (_guard, keys) = crate::keys::KeyManager::test_fixture(&[
+            ("payer", [1u8; 32]),
+            ("authority", [1u8; 32]),
+        ]);
+        let mut config = Config {
+            keys,
+            ..Config::default()
+        };
+        let expected = config.keys.public_key("payer").unwrap();
+        for alias in ["payer", "authority"] {
+            let mut entry = config.keys.get_entry(alias).unwrap().clone();
+            entry.source = crate::keys::KeySource::MacosKeychain {
+                id: format!("unavailable-program-public-metadata-{alias}"),
+            };
+            config.keys.insert_entry(alias, entry, true).unwrap();
+        }
+
+        assert_eq!(
+            resolve_create_authority_pubkey(&config, Some("authority"), Some("payer")).unwrap(),
+            expected
+        );
+    }
+
+    #[test]
+    fn create_authority_accepts_unregistered_file_reference() {
+        let (_guard, keys) = crate::keys::KeyManager::test_fixture(&[("payer", [1u8; 32])]);
+        let mut config = Config {
+            keys,
+            ..Config::default()
+        };
+        let expected = config.keys.public_key("payer").unwrap();
+        let reference = config.keys.get_entry("payer").unwrap().reference();
+        config.keys.remove_key("payer").unwrap();
+
+        assert_eq!(
+            resolve_create_authority_pubkey(&config, Some(&reference), Some(&reference)).unwrap(),
+            expected
+        );
+    }
 
     fn valid_program_image_bytes() -> Vec<u8> {
         let mut data =
@@ -2204,8 +2440,8 @@ mod tests {
     fn test_create_authority_defaults_to_named_fee_payer_without_default_key() {
         let mut config = Config::default();
         let payer_key = hex::encode([1u8; 32]);
-        config.keys.add_key("payer", &payer_key, false).unwrap();
-        config.keys.remove_key("default").unwrap();
+        let (_guard, keys) = crate::keys::KeyManager::test_fixture(&[("payer", [1u8; 32])]);
+        config.keys = keys;
 
         let authority = resolve_create_authority_pubkey(&config, None, Some("payer")).unwrap();
         let expected = crypto::keypair_from_hex(&payer_key).unwrap().public_key;
@@ -2216,13 +2452,11 @@ mod tests {
     #[test]
     fn test_explicit_create_authority_must_match_fee_payer() {
         let mut config = Config::default();
-        let payer_key = hex::encode([1u8; 32]);
-        let authority_key = hex::encode([2u8; 32]);
-        config.keys.add_key("payer", &payer_key, false).unwrap();
-        config
-            .keys
-            .add_key("authority", &authority_key, false)
-            .unwrap();
+        let (_guard, keys) = crate::keys::KeyManager::test_fixture(&[
+            ("payer", [1u8; 32]),
+            ("authority", [2u8; 32]),
+        ]);
+        config.keys = keys;
 
         let error = resolve_create_authority_pubkey(&config, Some("authority"), Some("payer"))
             .expect_err("a separately supplied program authority cannot sign the transaction");

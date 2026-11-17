@@ -62,6 +62,7 @@ function buildCreateBase(args: {
   sourceBufferAccountIdx: number;
   sourceOffset?: number;
   sourceSize: number;
+  sourceSha256: Uint8Array;
   authorityAccountIdx: number;
   seed: string | Uint8Array;
 }): Uint8Array {
@@ -76,6 +77,7 @@ function buildCreateBase(args: {
     .set_srcbuf_account_idx(args.sourceBufferAccountIdx)
     .set_srcbuf_offset(args.sourceOffset ?? 0)
     .set_srcbuf_size(args.sourceSize)
+    .set_srcbuf_sha256(exactBytes(args.sourceSha256, 32, 'sourceSha256'))
     .set_authority_account_idx(args.authorityAccountIdx);
   builder.seed().write(normalizeSeed(args.seed)).finish();
   return builder.build();
@@ -108,6 +110,7 @@ export function buildManagerInstructionBytes(
           .set_srcbuf_account_idx(args.sourceBufferAccountIdx)
           .set_srcbuf_offset(args.sourceOffset ?? 0)
           .set_srcbuf_size(args.sourceSize)
+          .set_srcbuf_sha256(exactBytes(args.sourceSha256, 32, 'sourceSha256'))
           .build()
       );
     }
@@ -180,6 +183,7 @@ export function createPermanentProgramInstruction(
       ),
       sourceOffset: args.sourceOffset,
       sourceSize: args.sourceSize,
+      sourceSha256: args.sourceSha256,
       seed: args.seed,
       metaStateProof: args.metaStateProof,
       programStateProof: args.programStateProof,
@@ -205,6 +209,7 @@ export function createEphemeralProgramInstruction(
       ),
       sourceOffset: args.sourceOffset,
       sourceSize: args.sourceSize,
+      sourceSha256: args.sourceSha256,
       seed: args.seed,
     });
 }
@@ -223,6 +228,7 @@ export function createUpgradeProgramInstruction(
       ),
       sourceOffset: args.sourceOffset,
       sourceSize: args.sourceSize,
+      sourceSha256: args.sourceSha256,
     });
 }
 

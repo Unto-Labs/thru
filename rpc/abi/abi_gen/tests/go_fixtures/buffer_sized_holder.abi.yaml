@@ -1,0 +1,45 @@
+abi:
+  package: "test.buffer_sized_holder"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "A struct holding a type sized by __buffer_size"
+
+types:
+  - name: "BufferSizedEntries"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "version"
+            field-type:
+              primitive: u32
+          - name: "entries"
+            field-type:
+              array:
+                size:
+                  div:
+                    left:
+                      sub:
+                        left:
+                          field-ref:
+                            path: ["__buffer_size"]
+                        right:
+                          literal:
+                            u64: 4
+                    right:
+                      literal:
+                        u64: 8
+                element-type:
+                  primitive: u64
+  - name: "SizedHolder"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "tag"
+            field-type:
+              primitive: u8
+          - name: "body"
+            field-type:
+              type-ref:
+                name: "BufferSizedEntries"

@@ -29,7 +29,12 @@ pub fn ts_parameter_bindings(type_ir: &TypeIr) -> Vec<TsParamBinding> {
         .iter()
         .map(|param| TsParamBinding {
             canonical: param.name.clone(),
-            ts_name: sanitize_param_name(&param.name),
+            /* `__buffer_size` is exposed as `buffer_size` (Rust's name). */
+            ts_name: if param.name == "__buffer_size" {
+                "buffer_size".to_string()
+            } else {
+                sanitize_param_name(&param.name)
+            },
             derived: param.derived,
         })
         .collect()
@@ -130,72 +135,18 @@ fn normalize_field_ref_path(path: &[String]) -> String {
     normalize_binding_path(&joined)
 }
 
+/* A derived parameter (a computed enum tag) over params read from the
+buffer: checked u64 arithmetic; an overflow becomes 2^64, a tag no variant
+has (the IR switch then reports `tn.ir.invalid_tag`). */
 fn expr_to_param_expr(expr: &ExprKind, lookup: &BTreeMap<String, String>) -> Option<String> {
-    match expr {
-        ExprKind::Literal(lit) => literal_to_bigint_string(lit),
-        ExprKind::FieldRef(field_ref) => {
-            let normalized = normalize_field_ref_path(&field_ref.path);
-            let key = lookup.get(&normalized)?;
-            Some(format!("params.{}", key))
-        }
-        ExprKind::Add(e) => Some(format!(
-            "({} + {})",
-            expr_to_param_expr(&e.left, lookup)?,
-            expr_to_param_expr(&e.right, lookup)?
-        )),
-        ExprKind::Sub(e) => Some(format!(
-            "({} - {})",
-            expr_to_param_expr(&e.left, lookup)?,
-            expr_to_param_expr(&e.right, lookup)?
-        )),
-        ExprKind::Mul(e) => Some(format!(
-            "({} * {})",
-            expr_to_param_expr(&e.left, lookup)?,
-            expr_to_param_expr(&e.right, lookup)?
-        )),
-        ExprKind::Div(e) => Some(format!(
-            "({} / {})",
-            expr_to_param_expr(&e.left, lookup)?,
-            expr_to_param_expr(&e.right, lookup)?
-        )),
-        ExprKind::Mod(e) => Some(format!(
-            "({} % {})",
-            expr_to_param_expr(&e.left, lookup)?,
-            expr_to_param_expr(&e.right, lookup)?
-        )),
-        ExprKind::BitAnd(e) => Some(format!(
-            "({} & {})",
-            expr_to_param_expr(&e.left, lookup)?,
-            expr_to_param_expr(&e.right, lookup)?
-        )),
-        ExprKind::BitOr(e) => Some(format!(
-            "({} | {})",
-            expr_to_param_expr(&e.left, lookup)?,
-            expr_to_param_expr(&e.right, lookup)?
-        )),
-        ExprKind::BitXor(e) => Some(format!(
-            "({} ^ {})",
-            expr_to_param_expr(&e.left, lookup)?,
-            expr_to_param_expr(&e.right, lookup)?
-        )),
-        ExprKind::LeftShift(e) => Some(format!(
-            "({} << {})",
-            expr_to_param_expr(&e.left, lookup)?,
-            expr_to_param_expr(&e.right, lookup)?
-        )),
-        ExprKind::RightShift(e) => Some(format!(
-            "({} >> {})",
-            expr_to_param_expr(&e.left, lookup)?,
-            expr_to_param_expr(&e.right, lookup)?
-        )),
-        ExprKind::BitNot(e) => Some(format!("(~({}))", expr_to_param_expr(&e.operand, lookup)?)),
-        ExprKind::Neg(e) => Some(format!("(-({}))", expr_to_param_expr(&e.operand, lookup)?)),
-        ExprKind::Popcount(e) => Some(format!(
-            "BigInt(__tnPopcount({}))",
-            expr_to_param_expr(&e.operand, lookup)?
-        )),
-        _ => None,
-    }
+    let mut resolver = |path: &[String]| -> Option<String> {
+        let normalized = normalize_field_ref_path(path);
+        lookup
+            .get(&normalized)
+            .map(|key| format!("__tnU64(params.{key})"))
+    };
+    let checked = super::helpers::expr_to_ts_bigint_with_resolver(expr, &mut resolver)?;
+    Some(format!("({checked} ?? __tnMeasureLimit)"))
 }
 
 fn enum_computed_tag_expr(field: &ResolvedField) -> Option<ExprKind> {
@@ -230,6 +181,17 @@ pub fn derived_param_specs(
             if let Some(expr) = enum_computed_tag_expr(field) {
                 let canonical = format!("{}.computed_tag", field.field_type.name);
                 expr_sources.insert(canonical, expr);
+            }
+            /* An array count the IR cannot express (see
+            `IrBuilder::for_typescript`). */
+            if let ResolvedTypeKind::Array {
+                size_expression, ..
+            } = &field.field_type.kind
+            {
+                expr_sources.insert(
+                    format!("{}.computed_size", field.name),
+                    size_expression.clone(),
+                );
             }
         }
     }
@@ -370,6 +332,32 @@ pub fn collect_dynamic_param_bindings(
     map
 }
 
+/* Whether a struct's `__tnExtractParams` reads anything: resolver-level
+dynamic bindings or payload sizes measured by the sequential scan. */
+pub fn extractor_emitted(resolved_type: &ResolvedType, type_ir: &TypeIr) -> bool {
+    !collect_dynamic_param_bindings(resolved_type).is_empty()
+        || type_ir.parameters.iter().any(|param| {
+            !param.derived
+                && (param.name.ends_with(".payload_size")
+                    || param.name == "__buffer_size"
+                    || names_type_ref_field(resolved_type, &param.name))
+        })
+}
+
+/* `<field>.<path>` with `field` a type-ref: a named type's outside reference
+bound to this struct (see `IrBuilder::bind_context_args`). */
+fn names_type_ref_field(resolved_type: &ResolvedType, param: &str) -> bool {
+    let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind else {
+        return false;
+    };
+    let Some((head, _)) = param.split_once('.') else {
+        return false;
+    };
+    fields
+        .iter()
+        .any(|f| f.name == head && matches!(f.field_type.kind, ResolvedTypeKind::TypeRef { .. }))
+}
+
 pub fn resolve_param_binding<'a>(ir_param: &str, available: &'a [String]) -> Option<&'a String> {
     if let Some(exact) = available
         .iter()
@@ -377,19 +365,24 @@ pub fn resolve_param_binding<'a>(ir_param: &str, available: &'a [String]) -> Opt
     {
         return Some(exact);
     }
-    available.iter().find(|candidate| {
-        if ir_param.len() <= candidate.len() {
-            return false;
-        }
-        if !ir_param.ends_with(candidate.as_str()) {
-            return false;
-        }
-        ir_param
-            .as_bytes()
-            .get(ir_param.len() - candidate.len() - 1)
-            .map(|b| *b == b'_')
-            .unwrap_or(false)
-    })
+    /* Prefer the longest suffix: `hdr_data_sz` must win over its alias `data_sz`,
+    whose binding path has lost the `hdr.` prefix. */
+    available
+        .iter()
+        .filter(|candidate| {
+            if ir_param.len() <= candidate.len() {
+                return false;
+            }
+            if !ir_param.ends_with(candidate.as_str()) {
+                return false;
+            }
+            ir_param
+                .as_bytes()
+                .get(ir_param.len() - candidate.len() - 1)
+                .map(|b| *b == b'_')
+                .unwrap_or(false)
+        })
+        .max_by_key(|candidate| candidate.len())
 }
 
 #[derive(Clone)]

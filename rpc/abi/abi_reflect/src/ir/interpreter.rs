@@ -1,7 +1,10 @@
+use super::derived::DerivedParams;
 use crate::errors::{ReflectError, ReflectResult};
+use crate::limits::{MAX_DECODE_DEPTH, MAX_IR_EVAL_STEPS};
 use abi_gen::codegen::shared::ir::{
     CallNestedNode, IrArgument, IrNode, LayoutIr, SwitchNode, TypeIr,
 };
+use std::cell::Cell;
 use std::collections::BTreeMap;
 
 /// Shared parameter map passed into the IR interpreter.
@@ -17,6 +20,10 @@ pub struct IrValidationResult {
 pub struct IrInterpreter<'a> {
     layout_ir: &'a LayoutIr,
     ir_index: &'a BTreeMap<String, usize>,
+    derived: Option<&'a DerivedParams>,
+    /* Nodes evaluated by the current validation and the nesting depth */
+    steps: Cell<usize>,
+    depth: Cell<usize>,
 }
 
 impl<'a> IrInterpreter<'a> {
@@ -24,7 +31,40 @@ impl<'a> IrInterpreter<'a> {
         Self {
             layout_ir,
             ir_index,
+            derived: None,
+            steps: Cell::new(0),
+            depth: Cell::new(0),
         }
+    }
+
+    /// Also compute derived parameters (computed enum tags) a type's IR
+    /// reads when the caller did not supply them.
+    pub fn with_derived_params(
+        layout_ir: &'a LayoutIr,
+        ir_index: &'a BTreeMap<String, usize>,
+        derived: &'a DerivedParams,
+    ) -> Self {
+        Self {
+            layout_ir,
+            ir_index,
+            derived: Some(derived),
+            steps: Cell::new(0),
+            depth: Cell::new(0),
+        }
+    }
+
+    fn fill_derived(&self, type_name: &str, params: &mut ParamMap) -> ReflectResult<()> {
+        let Some(specs) = self.derived.and_then(|derived| derived.get(type_name)) else {
+            return Ok(());
+        };
+        for (name, expr) in specs {
+            if params.contains_key(name) {
+                continue;
+            }
+            let value = expr.eval(params, type_name)?;
+            params.insert(name.clone(), value as u128);
+        }
+        Ok(())
     }
 
     pub fn validate(
@@ -33,10 +73,13 @@ impl<'a> IrInterpreter<'a> {
         buffer_len: usize,
         params: &ParamMap,
     ) -> ReflectResult<IrValidationResult> {
+        self.steps.set(0);
+        self.depth.set(0);
         let mut effective_params = params.clone();
         effective_params
             .entry("__buffer_size".into())
             .or_insert(buffer_len as u128);
+        self.fill_derived(&type_ir.type_name, &mut effective_params)?;
         let ctx = EvalContext {
             type_name: &type_ir.type_name,
             params: &effective_params,
@@ -55,7 +98,30 @@ impl<'a> IrInterpreter<'a> {
         })
     }
 
+    /* Evaluate one node, within the step and depth limits */
     fn eval_node(&self, node: &IrNode, ctx: &EvalContext<'_>) -> ReflectResult<u128> {
+        let limit = |reason: String| ReflectError::LimitExceeded {
+            type_name: ctx.type_name.to_string(),
+            reason,
+        };
+        if self.depth.get() >= MAX_DECODE_DEPTH {
+            return Err(limit(format!(
+                "nesting deeper than {MAX_DECODE_DEPTH} levels"
+            )));
+        }
+        if self.steps.get() >= MAX_IR_EVAL_STEPS {
+            return Err(limit(format!(
+                "more than {MAX_IR_EVAL_STEPS} IR evaluation steps"
+            )));
+        }
+        self.steps.set(self.steps.get() + 1);
+        self.depth.set(self.depth.get() + 1);
+        let result = self.eval_node_unbounded(node, ctx);
+        self.depth.set(self.depth.get() - 1);
+        result
+    }
+
+    fn eval_node_unbounded(&self, node: &IrNode, ctx: &EvalContext<'_>) -> ReflectResult<u128> {
         match node {
             IrNode::Const(const_node) => Ok(const_node.value as u128),
             IrNode::ZeroSize { .. } => Ok(0),
@@ -145,10 +211,12 @@ impl<'a> IrInterpreter<'a> {
                     type_name: ctx.type_name.to_string(),
                     parameter: node.tag.clone(),
                 })?;
-        let tag_number = tag_value as u64;
-        for case in &node.cases {
-            if case.tag_value == tag_number {
-                return self.eval_node(&case.node, ctx);
+        /* A tag past u64 matches no case (rather than its truncation). */
+        if let Ok(tag_number) = u64::try_from(tag_value) {
+            for case in &node.cases {
+                if case.tag_value == tag_number {
+                    return self.eval_node(&case.node, ctx);
+                }
             }
         }
         if let Some(default) = &node.default {
@@ -171,6 +239,7 @@ impl<'a> IrInterpreter<'a> {
                 }
             }
         }
+        self.fill_derived(&nested_type.type_name, &mut nested_params)?;
         let nested_ctx = EvalContext {
             type_name: &nested_type.type_name,
             params: &nested_params,

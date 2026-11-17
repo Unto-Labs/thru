@@ -1,0 +1,7 @@
+test-case:
+  name: "account_root_mixed_log"
+  abi-file: "../../abi_definitions/account_root.abi.yaml"
+  type: "MixedAccount"
+  description: "Different-size variants: log_v1 with entries"
+  tags: ["enums", "tagged", "account-root"]
+  binary-hex: "02 02 01 00 02 00"

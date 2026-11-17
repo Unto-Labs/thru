@@ -1,0 +1,145 @@
+.tds-state-picker {
+  min-width: 0;
+}
+.tds-state-picker > .tds-field__label {
+  color: var(--color-text-secondary);
+}
+.tds-state-picker > .tds-field__error {
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+.tds-state-picker__trigger {
+  box-sizing: border-box;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  padding: 0 40px 0 var(--space-3);
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-none);
+  color: var(--color-text-primary);
+  font: 16px var(--font-mono);
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard);
+}
+.tds-state-picker__trigger:hover:not(:disabled),
+.tds-state-picker__trigger:focus-visible,
+.tds-state-picker__trigger[data-popup-open] {
+  border-color: var(--color-border-primary);
+  box-shadow: inset 0 0 0 1px var(--color-border-primary);
+}
+.tds-state-picker__trigger[data-error] {
+  border-color: var(--color-border-danger);
+  box-shadow: inset 0 0 0 1px var(--color-border-danger);
+}
+.tds-state-picker__trigger:disabled {
+  background: var(--color-surface-disabled);
+  cursor: not-allowed;
+}
+.tds-state-picker__icon {
+  position: absolute;
+  right: 12px;
+  top: 17px;
+  display: flex;
+  color: var(--color-text-tertiary);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+.tds-state-picker__trigger[data-popup-open] .tds-state-picker__icon {
+  transform: rotate(180deg);
+}
+.tds-state-picker__positioner {
+  z-index: 70;
+}
+.tds-state-picker__popup.tds-combobox-popup {
+  box-sizing: border-box;
+  width: min(280px, calc(100vw - 32px));
+  min-width: 0;
+  /* Base UI measures before setting this variable and locks the first side it picks. */
+  max-height: min(320px, var(--available-height, 320px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+.tds-state-picker__search-wrap {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-border-tertiary);
+  flex: none;
+}
+.tds-state-picker__search.tds-combobox-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 48px;
+  padding: 0 var(--space-3);
+  font: 16px var(--font-sans);
+}
+.tds-state-picker__search.tds-combobox-input::placeholder {
+  color: var(--steel-500);
+}
+.tds-state-picker__search.tds-combobox-input:focus {
+  border-color: var(--color-border-primary);
+  box-shadow: inset 0 0 0 1px var(--color-border-primary);
+}
+.tds-state-picker__list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-1);
+}
+.tds-state-picker__option.tds-combobox-item {
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-5);
+  font: 13px var(--font-sans);
+}
+.tds-state-picker__code {
+  flex: none;
+  width: 24px;
+  font: 11px var(--font-mono);
+  color: var(--color-text-secondary);
+}
+.tds-state-picker__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.tds-state-picker__reason {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.tds-state-picker__option[data-highlighted] .tds-state-picker__code {
+  color: inherit;
+}
+.tds-state-picker__option.tds-combobox-item[data-disabled] {
+  background: var(--color-surface-disabled);
+  color: var(--color-text-secondary);
+  cursor: not-allowed;
+}
+.tds-state-picker__option[data-disabled][data-highlighted] {
+  box-shadow: inset 0 0 0 1px var(--color-border-primary);
+}
+.tds-state-picker__empty.tds-combobox-item {
+  padding: var(--space-2) var(--space-3);
+  font: 13px var(--font-sans);
+  color: var(--color-text-secondary);
+}
+.tds-state-picker__empty.tds-combobox-item:empty {
+  padding: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tds-state-picker__icon {
+    transition: none;
+  }
+}
+
+.tds-state-picker__trigger[data-error]:hover:not(:disabled) {
+  border-color: var(--color-border-danger);
+  box-shadow: inset 0 0 0 1px var(--color-border-danger);
+}
+.tds-state-picker__trigger[data-error]:focus-visible {
+  outline: 2px solid var(--color-border-primary);
+  outline-offset: 1px;
+}

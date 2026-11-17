@@ -24,3 +24,18 @@ types:
                     u32: 4
                 element-type:
                   primitive: u8
+  - name: "UnionHolder"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "kind"
+            field-type:
+              primitive: u8
+          - name: "value"
+            field-type:
+              type-ref:
+                name: "SimpleUnion"
+          - name: "trailer"
+            field-type:
+              primitive: u16

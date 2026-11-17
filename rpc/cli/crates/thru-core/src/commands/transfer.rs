@@ -2,11 +2,10 @@
 
 use std::time::Duration;
 use thru_base::txn_lib::TnPubkey;
+use thru_base::txn_tools::EOA_PROGRAM;
 use thru_base::txn_tools::TransactionBuilder;
-use thru_base::{tn_tools::Pubkey, txn_tools::EOA_PROGRAM};
 
 use crate::config::Config;
-use crate::crypto::keypair_from_hex;
 use crate::error::CliError;
 use crate::output;
 use crate::utils::format_vm_error;
@@ -28,13 +27,8 @@ pub async fn handle_transfer_command(
         ));
     }
 
-    // Resolve source key
-    let src_private_key = config.keys.get_key(src).map_err(|_| {
-        CliError::Validation(format!("Source key '{}' not found in configuration", src))
-    })?;
-
-    // Create keypair from source private key
-    let src_keypair = keypair_from_hex(src_private_key)?;
+    // Load the signing source without falling back on explicit-source errors.
+    let src_keypair = config.keys.load_key(src)?;
 
     // Resolve destination public key
     let dst_pubkey = resolve_destination_key(config, dst)?;
@@ -181,31 +175,9 @@ pub async fn handle_transfer_command(
     Ok(())
 }
 
-/// Resolve destination key - try as key name first, then as public address
+/// Resolve destination public metadata or an explicit public address/source.
 fn resolve_destination_key(config: &Config, dst: &str) -> Result<TnPubkey, CliError> {
-    // First try to resolve as key name from config
-    if let Ok(key_hex) = config.keys.get_key(dst) {
-        let keypair = keypair_from_hex(key_hex)?;
-        return Ok(keypair.public_key);
-    }
-
-    // If not found as key name, try to parse as public address
-    if dst.starts_with("ta") && dst.len() == 46 {
-        let pubkey = Pubkey::new(dst.to_string())
-            .map_err(|e| CliError::Validation(format!("Invalid destination address: {}", e)))?;
-
-        // Convert Pubkey to TnPubkey
-        let pubkey_bytes = pubkey.to_bytes().map_err(|e| {
-            CliError::Validation(format!("Failed to convert destination address: {}", e))
-        })?;
-
-        return Ok(pubkey_bytes);
-    }
-
-    Err(CliError::Validation(format!(
-        "Destination '{}' is neither a valid key name nor a valid public address (taXX format)",
-        dst
-    )))
+    config.keys.resolve_public_key(dst)
 }
 
 /// Create an RPC client from configuration

@@ -1,4 +1,5 @@
 use super::ir_helpers::sanitize_param_name;
+use super::names::{IrNameFn, IrNames, plain_ir_names};
 use crate::codegen::shared::ir::{
     AlignNode, BinaryOpNode, CallNestedNode, IrNode, SwitchNode, TypeIr,
 };
@@ -15,6 +16,7 @@ pub struct IrValidateEmitter<'a> {
     type_ir: &'a TypeIr,
     output: String,
     temp_idx: usize,
+    names: Option<IrNameFn<'a>>,
 }
 
 impl<'a> IrValidateEmitter<'a> {
@@ -23,28 +25,40 @@ impl<'a> IrValidateEmitter<'a> {
             type_ir,
             output: String::new(),
             temp_idx: 0,
+            names: None,
+        }
+    }
+
+    /* Take helper names (this type's and its callees') from `names`. */
+    pub fn with_names(mut self, names: IrNameFn<'a>) -> Self {
+        self.names = Some(names);
+        self
+    }
+
+    fn fn_names(&self, type_name: &str) -> IrNames {
+        match self.names {
+            Some(f) => f(type_name),
+            None => plain_ir_names(type_name),
         }
     }
 
     pub fn emit(mut self) -> Result<String, IrValidateError> {
-        let fn_name = format!(
-            "{}_validate_ir",
-            sanitize_param_name(&self.type_ir.type_name)
-        );
+        let fn_name = self.fn_names(&self.type_ir.type_name).validate;
         let params = format_ir_parameter_list(self.type_ir);
         let mut signature = format!("pub fn {}(buf_sz: u64", fn_name);
         if !params.is_empty() {
             signature.push_str(", ");
             signature.push_str(&params);
         }
-        signature.push_str(") -> Result<u64, AbiIrValidateError>");
+        signature.push_str(") -> ::core::result::Result<u64, AbiIrValidateError>");
 
         writeln!(&mut self.output, "{} {{", signature).unwrap();
         let result_var = self.emit_node(&self.type_ir.root, 1)?;
         writeln!(&mut self.output, "    if {} > buf_sz {{", result_var).unwrap();
         writeln!(
             &mut self.output,
-            "        return Err(AbiIrValidateError::BufferTooSmall);"
+            "        return Err(AbiIrValidateError::BufferTooSmall {{ needed: usize::try_from({}).unwrap_or(usize::MAX), have: usize::try_from(buf_sz).unwrap_or(usize::MAX) }});",
+            result_var
         )
         .unwrap();
         writeln!(&mut self.output, "    }}").unwrap();
@@ -261,7 +275,7 @@ impl<'a> IrValidateEmitter<'a> {
         node: &CallNestedNode,
         indent: usize,
     ) -> Result<String, IrValidateError> {
-        let fn_name = format!("{}_footprint_ir", sanitize_param_name(&node.type_name));
+        let fn_name = self.fn_names(&node.type_name).footprint_checked;
         let mut args = String::new();
         for (idx, arg) in node.arguments.iter().enumerate() {
             if idx > 0 {
@@ -269,11 +283,7 @@ impl<'a> IrValidateEmitter<'a> {
             }
             args.push_str(&sanitize_param_name(&arg.value));
         }
-        let call = if args.is_empty() {
-            format!("{}()", fn_name)
-        } else {
-            format!("{}({})", fn_name, args)
-        };
+        let call = format!("{}({})?", fn_name, args);
         let var = self.new_var();
         writeln!(
             &mut self.output,
@@ -345,6 +355,14 @@ impl<'a> IrValidateEmitter<'a> {
 
 pub fn emit_ir_validate_fn(type_ir: &TypeIr) -> Result<String, IrValidateError> {
     IrValidateEmitter::new(type_ir).emit()
+}
+
+/* `emit_ir_validate_fn` with helper names from a package's name table. */
+pub fn emit_ir_validate_fn_named(
+    type_ir: &TypeIr,
+    names: IrNameFn<'_>,
+) -> Result<String, IrValidateError> {
+    IrValidateEmitter::new(type_ir).with_names(names).emit()
 }
 
 fn format_ir_parameter_list(type_ir: &TypeIr) -> String {

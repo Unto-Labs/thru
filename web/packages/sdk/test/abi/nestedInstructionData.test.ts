@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  MAX_NESTED_INSTRUCTION_DECODES,
   resolveNestedInstructionData,
   type FormattedReflection,
 } from "../../src/abi";
@@ -71,6 +72,29 @@ describe("resolveNestedInstructionData", () => {
     expect(result.value.calls[0].decodedInstruction).toBeDefined();
     expect(result.value.wrapper.value.decodedInstruction).toBeDefined();
     expect(decodeCount).toBe(2);
+  });
+
+  // Fan-out (every union view of a payload can be instruction data) is
+  // bounded by a decode budget shared across the whole call, not just by
+  // depth: eight children per level would otherwise mean 8^depth calls.
+  it("stops at the shared nested decode budget", async () => {
+    const fanOut = () =>
+      Object.fromEntries(
+        Array.from({ length: 8 }, (_, i) => [`view${i}`, instructionData(0, "0x01")]),
+      );
+    let calls = 0;
+    const result = await resolveNestedInstructionData(
+      reflection(fanOut(), "RootInstruction"),
+      ["p0"],
+      () => {
+        calls += 1;
+        return reflection(fanOut(), "Level");
+      },
+      { maxDepth: 6 },
+    );
+
+    expect(calls).toBe(MAX_NESTED_INSTRUCTION_DECODES);
+    expect(JSON.stringify(result.value)).toContain("Nested instruction decode limit reached");
   });
 
   it("stops at the depth cap", async () => {

@@ -1,0 +1,74 @@
+abi:
+  package: "compliance.wide_tag_enums"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Enums whose tag field is wider than one byte"
+
+types:
+  - name: "U16TagEnum"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "tag"
+            field-type:
+              primitive: u16
+          - name: "body"
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  field-ref:
+                    path: ["tag"]
+                variants:
+                  # 258 truncates to 2 as a u8: a backend that narrows the tag
+                  # picks "Two" instead of "Big" and mis-sizes the payload.
+                  - name: "Two"
+                    tag-value: 2
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "value"
+                            field-type:
+                              primitive: u16
+                  - name: "Big"
+                    tag-value: 258
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "value"
+                            field-type:
+                              primitive: u32
+  - name: "U32TagEnum"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "tag"
+            field-type:
+              primitive: u32
+          - name: "body"
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  field-ref:
+                    path: ["tag"]
+                variants:
+                  - name: "Zero"
+                    tag-value: 0
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields: []
+                  - name: "High"
+                    tag-value: 65536
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "value"
+                            field-type:
+                              primitive: u64

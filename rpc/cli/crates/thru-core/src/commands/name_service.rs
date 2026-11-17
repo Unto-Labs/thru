@@ -8,16 +8,18 @@ use crate::cli::{NameServiceCommands, RegistrarCommands};
 use crate::commands::state_proof::make_state_proof;
 use crate::config::Config;
 use crate::error::CliError;
+use crate::keys::LoadedKey;
 use crate::utils::validate_address_or_hex;
 use std::convert::TryInto;
+use std::sync::Arc;
 use std::time::Duration;
 use thru_base::crypto_utils::derive_program_address;
 use thru_base::rpc_types::ProofType;
 use thru_base::tn_public_address::tn_pubkey_to_address_string;
-use thru_base::tn_tools::{KeyPair, Pubkey};
+use thru_base::tn_tools::Pubkey;
 use thru_base::txn_tools::{
-    TransactionBuilder, TN_NAME_SERVICE_MAX_DOMAIN_LENGTH, TN_NAME_SERVICE_MAX_KEY_LENGTH,
-    TN_NAME_SERVICE_MAX_VALUE_LENGTH,
+    TN_NAME_SERVICE_MAX_DOMAIN_LENGTH, TN_NAME_SERVICE_MAX_KEY_LENGTH,
+    TN_NAME_SERVICE_MAX_VALUE_LENGTH, TransactionBuilder,
 };
 use thru_client::{Client, ClientBuilder, TransactionDetails};
 
@@ -25,31 +27,67 @@ use thru_client::{Client, ClientBuilder, TransactionDetails};
 const THRU_REGISTRAR_PROGRAM_FEE: u64 = 0;
 const NAME_SERVICE_PROGRAM_FEE: u64 = 0;
 
-/// Token account data layout offsets
-const TOKEN_ACCOUNT_MINT_OFFSET: usize = 0;
-const TOKEN_ACCOUNT_OWNER_OFFSET: usize = 32;
-const TOKEN_ACCOUNT_FROZEN_OFFSET: usize = 64 + 8; // owner (32) + amount (8) + frozen (1)
+/// tn_thru_registrar_config (tn_thru_registrar_program.h): packed,
+/// account_type (TN_THRU_REGISTRAR_ACCOUNT_TYPE_CONFIG_V1) at byte 0, then
+/// five pubkeys, the root domain name and its length, the price per year and
+/// the number of domains sold.
+const REGISTRAR_ACCOUNT_TYPE_CONFIG_V1: u8 = 1;
+const TN_THRU_REGISTRAR_MAX_DOMAIN_LENGTH: usize = 64;
+const REGISTRAR_CONFIG_SIZE: usize = 1 + 5 * 32 + TN_THRU_REGISTRAR_MAX_DOMAIN_LENGTH + 4 + 8 + 8;
 
-/// Helper function to resolve fee payer keypair from configuration
-fn resolve_fee_payer_keypair(
-    config: &Config,
-    fee_payer: Option<&str>,
-) -> Result<KeyPair, CliError> {
-    let (key_name, fee_payer_private_key) = if let Some(fee_payer_name) = fee_payer {
-        let key = config.keys.get_key(fee_payer_name).map_err(|_| {
-            CliError::Validation(format!(
-                "Fee payer key '{}' not found in configuration",
-                fee_payer_name
-            ))
-        })?;
-        (fee_payer_name, key)
-    } else {
-        let key = config.keys.get_key("default")?;
-        ("default", key)
+/// The pubkeys of a Thru Registrar config account.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RegistrarConfig {
+    name_service_program: [u8; 32],
+    root_registrar: [u8; 32],
+    treasurer: [u8; 32],
+    token_mint: [u8; 32],
+    token_program: [u8; 32],
+}
+
+/// Decodes a Thru Registrar config account: exact size and account type.
+fn parse_registrar_config(data: &[u8]) -> Result<RegistrarConfig, CliError> {
+    if data.len() != REGISTRAR_CONFIG_SIZE {
+        return Err(CliError::Validation(format!(
+            "Config account data is {} bytes (expected {})",
+            data.len(),
+            REGISTRAR_CONFIG_SIZE
+        )));
+    }
+    if data[0] != REGISTRAR_ACCOUNT_TYPE_CONFIG_V1 {
+        return Err(CliError::Validation(format!(
+            "Config account type {} is not a Thru Registrar config (expected {})",
+            data[0], REGISTRAR_ACCOUNT_TYPE_CONFIG_V1
+        )));
+    }
+    let key = |index: usize| -> [u8; 32] {
+        let start = 1 + index * 32;
+        data[start..start + 32].try_into().expect("32-byte slice")
     };
+    Ok(RegistrarConfig {
+        name_service_program: key(0),
+        root_registrar: key(1),
+        treasurer: key(2),
+        token_mint: key(3),
+        token_program: key(4),
+    })
+}
 
-    KeyPair::from_hex_private_key(key_name, fee_payer_private_key)
-        .map_err(|e| CliError::Crypto(format!("Failed to create fee payer keypair: {}", e)))
+/// Decodes a token account through the token ABI's account root.
+fn decode_token_account(
+    data: &[u8],
+    account_label: &str,
+) -> Result<crate::commands::token::DecodedTokenAccount, CliError> {
+    let decoded = crate::commands::token::decode_token_account_blob(data).map_err(|e| {
+        CliError::Validation(format!("Invalid {} token account: {}", account_label, e))
+    })?;
+    if decoded.is_closed {
+        return Err(CliError::Validation(format!(
+            "{} token account is closed",
+            account_label
+        )));
+    }
+    Ok(decoded)
 }
 
 /// Resolve the thru registrar program pubkey, optionally overriding with command-line input.
@@ -82,7 +120,7 @@ fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
 
 /// Common transaction execution context
 struct TransactionContext {
-    pub fee_payer_keypair: KeyPair,
+    pub fee_payer_keypair: Arc<LoadedKey>,
     pub client: Client,
     pub chain_id: u16,
     pub timeout_seconds: u64,
@@ -90,7 +128,7 @@ struct TransactionContext {
 
 /// Common context for base name service operations
 struct FeePayerContext {
-    pub fee_payer_keypair: KeyPair,
+    pub fee_payer_keypair: Arc<LoadedKey>,
     pub client: Client,
     pub nonce: u64,
     pub start_slot: u64,
@@ -132,13 +170,10 @@ async fn validate_token_account(
             CliError::Validation(format!("Failed to decode {} account data: {}", account_label, e))
         })?;
 
+        let token_account = decode_token_account(&data, account_label)?;
+
         // Validate mint
-        let mint_bytes: [u8; 32] = data[TOKEN_ACCOUNT_MINT_OFFSET..TOKEN_ACCOUNT_MINT_OFFSET + 32]
-            .try_into()
-            .map_err(|_| {
-                CliError::Validation(format!("Failed to parse {} mint bytes", account_label))
-            })?;
-        if mint_bytes != expected_mint {
+        if token_account.mint != expected_mint {
             return Err(CliError::Validation(format!(
                 "{} token account mint does not match expected mint",
                 account_label
@@ -147,13 +182,7 @@ async fn validate_token_account(
 
         // Validate owner if specified
         if let Some(expected_owner_bytes) = expected_owner {
-            let owner_bytes: [u8; 32] =
-                data[TOKEN_ACCOUNT_OWNER_OFFSET..TOKEN_ACCOUNT_OWNER_OFFSET + 32]
-                    .try_into()
-                    .map_err(|_| {
-                        CliError::Validation(format!("Failed to parse {} owner bytes", account_label))
-                    })?;
-            if owner_bytes != expected_owner_bytes {
+            if token_account.owner != expected_owner_bytes {
                 return Err(CliError::Validation(format!(
                     "{} token account owner does not match expected owner",
                     account_label
@@ -162,14 +191,11 @@ async fn validate_token_account(
         }
 
         // Validate not frozen
-        if data.len() > TOKEN_ACCOUNT_FROZEN_OFFSET {
-            let is_frozen = data[TOKEN_ACCOUNT_FROZEN_OFFSET];
-            if is_frozen != 0 {
-                return Err(CliError::Validation(format!(
-                    "{} token account is frozen",
-                    account_label
-                )));
-            }
+        if token_account.is_frozen {
+            return Err(CliError::Validation(format!(
+                "{} token account is frozen",
+                account_label
+            )));
         }
     }
 
@@ -181,7 +207,7 @@ async fn setup_fee_payer_context(
     config: &Config,
     fee_payer: Option<&str>,
 ) -> Result<FeePayerContext, CliError> {
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer)?;
     let client = create_rpc_client(config)?;
 
     let account_info = client
@@ -291,12 +317,13 @@ fn derive_domain_account_pubkey(
 }
 
 fn resolve_signing_account(
+    config: &Config,
     account: Option<&str>,
-    fee_payer_keypair: &KeyPair,
+    fee_payer_keypair: &LoadedKey,
     label: &str,
 ) -> Result<[u8; 32], CliError> {
     let account_bytes = if let Some(account_str) = account {
-        validate_address_or_hex(account_str)?
+        config.keys.resolve_public_key(account_str)?
     } else {
         fee_payer_keypair.public_key
     };
@@ -753,7 +780,7 @@ async fn initialize_registry(
     // Resolve thru registrar program and fee payer
     let (thru_registrar_program_pubkey, thru_registrar_program_bytes) =
         resolve_thru_registrar_program(config, thru_registrar_program)?;
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer)?;
 
     // Create RPC client
     let client = create_rpc_client(config)?;
@@ -813,21 +840,18 @@ async fn initialize_registry(
             let data = general_purpose::STANDARD
                 .decode(data_b64)
                 .map_err(|e| CliError::Validation(format!("Failed to decode treasurer account data: {}", e)))?;
-            let mint_bytes = &data[..32];
-            if mint_bytes != token_mint_account_pubkey {
+            let treasurer_token = decode_token_account(&data, "Treasurer")?;
+            if treasurer_token.mint != token_mint_account_pubkey {
                 return Err(CliError::Validation(format!(
                     "Treasurer token account mint {} does not match provided mint {}",
-                    tn_pubkey_to_address_string(&mint_bytes.try_into().unwrap_or([0u8;32])),
+                    tn_pubkey_to_address_string(&treasurer_token.mint),
                     tn_pubkey_to_address_string(&token_mint_account_pubkey)
                 )));
             }
-            if data.len() > TOKEN_ACCOUNT_FROZEN_OFFSET {
-                let is_frozen = data[TOKEN_ACCOUNT_FROZEN_OFFSET];
-                if is_frozen != 0 {
-                    return Err(CliError::Validation(
-                        "Treasurer token account is frozen; must be active to receive payments".to_string(),
-                    ));
-                }
+            if treasurer_token.is_frozen {
+                return Err(CliError::Validation(
+                    "Treasurer token account is frozen; must be active to receive payments".to_string(),
+                ));
             }
         }
         }
@@ -1057,21 +1081,13 @@ async fn purchase_domain(
         .decode(config_data_b64)
         .map_err(|e| CliError::Validation(format!("Failed to decode config account data: {}", e)))?;
 
-    let cfg_name_service_program_bytes: [u8; 32] = config_data[0..32]
-        .try_into()
-        .map_err(|_| CliError::Validation("Failed to parse name service program id".to_string()))?;
-    let cfg_root_registrar_bytes: [u8; 32] = config_data[32..64]
-        .try_into()
-        .map_err(|_| CliError::Validation("Failed to parse root registrar".to_string()))?;
-    let cfg_treasurer_bytes: [u8; 32] = config_data[64..96]
-        .try_into()
-        .map_err(|_| CliError::Validation("Failed to parse treasurer".to_string()))?;
-    let cfg_token_mint_bytes: [u8; 32] = config_data[96..128]
-        .try_into()
-        .map_err(|_| CliError::Validation("Failed to parse token mint".to_string()))?;
-    let cfg_token_program_bytes: [u8; 32] = config_data[128..160]
-        .try_into()
-        .map_err(|_| CliError::Validation("Failed to parse token program".to_string()))?;
+    let RegistrarConfig {
+        name_service_program: cfg_name_service_program_bytes,
+        root_registrar: cfg_root_registrar_bytes,
+        treasurer: cfg_treasurer_bytes,
+        token_mint: cfg_token_mint_bytes,
+        token_program: cfg_token_program_bytes,
+    } = parse_registrar_config(&config_data)?;
 
     // Resolve programs
     let name_service_program_pubkey = Pubkey::from_bytes(&cfg_name_service_program_bytes);
@@ -1264,15 +1280,12 @@ async fn renew_lease(
     let config_data = general_purpose::STANDARD
         .decode(config_data_b64)
         .map_err(|e| CliError::Validation(format!("Failed to decode config account data: {}", e)))?;
-    let cfg_treasurer_bytes: [u8; 32] = config_data[64..96]
-        .try_into()
-        .map_err(|_| CliError::Validation("Failed to parse treasurer".to_string()))?;
-    let cfg_token_mint_bytes: [u8; 32] = config_data[96..128]
-        .try_into()
-        .map_err(|_| CliError::Validation("Failed to parse token mint".to_string()))?;
-    let cfg_token_program_bytes: [u8; 32] = config_data[128..160]
-        .try_into()
-        .map_err(|_| CliError::Validation("Failed to parse token program".to_string()))?;
+    let RegistrarConfig {
+        treasurer: cfg_treasurer_bytes,
+        token_mint: cfg_token_mint_bytes,
+        token_program: cfg_token_program_bytes,
+        ..
+    } = parse_registrar_config(&config_data)?;
     let token_program_pubkey = Pubkey::from_bytes(&cfg_token_program_bytes);
 
     // Validate lease account exists and owned by thru program
@@ -1414,15 +1427,12 @@ async fn claim_expired_domain(
     let config_data = general_purpose::STANDARD
         .decode(config_data_b64)
         .map_err(|e| CliError::Validation(format!("Failed to decode config account data: {}", e)))?;
-    let cfg_treasurer_bytes: [u8; 32] = config_data[64..96]
-        .try_into()
-        .map_err(|_| CliError::Validation("Failed to parse treasurer".to_string()))?;
-    let cfg_token_mint_bytes: [u8; 32] = config_data[96..128]
-        .try_into()
-        .map_err(|_| CliError::Validation("Failed to parse token mint".to_string()))?;
-    let cfg_token_program_bytes: [u8; 32] = config_data[128..160]
-        .try_into()
-        .map_err(|_| CliError::Validation("Failed to parse token program".to_string()))?;
+    let RegistrarConfig {
+        treasurer: cfg_treasurer_bytes,
+        token_mint: cfg_token_mint_bytes,
+        token_program: cfg_token_program_bytes,
+        ..
+    } = parse_registrar_config(&config_data)?;
     let token_program_pubkey = Pubkey::from_bytes(&cfg_token_program_bytes);
 
     // Validate lease account exists and owned by thru program
@@ -1615,7 +1625,7 @@ async fn initialize_root_registrar(
 
     let fee_ctx = setup_fee_payer_context(config, fee_payer).await?;
     let authority_bytes =
-        resolve_signing_account(authority, &fee_ctx.fee_payer_keypair, "Authority")?;
+        resolve_signing_account(config, authority, &fee_ctx.fee_payer_keypair, "Authority")?;
 
     let registrar_pubkey = if let Some(registrar_str) = registrar_account {
         let registrar_bytes = validate_address_or_hex(registrar_str)?;
@@ -1724,9 +1734,9 @@ async fn register_subdomain(
     let parent_pubkey = Pubkey::from_bytes(&parent_account_bytes);
 
     let fee_ctx = setup_fee_payer_context(config, fee_payer).await?;
-    let owner_bytes = resolve_signing_account(owner, &fee_ctx.fee_payer_keypair, "Owner")?;
+    let owner_bytes = resolve_signing_account(config, owner, &fee_ctx.fee_payer_keypair, "Owner")?;
     let authority_bytes =
-        resolve_signing_account(authority, &fee_ctx.fee_payer_keypair, "Authority")?;
+        resolve_signing_account(config, authority, &fee_ctx.fee_payer_keypair, "Authority")?;
 
     let domain_pubkey = if let Some(domain_str) = domain_account {
         let domain_bytes = validate_address_or_hex(domain_str)?;
@@ -1857,7 +1867,7 @@ async fn append_record(
     let domain_account_bytes = validate_address_or_hex(domain_account)?;
 
     let fee_ctx = setup_fee_payer_context(config, fee_payer).await?;
-    let owner_bytes = resolve_signing_account(owner, &fee_ctx.fee_payer_keypair, "Owner")?;
+    let owner_bytes = resolve_signing_account(config, owner, &fee_ctx.fee_payer_keypair, "Owner")?;
 
     let transaction = TransactionBuilder::build_name_service_append_record(
         fee_ctx.fee_payer_keypair.public_key,
@@ -1936,7 +1946,7 @@ async fn delete_record(
     let domain_account_bytes = validate_address_or_hex(domain_account)?;
 
     let fee_ctx = setup_fee_payer_context(config, fee_payer).await?;
-    let owner_bytes = resolve_signing_account(owner, &fee_ctx.fee_payer_keypair, "Owner")?;
+    let owner_bytes = resolve_signing_account(config, owner, &fee_ctx.fee_payer_keypair, "Owner")?;
 
     let transaction = TransactionBuilder::build_name_service_delete_record(
         fee_ctx.fee_payer_keypair.public_key,
@@ -1995,7 +2005,7 @@ async fn unregister_subdomain(
     let domain_account_bytes = validate_address_or_hex(domain_account)?;
 
     let fee_ctx = setup_fee_payer_context(config, fee_payer).await?;
-    let owner_bytes = resolve_signing_account(owner, &fee_ctx.fee_payer_keypair, "Owner")?;
+    let owner_bytes = resolve_signing_account(config, owner, &fee_ctx.fee_payer_keypair, "Owner")?;
 
     let transaction = TransactionBuilder::build_name_service_unregister_subdomain(
         fee_ctx.fee_payer_keypair.public_key,
@@ -2059,9 +2069,10 @@ struct ParsedRootRegistrar {
     total_subdomains: u64,
 }
 
-/// First byte of any name-service account is its kind. 0 reserved (must not be valid).
-const NS_KIND_ROOT_REGISTRAR: u8 = 1;
-const NS_KIND_DOMAIN: u8 = 2;
+/// Byte 0 of every name-service account is its account_type discriminator
+/// (TN_NAME_SERVICE_ACCOUNT_TYPE_*_V1). 0 is invalid.
+const NS_ACCOUNT_TYPE_ROOT_REGISTRAR_V1: u8 = 1;
+const NS_ACCOUNT_TYPE_DOMAIN_V1: u8 = 2;
 
 const DOMAIN_BASE_SIZE: usize =
     1 + 32 + 32 + TN_NAME_SERVICE_MAX_DOMAIN_LENGTH + 4 + 8 + 4;
@@ -2075,13 +2086,13 @@ fn parse_domain_account_data(data: &[u8]) -> Result<ParsedDomainAccount, CliErro
             "Account data too small to be a domain account".to_string(),
         ));
     }
-    if data[0] != NS_KIND_DOMAIN {
+    if data[0] != NS_ACCOUNT_TYPE_DOMAIN_V1 {
         return Err(CliError::Validation(format!(
-            "Expected domain account (kind={}), got kind={}",
-            NS_KIND_DOMAIN, data[0]
+            "Expected domain account (account_type={}), got account_type={}",
+            NS_ACCOUNT_TYPE_DOMAIN_V1, data[0]
         )));
     }
-    let mut offset = 1usize;  /* skip discriminator byte */
+    let mut offset = 1usize;  /* skip account_type byte */
     let parent: [u8; 32] = data[offset..offset + 32]
         .try_into()
         .map_err(|_| CliError::Validation("Invalid parent pubkey length".to_string()))?;
@@ -2182,13 +2193,13 @@ fn parse_root_registrar_account_data(data: &[u8]) -> Result<ParsedRootRegistrar,
             "Account data too small to be a root registrar account".to_string(),
         ));
     }
-    if data[0] != NS_KIND_ROOT_REGISTRAR {
+    if data[0] != NS_ACCOUNT_TYPE_ROOT_REGISTRAR_V1 {
         return Err(CliError::Validation(format!(
-            "Expected root registrar account (kind={}), got kind={}",
-            NS_KIND_ROOT_REGISTRAR, data[0]
+            "Expected root registrar account (account_type={}), got account_type={}",
+            NS_ACCOUNT_TYPE_ROOT_REGISTRAR_V1, data[0]
         )));
     }
-    let mut offset = 1usize;  /* skip discriminator byte */
+    let mut offset = 1usize;  /* skip account_type byte */
     let authority: [u8; 32] = data[offset..offset + 32]
         .try_into()
         .map_err(|_| CliError::Validation("Invalid authority pubkey length".to_string()))?;
@@ -2268,9 +2279,9 @@ async fn resolve_domain(
         .decode(data_b64)
         .map_err(|e| CliError::Validation(format!("Failed to decode account data: {}", e)))?;
 
-    // Dispatch on the discriminator byte (first byte of every name-service account)
+    // Dispatch on the account_type byte (byte 0 of every name-service account)
     let kind = data.first().copied();
-    if kind == Some(NS_KIND_ROOT_REGISTRAR) {
+    if kind == Some(NS_ACCOUNT_TYPE_ROOT_REGISTRAR_V1) {
         let registrar = parse_root_registrar_account_data(&data)?;
         let authority_address = tn_pubkey_to_address_string(&registrar.authority);
         if json_format {
@@ -2292,7 +2303,7 @@ async fn resolve_domain(
         }
         return Ok(());
     }
-    if kind != Some(NS_KIND_DOMAIN) {
+    if kind != Some(NS_ACCOUNT_TYPE_DOMAIN_V1) {
         return Err(CliError::Validation(format!(
             "Account {} is not a recognized name service account",
             domain_address
@@ -2528,7 +2539,7 @@ mod tests {
     #[test]
     fn parse_root_registrar_happy() {
         let authority = [0x42u8; 32];
-        let buf = build_root_registrar(NS_KIND_ROOT_REGISTRAR, authority, b"thru", 42);
+        let buf = build_root_registrar(NS_ACCOUNT_TYPE_ROOT_REGISTRAR_V1, authority, b"thru", 42);
         let parsed = parse_root_registrar_account_data(&buf).expect("parse should succeed");
         assert_eq!(parsed.authority, authority);
         assert_eq!(parsed.root_name, "thru");
@@ -2537,14 +2548,14 @@ mod tests {
 
     #[test]
     fn parse_root_registrar_wrong_discriminator() {
-        let buf = build_root_registrar(NS_KIND_DOMAIN, [0u8; 32], b"thru", 0);
+        let buf = build_root_registrar(NS_ACCOUNT_TYPE_DOMAIN_V1, [0u8; 32], b"thru", 0);
         let err = parse_root_registrar_account_data(&buf).expect_err("should reject wrong discriminator");
         assert!(matches!(err, CliError::Validation(_)));
     }
 
     #[test]
     fn parse_root_registrar_too_small() {
-        let buf = vec![NS_KIND_ROOT_REGISTRAR];
+        let buf = vec![NS_ACCOUNT_TYPE_ROOT_REGISTRAR_V1];
         let err = parse_root_registrar_account_data(&buf).expect_err("should reject buffer too small");
         assert!(matches!(err, CliError::Validation(_)));
     }
@@ -2553,7 +2564,14 @@ mod tests {
     fn parse_domain_happy() {
         let parent = [0x11u8; 32];
         let owner = [0x22u8; 32];
-        let buf = build_domain(NS_KIND_DOMAIN, parent, owner, b"alice", 1000, &[]);
+        let buf = build_domain(
+            NS_ACCOUNT_TYPE_DOMAIN_V1,
+            parent,
+            owner,
+            b"alice",
+            1000,
+            &[],
+        );
         let parsed = parse_domain_account_data(&buf).expect("parse should succeed");
         assert_eq!(parsed.parent, parent);
         assert_eq!(parsed.owner, owner);
@@ -2568,7 +2586,14 @@ mod tests {
             (b"twitter".to_vec(), b"@bob".to_vec()),
             (b"github".to_vec(), b"bobgh".to_vec()),
         ];
-        let buf = build_domain(NS_KIND_DOMAIN, [0u8; 32], [0u8; 32], b"bob", 2000, &records);
+        let buf = build_domain(
+            NS_ACCOUNT_TYPE_DOMAIN_V1,
+            [0u8; 32],
+            [0u8; 32],
+            b"bob",
+            2000,
+            &records,
+        );
         let parsed = parse_domain_account_data(&buf).expect("parse should succeed");
         assert_eq!(parsed.records.len(), 2);
         assert_eq!(parsed.records[0].key, b"twitter");
@@ -2579,8 +2604,43 @@ mod tests {
 
     #[test]
     fn parse_domain_wrong_discriminator() {
-        let buf = build_domain(NS_KIND_ROOT_REGISTRAR, [0u8; 32], [0u8; 32], b"alice", 0, &[]);
+        let buf = build_domain(
+            NS_ACCOUNT_TYPE_ROOT_REGISTRAR_V1,
+            [0u8; 32],
+            [0u8; 32],
+            b"alice",
+            0,
+            &[],
+        );
         let err = parse_domain_account_data(&buf).expect_err("should reject wrong discriminator");
         assert!(matches!(err, CliError::Validation(_)));
+    }
+
+    fn registrar_config_fixture() -> Vec<u8> {
+        let mut data = vec![0u8; REGISTRAR_CONFIG_SIZE];
+        data[0] = REGISTRAR_ACCOUNT_TYPE_CONFIG_V1;
+        for (index, fill) in [0x11u8, 0x22, 0x33, 0x44, 0x55].into_iter().enumerate() {
+            data[1 + index * 32..1 + (index + 1) * 32].fill(fill);
+        }
+        data
+    }
+
+    #[test]
+    fn registrar_config_reads_pubkeys_after_the_account_type() {
+        assert_eq!(REGISTRAR_CONFIG_SIZE, 245);
+        let config = parse_registrar_config(&registrar_config_fixture()).unwrap();
+        assert_eq!(config.name_service_program, [0x11; 32]);
+        assert_eq!(config.root_registrar, [0x22; 32]);
+        assert_eq!(config.treasurer, [0x33; 32]);
+        assert_eq!(config.token_mint, [0x44; 32]);
+        assert_eq!(config.token_program, [0x55; 32]);
+    }
+
+    #[test]
+    fn registrar_config_rejects_wrong_type_or_size() {
+        let mut data = registrar_config_fixture();
+        data[0] = 2; /* lease */
+        assert!(parse_registrar_config(&data).is_err());
+        assert!(parse_registrar_config(&registrar_config_fixture()[..244]).is_err());
     }
 }

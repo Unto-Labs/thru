@@ -1944,7 +1944,10 @@ fn insert_struct_refs(
     }
 }
 
-fn qualify_struct_path(
+/* Names a reference made inside struct field `field_name` (`ref_path`) as a
+ * parameter of the struct holding the field: prefixed with the field name
+ * unless it already names a field of that struct or steps out with `..`. */
+pub(crate) fn qualify_struct_path(
     field_name: &str,
     ref_path: &str,
     struct_fields: &HashSet<String>,

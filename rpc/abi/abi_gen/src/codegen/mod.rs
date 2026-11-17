@@ -1,5 +1,7 @@
 pub mod c;
 pub mod c_gen;
+pub mod go;
+pub mod go_gen;
 pub mod rust;
 pub mod rust_gen;
 pub mod shared;
@@ -59,7 +61,7 @@ pub fn generate_all(resolver: &TypeResolver) -> Result<(), Box<dyn std::error::E
         type_package_map: None,
         package_path_map: None,
     };
-    let ts_ir_builder = IrBuilder::new(resolver);
+    let ts_ir_builder = IrBuilder::for_typescript(resolver);
     let mut ts_types_with_ir = Vec::with_capacity(resolved_types.len());
     for ty in &resolved_types {
         let ty = *ty;

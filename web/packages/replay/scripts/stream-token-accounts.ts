@@ -5,8 +5,8 @@ import { TOKEN_PROGRAM_ADDRESS } from "@thru/sdk";
  * Test script for streaming all token program accounts using createAccountsByOwnerReplay.
  *
  * This demonstrates streaming:
- * - TokenAccount (73 bytes) - token holdings
- * - TokenMintAccount (115 bytes) - mint definitions
+ * - TokenAccount (74 bytes, account type 2) - token holdings
+ * - TokenMintAccount (116 bytes, account type 1) - mint definitions
  *
  * All accounts owned by the token program.
  */
@@ -16,14 +16,25 @@ import { AccountView, ChainClient, createAccountsByOwnerReplay } from "../src";
 const BASE_URL = process.env.GRPC_URL ?? "https://rpc.alphanet.thru.org";
 const TOKEN_PROGRAM = process.env.TOKEN_PROGRAM ?? TOKEN_PROGRAM_ADDRESS;
 
-// Account data sizes from token_program.abi.yaml
-const TOKEN_ACCOUNT_SIZE = 73;
-const MINT_ACCOUNT_SIZE = 115;
+// Byte 0 of every token program account is the account type (TokenProgramAccount
+// root in token_program.abi.yaml); sizes are only a server-side prefilter.
+const MINT_ACCOUNT_TYPE = 1;
+const TOKEN_ACCOUNT_TYPE = 2;
+const TOKEN_ACCOUNT_SIZE = 74;
+const MINT_ACCOUNT_SIZE = 116;
 
-function getAccountType(dataSize: number): string {
-  if (dataSize === TOKEN_ACCOUNT_SIZE) return "TokenAccount";
-  if (dataSize === MINT_ACCOUNT_SIZE) return "MintAccount";
-  return `Unknown(${dataSize})`;
+function getAccountType(data: Uint8Array): string {
+  if (data[0] === TOKEN_ACCOUNT_TYPE && data.length === TOKEN_ACCOUNT_SIZE) return "TokenAccount";
+  if (data[0] === MINT_ACCOUNT_TYPE && data.length === MINT_ACCOUNT_SIZE) return "MintAccount";
+  return `Unknown(type=${data[0]}, size=${data.length})`;
+}
+
+function describeMint(data: Uint8Array): string {
+  const decimals = data[1];
+  const supply = new DataView(data.buffer, data.byteOffset + 2, 8).getBigUint64(0, true);
+  const tickerLen = data[107];
+  const ticker = new TextDecoder().decode(data.slice(108, 108 + tickerLen));
+  return `decimals=${decimals} supply=${supply} ticker="${ticker}"`;
 }
 
 async function main(): Promise<void> {
@@ -64,7 +75,7 @@ async function main(): Promise<void> {
     for await (const event of stream) {
       if (event.type === "account") {
         const account = event.account;
-        const accountType = getAccountType(account.meta.dataSize);
+        const accountType = getAccountType(account.data);
         const isNew = !seenAddresses.has(account.addressHex);
         seenAddresses.add(account.addressHex);
 
@@ -77,18 +88,14 @@ async function main(): Promise<void> {
 
         if (account.data.length > 0) {
           // Parse based on account type
-          if (accountType === "TokenAccount" && account.data.length >= 73) {
-            const mint = encodeAddress(account.data.slice(0, 32));
-            const owner = encodeAddress(account.data.slice(32, 64));
-            const amount = new DataView(account.data.buffer, account.data.byteOffset + 64, 8).getBigUint64(0, true);
-            const isFrozen = account.data[72] !== 0;
+          if (accountType === "TokenAccount") {
+            const mint = encodeAddress(account.data.slice(1, 33));
+            const owner = encodeAddress(account.data.slice(33, 65));
+            const amount = new DataView(account.data.buffer, account.data.byteOffset + 65, 8).getBigUint64(0, true);
+            const isFrozen = account.data[73] !== 0;
             console.log(`  Parsed: mint=${mint.slice(0, 20)}... owner=${owner.slice(0, 20)}... amount=${amount} frozen=${isFrozen}`);
-          } else if (accountType === "MintAccount" && account.data.length >= 115) {
-            const decimals = account.data[0];
-            const supply = new DataView(account.data.buffer, account.data.byteOffset + 1, 8).getBigUint64(0, true);
-            const tickerLen = account.data[105];
-            const ticker = new TextDecoder().decode(account.data.slice(106, 106 + tickerLen));
-            console.log(`  Parsed: decimals=${decimals} supply=${supply} ticker="${ticker}"`);
+          } else if (accountType === "MintAccount") {
+            console.log(`  Parsed: ${describeMint(account.data)}`);
           }
         }
         console.log();
@@ -120,7 +127,7 @@ async function main(): Promise<void> {
   console.log();
 
   // Test 2: Stream only MintAccounts
-  console.log("=== Test 2: Stream only MintAccounts (115 bytes) ===");
+  console.log(`=== Test 2: Stream only MintAccounts (${MINT_ACCOUNT_SIZE} bytes) ===`);
   console.log("Waiting for mint account updates... (30s timeout, max 5 events)");
   console.log();
 
@@ -141,12 +148,8 @@ async function main(): Promise<void> {
         console.log(`[MintAccount] ${encodeAddress(account.address)}`);
         console.log(`  Slot: ${account.slot}, Seq: ${account.seq}, Source: ${account.source}`);
 
-        if (account.data.length >= 115) {
-          const decimals = account.data[0];
-          const supply = new DataView(account.data.buffer, account.data.byteOffset + 1, 8).getBigUint64(0, true);
-          const tickerLen = account.data[105];
-          const ticker = new TextDecoder().decode(account.data.slice(106, 106 + tickerLen));
-          console.log(`  Decimals: ${decimals}, Supply: ${supply}, Ticker: "${ticker}"`);
+        if (getAccountType(account.data) === "MintAccount") {
+          console.log(`  ${describeMint(account.data)}`);
         }
         console.log();
 

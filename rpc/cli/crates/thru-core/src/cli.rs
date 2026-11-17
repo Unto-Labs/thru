@@ -3,6 +3,8 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
+use crate::keys::KeyStorage;
+
 /// Parse and validate chunk size (1024-31000 bytes)
 fn parse_chunk_size(s: &str) -> Result<usize, String> {
     let size: usize = s
@@ -22,6 +24,9 @@ fn parse_chunk_size(s: &str) -> Result<usize, String> {
 #[command(name = "thru")]
 #[command(about = "Command-line interface for the Thru blockchain")]
 #[command(version = thru_base::get_version!())]
+#[command(
+    after_help = "Signing key references: /absolute/path, ./relative/path, file:<path>, keychain:<id>, a configured alias, or alias:<name> for reserved legacy names. Relative command-line paths use the current directory. Omitted signers use the 'default' alias."
+)]
 pub struct Cli {
     /// Output results in JSON format
     #[arg(long, global = true)]
@@ -51,6 +56,11 @@ pub struct Cli {
 /// Available CLI commands
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Core, Multisig and official-ABI governance with reviewed bound plans.
+    Governance {
+        #[command(subcommand)]
+        subcommand: crate::commands::governance::GovernanceCommands,
+    },
     /// Get version information from the Thru node
     #[command(name = "getversion")]
     GetVersion,
@@ -104,7 +114,7 @@ pub enum Commands {
     /// Transfer tokens between accounts
     #[command(name = "transfer")]
     Transfer {
-        /// Source key name from configuration
+        /// Source signing key reference (file path, keychain:<id>, or config alias)
         src: String,
 
         /// Destination (key name from config or public address in taXX format)
@@ -210,6 +220,13 @@ pub enum Commands {
         subcommand: WthruCommands,
     },
 
+    /// M-of-N multisig: create, propose, approve, execute
+    #[command(name = "multisig")]
+    Multisig {
+        #[command(subcommand)]
+        subcommand: MultisigCommands,
+    },
+
     /// Block-producer (BP) bond program commands
     #[command(name = "bond")]
     Bond {
@@ -286,9 +303,12 @@ pub enum FeatureGatesCommands {
         #[arg(long, default_value = "0")]
         next_change_lead_slots: u64,
 
-        /// Fee payer key name; must be the creation admin signer
+        /// Fee payer key reference; must be the creation admin signer
         #[arg(long)]
         fee_payer: Option<String>,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
     },
 
     /// Arm a value transition at an activation slot
@@ -304,9 +324,12 @@ pub enum FeatureGatesCommands {
         #[arg(long)]
         slot: u64,
 
-        /// Fee payer key name; must be the management admin signer
+        /// Fee payer key reference; must be the management admin signer
         #[arg(long)]
         fee_payer: Option<String>,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
     },
 
     /// Cancel an armed transition
@@ -314,9 +337,12 @@ pub enum FeatureGatesCommands {
         /// Registry name or numeric index to disarm
         target: String,
 
-        /// Fee payer key name; must be the management admin signer
+        /// Fee payer key reference; must be the management admin signer
         #[arg(long)]
         fee_payer: Option<String>,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
     },
 
     /// Update global timing knobs atomically
@@ -333,9 +359,12 @@ pub enum FeatureGatesCommands {
         #[arg(long)]
         no_disarm_window_slots: u64,
 
-        /// Fee payer key name; must be the config admin signer
+        /// Fee payer key reference; must be the config admin signer
         #[arg(long)]
         fee_payer: Option<String>,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
     },
 
     /// Propose a new admin for a role
@@ -348,9 +377,12 @@ pub enum FeatureGatesCommands {
         #[arg(long)]
         new_admin: String,
 
-        /// Fee payer key name; must be the current admin signer for the role
+        /// Fee payer key reference; must be the current admin signer for the role
         #[arg(long)]
         fee_payer: Option<String>,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
     },
 
     /// Accept a pending admin role handoff
@@ -359,9 +391,12 @@ pub enum FeatureGatesCommands {
         #[arg(long, value_enum)]
         role: FeatureGateAdminRole,
 
-        /// Fee payer key name; must be the pending admin signer for the role
+        /// Fee payer key reference; must be the pending admin signer for the role
         #[arg(long)]
         fee_payer: Option<String>,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
     },
 }
 
@@ -395,11 +430,11 @@ pub enum ProgramCommands {
         /// Seed for meta account derivation
         seed: String,
 
-        /// Authority account name from config (optional, defaults to and must match the fee payer)
+        /// Authority key reference (defaults to and must match the fee payer)
         #[arg(long)]
         authority: Option<String>,
 
-        /// Fee payer and transaction signer account name from config (optional, defaults to 'default')
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -417,6 +452,9 @@ pub enum ProgramCommands {
         /// Skip the ELF magic check for offset-zero uploader writes
         #[arg(long)]
         skip_elf_check: bool,
+
+        #[command(flatten)]
+        abi: ProgramAbiArgs,
     },
 
     /// Upgrade an existing managed program
@@ -432,7 +470,7 @@ pub enum ProgramCommands {
         /// Seed for meta and program account derivation
         seed: String,
 
-        /// Fee payer and current authority account name from config (optional, defaults to 'default')
+        /// Fee payer/current authority key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -450,6 +488,12 @@ pub enum ProgramCommands {
         /// Skip the ELF magic check for offset-zero uploader writes
         #[arg(long)]
         skip_elf_check: bool,
+
+        #[command(flatten)]
+        abi: ProgramAbiArgs,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
     },
 
     /// Pause or unpause a managed program
@@ -468,9 +512,12 @@ pub enum ProgramCommands {
         /// Set paused state (true to pause, false to unpause)
         paused: String,
 
-        /// Fee payer and current authority account name from config (optional, defaults to 'default')
+        /// Fee payer/current authority key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
     },
 
     /// Destroy a managed program and its meta account
@@ -486,7 +533,7 @@ pub enum ProgramCommands {
         /// Seed for meta and program account derivation
         seed: String,
 
-        /// Fee payer and current authority account name from config (optional, defaults to 'default')
+        /// Fee payer/current authority key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
     },
@@ -504,7 +551,7 @@ pub enum ProgramCommands {
         /// Seed for meta and program account derivation
         seed: String,
 
-        /// Fee payer and current authority account name from config (optional, defaults to 'default')
+        /// Fee payer/current authority key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
     },
@@ -525,9 +572,12 @@ pub enum ProgramCommands {
         /// New authority candidate public key
         authority_candidate: String,
 
-        /// Fee payer and current authority account name from config (optional, defaults to 'default')
+        /// Fee payer/current authority key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
     },
 
     /// Claim authority for a managed program
@@ -543,9 +593,12 @@ pub enum ProgramCommands {
         /// Seed for meta and program account derivation
         seed: String,
 
-        /// Fee payer and authority candidate account name from config (optional, defaults to 'default')
+        /// Fee payer/authority candidate key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
     },
 
     /// Get the program derived address
@@ -646,6 +699,11 @@ pub enum AbiCommands {
         /// Enable verbose output
         #[arg(short = 'v', long = "verbose")]
         verbose: bool,
+
+        /// Go module path of the output root, written to go.mod (Go only;
+        /// default `abigen`)
+        #[arg(long = "go-module", value_name = "PATH")]
+        go_module: Option<String>,
     },
 
     /// Analyze ABI type definitions and show detailed type information
@@ -814,15 +872,15 @@ pub enum AbiAccountCommands {
         #[arg(long = "target-program")]
         target_program: Option<String>,
 
-        /// Fee payer and transaction signer key name (optional, defaults to config default)
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
-        /// Authority key name (`program` only; must match the fee payer)
+        /// Authority key reference (`program` only; must match the fee payer)
         #[arg(long, conflicts_with = "publisher")]
         authority: Option<String>,
 
-        /// Publisher key name (`third-party` and `standalone` only; must match the fee payer)
+        /// Publisher key reference (`third-party` and `standalone` only; must match the fee payer)
         #[arg(long, conflicts_with = "authority")]
         publisher: Option<String>,
 
@@ -844,15 +902,15 @@ pub enum AbiAccountCommands {
         #[arg(long = "target-program")]
         target_program: Option<String>,
 
-        /// Fee payer and transaction signer key name (defaults to config default)
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
-        /// Authority key name (`program` only; must match the fee payer)
+        /// Authority key reference (`program` only; must match the fee payer)
         #[arg(long, conflicts_with = "publisher")]
         authority: Option<String>,
 
-        /// Publisher key name (`third-party` and `standalone` only; must match the fee payer)
+        /// Publisher key reference (`third-party` and `standalone` only; must match the fee payer)
         #[arg(long, conflicts_with = "authority")]
         publisher: Option<String>,
 
@@ -871,15 +929,15 @@ pub enum AbiAccountCommands {
         #[arg(long = "target-program")]
         target_program: Option<String>,
 
-        /// Fee payer and transaction signer key name (defaults to config default)
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
-        /// Authority key name (`program` only; must match the fee payer)
+        /// Authority key reference (`program` only; must match the fee payer)
         #[arg(long, conflicts_with = "publisher")]
         authority: Option<String>,
 
-        /// Publisher key name (`third-party` and `standalone` only; must match the fee payer)
+        /// Publisher key reference (`third-party` and `standalone` only; must match the fee payer)
         #[arg(long, conflicts_with = "authority")]
         publisher: Option<String>,
 
@@ -897,15 +955,15 @@ pub enum AbiAccountCommands {
         #[arg(long = "target-program")]
         target_program: Option<String>,
 
-        /// Fee payer and transaction signer key name (defaults to config default)
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
-        /// Authority key name (`program` only; must match the fee payer)
+        /// Authority key reference (`program` only; must match the fee payer)
         #[arg(long, conflicts_with = "publisher")]
         authority: Option<String>,
 
-        /// Publisher key name (`third-party` and `standalone` only; must match the fee payer)
+        /// Publisher key reference (`third-party` and `standalone` only; must match the fee payer)
         #[arg(long, conflicts_with = "authority")]
         publisher: Option<String>,
 
@@ -933,6 +991,7 @@ pub enum AbiLanguage {
     Rust,
     #[value(name = "typescript")]
     TypeScript,
+    Go,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
@@ -950,7 +1009,7 @@ pub enum UploaderCommands {
         #[arg(long)]
         uploader: Option<String>,
 
-        /// Fee payer and transaction signer account name from config (optional, defaults to 'default')
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -976,7 +1035,7 @@ pub enum UploaderCommands {
         #[arg(long)]
         uploader: Option<String>,
 
-        /// Fee payer and transaction signer account name from config (optional, defaults to 'default')
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -995,50 +1054,110 @@ pub enum UploaderCommands {
     },
 }
 
+/// Reject obsolete positional secrets without letting clap format their value.
+#[derive(Clone)]
+struct RejectPositionalSeed;
+
+impl clap::builder::TypedValueParser for RejectPositionalSeed {
+    type Value = bool;
+
+    fn parse_ref(
+        &self,
+        _command: &clap::Command,
+        _argument: Option<&clap::Arg>,
+        _value: &std::ffi::OsStr,
+    ) -> Result<Self::Value, clap::Error> {
+        Err(clap::Error::raw(
+            clap::error::ErrorKind::ValueValidation,
+            "Private keys cannot be passed as arguments; use --stdin or --file",
+        ))
+    }
+}
+
 /// Key management subcommands
 #[derive(Subcommand)]
 pub enum KeysCommands {
-    /// List all key names
+    /// List registered key references and public addresses
     List,
 
-    /// Add a new key
+    /// Register a private-key file or import a seed from file/stdin
     Add {
-        /// Overwrite existing key
+        /// Replace a registration and clean up its unreferenced CLI-managed seed file
         #[arg(long)]
         overwrite: bool,
 
-        /// Key name (case-insensitive)
+        /// Config alias (case-insensitive)
         name: String,
 
-        /// Private key (64 hex characters)
-        key: String,
+        /// Obsolete positional input is rejected before retaining its value.
+        #[arg(hide = true, num_args = 1.., value_parser = RejectPositionalSeed)]
+        legacy_seed: Vec<bool>,
+
+        /// Read a 32-byte hex seed from this owner-only file
+        #[arg(long, conflicts_with = "stdin")]
+        file: Option<PathBuf>,
+
+        /// Read a 32-byte hex seed from standard input, never a command-line argument
+        #[arg(long, conflicts_with = "file")]
+        stdin: bool,
+
+        /// Secret storage backend; file input with file storage is registered in place
+        #[arg(long, value_enum, default_value = "file")]
+        store: KeyStorage,
     },
 
-    /// Get a key value
+    /// Show a registered key's public address and source, never its private key
     Get {
-        /// Key name to retrieve
+        /// Config alias to retrieve
         name: String,
     },
 
-    /// Generate a new random key
+    /// Generate a key directly into a dedicated file or macOS Keychain
     Generate {
-        /// Overwrite existing key
+        /// Replace a registration and clean up its unreferenced CLI-managed seed file
         #[arg(long)]
         overwrite: bool,
 
-        /// Key name for the new key
+        /// Config alias for the new key
         name: String,
+
+        /// Secret storage backend
+        #[arg(long, value_enum, default_value = "file")]
+        store: KeyStorage,
     },
 
-    /// Remove a key
+    /// Unregister a key and clean up its unreferenced CLI-managed seed file
     #[command(name = "rm")]
     Remove {
-        /// Allow removing the default key
+        /// Allow unregistering the default key
         #[arg(long)]
         force: bool,
 
-        /// Key name to remove
+        /// Also delete an external file or Keychain entry instead of retaining it
+        #[arg(long)]
+        delete_secret: bool,
+
+        /// Config alias to remove
         name: String,
+    },
+
+    /// Move registered keys between file and macOS Keychain storage
+    Move {
+        /// Config alias to move (omit with --all)
+        #[arg(required_unless_present = "all", conflicts_with = "all")]
+        name: Option<String>,
+        /// Move every registered key
+        #[arg(long)]
+        all: bool,
+        /// Destination storage
+        #[arg(long, value_enum)]
+        to: KeyStorage,
+    },
+    /// Move legacy inline config keys into files or macOS Keychain
+    Migrate {
+        /// Destination secret storage backend
+        #[arg(long, value_enum, default_value = "file")]
+        store: KeyStorage,
     },
 }
 
@@ -1099,7 +1218,7 @@ pub enum TxnCommands {
         /// Instruction data as hex string
         instruction_data: String,
 
-        /// Fee payer account (optional, defaults to 'default')
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1140,7 +1259,7 @@ pub enum TxnCommands {
         /// Instruction data as hex string
         instruction_data: String,
 
-        /// Fee payer account (optional, defaults to 'default')
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1243,13 +1362,13 @@ pub enum TxnCommands {
 pub enum AccountCommands {
     /// Create a new account with fee payer proof
     Create {
-        /// Key name from configuration (optional, defaults to 'default')
+        /// Signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         key_name: Option<String>,
     },
 
     /// Get account information (alias to getaccountinfo)
     Info {
-        /// Key name from configuration (optional, defaults to 'default')
+        /// Key reference (file path, keychain:<id>, or alias; defaults to 'default')
         key_name: Option<String>,
     },
 
@@ -1272,7 +1391,7 @@ pub enum AccountCommands {
     Compress {
         /// Target account to compress (key name from config or ta... address)
         target_account: String,
-        /// Fee payer key name from config (optional - defaults to 'default')
+        /// Fee payer key reference (file path, keychain:<id>, or alias; defaults to 'default')
         fee_payer: Option<String>,
     },
 
@@ -1280,7 +1399,7 @@ pub enum AccountCommands {
     Decompress {
         /// Target account to decompress (key name from config or ta... address)
         target_account: String,
-        /// Fee payer key name from config (optional - defaults to 'default')
+        /// Fee payer key reference (file path, keychain:<id>, or alias; defaults to 'default')
         fee_payer: Option<String>,
     },
 
@@ -1430,7 +1549,7 @@ pub enum TokenCommands {
         #[arg(long)]
         state_proof: Option<String>,
 
-        /// Fee payer and creator signer account name (optional, defaults to 'default')
+        /// Fee payer/creator signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1455,7 +1574,7 @@ pub enum TokenCommands {
         #[arg(long)]
         state_proof: Option<String>,
 
-        /// Fee payer account (optional, defaults to 'default')
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1476,7 +1595,7 @@ pub enum TokenCommands {
         /// Amount to transfer
         amount: u64,
 
-        /// Fee payer account (optional, defaults to 'default')
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1484,6 +1603,19 @@ pub enum TokenCommands {
         /// the token account
         #[arg(long = "token-program")]
         token_program: Option<String>,
+
+        /// Send the plain Transfer instruction instead of TransferChecked.
+        /// TransferChecked makes the token program check the mint, its
+        /// decimals and its ticker. Use this flag for a mint whose stored
+        /// ticker is not canonical, or when the network's token program does
+        /// not support TransferChecked yet (the transfer fails with
+        /// TokenError 2). Not accepted with --via-multisig: a multisig
+        /// proposal always carries the plain Transfer
+        #[arg(long, conflicts_with = "via_multisig")]
+        unchecked: bool,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
     },
 
     /// Mint new tokens to an account
@@ -1500,7 +1632,7 @@ pub enum TokenCommands {
         /// Amount to mint
         amount: u64,
 
-        /// Fee payer and mint-authority signer account name (optional, defaults to 'default')
+        /// Fee payer/mint-authority signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1508,6 +1640,9 @@ pub enum TokenCommands {
         /// the mint
         #[arg(long = "token-program")]
         token_program: Option<String>,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
     },
 
     /// Burn tokens from an account
@@ -1524,7 +1659,7 @@ pub enum TokenCommands {
         /// Amount to burn
         amount: u64,
 
-        /// Fee payer and account-authority signer account name (optional, defaults to 'default')
+        /// Fee payer/account-authority signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1532,6 +1667,9 @@ pub enum TokenCommands {
         /// the mint
         #[arg(long = "token-program")]
         token_program: Option<String>,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
     },
 
     /// Close a token account
@@ -1545,7 +1683,7 @@ pub enum TokenCommands {
         /// Account authority address (must match the selected fee payer)
         authority: String,
 
-        /// Fee payer and account-authority signer account name (optional, defaults to 'default')
+        /// Fee payer/account-authority signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1553,6 +1691,9 @@ pub enum TokenCommands {
         /// the token account
         #[arg(long = "token-program")]
         token_program: Option<String>,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
     },
 
     /// Freeze a token account
@@ -1566,7 +1707,7 @@ pub enum TokenCommands {
         /// Freeze authority address (must match the selected fee payer)
         authority: String,
 
-        /// Fee payer and freeze-authority signer account name (optional, defaults to 'default')
+        /// Fee payer/freeze-authority signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1574,6 +1715,9 @@ pub enum TokenCommands {
         /// the mint
         #[arg(long = "token-program")]
         token_program: Option<String>,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
     },
 
     /// Unfreeze a token account
@@ -1587,7 +1731,7 @@ pub enum TokenCommands {
         /// Freeze authority address (must match the selected fee payer)
         authority: String,
 
-        /// Fee payer and freeze-authority signer account name (optional, defaults to 'default')
+        /// Fee payer/freeze-authority signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1595,6 +1739,9 @@ pub enum TokenCommands {
         /// the mint
         #[arg(long = "token-program")]
         token_program: Option<String>,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
     },
 
     /// Derive token account address from mint, owner, and seed
@@ -1649,14 +1796,47 @@ pub enum AuthCommands {
         /// Display the approval URL/code without opening a browser
         #[arg(long)]
         no_browser: bool,
+        /// Print the approval URL and code, save the pending login and exit
+        /// without waiting; finish with `thru auth login --resume`. Never opens a browser
+        #[arg(long, conflicts_with = "resume")]
+        no_wait: bool,
+        /// Wait for approval of the login started by `thru auth login --no-wait`, then finish it
+        #[arg(long)]
+        resume: bool,
     },
     /// Validate the current Developers account, refreshing credentials if needed
     Status,
     /// Revoke this installation and clear its local credentials
     Logout,
+    /// Manage your organization's RPC API keys on Thru Developers
+    Keys {
+        #[command(subcommand)]
+        subcommand: AuthKeysCommands,
+    },
 }
 
-/// THRU and test THRUSD faucet commands
+/// Organization API keys, managed with the `thru auth login` credentials
+#[derive(Subcommand)]
+pub enum AuthKeysCommands {
+    /// List the organization's API keys
+    List,
+    /// Create a named API key; its secret is printed once
+    Create {
+        /// Name of the key, for example the service or CI job that uses it
+        #[arg(long)]
+        name: String,
+        /// Hostname allowed to use the key from a browser (repeatable; `*.` prefix allowed)
+        #[arg(long = "origin", value_name = "HOST")]
+        origins: Vec<String>,
+    },
+    /// Revoke an API key by id (see `thru auth keys list`)
+    Revoke {
+        /// Id of the key to revoke
+        key_id: String,
+    },
+}
+
+/// THRU and test UUSD faucet commands
 #[derive(Subcommand)]
 pub enum FaucetCommands {
     /// Deposit THRU into the on-chain faucet
@@ -1667,12 +1847,12 @@ pub enum FaucetCommands {
         /// Amount to deposit in raw THRU balance units
         amount: u64,
 
-        /// Fee payer account name (defaults to 'default')
+        /// Fee payer key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
     },
 
-    /// Withdraw THRU or test THRUSD
+    /// Withdraw THRU or test UUSD
     Withdraw {
         #[command(subcommand)]
         subcommand: FaucetWithdrawCommands,
@@ -1691,9 +1871,9 @@ pub enum FaucetWithdrawCommands {
         amount: u64,
     },
 
-    /// Fund an existing test THRUSD token account through Thru Developers
-    Thrusd {
-        /// Existing ta... THRUSD token-account address on the selected network
+    /// Fund an existing test UUSD token account through Thru Developers
+    Uusd {
+        /// Existing ta... UUSD token-account address on the selected network
         account: String,
 
         /// Positive decimal token amount, such as 10 or 0.001
@@ -1738,7 +1918,7 @@ pub enum RegistrarCommands {
         #[arg(long)]
         registrar_proof: Option<String>,
 
-        /// Fee payer account (optional, defaults to 'default')
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1769,7 +1949,7 @@ pub enum RegistrarCommands {
         #[arg(long)]
         domain_proof: Option<String>,
 
-        /// Fee payer account (optional, defaults to 'default')
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1792,7 +1972,7 @@ pub enum RegistrarCommands {
         /// Payer token account (must be an account for the registry mint owned by fee payer)
         payer_token_account: String,
 
-        /// Fee payer account (optional, defaults to 'default')
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1815,7 +1995,7 @@ pub enum RegistrarCommands {
         /// Payer token account (must be an account for the registry mint owned by fee payer)
         payer_token_account: String,
 
-        /// Fee payer account (optional, defaults to 'default')
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1844,7 +2024,7 @@ pub enum NameServiceCommands {
         #[arg(long)]
         owner: Option<String>,
 
-        /// Fee payer account (defaults to 'default')
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1866,7 +2046,7 @@ pub enum NameServiceCommands {
         #[arg(long)]
         owner: Option<String>,
 
-        /// Fee payer account (defaults to 'default')
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1939,7 +2119,7 @@ pub enum NameServiceCommands {
         #[arg(long)]
         proof: Option<String>,
 
-        /// Fee payer account (defaults to 'default')
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
     },
@@ -1984,7 +2164,7 @@ pub enum NameServiceCommands {
         #[arg(long)]
         proof: Option<String>,
 
-        /// Fee payer account (defaults to 'default')
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
     },
@@ -2014,7 +2194,7 @@ pub enum NameServiceCommands {
         #[arg(long)]
         owner: Option<String>,
 
-        /// Fee payer account (defaults to 'default')
+        /// Fee payer signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -2029,7 +2209,7 @@ pub enum NameServiceCommands {
 pub enum WthruCommands {
     /// Initialize the WTHRU mint and vault accounts
     Initialize {
-        /// Fee payer account name (defaults to 'default')
+        /// Fee payer key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -2056,7 +2236,7 @@ pub enum WthruCommands {
         /// Amount of native THRU to wrap (lamports)
         amount: u64,
 
-        /// Fee payer account name (defaults to 'default')
+        /// Fee payer key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -2084,7 +2264,7 @@ pub enum WthruCommands {
         /// Amount of WTHRU to unwrap (lamports)
         amount: u64,
 
-        /// Fee payer/owner account name (defaults to 'default')
+        /// Fee payer/owner key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -2107,12 +2287,12 @@ pub enum BondCommands {
     /// --fee-payer the bond is created self-pay (Mode 1); otherwise the signer
     /// EOA-signs a challenge and a third party pays (Mode 2).
     Create {
-        /// Signer key name (the block-producer identity; CLI must hold it).
+        /// Block-producer signing key reference (file path, keychain:<id>, or alias).
         /// Defaults to the --fee-payer key.
         #[arg(long)]
         signer: Option<String>,
 
-        /// Fee payer key name (defaults to 'default')
+        /// Fee payer key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
@@ -2145,7 +2325,7 @@ pub enum BondCommands {
         /// Amount to stage
         amount: u64,
 
-        /// Fee payer = bond authority (defaults to 'default')
+        /// Fee payer/bond authority key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
@@ -2172,7 +2352,7 @@ pub enum BondCommands {
         #[arg(long = "unlock-slot")]
         unlock_slot: Option<u64>,
 
-        /// Fee payer = bond authority (defaults to 'default')
+        /// Fee payer/bond authority key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
@@ -2199,7 +2379,7 @@ pub enum BondCommands {
         #[arg(long = "from", default_value = "staged")]
         from: String,
 
-        /// Fee payer = bond authority (defaults to 'default')
+        /// Fee payer/bond authority key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
@@ -2225,7 +2405,7 @@ pub enum BondCommands {
         /// New bond authority pubkey (key name, ta… or hex)
         new_authority: String,
 
-        /// Current bond authority = fee payer (defaults to 'default')
+        /// Fee payer/current bond authority key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
@@ -2241,7 +2421,7 @@ pub enum BondCommands {
         /// Destination WTHRU token account
         dest_ta: String,
 
-        /// Fee payer = bond authority (defaults to 'default')
+        /// Fee payer/bond authority key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
@@ -2263,7 +2443,7 @@ pub enum BondCommands {
         /// Recipient of the returned native lamports (key name, ta… or hex)
         dest: String,
 
-        /// Fee payer = bond authority (defaults to 'default')
+        /// Fee payer/bond authority key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
@@ -2348,7 +2528,7 @@ pub enum ValidatorCommands {
         #[arg(long = "claim-authority")]
         claim_authority: Option<String>,
 
-        /// Fee payer account name (defaults to 'default')
+        /// Fee payer key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
@@ -2375,7 +2555,7 @@ pub enum ValidatorCommands {
         #[arg(long = "dest-token-account")]
         dest_token_account: String,
 
-        /// Fee payer account name (defaults to 'default')
+        /// Fee payer key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
@@ -2407,7 +2587,7 @@ pub enum ValidatorCommands {
         #[arg(long = "token-amount")]
         token_amount: u64,
 
-        /// Fee payer account name (defaults to 'default')
+        /// Fee payer key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
@@ -2438,7 +2618,7 @@ pub enum ValidatorCommands {
         #[arg(long = "dest-token-account")]
         dest_token_account: String,
 
-        /// Fee payer account name (defaults to 'default')
+        /// Fee payer key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
@@ -2470,7 +2650,7 @@ pub enum ValidatorCommands {
         #[arg(long = "new-claim-authority")]
         new_claim_authority: String,
 
-        /// Fee payer account name (defaults to 'default')
+        /// Fee payer key reference (file path, keychain:<id>, or alias; defaults to 'default')
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
@@ -2770,6 +2950,47 @@ mod tests {
     }
 
     #[test]
+    fn token_transfer_is_checked_unless_unchecked_is_passed() {
+        for (flag, expected) in [(None, false), (Some("--unchecked"), true)] {
+            let mut args = vec!["thru", "token", "transfer", "from", "to", "5"];
+            args.extend(flag);
+            let cli = Cli::try_parse_from(args).expect("token transfer should parse");
+
+            match cli.command {
+                Commands::Token {
+                    subcommand: TokenCommands::Transfer { unchecked, .. },
+                } => assert_eq!(unchecked, expected),
+                _ => panic!("unexpected command"),
+            }
+        }
+    }
+
+    /* A multisig proposal always carries the plain Transfer, so the flag
+     * would have no effect there. */
+    #[test]
+    fn token_transfer_rejects_unchecked_with_via_multisig() {
+        let args = ["thru", "token", "transfer", "from", "to", "5"];
+
+        let conflict = ["--unchecked", "--via-multisig", "ms"];
+        match Cli::try_parse_from(args.into_iter().chain(conflict)) {
+            Err(error) => assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict),
+            Ok(_) => panic!("--unchecked must not combine with --via-multisig"),
+        }
+
+        let cli = Cli::try_parse_from(args.into_iter().chain(["--via-multisig", "ms"]))
+            .expect("--via-multisig alone should parse");
+        match cli.command {
+            Commands::Token {
+                subcommand: TokenCommands::Transfer { unchecked, via, .. },
+            } => {
+                assert!(!unchecked);
+                assert_eq!(via.via_multisig.as_deref(), Some("ms"));
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
     fn parses_uploader_upload_skip_elf_check_flag() {
         let cli = Cli::try_parse_from([
             "thru",
@@ -3010,6 +3231,68 @@ mod tests {
     }
 
     #[test]
+    fn parses_program_create_and_upgrade_abi_flags() {
+        let cli = Cli::try_parse_from([
+            "thru", "program", "create", "my-seed", "program.bin", "--abi", "my.abi.yaml",
+        ])
+        .expect("program create --abi should parse");
+        match cli.command {
+            Commands::Program {
+                subcommand: ProgramCommands::Create { abi, .. },
+            } => {
+                assert_eq!(abi.abi.as_deref(), Some("my.abi.yaml"));
+                assert!(!abi.dangerously_exclude_abi);
+            }
+            _ => panic!("unexpected command"),
+        }
+
+        let cli = Cli::try_parse_from([
+            "thru",
+            "program",
+            "upgrade",
+            "my-seed",
+            "program.bin",
+            "--dangerously-exclude-abi",
+            "--via-multisig",
+            "team",
+        ])
+        .expect("program upgrade --dangerously-exclude-abi should parse");
+        match cli.command {
+            Commands::Program {
+                subcommand: ProgramCommands::Upgrade { abi, via, .. },
+            } => {
+                assert_eq!(abi.abi, None);
+                assert!(abi.dangerously_exclude_abi);
+                assert_eq!(via.via_multisig.as_deref(), Some("team"));
+            }
+            _ => panic!("unexpected command"),
+        }
+
+        // Neither flag parses; the handler reports the missing choice.
+        assert!(Cli::try_parse_from(["thru", "program", "upgrade", "s", "p.bin"]).is_ok());
+    }
+
+    #[test]
+    fn rejects_abi_with_dangerously_exclude_abi() {
+        for sub in ["create", "upgrade"] {
+            assert!(
+                Cli::try_parse_from([
+                    "thru",
+                    "program",
+                    sub,
+                    "s",
+                    "p.bin",
+                    "--abi",
+                    "a.yaml",
+                    "--dangerously-exclude-abi",
+                ])
+                .is_err(),
+                "{sub} must reject both ABI flags"
+            );
+        }
+    }
+
+    #[test]
     fn parses_program_set_pause_fee_payer() {
         let cli = Cli::try_parse_from([
             "thru",
@@ -3073,13 +3356,46 @@ mod tests {
                         language,
                         output_dir,
                         verbose,
+                        go_module,
                     },
             } => {
+                assert!(go_module.is_none());
                 assert_eq!(files, vec![PathBuf::from("input.abi.yaml")]);
                 assert!(include_dirs.is_empty());
                 assert_eq!(language, AbiLanguage::Rust);
                 assert_eq!(output_dir, PathBuf::from("generated"));
                 assert!(!verbose);
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_abi_codegen_go_command() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "abi",
+            "codegen",
+            "-f",
+            "input.abi.yaml",
+            "-l",
+            "go",
+            "--go-module",
+            "example.com/me/abi",
+        ])
+        .expect("go codegen command should parse");
+
+        match cli.command {
+            Commands::Abi {
+                subcommand:
+                    AbiCommands::Codegen {
+                        language,
+                        go_module,
+                        ..
+                    },
+            } => {
+                assert_eq!(language, AbiLanguage::Go);
+                assert_eq!(go_module.as_deref(), Some("example.com/me/abi"));
             }
             _ => panic!("unexpected command"),
         }
@@ -3578,6 +3894,7 @@ mod tests {
                         value,
                         next_change_lead_slots,
                         fee_payer,
+                        ..
                     },
                 ..
             } => {
@@ -3611,6 +3928,7 @@ mod tests {
                         value,
                         slot,
                         fee_payer,
+                        ..
                     },
                 ..
             } => {
@@ -3626,7 +3944,9 @@ mod tests {
             .expect("feature-gates disarm should parse");
         match disarm.command {
             Commands::FeatureGates {
-                subcommand: FeatureGatesCommands::Disarm { target, fee_payer },
+                subcommand: FeatureGatesCommands::Disarm {
+                    target, fee_payer, ..
+                },
                 ..
             } => {
                 assert_eq!(target, "0");
@@ -4040,4 +4360,307 @@ mod tests {
 
         assert!(result.is_err(), "debug re-execute should no longer parse");
     }
+}
+
+/// Multisig program commands
+#[derive(Subcommand)]
+pub enum MultisigCommands {
+    /// Create a multisig. The --fee-payer key must be one of the members.
+    Create {
+        /// Members: comma-separated key names or ta... addresses (2-32)
+        #[arg(long, value_delimiter = ',', required = true)]
+        members: Vec<String>,
+
+        /// Approvals needed to execute an invoke request (M)
+        #[arg(long)]
+        threshold: u16,
+
+        /// Seed for the multisig address (any label or 64 hex chars; random if omitted)
+        #[arg(long)]
+        seed: Option<String>,
+
+        /// Print the address the multisig would get, without creating it
+        #[arg(long)]
+        dry_run: bool,
+
+        #[command(flatten)]
+        common: MultisigCommonArgs,
+    },
+
+    /// Show a multisig's members, threshold and state
+    Show {
+        /// Multisig address
+        multisig: String,
+
+        #[command(flatten)]
+        common: MultisigCommonArgs,
+    },
+
+    /// List a multisig's open requests
+    Requests {
+        /// Multisig address
+        multisig: String,
+
+        /// Also list stale requests (proposed before the last config change)
+        #[arg(long)]
+        include_stale: bool,
+
+        #[command(flatten)]
+        common: MultisigCommonArgs,
+    },
+
+    /// Inspect a single request
+    Request {
+        #[command(subcommand)]
+        subcommand: MultisigRequestCommands,
+    },
+
+    /// Propose an action. The proposer (--fee-payer) approves it too unless --no-approve.
+    Propose {
+        #[command(subcommand)]
+        subcommand: MultisigProposeCommands,
+    },
+
+    /// Approve a request as the --fee-payer member
+    Approve {
+        /// Request address
+        request: String,
+
+        /// Skip the confirmation prompt
+        #[arg(long, short = 'y')]
+        yes: bool,
+
+        #[command(flatten)]
+        common: MultisigCommonArgs,
+
+        /// SHA-256 (hex) of the code a program upgrade installs; required for upgrades
+        #[arg(long)]
+        expect_code_hash: Option<String>,
+
+        /// SHA-256 (hex) of the ABI a program + ABI upgrade publishes; required for those
+        #[arg(long)]
+        expect_abi_hash: Option<String>,
+    },
+
+    /// Execute a request that has enough approvals (any key can execute)
+    Execute {
+        /// Request address
+        request: String,
+
+        /// Compute units for the execute transaction (default depends on the action)
+        #[arg(long)]
+        compute_units: Option<u32>,
+
+        /// State units for the execute transaction (default depends on the action)
+        #[arg(long)]
+        state_units: Option<u16>,
+
+        /// Skip the confirmation prompt
+        #[arg(long, short = 'y')]
+        yes: bool,
+
+        #[command(flatten)]
+        common: MultisigCommonArgs,
+
+        /// SHA-256 (hex) of the code a program upgrade installs; required for upgrades
+        #[arg(long)]
+        expect_code_hash: Option<String>,
+
+        /// SHA-256 (hex) of the ABI a program + ABI upgrade publishes; required for those
+        #[arg(long)]
+        expect_abi_hash: Option<String>,
+    },
+
+    /// Cancel a request: the proposer before any approvals, or any member once stale
+    Cancel {
+        /// Request address
+        request: String,
+
+        #[command(flatten)]
+        common: MultisigCommonArgs,
+    },
+}
+
+/// Inspect multisig requests
+#[derive(Subcommand)]
+pub enum MultisigRequestCommands {
+    /// Decode and show a request
+    Show {
+        /// Request address
+        request: String,
+
+        #[command(flatten)]
+        common: MultisigCommonArgs,
+    },
+}
+
+/// Propose a multisig request
+#[derive(Subcommand)]
+pub enum MultisigProposeCommands {
+    /// Call another program as the multisig.
+    /// Run with --show-layout first to see the account indices to encode in --data.
+    Invoke {
+        /// Multisig address
+        multisig: String,
+
+        /// Program to call
+        #[arg(long)]
+        target: String,
+
+        /// Instruction data (hex), encoded against the indices --show-layout prints
+        #[arg(long, required_unless_present = "show_layout", requires = "request_seed")]
+        data: Option<String>,
+
+        /// Request seed printed by --show-layout; pins the request account so the
+        /// account indices encoded in --data can't shift
+        #[arg(long)]
+        request_seed: Option<String>,
+
+        /// Writable accounts the call uses (repeatable or comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        rw: Vec<String>,
+
+        /// Read-only accounts the call uses (repeatable or comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        ro: Vec<String>,
+
+        /// Print the transaction account indices and exit
+        #[arg(long)]
+        show_layout: bool,
+
+        #[command(flatten)]
+        propose: MultisigProposeArgs,
+    },
+
+    /// Change the threshold M (needs a majority of all members)
+    SetThreshold {
+        /// Multisig address
+        multisig: String,
+
+        /// New threshold
+        threshold: u16,
+
+        #[command(flatten)]
+        propose: MultisigProposeArgs,
+    },
+
+    /// Replace the member list (needs a majority of all members)
+    SetMembers {
+        /// Multisig address
+        multisig: String,
+
+        /// The full new member list: key names or ta... addresses
+        #[arg(long, value_delimiter = ',', required = true)]
+        members: Vec<String>,
+
+        #[command(flatten)]
+        propose: MultisigProposeArgs,
+    },
+
+    /// Add members (needs a majority of all members)
+    AddMembers {
+        /// Multisig address
+        multisig: String,
+
+        /// Members to add: key names or ta... addresses
+        #[arg(long, value_delimiter = ',', required = true)]
+        members: Vec<String>,
+
+        #[command(flatten)]
+        propose: MultisigProposeArgs,
+    },
+
+    /// Remove members (needs a majority of all members; the threshold drops if it
+    /// would exceed the new member count)
+    RemoveMembers {
+        /// Multisig address
+        multisig: String,
+
+        /// Members to remove: key names or ta... addresses
+        #[arg(long, value_delimiter = ',', required = true)]
+        members: Vec<String>,
+
+        #[command(flatten)]
+        propose: MultisigProposeArgs,
+    },
+
+    /// Swap members, e.g. a lost key (needs a majority of all members)
+    ReplaceMembers {
+        /// Multisig address
+        multisig: String,
+
+        /// Current members to replace, in order
+        #[arg(long, value_delimiter = ',', required = true)]
+        old: Vec<String>,
+
+        /// Their replacements, in the same order
+        #[arg(long, value_delimiter = ',', required = true)]
+        new: Vec<String>,
+
+        #[command(flatten)]
+        propose: MultisigProposeArgs,
+    },
+
+    /// Delete the multisig (needs a majority; must be the last live request)
+    DeleteMultisig {
+        /// Multisig address
+        multisig: String,
+
+        #[command(flatten)]
+        propose: MultisigProposeArgs,
+    },
+}
+
+/// Options shared by every multisig command
+#[derive(clap::Args, Debug, Clone, Default)]
+pub struct MultisigCommonArgs {
+    /// Key that signs and pays; for propose/approve/cancel, the acting member (defaults to 'default')
+    #[arg(long, visible_alias = "signer")]
+    pub fee_payer: Option<String>,
+
+    /// Multisig program address (defaults to multisig_program_public_key in config)
+    #[arg(long)]
+    pub program: Option<String>,
+}
+
+/// Options shared by propose commands
+#[derive(clap::Args, Debug, Clone, Default)]
+pub struct MultisigProposeArgs {
+    /// Don't approve as the proposer
+    #[arg(long)]
+    pub no_approve: bool,
+
+    #[command(flatten)]
+    pub common: MultisigCommonArgs,
+}
+
+/// `--abi` / `--dangerously-exclude-abi` for program create and upgrade.
+/// Exactly one is required; the handler reports a missing choice.
+#[derive(clap::Args, Debug, Clone, Default)]
+pub struct ProgramAbiArgs {
+    /// Official ABI file to publish with the program in the same transaction
+    #[arg(long = "abi", value_name = "ABI_FILE", conflicts_with = "dangerously_exclude_abi")]
+    pub abi: Option<String>,
+
+    /// Deploy the program without its ABI (the on-chain ABI may stop matching
+    /// the program)
+    #[arg(long = "dangerously-exclude-abi")]
+    pub dangerously_exclude_abi: bool,
+}
+
+/// `--via-multisig` options for admin commands
+#[derive(clap::Args, Debug, Clone, Default)]
+pub struct ViaMultisigArgs {
+    /// Propose this action from a multisig instead of signing it directly.
+    /// --fee-payer is then the proposing member.
+    #[arg(long = "via-multisig", value_name = "MULTISIG")]
+    pub via_multisig: Option<String>,
+
+    /// With --via-multisig: multisig program address override
+    #[arg(long = "multisig-program", requires = "via_multisig")]
+    pub multisig_program: Option<String>,
+
+    /// With --via-multisig: don't approve as the proposer
+    #[arg(long = "no-approve", requires = "via_multisig")]
+    pub no_approve: bool,
 }

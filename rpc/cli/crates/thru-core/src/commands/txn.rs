@@ -4,7 +4,6 @@ use crate::cli::TxnCommands;
 use crate::commands::debug::run_txn_debug;
 use crate::commands::state_proof::make_state_proof as make_state_proof_util;
 use crate::config::Config;
-use crate::crypto;
 use crate::error::CliError;
 use crate::output;
 use crate::utils::format_vm_error;
@@ -12,7 +11,7 @@ use base64::Engine;
 use base64::engine::general_purpose;
 use std::time::Duration;
 use thru_base::rpc_types::ProofType;
-use thru_base::tn_tools::{KeyPair, Pubkey};
+use thru_base::tn_tools::Pubkey;
 use thru_base::txn_lib::{TnPubkey, Transaction};
 use thru_client::{Client, ClientBuilder};
 
@@ -446,7 +445,7 @@ async fn execute_transaction(
 }
 
 /// Build and sign a transaction with the given parameters
-async fn build_and_sign_transaction(
+pub(super) async fn build_and_sign_transaction(
     config: &Config,
     program: &str,
     instruction_data: &[u8],
@@ -461,9 +460,7 @@ async fn build_and_sign_transaction(
 ) -> Result<Transaction, CliError> {
     // Resolve fee payer account
     let fee_payer_key = fee_payer.unwrap_or("default");
-    let fee_payer_private_key = config.keys.get_key(fee_payer_key)?;
-    let fee_payer_keypair = KeyPair::from_hex_private_key(fee_payer_key, fee_payer_private_key)
-        .map_err(|e| CliError::Crypto(format!("Failed to create fee payer keypair: {}", e)))?;
+    let fee_payer_keypair = config.keys.load_key(fee_payer_key)?;
 
     // Resolve program public key
     let program_pubkey = resolve_program_public_key(config, program)?;
@@ -538,41 +535,9 @@ async fn build_and_sign_transaction(
     Ok(transaction)
 }
 
-/// Resolve program public key from string (either ta... address or key name from config)
+/// Resolve program metadata, a public address, or an explicit key source.
 fn resolve_program_public_key(config: &Config, program: &str) -> Result<TnPubkey, CliError> {
-    // Try as ta... address first
-    if program.starts_with("ta") && program.len() == 46 {
-        let pubkey = Pubkey::new(program.to_string())
-            .map_err(|e| CliError::Validation(format!("Invalid program public key: {}", e)))?;
-        return pubkey.to_bytes().map_err(|e| {
-            CliError::Validation(format!("Failed to decode program public key: {}", e))
-        });
-    }
-
-    // Try as key name from config
-    if let Ok(private_key_hex) = config.keys.get_key(program) {
-        let keypair = KeyPair::from_hex_private_key(program, private_key_hex).map_err(|e| {
-            CliError::Validation(format!("Failed to resolve program key from config: {}", e))
-        })?;
-        return Ok(keypair.public_key);
-    }
-
-    // If neither works, try as hex public key
-    if program.len() == 64 {
-        let program_bytes = crypto::hex_to_bytes(program).map_err(|e| {
-            CliError::Validation(format!("Failed to decode hex program key: {}", e))
-        })?;
-        if program_bytes.len() == 32 {
-            let mut pubkey = [0u8; 32];
-            pubkey.copy_from_slice(&program_bytes);
-            return Ok(pubkey);
-        }
-    }
-
-    Err(CliError::Validation(format!(
-        "Invalid program identifier: {}. Must be a ta... address, key name from config, or 64-character hex public key",
-        program
-    )))
+    config.keys.resolve_public_key(program)
 }
 
 /// Display event data as string if human-readable, otherwise as hex
@@ -664,38 +629,7 @@ async fn make_state_proof(
         }
     };
 
-    // Parse account public key
-    let account_pubkey = if account.starts_with("ta") && account.len() == 46 {
-        // It's a ta... address
-        Pubkey::new(account.to_string())
-            .map_err(|e| CliError::Validation(format!("Invalid account public key: {}", e)))?
-    } else if let Ok(private_key_hex) = config.keys.get_key(account) {
-        // It's a key name from config - get the public key
-        let keypair = KeyPair::from_hex_private_key(account, private_key_hex).map_err(|e| {
-            CliError::Validation(format!("Failed to resolve account key from config: {}", e))
-        })?;
-        keypair.address_string
-    } else if account.len() == 64 {
-        // Try as hex public key
-        let account_bytes = crypto::hex_to_bytes(account).map_err(|e| {
-            CliError::Validation(format!("Failed to decode hex account key: {}", e))
-        })?;
-        if account_bytes.len() == 32 {
-            let mut pubkey_bytes = [0u8; 32];
-            pubkey_bytes.copy_from_slice(&account_bytes);
-            Pubkey::from_bytes(&pubkey_bytes)
-        } else {
-            return Err(CliError::Validation(format!(
-                "Hex account key must be exactly 32 bytes (64 hex characters), got {} bytes",
-                account_bytes.len()
-            )));
-        }
-    } else {
-        return Err(CliError::Validation(format!(
-            "Invalid account identifier: {}. Must be a ta... address, key name from config, or 64-character hex public key",
-            account
-        )));
-    };
+    let account_pubkey = Pubkey::from_bytes(&config.keys.resolve_public_key(account)?);
 
     // Create RPC client
     let client = create_rpc_client(config)?;
@@ -737,7 +671,7 @@ async fn make_state_proof(
 }
 
 /// Create RPC client from config
-fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
+pub(super) fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
     let rpc_url = config.get_grpc_url()?;
 
     ClientBuilder::new()
@@ -807,7 +741,9 @@ async fn get_transaction(
         .get_transaction(&signature, timeout_duration, retry_count)
         .await
         .map_err(|e| {
-            CliError::TransactionSubmission(format!("Failed to get transaction: {:?}", e))
+            CliError::rate_limited_or(e, |e| {
+                CliError::TransactionSubmission(format!("Failed to get transaction: {:?}", e))
+            })
         })?;
 
     match transaction_details {
@@ -1136,27 +1072,19 @@ fn sort_pubkeys(pubkeys: &[String], json_format: bool) -> Result<(), CliError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::KeyManager;
+    use crate::keys::KeyManager;
 
-    fn create_test_config() -> Config {
-        let mut keys = KeyManager::new();
-        // Add a test key
-        keys.add_key(
-            "test",
-            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-            false,
-        )
-        .unwrap();
-
+    fn create_test_config() -> (tempfile::TempDir, Config) {
+        let (guard, keys) = KeyManager::test_fixture(&[("default", [1; 32]), ("test", [2; 32])]);
         let mut config = Config::default();
         config.rpc_base_url = "http://localhost:8080".to_string();
         config.keys = keys;
-        config
+        (guard, config)
     }
 
     #[test]
     fn test_resolve_program_public_key_hex() {
-        let config = create_test_config();
+        let (_guard, config) = create_test_config();
         let hex_key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         let result = resolve_program_public_key(&config, hex_key);
         assert!(result.is_ok());
@@ -1164,14 +1092,14 @@ mod tests {
 
     #[test]
     fn test_resolve_program_public_key_key_name() {
-        let config = create_test_config();
+        let (_guard, config) = create_test_config();
         let result = resolve_program_public_key(&config, "test");
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_resolve_program_public_key_invalid() {
-        let config = create_test_config();
+        let (_guard, config) = create_test_config();
         let result = resolve_program_public_key(&config, "invalid");
         assert!(result.is_err());
     }

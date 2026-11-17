@@ -1,0 +1,79 @@
+abi:
+  package: "compliance.shared_count"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Two arrays sized by one count field; trailing padding must not hide a length mismatch"
+
+types:
+  - name: "SharedCount"
+    kind:
+      struct:
+        fields:
+          - name: "count"
+            field-type:
+              primitive: u64
+          - name: "a"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  primitive: u8
+          - name: "b"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  primitive: u8
+  - name: "SharedEmptyCount"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "tag"
+            field-type:
+              primitive: u8
+          - name: "count"
+            field-type:
+              primitive: u8
+          - name: "a"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  enum:
+                    packed: true
+                    tag-ref:
+                      field-ref:
+                        path: ["tag"]
+                    variants:
+                      - name: "none"
+                        tag-value: 0
+                        variant-type:
+                          struct:
+                            packed: true
+                            fields: []
+          - name: "b"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  enum:
+                    packed: true
+                    tag-ref:
+                      field-ref:
+                        path: ["tag"]
+                    variants:
+                      - name: "none"
+                        tag-value: 0
+                        variant-type:
+                          struct:
+                            packed: true
+                            fields: []

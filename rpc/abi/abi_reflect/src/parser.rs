@@ -1,6 +1,7 @@
 /* Binary parser for ABI types */
 
 use crate::ir::ParamMap;
+use crate::limits::{decode_value_budget, DECODE_VALUE_BASE, MAX_DECODE_DEPTH};
 use crate::types::{ReflectedType, ReflectedTypeKind};
 use crate::value::{
     PrimitiveValue, PrimitiveValueChar, PrimitiveValueF16, PrimitiveValueF32, PrimitiveValueF64,
@@ -32,6 +33,9 @@ pub enum ParseError {
 
     #[error("Type resolution failed: {0}")]
     TypeResolutionFailed(String),
+
+    #[error("Decode limit exceeded: {0}")]
+    LimitExceeded(String),
 }
 
 /* Parser for binary data according to ABI types */
@@ -53,6 +57,12 @@ pub struct Parser<'a> {
 
     /* Root type name for resolving field references in nested contexts */
     root_type_name: String,
+
+    /* Values the current decode may still produce, out of `value_budget`,
+     * and the current nesting depth (see `limits`) */
+    value_budget: usize,
+    values_left: usize,
+    depth: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -66,6 +76,9 @@ impl<'a> Parser<'a> {
             param_aliases,
             root_buffer: Vec::new(),
             root_type_name: String::new(),
+            value_budget: DECODE_VALUE_BASE,
+            values_left: DECODE_VALUE_BASE,
+            depth: 0,
         }
     }
 
@@ -78,6 +91,9 @@ impl<'a> Parser<'a> {
         /* Store root buffer and type name for nested field reference resolution */
         self.root_buffer = data.to_vec();
         self.root_type_name = resolved_type.name.clone();
+        self.value_budget = decode_value_budget(data.len());
+        self.values_left = self.value_budget;
+        self.depth = 0;
 
         let type_info = self.reflected_type(resolved_type);
         let value = self.parse_value(data, resolved_type, &resolved_type.name)?;
@@ -91,8 +107,32 @@ impl<'a> Parser<'a> {
         )
     }
 
-    /* Parse a value from binary data */
+    /* Parse a value from binary data, within the decode limits */
     fn parse_value(
+        &mut self,
+        data: &[u8],
+        resolved_type: &ResolvedType,
+        owner_name: &str,
+    ) -> Result<Value, ParseError> {
+        if self.depth >= MAX_DECODE_DEPTH {
+            return Err(ParseError::LimitExceeded(format!(
+                "nesting deeper than {MAX_DECODE_DEPTH} levels"
+            )));
+        }
+        if self.values_left == 0 {
+            return Err(ParseError::LimitExceeded(format!(
+                "more than {} values",
+                self.value_budget
+            )));
+        }
+        self.values_left -= 1;
+        self.depth += 1;
+        let result = self.parse_value_unbounded(data, resolved_type, owner_name);
+        self.depth -= 1;
+        result
+    }
+
+    fn parse_value_unbounded(
         &mut self,
         data: &[u8],
         resolved_type: &ResolvedType,
@@ -295,22 +335,27 @@ impl<'a> Parser<'a> {
             } else {
                 /* Align offset to field alignment */
                 let field_alignment = field.field_type.alignment as usize;
-                align_up(offset, field_alignment)
+                align_up(offset, field_alignment)?
             };
+
+            /* An enum keyed on an earlier field of this struct (an account
+             * root's payload keyed on account_type) needs this struct's
+             * parsed fields to read its tag, even when every variant has
+             * the same size and the enum is fixed-size. */
+            let enum_keyed_on_field = matches!(
+                &field.field_type.kind,
+                ResolvedTypeKind::Enum { tag_constant_status, .. }
+                    if !matches!(tag_constant_status, abi_gen::abi::resolved::ConstantStatus::Constant)
+            );
 
             /* Handle variable-size fields (enums, arrays, size-discriminated unions) */
             let (field_data, field_size) = match &field.field_type.size {
-                abi_gen::abi::resolved::Size::Const(size) => {
+                abi_gen::abi::resolved::Size::Const(size) if !enum_keyed_on_field => {
                     let size = *size as usize;
-                    if field_offset + size > data.len() {
-                        return Err(ParseError::InsufficientData {
-                            needed: field_offset + size,
-                            available: data.len(),
-                        });
-                    }
-                    (&data[field_offset..field_offset + size], size)
+                    let end = checked_end(field_offset, size, data.len())?;
+                    (&data[field_offset..end], size)
                 }
-                abi_gen::abi::resolved::Size::Variable(_) => {
+                _ => {
                     if let ResolvedTypeKind::Enum {
                         tag_expression,
                         variants,
@@ -349,16 +394,11 @@ impl<'a> Parser<'a> {
                             }
                         };
 
-                        if field_offset + variant_size > data.len() {
-                            return Err(ParseError::InsufficientData {
-                                needed: field_offset + variant_size,
-                                available: data.len(),
-                            });
-                        }
+                        let variant_end = checked_end(field_offset, variant_size, data.len())?;
 
                         /* Parse the enum value directly here since we already know the variant */
                         /* This avoids calling parse_value which would try to evaluate the tag again */
-                        let variant_data = &data[field_offset..field_offset + variant_size];
+                        let variant_data = &data[field_offset..variant_end];
                         let variant_value =
                             self.parse_value(variant_data, &variant.variant_type, owner_name)?;
                         let variant_type_info = self.reflected_type(&variant.variant_type);
@@ -374,14 +414,19 @@ impl<'a> Parser<'a> {
                         let enum_reflected = ReflectedValue::new(enum_type_info, enum_value);
                         parsed_fields.push((field.name.clone(), enum_reflected.clone()));
                         parsed_field_map.insert(field.name.clone(), enum_reflected);
-                        offset = field_offset + variant_size;
+                        offset = variant_end;
                         continue; /* Skip the normal field parsing below since we already handled it */
                     }
 
                     if let ResolvedTypeKind::SizeDiscriminatedUnion { variants } =
                         &field.field_type.kind
                     {
-                        let remaining_size = data.len() - field_offset;
+                        let remaining_size = data.len().checked_sub(field_offset).ok_or(
+                            ParseError::InsufficientData {
+                                needed: field_offset,
+                                available: data.len(),
+                            },
+                        )?;
                         let variant = variants
                             .iter()
                             .find(|v| v.expected_size == remaining_size as u64)
@@ -391,17 +436,9 @@ impl<'a> Parser<'a> {
                             })?;
 
                         let variant_size = variant.expected_size as usize;
-                        if field_offset + variant_size > data.len() {
-                            return Err(ParseError::InsufficientData {
-                                needed: field_offset + variant_size,
-                                available: data.len(),
-                            });
-                        }
+                        let variant_end = checked_end(field_offset, variant_size, data.len())?;
 
-                        (
-                            &data[field_offset..field_offset + variant_size],
-                            variant_size,
-                        )
+                        (&data[field_offset..variant_end], variant_size)
                     } else if let ResolvedTypeKind::Array {
                         element_type,
                         size_expression,
@@ -417,6 +454,7 @@ impl<'a> Parser<'a> {
                             owner_name,
                         )? as usize;
                         if *jagged {
+                            checked_end(field_offset, 0, data.len())?;
                             let (elements, total_size) = self.parse_jagged_array_elements(
                                 &data[field_offset..],
                                 count,
@@ -445,14 +483,22 @@ impl<'a> Parser<'a> {
                                 "Array size overflow".to_string(),
                             )
                         })?;
-                        if field_offset + total_size > data.len() {
-                            return Err(ParseError::InsufficientData {
-                                needed: field_offset + total_size,
-                                available: data.len(),
-                            });
-                        }
+                        let array_end = checked_end(field_offset, total_size, data.len())?;
 
-                        (&data[field_offset..field_offset + total_size], total_size)
+                        /* Decode with the count evaluated here: re-evaluating
+                         * it against the field's own bytes would change what
+                         * `__buffer_size` and parent references mean. */
+                        let field_data = &data[field_offset..array_end];
+                        let elements =
+                            self.parse_array_elements(field_data, count, element_type)?;
+                        let reflected_field = ReflectedValue::new(
+                            self.reflected_type(&field.field_type),
+                            Value::Array { elements },
+                        );
+                        parsed_field_map.insert(field.name.clone(), reflected_field.clone());
+                        parsed_fields.push((field.name.clone(), reflected_field));
+                        offset = array_end;
+                        continue;
                     } else if let ResolvedTypeKind::Struct { .. } = &field.field_type.kind {
                         if !is_last_field {
                             return Err(ParseError::ExpressionEvaluationFailed(
@@ -510,46 +556,48 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /* Parse a union */
+    /* Parse a union: it has no tag, so every variant is decoded over the
+     * union's bytes */
     fn parse_union(
         &mut self,
         data: &[u8],
         variants: &[abi_gen::abi::resolved::ResolvedField],
     ) -> Result<Value, ParseError> {
-        /* For unions, we parse the first variant by default */
-        /* In practice, you'd need external information about which variant is active */
         if variants.is_empty() {
             return Err(ParseError::TypeResolutionFailed(
                 "Union has no variants".to_string(),
             ));
         }
 
-        let variant = &variants[0];
-        let variant_size = match &variant.field_type.size {
-            abi_gen::abi::resolved::Size::Const(size) => *size as usize,
-            abi_gen::abi::resolved::Size::Variable(_) => {
-                return Err(ParseError::ExpressionEvaluationFailed(
-                    "Variable-size union variants not supported".to_string(),
-                ));
-            }
-        };
+        let mut decoded = Vec::with_capacity(variants.len());
+        for variant in variants {
+            let variant_size = match &variant.field_type.size {
+                abi_gen::abi::resolved::Size::Const(size) => *size as usize,
+                abi_gen::abi::resolved::Size::Variable(_) => {
+                    return Err(ParseError::ExpressionEvaluationFailed(
+                        "Variable-size union variants not supported".to_string(),
+                    ));
+                }
+            };
 
-        if variant_size > data.len() {
-            return Err(ParseError::InsufficientData {
-                needed: variant_size,
-                available: data.len(),
-            });
+            if variant_size > data.len() {
+                return Err(ParseError::InsufficientData {
+                    needed: variant_size,
+                    available: data.len(),
+                });
+            }
+
+            let variant_data = &data[..variant_size];
+            let variant_value =
+                self.parse_value(variant_data, &variant.field_type, &variant.field_type.name)?;
+            let variant_type_info = self.reflected_type(&variant.field_type);
+            decoded.push((
+                variant.name.clone(),
+                ReflectedValue::new(variant_type_info, variant_value),
+            ));
         }
 
-        let variant_data = &data[..variant_size];
-        let variant_value =
-            self.parse_value(variant_data, &variant.field_type, &variant.field_type.name)?;
-        let variant_type_info = self.reflected_type(&variant.field_type);
-
-        Ok(Value::Union {
-            variant_name: variant.name.clone(),
-            variant_value: Box::new(ReflectedValue::new(variant_type_info, variant_value)),
-        })
+        Ok(Value::Union { variants: decoded })
     }
 
     /* Parse an enum */
@@ -645,6 +693,17 @@ impl<'a> Parser<'a> {
             return Ok(Value::Array { elements });
         }
 
+        let elements = self.parse_array_elements(data, array_size, element_type)?;
+        Ok(Value::Array { elements })
+    }
+
+    /* Decode `count` fixed-size elements from the start of `data`. */
+    fn parse_array_elements(
+        &mut self,
+        data: &[u8],
+        array_size: usize,
+        element_type: &ResolvedType,
+    ) -> Result<Vec<ReflectedValue>, ParseError> {
         let element_size = match &element_type.size {
             abi_gen::abi::resolved::Size::Const(size) => *size as usize,
             abi_gen::abi::resolved::Size::Variable(_) => {
@@ -683,7 +742,7 @@ impl<'a> Parser<'a> {
             ));
         }
 
-        Ok(Value::Array { elements })
+        Ok(elements)
     }
 
     fn parse_jagged_array_elements(
@@ -807,6 +866,9 @@ impl<'a> Parser<'a> {
 
         /* Try to evaluate field references */
         if let ExprKind::FieldRef(field_ref) = expr {
+            if is_buffer_size_ref(field_ref.path.as_slice()) {
+                return Ok(data.len() as u64);
+            }
             if let Some(value) = self.resolve_param_value(owner_name, field_ref.path.as_slice()) {
                 return Ok(value);
             }
@@ -820,21 +882,23 @@ impl<'a> Parser<'a> {
                     self.evaluate_tag_expression(&e.left, data, resolved_type, owner_name)?;
                 let right =
                     self.evaluate_tag_expression(&e.right, data, resolved_type, owner_name)?;
-                Ok(left + right)
+                left.checked_add(right).ok_or_else(|| overflow("Addition"))
             }
             ExprKind::Sub(e) => {
                 let left =
                     self.evaluate_tag_expression(&e.left, data, resolved_type, owner_name)?;
                 let right =
                     self.evaluate_tag_expression(&e.right, data, resolved_type, owner_name)?;
-                Ok(left - right)
+                left.checked_sub(right)
+                    .ok_or_else(|| overflow("Subtraction"))
             }
             ExprKind::Mul(e) => {
                 let left =
                     self.evaluate_tag_expression(&e.left, data, resolved_type, owner_name)?;
                 let right =
                     self.evaluate_tag_expression(&e.right, data, resolved_type, owner_name)?;
-                Ok(left * right)
+                left.checked_mul(right)
+                    .ok_or_else(|| overflow("Multiplication"))
             }
             ExprKind::Div(e) => {
                 let left =
@@ -886,14 +950,14 @@ impl<'a> Parser<'a> {
                     self.evaluate_tag_expression(&e.left, data, resolved_type, owner_name)?;
                 let right =
                     self.evaluate_tag_expression(&e.right, data, resolved_type, owner_name)?;
-                Ok(left << right)
+                checked_shift(left, right, "Left shift", u64::checked_shl)
             }
             ExprKind::RightShift(e) => {
                 let left =
                     self.evaluate_tag_expression(&e.left, data, resolved_type, owner_name)?;
                 let right =
                     self.evaluate_tag_expression(&e.right, data, resolved_type, owner_name)?;
-                Ok(left >> right)
+                checked_shift(left, right, "Right shift", u64::checked_shr)
             }
             ExprKind::BitNot(e) => {
                 let operand =
@@ -966,6 +1030,15 @@ impl<'a> Parser<'a> {
 
         /* Try to evaluate field references using parsed fields */
         if let ExprKind::FieldRef(field_ref) = expr {
+            if is_buffer_size_ref(field_ref.path.as_slice()) {
+                return Ok(data.len() as u64);
+            }
+            /* A field of this instance wins over a parameter alias: the
+             * aliases are global, so `n` could name an outer struct's `n`. */
+            if let Some(value) = self.resolve_parsed_field(field_ref.path.as_slice(), parsed_fields)
+            {
+                return Ok(value);
+            }
             if let Some(value) = self.resolve_param_value(owner_name, field_ref.path.as_slice()) {
                 return Ok(value);
             }
@@ -995,7 +1068,7 @@ impl<'a> Parser<'a> {
                     parsed_fields,
                     owner_name,
                 )?;
-                Ok(left + right)
+                left.checked_add(right).ok_or_else(|| overflow("Addition"))
             }
             ExprKind::Sub(e) => {
                 let left = self.evaluate_tag_expression_with_context(
@@ -1012,7 +1085,8 @@ impl<'a> Parser<'a> {
                     parsed_fields,
                     owner_name,
                 )?;
-                Ok(left - right)
+                left.checked_sub(right)
+                    .ok_or_else(|| overflow("Subtraction"))
             }
             ExprKind::Mul(e) => {
                 let left = self.evaluate_tag_expression_with_context(
@@ -1029,7 +1103,8 @@ impl<'a> Parser<'a> {
                     parsed_fields,
                     owner_name,
                 )?;
-                Ok(left * right)
+                left.checked_mul(right)
+                    .ok_or_else(|| overflow("Multiplication"))
             }
             ExprKind::Div(e) => {
                 let left = self.evaluate_tag_expression_with_context(
@@ -1141,7 +1216,7 @@ impl<'a> Parser<'a> {
                     parsed_fields,
                     owner_name,
                 )?;
-                Ok(left << right)
+                checked_shift(left, right, "Left shift", u64::checked_shl)
             }
             ExprKind::RightShift(e) => {
                 let left = self.evaluate_tag_expression_with_context(
@@ -1158,7 +1233,7 @@ impl<'a> Parser<'a> {
                     parsed_fields,
                     owner_name,
                 )?;
-                Ok(left >> right)
+                checked_shift(left, right, "Right shift", u64::checked_shr)
             }
             ExprKind::BitNot(e) => {
                 let operand = self.evaluate_tag_expression_with_context(
@@ -1322,14 +1397,11 @@ impl<'a> Parser<'a> {
                         index, element_count
                     )));
                 }
-                let start = index * element_size;
-                if start + element_size > data.len() {
-                    return Err(ParseError::InsufficientData {
-                        needed: start + element_size,
-                        available: data.len(),
-                    });
-                }
-                let element_data = &data[start..start + element_size];
+                let start = index
+                    .checked_mul(element_size)
+                    .ok_or_else(|| overflow("Offset"))?;
+                let end = checked_end(start, element_size, data.len())?;
+                let element_data = &data[start..end];
                 if path.len() == 1 {
                     return self.extract_primitive_from_type(element_type, element_data);
                 }
@@ -1441,13 +1513,8 @@ impl<'a> Parser<'a> {
                 )))
             }
         };
-        if field_offset + field_size > data.len() {
-            return Err(ParseError::InsufficientData {
-                needed: field_offset + field_size,
-                available: data.len(),
-            });
-        }
-        Ok(&data[field_offset..field_offset + field_size])
+        let end = checked_end(field_offset, field_size, data.len())?;
+        Ok(&data[field_offset..end])
     }
 
     fn extract_primitive_field_value(
@@ -1489,6 +1556,19 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /* Resolves `path` against the fields of the instance being parsed, or
+     * returns None when its first segment is not one of them (or does not
+     * yield a u64), so the caller can fall back to parameters. */
+    fn resolve_parsed_field(
+        &self,
+        path: &[String],
+        parsed_fields: &std::collections::HashMap<String, ReflectedValue>,
+    ) -> Option<u64> {
+        let field_value = parsed_fields.get(path.first()?)?;
+        self.extract_u64_from_reflected_value(field_value, &path[1..])
+            .ok()
+    }
+
     fn resolve_param_value(&self, owner: &str, path: &[String]) -> Option<u64> {
         if path.is_empty() {
             return None;
@@ -1526,6 +1606,15 @@ impl<'a> Parser<'a> {
     }
 }
 
+/* `__buffer_size` is the number of bytes available to the struct that reads
+ * it (the root type's buffer at the top level), as in the code generators. */
+fn is_buffer_size_ref(path: &[String]) -> bool {
+    path.len() == 1 && path[0] == BUFFER_SIZE_REF
+}
+
+/* Name of the implicit field reference to the available byte count. */
+pub(crate) const BUFFER_SIZE_REF: &str = "__buffer_size";
+
 fn build_param_alias_map(params: &ParamMap) -> HashMap<String, String> {
     let mut map = HashMap::new();
     for key in params.keys() {
@@ -1554,7 +1643,7 @@ fn insert_param_aliases(map: &mut HashMap<String, String>, canonical: &str) {
     }
 }
 
-fn normalize_param_alias(value: &str) -> String {
+pub(crate) fn normalize_param_alias(value: &str) -> String {
     let mut trimmed = value;
     while let Some(stripped) = trimmed.strip_prefix("../") {
         trimmed = stripped;
@@ -1573,7 +1662,7 @@ fn normalize_param_alias(value: &str) -> String {
         .join(".")
 }
 
-fn reflected_runtime_size(value: &ReflectedValue) -> Option<usize> {
+pub(crate) fn reflected_runtime_size(value: &ReflectedValue) -> Option<usize> {
     if let Some(size) = value.type_info.size {
         return usize::try_from(size).ok();
     }
@@ -1583,27 +1672,35 @@ fn reflected_runtime_size(value: &ReflectedValue) -> Option<usize> {
             reflected_runtime_size(element).and_then(|size| acc.checked_add(size))
         }),
         Value::Struct { fields } => {
-            let ReflectedTypeKind::Struct {
-                fields: type_fields,
-                ..
-            } = &value.type_info.kind
-            else {
+            let ReflectedTypeKind::Struct { packed, .. } = &value.type_info.kind else {
                 return None;
             };
 
+            /* Mirror parse_struct: non-packed fields start at the running offset
+            aligned to the field's alignment, so padding after a
+            variable-length field is counted. A non-packed struct also ends
+            padded to its own alignment, matching the IR footprint. */
             let mut running_offset = 0usize;
-            for (idx, (_, field)) in fields.iter().enumerate() {
-                let field_offset = type_fields
-                    .get(idx)
-                    .and_then(|field| field.offset)
-                    .and_then(|offset| usize::try_from(offset).ok())
-                    .unwrap_or(running_offset);
+            for (_, field) in fields.iter() {
+                let field_offset = if *packed {
+                    running_offset
+                } else {
+                    let alignment = usize::try_from(field.type_info.alignment).ok()?.max(1);
+                    align_up_checked(running_offset, alignment)?
+                };
                 let field_size = reflected_runtime_size(field)?;
-                running_offset = running_offset.max(field_offset.checked_add(field_size)?);
+                running_offset = field_offset.checked_add(field_size)?;
             }
-            Some(running_offset)
+            if *packed {
+                Some(running_offset)
+            } else {
+                let alignment = usize::try_from(value.type_info.alignment).ok()?.max(1);
+                align_up_checked(running_offset, alignment)
+            }
         }
-        Value::Union { variant_value, .. } => reflected_runtime_size(variant_value),
+        Value::Union { variants } => variants.iter().try_fold(0usize, |acc, (_, variant)| {
+            reflected_runtime_size(variant).map(|size| acc.max(size))
+        }),
         Value::Enum { variant_value, .. } => reflected_runtime_size(variant_value),
         Value::SizeDiscriminatedUnion { variant_value, .. } => {
             reflected_runtime_size(variant_value)
@@ -1643,6 +1740,46 @@ fn check_size(data: &[u8], needed: usize) -> Result<(), ParseError> {
 }
 
 /* Helper function to align offset */
-fn align_up(offset: usize, alignment: usize) -> usize {
-    (offset + alignment - 1) & !(alignment - 1)
+fn align_up(offset: usize, alignment: usize) -> Result<usize, ParseError> {
+    if alignment <= 1 {
+        return Ok(offset);
+    }
+    offset
+        .checked_add(alignment - 1)
+        .map(|end| end & !(alignment - 1))
+        .ok_or_else(|| overflow("Alignment"))
+}
+
+fn overflow(what: &str) -> ParseError {
+    ParseError::ExpressionEvaluationFailed(format!("{what} overflow"))
+}
+
+/* End of `len` bytes from `start`, which must fit in `available` bytes. */
+fn checked_end(start: usize, len: usize, available: usize) -> Result<usize, ParseError> {
+    let end = start.checked_add(len).ok_or_else(|| overflow("Offset"))?;
+    if end > available {
+        return Err(ParseError::InsufficientData {
+            needed: end,
+            available,
+        });
+    }
+    Ok(end)
+}
+
+/* A shift by at least the width of u64 is an overflow, not a masked shift. */
+fn checked_shift(
+    value: u64,
+    amount: u64,
+    what: &str,
+    shift: fn(u64, u32) -> Option<u64>,
+) -> Result<u64, ParseError> {
+    u32::try_from(amount)
+        .ok()
+        .and_then(|amount| shift(value, amount))
+        .ok_or_else(|| overflow(what))
+}
+
+/* align_up for sizes derived from decoded data: None on overflow */
+fn align_up_checked(offset: usize, alignment: usize) -> Option<usize> {
+    Some(offset.checked_add(alignment - 1)? & !(alignment - 1))
 }

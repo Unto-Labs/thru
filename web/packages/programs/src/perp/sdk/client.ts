@@ -8,6 +8,11 @@ import {
   perpNextFundingRoundNs,
   perpOracleFeedIsFresh,
   perpOracleMaxAgeNs,
+  parsePerpCbookAccount,
+  parsePerpMarginAccount,
+  parsePerpMarketAccount,
+  parsePerpOrderArenaAccount,
+  parsePerpSeatArenaAccount,
   perpSeatOrders,
   type PerpMarginAccount,
   type PerpMarket,
@@ -15,9 +20,6 @@ import {
   type PerpOrderType,
   type PerpSeatEntry,
 } from '../index';
-import { fetchPerpAbiVersion } from '../versions/detect';
-import type { PerpAbiVersion, PerpAbiVersionDetection, PerpFeatureFlags } from '../versions/model';
-import { assertPerpSupports, getPerpAbiVersion } from '../versions/registry';
 import { loadPerpsDeployment, PERPS_NETWORK_RPC_URLS, type PerpDeployment, type PerpDeploymentMarket, type PerpsDeploymentSource } from './deployment';
 import { hexToBytes } from './instructions';
 import {
@@ -66,8 +68,8 @@ import { parsePerpPrice, parsePerpSize, parseUnits, type PerpRounding } from './
 
    Reads come from the perps indexer when `indexerUrl` is given (the
    indexer, or an app that proxies its /v1 routes) and fall back to RPC on
-   any indexer failure; RPC reads decode accounts with the deployment's ABI
-   version (detected from the program hash, see versions/).  Builders
+   any indexer failure; RPC reads decode accounts with the SDK's parsers
+   (the program's current ABI).  Builders
    return an unsigned PerpTransaction plus metadata; `send` signs it with
    any PerpsSigner and waits for execution on the fast confirm path. */
 
@@ -83,11 +85,6 @@ export interface PerpsClientOptions {
   indexerUrl?: string;
   indexer?: Omit<PerpsIndexerOptions, 'url'>;
   fetch?: typeof fetch;
-  /** Use this ABI version instead of detecting it from the program account. */
-  abiVersion?: PerpAbiVersion | string;
-  /** When the program hash and ABI account are both unknown, assume the
-      latest version (default true) instead of failing. */
-  assumeLatest?: boolean;
   /** Margin account ids searched for an owner's accounts (default 0..3). */
   marginAccountIds?: number[];
   /** The current time in nanoseconds, against which getMark applies the
@@ -134,7 +131,6 @@ export interface PerpsBuilt {
     cross?: boolean;
     marginAccount?: string;
     stateUnits?: number;
-    abiVersion: string;
     programAddress: string;
   };
 }
@@ -165,7 +161,6 @@ export interface PerpsMark {
 
 export interface PerpsFundingInfo {
   market: string;
-  supported: boolean;
   enabled: boolean;
   funding: PerpMarket['funding'] | null;
   nextRoundNs: bigint | null;
@@ -189,16 +184,10 @@ export class PerpsClient {
   constructor(
     readonly thru: ThruClient,
     readonly deployment: PerpDeployment,
-    readonly version: PerpAbiVersion,
-    readonly versionDetection: PerpAbiVersionDetection | null,
     readonly indexer: PerpsIndexer | null,
     private readonly marginAccountIds: number[],
     private readonly nowNs: () => bigint = () => BigInt(Date.now()) * 1_000_000n,
   ) {}
-
-  get features(): Readonly<PerpFeatureFlags> {
-    return this.version.features;
-  }
 
   get programAddress(): string {
     return this.deployment.perpProgram;
@@ -231,7 +220,7 @@ export class PerpsClient {
     const record = this.market(market);
     const state = await this.viaIndexer(options,
       async (indexer) => perpMarketFromIndexer(await indexer.get(`/v1/markets/${record.seatArena}`)),
-      async () => this.version.decode.market(await readAccount(this.thru, record.seatArena)),
+      async () => parsePerpMarketAccount(await readAccount(this.thru, record.seatArena)),
     );
     return { symbol: record.symbol, address: record.seatArena, record, state };
   }
@@ -250,9 +239,9 @@ export class PerpsClient {
           readAccount(this.thru, record.asksCbook),
         ]);
         const snapshot = buildPerpOrderBookSnapshot({
-          orders: this.version.decode.orderArena(arena).orders,
-          bidsCbook: this.version.decode.cbook(bids),
-          asksCbook: this.version.decode.cbook(asks),
+          orders: parsePerpOrderArenaAccount(arena).orders,
+          bidsCbook: parsePerpCbookAccount(bids),
+          asksCbook: parsePerpCbookAccount(asks),
         });
         const tick = BigInt(record.tickSize);
         const lot = BigInt(record.lotSize);
@@ -301,10 +290,9 @@ export class PerpsClient {
 
   async getFunding(market: string): Promise<PerpsFundingInfo> {
     const { record, state } = await this.getMarket(market);
-    const supported = this.version.features.funding;
-    const funding = supported ? (state.funding ?? null) : null;
-    const enabled = !!funding && funding.premiumMultiplier !== 0;
-    return { market: record.seatArena, supported, enabled, funding, nextRoundNs: enabled && funding ? perpNextFundingRoundNs(funding) : null };
+    const funding = state.funding;
+    const enabled = funding.premiumMultiplier !== 0;
+    return { market: record.seatArena, enabled, funding, nextRoundNs: enabled ? perpNextFundingRoundNs(funding) : null };
   }
 
   /** The owner's seat in the market, or null. */
@@ -317,15 +305,13 @@ export class PerpsClient {
         const entry = indexerItems(page).find((item) => (item.seat as Record<string, unknown> | undefined)?.market === record.seatArena);
         return entry ? perpSeatFromIndexer(entry.seat as Record<string, unknown>) : null;
       },
-      async () => this.version.decode.seatArena(await readAccount(this.thru, record.seatArena)).seats.find((seat) => seat.seatAuthority === authority) ?? null,
+      async () => parsePerpSeatArenaAccount(await readAccount(this.thru, record.seatArena)).seats.find((seat) => seat.seatAuthority === authority) ?? null,
     );
   }
 
-  /** The owner's margin accounts (none on a version without cross margin).
-      From the indexer, every page of them; a list the indexer cannot page
+  /** The owner's margin accounts.  From the indexer, every page of them; a list the indexer cannot page
       to the end (indexerAllItems) is read from the chain instead. */
   async getMarginAccounts(owner: string, options: PerpsReadOptions = {}): Promise<PerpsMarginAccountInfo[]> {
-    if (!this.version.features.crossMargin) return [];
     const authority = normalizeAddress(owner);
     return this.viaIndexer(options,
       async (indexer) =>
@@ -337,7 +323,7 @@ export class PerpsClient {
           for (const accountId of this.marginAccountIds) {
             const { address } = await derivePerpMarginAccountAddress({ ownerAddress: authority, vaultAddress: vault, accountId, perpProgramAddress: this.programAddress });
             try {
-              found.push({ address, ...this.version.decode.marginAccount(await readAccount(this.thru, address)) });
+              found.push({ address, ...parsePerpMarginAccount(await readAccount(this.thru, address)) });
             } catch (error) {
               if (!isNotFound(error)) throw error;
             }
@@ -365,9 +351,9 @@ export class PerpsClient {
           readAccount(this.thru, record.bidsCbook),
           readAccount(this.thru, record.asksCbook),
         ]);
-        const arena = this.version.decode.orderArena(arenaAccount);
+        const arena = parsePerpOrderArenaAccount(arenaAccount);
         const mine = new Map(perpSeatOrders(seat, arena).map((order) => [order.orderEntryIndex, order]));
-        const snapshot = buildPerpOrderBookSnapshot({ orders: arena.orders, bidsCbook: this.version.decode.cbook(bids), asksCbook: this.version.decode.cbook(asks) });
+        const snapshot = buildPerpOrderBookSnapshot({ orders: arena.orders, bidsCbook: parsePerpCbookAccount(bids), asksCbook: parsePerpCbookAccount(asks) });
         const tick = BigInt(record.tickSize);
         const lot = BigInt(record.lotSize);
         return [...snapshot.bids, ...snapshot.asks].flatMap((level) =>
@@ -415,14 +401,13 @@ export class PerpsClient {
 
   /* Builders ************************************************************************/
 
-  private built(action: string, transaction: PerpTransaction, meta: Omit<PerpsBuilt['meta'], 'action' | 'abiVersion' | 'programAddress' | 'stateUnits'>): PerpsBuilt {
+  private built(action: string, transaction: PerpTransaction, meta: Omit<PerpsBuilt['meta'], 'action' | 'programAddress' | 'stateUnits'>): PerpsBuilt {
     return {
       transaction,
       meta: {
         action,
         ...meta,
         ...(transaction.stateUnits === undefined ? {} : { stateUnits: transaction.stateUnits }),
-        abiVersion: this.version.id,
         programAddress: this.programAddress,
       },
     };
@@ -450,7 +435,7 @@ export class PerpsClient {
     const orders = params.orders.map((order) => this.orderRequest(record, order));
     const cancels = await this.cancelRequests(params.market, owner, params.cancels ?? []);
     const book = await readOrderBookState(this.thru, record, { withOrders: cancels.length > 0, attempts: 2 });
-    const tx = ordersTx(ref, owner, seat.seatIndex, orders, cancels, book, { margin, version: this.version });
+    const tx = ordersTx(ref, owner, seat.seatIndex, orders, cancels, book, { margin });
     return this.built('placeOrders', tx, { market: record.seatArena, owner, seatIndex: seat.seatIndex, cross: !!margin, marginAccount: margin?.address });
   }
 
@@ -458,7 +443,7 @@ export class PerpsClient {
     const owner = normalizeAddress(params.owner);
     const { ref, seat, margin } = await this.seatContext(params.market, owner);
     const cancels = await this.cancelRequests(params.market, owner, [params]);
-    const tx = cancelOrdersTx(ref, owner, seat.seatIndex, cancels, { margin, version: this.version });
+    const tx = cancelOrdersTx(ref, owner, seat.seatIndex, cancels, { margin });
     return this.built('cancel', tx, { market: ref.market.seatArena, owner, seatIndex: seat.seatIndex, cross: !!margin, marginAccount: margin?.address });
   }
 
@@ -467,7 +452,7 @@ export class PerpsClient {
     const orders = await this.getOpenOrders(params.market, owner, { source: 'rpc' });
     if (!orders.length) throw new Error(`${owner} has no open orders in ${this.market(params.market).symbol}`);
     const { ref, seat, margin } = await this.seatContext(params.market, owner);
-    const tx = cancelOrdersTx(ref, owner, seat.seatIndex, orders.map((order) => ({ orderId: order.orderId, orderEntryIndex: order.orderEntryIndex })), { margin, version: this.version });
+    const tx = cancelOrdersTx(ref, owner, seat.seatIndex, orders.map((order) => ({ orderId: order.orderId, orderEntryIndex: order.orderEntryIndex })), { margin });
     return this.built('cancelAll', tx, { market: ref.market.seatArena, owner, seatIndex: seat.seatIndex, cross: !!margin, marginAccount: margin?.address });
   }
 
@@ -478,7 +463,7 @@ export class PerpsClient {
     const { ref, seat, margin } = await this.seatContext(params.market, owner);
     const [cancel] = await this.cancelRequests(params.market, owner, [params]);
     const quantity = this.quantity(record, params, 'exact');
-    const tx = modifyOrderTx(ref, owner, seat.seatIndex, [{ ...cancel!, quantity }], { margin, version: this.version });
+    const tx = modifyOrderTx(ref, owner, seat.seatIndex, [{ ...cancel!, quantity }], { margin });
     return this.built('modify', tx, { market: record.seatArena, owner, seatIndex: seat.seatIndex, cross: !!margin, marginAccount: margin?.address });
   }
 
@@ -504,14 +489,13 @@ export class PerpsClient {
     const { ref, seat, margin } = await this.seatContext(params.market, owner);
     const wallet = deriveTokenAccountAddress(this.thru, owner, mint.address, this.deployment.tokenProgram);
     const build = action === 'deposit' ? depositTx : withdrawTx;
-    const tx = build(ref, owner, seat.seatIndex, wallet, amount, { margin, version: this.version });
+    const tx = build(ref, owner, seat.seatIndex, wallet, amount, { margin });
     return this.built(action, tx, { market: record.seatArena, owner, seatIndex: seat.seatIndex, cross: !!margin, marginAccount: margin?.address });
   }
 
   /** Creates margin account `accountId` (default 0) of the owner on the
       market's quote vault (every market it links must share that vault). */
   async createMarginAccount(params: { owner: string; market: string; accountId?: number }): Promise<PerpsBuilt> {
-    assertPerpSupports(this.version, 'crossMargin', 'createMarginAccount');
     const owner = normalizeAddress(params.owner);
     const { state } = await this.getMarket(params.market, { source: 'rpc' });
     const accountId = params.accountId ?? 0;
@@ -533,7 +517,6 @@ export class PerpsClient {
   }
 
   private async link(params: { market: string; owner: string; accountId?: number }, link: boolean): Promise<PerpsBuilt> {
-    assertPerpSupports(this.version, 'crossMargin', link ? 'linkMargin' : 'unlinkMargin');
     const owner = normalizeAddress(params.owner);
     const rpc = { source: 'rpc' } as const;
     const { state } = await this.getMarket(params.market, rpc);
@@ -559,7 +542,6 @@ export class PerpsClient {
       there.  Never required (the program settles before it reads a seat's
       equity); it updates the stored balance. */
   async settleFunding(params: { market: string; seatIndexes?: number[]; owner?: string }): Promise<PerpsBuilt> {
-    assertPerpSupports(this.version, 'settleFunding', 'settleFunding');
     const ref = this.marketRef(params.market);
     let seatIndexes = params.seatIndexes ?? [];
     if (!seatIndexes.length) {
@@ -568,7 +550,7 @@ export class PerpsClient {
       if (!seat) throw new Error(`${params.owner} has no seat in ${this.market(params.market).symbol}`);
       seatIndexes = [seat.seatIndex];
     }
-    return this.built('settleFunding', settleFundingTx(ref, seatIndexes, { version: this.version }), { market: ref.market.seatArena, owner: params.owner });
+    return this.built('settleFunding', settleFundingTx(ref, seatIndexes), { market: ref.market.seatArena, owner: params.owner });
   }
 
   /** Settles funding of every seat a margin account of the owner links (the
@@ -578,7 +560,7 @@ export class PerpsClient {
     const accounts = await this.getMarginAccounts(owner, { source: 'rpc' });
     const account = params.marginAccount ? accounts.find((entry) => entry.address === params.marginAccount) : accounts.find((entry) => entry.links.length > 0);
     if (!account) throw new Error(`no margin account of ${owner} with links`);
-    const tx = settleAccountFundingTx(this.marketRef(this.deployment.markets[0]!.symbol).deployment, account, this.deployment.markets, { version: this.version });
+    const tx = settleAccountFundingTx(this.marketRef(this.deployment.markets[0]!.symbol).deployment, account, this.deployment.markets);
     return this.built('settleAccountFunding', tx, { owner, marginAccount: account.address });
   }
 
@@ -587,7 +569,7 @@ export class PerpsClient {
   async liquidate(params: { market: string; owner: string; targetSeatIndex: number }): Promise<PerpsBuilt> {
     const owner = normalizeAddress(params.owner);
     const { ref, seat, margin } = await this.seatContext(params.market, owner);
-    const arena = this.version.decode.seatArena(await readAccount(this.thru, ref.market.seatArena));
+    const arena = parsePerpSeatArenaAccount(await readAccount(this.thru, ref.market.seatArena));
     const target = arena.seats.find((entry) => entry.seatIndex === params.targetSeatIndex);
     if (!target) throw new Error(`no seat #${params.targetSeatIndex} in ${this.market(params.market).symbol}`);
     let targetAccount: CrossAccountRef | undefined;
@@ -597,7 +579,7 @@ export class PerpsClient {
       if (!account) throw new Error(`target seat #${target.seatIndex} is cross but its margin account was not found`);
       targetAccount = this.crossRef(account);
     }
-    const tx = liquidateTx(ref, owner, seat.seatIndex, params.targetSeatIndex, { target: targetAccount, liquidator: margin, version: this.version });
+    const tx = liquidateTx(ref, owner, seat.seatIndex, params.targetSeatIndex, { target: targetAccount, liquidator: margin });
     return this.built('liquidate', tx, { market: ref.market.seatArena, owner, seatIndex: seat.seatIndex, cross: !!margin, marginAccount: margin?.address });
   }
 
@@ -671,28 +653,16 @@ export class PerpsClient {
   }
 }
 
-/** Connects to a perps deployment: loads its record, detects its ABI
-    version and, with `indexerUrl`, reads through the indexer. */
+/** Connects to a perps deployment: loads its record and, with
+    `indexerUrl`, reads through the indexer. */
 export async function createPerpsClient(options: PerpsClientOptions): Promise<PerpsClient> {
   const source = options.deployment ?? options.network;
   if (!source) throw new Error('createPerpsClient needs a deployment (object, network name, URL or JSON) or network');
   const deployment = await loadPerpsDeployment(source, { fetch: options.fetch });
   const rpcUrl = options.rpcUrl ?? deployment.rpcUrl ?? PERPS_NETWORK_RPC_URLS[deployment.network];
   const thru = options.thru ?? createThruClient({ baseUrl: rpcUrl });
-  let version: PerpAbiVersion;
-  let detection: PerpAbiVersionDetection | null = null;
-  if (options.abiVersion) {
-    version = typeof options.abiVersion === 'string' ? getPerpAbiVersion(options.abiVersion) : options.abiVersion;
-  } else {
-    detection = await fetchPerpAbiVersion(thru as never, {
-      programAddress: deployment.perpProgram,
-      abiAccountAddress: deployment.perpAbi ?? undefined,
-      assumeLatest: options.assumeLatest ?? true,
-    });
-    version = detection.version;
-  }
   const indexer = options.indexerUrl ? createPerpsIndexer({ ...options.indexer, url: options.indexerUrl, fetch: options.indexer?.fetch ?? options.fetch }) : null;
-  return new PerpsClient(thru, deployment, version, detection, indexer, options.marginAccountIds ?? [0, 1, 2, 3], options.nowNs);
+  return new PerpsClient(thru, deployment, indexer, options.marginAccountIds ?? [0, 1, 2, 3], options.nowNs);
 }
 
 function toAtoms(value: PerpsAmount, label: string): bigint {

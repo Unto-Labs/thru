@@ -698,90 +698,45 @@ fn simple_enum_fixture_formats_variants() {
     );
 }
 
+/* A union has no tag: every fixture formats as all three views of its bytes. */
 #[test]
-fn simple_union_fixture_formats_first_variant() {
+fn simple_union_fixture_formats_every_variant() {
     let reflector =
         load_reflector("../abi_gen/tests/compliance_tests/abi_definitions/unions.abi.yaml");
 
-    let int_bytes =
-        load_binary("../abi_gen/tests/compliance_tests/binary_data/unions/int_value.bin");
-    let int_value = reflector
-        .reflect(&int_bytes, "SimpleUnion")
-        .expect("union int reflect");
-    let formatted_int = format_reflection(&int_value);
-    let int_obj = formatted_int
-        .value
-        .as_object()
-        .expect("union formatted object");
-    assert_eq!(
-        int_obj.get("variant").and_then(JsonValue::as_str),
-        Some("int_value")
-    );
-    assert_eq!(int_obj.get("value").and_then(JsonValue::as_i64), Some(-42));
-
-    // Document the current limitation: regardless of payload, unions always report the
-    // first variant. Once union dispatch is implemented we can enable the ignored
-    // regression test below.
-    let float_bytes =
-        load_binary("../abi_gen/tests/compliance_tests/binary_data/unions/float_value.bin");
-    let float_value = reflector
-        .reflect(&float_bytes, "SimpleUnion")
-        .expect("union float reflect");
-    let formatted_float = format_reflection(&float_value);
-    let float_obj = formatted_float
-        .value
-        .as_object()
-        .expect("union float object");
-    assert_eq!(
-        float_obj.get("variant").and_then(JsonValue::as_str),
-        Some("int_value"),
-        "SimpleUnion parser currently always reports the first variant"
-    );
-}
-
-#[test]
-#[ignore = "Union parsing currently always selects the first variant"]
-fn simple_union_fixture_should_distinguish_variants() {
-    let reflector =
-        load_reflector("../abi_gen/tests/compliance_tests/abi_definitions/unions.abi.yaml");
-
-    let float_bytes =
-        load_binary("../abi_gen/tests/compliance_tests/binary_data/unions/float_value.bin");
-    let float_value = reflector
-        .reflect(&float_bytes, "SimpleUnion")
-        .expect("union float reflect");
-    let formatted_float = format_reflection(&float_value);
-    let float_obj = formatted_float
-        .value
-        .as_object()
-        .expect("union float object");
-    assert_eq!(
-        float_obj.get("variant").and_then(JsonValue::as_str),
-        Some("float_value")
-    );
-    assert_float(
-        float_obj.get("value").expect("float payload"),
-        std::f64::consts::PI,
-        1e-6,
-    );
-
-    let bytes_bytes = load_binary("../abi_gen/tests/compliance_tests/binary_data/unions/bytes.bin");
-    let bytes_value = reflector
-        .reflect(&bytes_bytes, "SimpleUnion")
-        .expect("union bytes reflect");
-    let formatted_bytes = format_reflection(&bytes_value);
-    let bytes_obj = formatted_bytes
-        .value
-        .as_object()
-        .expect("union bytes object");
-    assert_eq!(
-        bytes_obj.get("variant").and_then(JsonValue::as_str),
-        Some("bytes")
-    );
-    assert_eq!(
-        bytes_obj.get("value").and_then(JsonValue::as_str),
-        Some("0xdeadbeef")
-    );
+    for (fixture, int_view, bytes_view) in [
+        ("int_value.bin", -42i64, "0xd6ffffff"),
+        ("float_value.bin", 0x40490fd0, "0xd00f4940"),
+        ("bytes.bin", -272716322, "0xdeadbeef"),
+    ] {
+        let bytes = load_binary(&format!(
+            "../abi_gen/tests/compliance_tests/binary_data/unions/{fixture}"
+        ));
+        let value = reflector
+            .reflect(&bytes, "SimpleUnion")
+            .expect("union reflect");
+        let formatted = format_reflection(&value);
+        let obj = formatted.value.as_object().expect("union formatted object");
+        let keys: Vec<&str> = obj.keys().map(String::as_str).collect();
+        assert_eq!(keys, ["int_value", "float_value", "bytes"], "{fixture}");
+        assert_eq!(
+            obj.get("int_value").and_then(JsonValue::as_i64),
+            Some(int_view),
+            "{fixture}"
+        );
+        assert_eq!(
+            obj.get("bytes").and_then(JsonValue::as_str),
+            Some(bytes_view),
+            "{fixture}"
+        );
+        if fixture == "float_value.bin" {
+            assert_float(
+                obj.get("float_value").expect("float view"),
+                f32::from_bits(0x40490fd0) as f64,
+                1e-9,
+            );
+        }
+    }
 }
 
 #[test]
@@ -790,7 +745,7 @@ fn clob_account_root_reflects_market_and_exchange_metadata() {
         load_reflector_with_imports_and_roots("../type-library/tn_clob_program.abi.yaml");
 
     let mut market = vec![0u8; 320 + 64];
-    market[0] = 0x77;
+    market[0] = 2; /* account_type: market_v1 */
     let reflected_market = reflector
         .reflect_account(&market)
         .expect("market account reflection succeeds");
@@ -799,14 +754,13 @@ fn clob_account_root_reflects_market_and_exchange_metadata() {
         .expect("market account payload");
     match market_payload.get_value() {
         abi_reflect::value::Value::Enum { variant_name, .. } => {
-            assert_eq!(variant_name, "market");
+            assert_eq!(variant_name, "market_v1");
         }
         other => panic!("expected market enum payload, got {other:?}"),
     }
 
-    let mut exchange_meta = vec![0u8; 96];
-    exchange_meta[..8].copy_from_slice(&0xF17EDA2CC10B0078u64.to_le_bytes());
-    exchange_meta[8] = 1;
+    let mut exchange_meta = vec![0u8; 88];
+    exchange_meta[0] = 1; /* account_type: exchange_meta_v1 */
     let reflected_exchange = reflector
         .reflect_account(&exchange_meta)
         .expect("exchange metadata reflection succeeds");
@@ -815,7 +769,7 @@ fn clob_account_root_reflects_market_and_exchange_metadata() {
         .expect("exchange metadata payload");
     match exchange_payload.get_value() {
         abi_reflect::value::Value::Enum { variant_name, .. } => {
-            assert_eq!(variant_name, "exchange_meta");
+            assert_eq!(variant_name, "exchange_meta_v1");
         }
         other => panic!("expected exchange metadata enum payload, got {other:?}"),
     }

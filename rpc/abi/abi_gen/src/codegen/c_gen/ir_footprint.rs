@@ -137,7 +137,7 @@ impl<'a> IrFootprintEmitter<'a> {
     }
 }
 
-fn contains_buffer_size_ref(node: &IrNode) -> bool {
+pub(crate) fn contains_buffer_size_ref(node: &IrNode) -> bool {
     match node {
         IrNode::FieldRef(field) => field.parameter.is_none() && field.path == "__buffer_size",
         IrNode::AlignUp(node) => contains_buffer_size_ref(&node.node),

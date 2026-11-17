@@ -1,0 +1,457 @@
+abi:
+  package: thru.program.core_manager
+  name: Core Manager
+  abi-version: 1
+  package-version: 0.2.0
+  description: Strict genesis-governed Core lifecycle manager. Account discriminators
+    managed program metadata 1, config 2, proof slot 3; admin kinds EOA 1 and Multisig
+    2; proof slot seeds start with coreprf1. Core A (0x..01) and Core B (the Core
+    A-managed pair at seed thru-core-peer:v1) run this binary. Core A upgrades Core
+    B with upgrade; Core B upgrades Core A, which its executable owns, with upgrade_peer.
+    Admin rotation (propose_admin, accept_admin) runs on Core A and moves both configs
+    in one instruction, Core A invoking Core B with the mirrored arguments (peer
+    is Core B and its config; Core B sees Core A and Core A's config). Errors 4097 instruction, 4098 binding, 4099 config, 4100 admin, 4101
+    authorization, 4102 account, 4103 state, 4104 protected, 4105 image, 4106 proof,
+    4107 namespace. No transaction marker or public initialization.
+  imports:
+  - type: path
+    path: thru_primitives.abi.yaml
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: CoreInstruction
+        account-root: CoreManagerAccount
+        errors: CoreManagerError
+types:
+- name: BoundAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: index
+        field-type:
+          primitive: u16
+      - name: address
+        field-type: &id004
+          type-ref:
+            name: Pubkey
+            package: thru.common.primitives
+- name: ImageCommitment
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: source
+        field-type: &id002
+          type-ref:
+            name: BoundAccount
+      - name: offset
+        field-type: &id001
+          primitive: u32
+      - name: length
+        field-type: *id001
+      - name: sha256
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 32
+            element-type: &id003
+              primitive: u8
+- name: CreateEphemeralArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: config
+        field-type: *id002
+      - name: admin
+        field-type: *id002
+      - name: metadata
+        field-type: *id002
+      - name: program
+        field-type: *id002
+      - name: seed
+        field-type: &id005
+          array:
+            size:
+              literal:
+                u64: 32
+            element-type: *id003
+      - name: image
+        field-type: &id006
+          type-ref:
+            name: ImageCommitment
+      - name: application_authority
+        field-type: *id004
+      - name: pin
+        field-type: *id003
+- name: CreatePermanentArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: config
+        field-type: *id002
+      - name: admin
+        field-type: *id002
+      - name: metadata
+        field-type: *id002
+      - name: program
+        field-type: *id002
+      - name: seed
+        field-type: *id005
+      - name: image
+        field-type: *id006
+      - name: application_authority
+        field-type: *id004
+      - name: pin
+        field-type: *id003
+      - name: slot
+        field-type: *id002
+      - name: slot_seed
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 32
+            element-type: *id003
+- name: UpgradeArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: config
+        field-type: *id002
+      - name: admin
+        field-type: *id002
+      - name: metadata
+        field-type: *id002
+      - name: program
+        field-type: *id002
+      - name: image
+        field-type: *id006
+- name: UpgradePeerArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: config
+        field-type: *id002
+      - name: admin
+        field-type: *id002
+      - name: peer
+        field-type: *id002
+      - name: image
+        field-type: *id006
+- name: SetPauseArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: config
+        field-type: *id002
+      - name: admin
+        field-type: *id002
+      - name: metadata
+        field-type: *id002
+      - name: program
+        field-type: *id002
+      - name: paused
+        field-type: *id003
+- name: PairArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: config
+        field-type: *id002
+      - name: admin
+        field-type: *id002
+      - name: metadata
+        field-type: *id002
+      - name: program
+        field-type: *id002
+- name: SetApplicationAuthorityArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: config
+        field-type: *id002
+      - name: admin
+        field-type: *id002
+      - name: metadata
+        field-type: *id002
+      - name: program
+        field-type: *id002
+      - name: application_authority
+        field-type: *id004
+- name: SetPinArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: config
+        field-type: *id002
+      - name: admin
+        field-type: *id002
+      - name: target
+        field-type: *id002
+      - name: pin
+        field-type: *id003
+- name: ProposeAdminArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: config
+        field-type: *id002
+      - name: admin
+        field-type: *id002
+      - name: candidate
+        field-type: *id002
+      - name: candidate_kind
+        field-type: *id003
+      - name: peer_program
+        field-type: *id002
+      - name: peer_config
+        field-type: *id002
+- name: AcceptAdminArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: config
+        field-type: *id002
+      - name: admin
+        field-type: *id002
+      - name: peer_program
+        field-type: *id002
+      - name: peer_config
+        field-type: *id002
+- name: WriteProofSlotArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: slot
+        field-type: *id002
+      - name: seed
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 32
+            element-type: *id003
+      - name: metadata_proof_size
+        field-type: *id001
+      - name: program_proof_size
+        field-type: *id001
+      - name: metadata_proof
+        field-type:
+          array:
+            size:
+              field-ref:
+                path:
+                - metadata_proof_size
+            element-type: *id003
+      - name: program_proof
+        field-type:
+          array:
+            size:
+              field-ref:
+                path:
+                - program_proof_size
+            element-type: *id003
+- name: CoreInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: tag
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - tag
+            variants:
+            - name: create_permanent
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: CreatePermanentArgs
+            - name: create_ephemeral
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: CreateEphemeralArgs
+            - name: upgrade
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: UpgradeArgs
+            - name: set_pause
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: SetPauseArgs
+            - name: destroy
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: PairArgs
+            - name: finalize
+              tag-value: 5
+              variant-type:
+                type-ref:
+                  name: PairArgs
+            - name: set_application_authority
+              tag-value: 6
+              variant-type:
+                type-ref:
+                  name: SetApplicationAuthorityArgs
+            - name: set_pin
+              tag-value: 7
+              variant-type:
+                type-ref:
+                  name: SetPinArgs
+            - name: propose_admin
+              tag-value: 8
+              variant-type:
+                type-ref:
+                  name: ProposeAdminArgs
+            - name: accept_admin
+              tag-value: 9
+              variant-type:
+                type-ref:
+                  name: AcceptAdminArgs
+            - name: write_proof_slot
+              tag-value: 10
+              variant-type:
+                type-ref:
+                  name: WriteProofSlotArgs
+            - name: upgrade_peer
+              tag-value: 11
+              variant-type:
+                type-ref:
+                  name: UpgradePeerArgs
+# Account root. Byte 0 of every account Core owns (other than program code
+# accounts, which stay raw) is account_type. Values are never reused; a new
+# layout takes the next unused value. Managed program metadata has the same
+# layout and value as the Public Manager's program metadata.
+- name: CoreManagerAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: account_type
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - account_type
+            variants:
+            - name: program_meta_v1
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: ManagedProgramMetadata
+            - name: config_v1
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: CoreConfig
+            - name: proof_slot_v1
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: ProofSlot
+# Config payload (71 bytes after account_type).
+- name: CoreConfig
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: admin_kind
+        field-type: *id003
+      - name: pending_admin_kind
+        field-type: *id003
+      - name: pending_present
+        field-type: *id003
+      - name: reserved
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 4
+            element-type: *id003
+      - name: admin
+        field-type: *id004
+      - name: pending_admin
+        field-type: *id004
+# Managed program metadata payload (73 bytes after account_type).
+- name: ManagedProgramMetadata
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: authority
+        field-type: *id004
+      - name: authority_candidate
+        field-type: *id004
+      - name: version
+        field-type: &id007
+          primitive: u64
+      - name: state
+        field-type: *id003
+# Proof slot payload (after account_type).
+- name: ProofSlot
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: reserved
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 3
+            element-type: *id003
+      - name: metadata_proof_size
+        field-type: *id001
+      - name: program_proof_size
+        field-type: *id001
+      - name: metadata_proof
+        field-type:
+          array:
+            size:
+              field-ref:
+                path:
+                - metadata_proof_size
+            element-type: *id003
+      - name: program_proof
+        field-type:
+          array:
+            size:
+              field-ref:
+                path:
+                - program_proof_size
+            element-type: *id003
+- name: CoreManagerError
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: code
+        field-type: *id007

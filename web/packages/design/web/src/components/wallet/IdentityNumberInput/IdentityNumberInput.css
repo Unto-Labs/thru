@@ -1,0 +1,29 @@
+.tds-identity-input[data-masked] {
+  -webkit-text-security: disc;
+}
+
+.tds-identity-input::placeholder {
+  -webkit-text-security: none;
+}
+
+@supports not (-webkit-text-security: disc) {
+  .tds-identity-input[data-masked] {
+    color: transparent;
+    caret-color: var(--color-text-primary);
+  }
+}
+
+.tds-identity-input__toggle {
+  flex: none;
+  align-self: stretch;
+  min-width: 44px;
+  margin-right: calc(-1 * var(--space-3));
+}
+
+.tds-identity-input__toggle.tds-btn {
+  padding-inline: var(--space-2);
+}
+
+.tds-identity-input__toggle.tds-btn:focus-visible {
+  outline-offset: -2px;
+}

@@ -5,9 +5,7 @@ use std::path::PathBuf;
 
 use abi_gen::abi::file::ImportResolver as GenImportResolver;
 use abi_gen::abi::resolved::TypeResolver;
-use abi_loader::{
-    AbiFile, AbiMetadata, EnhancedImportResolver, FetcherConfig, ImportResolver, ImportSource,
-};
+use abi_loader::{EnhancedImportResolver, FetcherConfig};
 use abi_reflect::{FormatOptions, Reflector, format_reflection_with_options};
 
 use crate::cli::{AbiIrFormat, AbiLanguage};
@@ -20,13 +18,22 @@ pub fn handle_codegen_command(
     language: AbiLanguage,
     output_dir: PathBuf,
     verbose: bool,
+    go_module: Option<String>,
 ) -> Result<(), CliError> {
     let language = match language {
         AbiLanguage::C => abi_gen::cmds::codegen::Language::C,
         AbiLanguage::Rust => abi_gen::cmds::codegen::Language::Rust,
         AbiLanguage::TypeScript => abi_gen::cmds::codegen::Language::TypeScript,
+        AbiLanguage::Go => abi_gen::cmds::codegen::Language::Go,
     };
-    abi_gen::cmds::codegen::run(files, include_dirs, language, output_dir, verbose)?;
+    abi_gen::cmds::codegen::run_with_options(
+        files,
+        include_dirs,
+        language,
+        output_dir,
+        verbose,
+        &abi_gen::cmds::codegen::CodegenOptions { go_module },
+    )?;
     Ok(())
 }
 
@@ -199,98 +206,12 @@ pub fn handle_prep_for_publish_command(
         println!("  Target network: {}", target_network);
     }
 
-    let mut resolver = ImportResolver::new(include_dirs.clone());
-    resolver.load_file_with_imports_skip_remote(&file, verbose)?;
-
-    let all_files = resolver.get_all_files();
-    if all_files.is_empty() {
-        return Err(CliError::Generic {
-            message: "No ABI files loaded".to_string(),
-        });
-    }
-
-    if verbose {
-        println!("  Resolved {} local packages", resolver.loaded_file_count());
-    }
-
-    if all_files.len() > 1 {
-        for abi_file in &all_files[..all_files.len() - 1] {
-            for import in abi_file.imports() {
-                if !matches!(import, ImportSource::Path { .. }) {
-                    return Err(CliError::Generic {
-                        message: format!(
-                            "Remote import found in local dependency '{}': {:?}",
-                            abi_file.package(),
-                            import
-                        ),
-                    });
-                }
-            }
-        }
-    }
-
-    let mut all_types = resolver.get_all_types().to_vec();
-    abi_loader::normalize_type_refs(&mut all_types, &resolver);
-
-    let root_abi = all_files.last().expect("checked non-empty above");
-
-    let mut remaining_imports: Vec<ImportSource> = Vec::new();
-    for import in root_abi.imports() {
-        match import {
-            ImportSource::Onchain {
-                address,
-                network: net,
-                ..
-            } => {
-                if net != &target_network {
-                    return Err(CliError::Generic {
-                        message: format!(
-                            "On-chain import '{}' uses network '{}' but prep-for-publish target is '{}'",
-                            address, net, target_network
-                        ),
-                    });
-                }
-                remaining_imports.push(import.clone());
-            }
-            ImportSource::Path { path } => {
-                if verbose {
-                    println!("  Inlining path import: {}", path);
-                }
-            }
-            ImportSource::Git { url, .. } => {
-                return Err(CliError::Generic {
-                    message: format!("Git imports not allowed for publishing: {}", url),
-                });
-            }
-            ImportSource::Http { url } => {
-                return Err(CliError::Generic {
-                    message: format!("HTTP imports not allowed for publishing: {}", url),
-                });
-            }
-        }
-    }
-
-    let output_metadata = AbiMetadata {
-        package: root_abi.package().to_string(),
-        name: root_abi.name().map(|value| value.to_string()),
-        abi_version: root_abi.abi_version(),
-        package_version: root_abi.package_version().to_string(),
-        description: root_abi.description().to_string(),
-        imports: remaining_imports,
-        options: root_abi.options().clone(),
-    };
-
-    let output_abi = AbiFile {
-        abi: output_metadata,
-        types: all_types,
-    };
-
-    let yaml = serde_yml::to_string(&output_abi).map_err(anyhow::Error::from)?;
+    let yaml =
+        abi_gen::cmds::common::prepare_for_publish(&file, &include_dirs, &target_network, verbose)?;
     fs::write(&output, &yaml)?;
 
     if verbose {
         println!("  Written to: {}", output.display());
-        println!("  Total types: {}", output_abi.get_types().len());
     }
 
     Ok(())
@@ -356,6 +277,7 @@ fn build_bundle_fetcher_config(config: &Config) -> FetcherConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use abi_loader::{AbiFile, ImportSource};
     use std::collections::HashMap;
     use tempfile::TempDir;
 
@@ -365,6 +287,28 @@ mod tests {
         let path = dir.path().join(name);
         fs::write(&path, contents).expect("test fixture should be written");
         path
+    }
+
+    #[test]
+    fn codegen_go_writes_a_module() {
+        let dir = TempDir::new().expect("temp dir");
+        let abi = write_test_file(&dir, "dep.abi.yaml", dependency_abi());
+        let out = dir.path().join("gen");
+        handle_codegen_command(
+            vec![abi],
+            Vec::new(),
+            AbiLanguage::Go,
+            out.clone(),
+            false,
+            Some("example.com/me/abi".to_string()),
+        )
+        .expect("go codegen");
+        let go_mod = fs::read_to_string(out.join("go.mod")).expect("go.mod");
+        assert!(go_mod.starts_with("module example.com/me/abi\n"));
+        assert!(out.join("tnabi/runtime.go").exists());
+        let types = fs::read_to_string(out.join("test/dep/types.go")).expect("types.go");
+        assert!(types.contains("package dep\n"));
+        assert!(types.contains("func ParseSharedType("));
     }
 
     fn dependency_abi() -> &'static str {
@@ -377,7 +321,12 @@ abi:
 types:
   - name: SharedType
     kind:
-      primitive: u64
+      struct:
+        packed: true
+        fields:
+          - name: value
+            field-type:
+              primitive: u64
 "#
     }
 
@@ -611,5 +560,203 @@ types:
             fetcher_config.onchain_config.abi_manager_program_id,
             config.abi_manager_program_public_key
         );
+    }
+
+    #[test]
+    fn preparation_requires_exact_local_qualifiers_and_unique_names() {
+        let dir = TempDir::new().unwrap();
+        write_test_file(&dir, "dep.abi.yaml", dependency_abi());
+        for (index, reference) in [
+            "name: SharedType\n                package: test.dep.extra",
+            "name: test.dep.extra.SharedType",
+            "name: Missing\n                package: test.dep",
+            "name: test.dep.Missing",
+            "name: SharedType\n                package: unknown",
+            "name: test.dep.SharedType\n                package: other",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let input = root_abi_with_path_imports().replace(
+                "name: SharedType\n                package: test.dep",
+                reference,
+            );
+            let root = write_test_file(&dir, "root.abi.yaml", &input);
+            let output = dir.path().join(format!("invalid-{index}.yaml"));
+            assert!(
+                handle_prep_for_publish_command(
+                    root.clone(),
+                    vec![],
+                    "mainnet".into(),
+                    output.clone(),
+                    false
+                )
+                .is_err()
+            );
+            assert!(handle_flatten_command(root, vec![], output.clone(), false).is_err());
+            assert!(!output.exists());
+        }
+        // The same layout from a root declaration is not the imported identity.
+        let input = root_abi_with_path_imports().to_owned()
+            + "  - name: SharedType\n    kind:\n      primitive: u64\n";
+        let root = write_test_file(&dir, "root.abi.yaml", &input);
+        let err = handle_prep_for_publish_command(
+            root,
+            vec![],
+            "mainnet".into(),
+            dir.path().join("collision.yaml"),
+            false,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("Conflicting declarations"));
+    }
+
+    #[test]
+    fn preparation_preserves_remote_qualification_without_fetching() {
+        let dir = TempDir::new().unwrap();
+        write_test_file(&dir, "dep.abi.yaml", dependency_abi());
+        for (index, reference) in [
+            "name: external.pkg.RemoteType",
+            "name: RemoteType\n                package: external.pkg",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let input = root_abi_for_publish_same_network().replace(
+                "name: SharedType\n                package: test.dep",
+                reference,
+            );
+            let root = write_test_file(&dir, "root.abi.yaml", &input);
+            let output = dir.path().join(format!("remote-{index}.yaml"));
+            handle_prep_for_publish_command(
+                root.clone(),
+                vec![],
+                "mainnet".into(),
+                output.clone(),
+                false,
+            )
+            .unwrap();
+            let bytes = fs::read_to_string(output).unwrap();
+            assert_eq!(
+                bytes,
+                abi_loader::prepare_for_publish(&root, &[], "mainnet", false).unwrap()
+            );
+            let prepared: AbiFile = serde_yml::from_str(&bytes).unwrap();
+            let original: AbiFile = serde_yml::from_str(&input).unwrap();
+            let root_type = prepared
+                .types
+                .iter()
+                .find(|ty| ty.name == "RootType")
+                .unwrap();
+            assert_eq!(root_type.kind, original.types[0].kind);
+            assert_eq!(prepared.imports().len(), 1);
+        }
+    }
+
+    #[test]
+    fn preparation_diamond_and_checkout_independence() {
+        let mut outputs = Vec::new();
+        for reverse in [false, true] {
+            let dir = TempDir::new().unwrap();
+            write_test_file(&dir, "dep.abi.yaml", dependency_abi());
+            for (file, package) in [("left.yaml", "test.left"), ("right.yaml", "test.right")] {
+                let branch = format!(
+                    "abi:\n  package: {package}\n  abi-version: 1\n  package-version: 1.0.0\n  description: branch\n  imports: [{{type: path, path: dep.abi.yaml}}]\ntypes: []\n"
+                );
+                write_test_file(&dir, file, &branch);
+            }
+            let imports = if reverse {
+                "    - type: path\n      path: right.yaml\n    - type: path\n      path: left.yaml"
+            } else {
+                "    - type: path\n      path: left.yaml\n    - type: path\n      path: right.yaml"
+            };
+            let input = root_abi_with_path_imports()
+                .replace("    - type: path\n      path: dep.abi.yaml", imports);
+            let root = write_test_file(&dir, "root.abi.yaml", &input);
+            let output = dir.path().join("publish.yaml");
+            handle_prep_for_publish_command(root, vec![], "mainnet".into(), output.clone(), false)
+                .unwrap();
+            let bytes = fs::read_to_string(output).unwrap();
+            let prepared: AbiFile = serde_yml::from_str(&bytes).unwrap();
+            assert_eq!(
+                prepared
+                    .types
+                    .iter()
+                    .filter(|ty| ty.name == "SharedType")
+                    .count(),
+                1
+            );
+            outputs.push(bytes);
+        }
+        assert_eq!(outputs[0], outputs[1]);
+    }
+
+    #[test]
+    fn preparation_rejects_remote_imports_below_root_and_root_web_imports() {
+        let dir = TempDir::new().unwrap();
+        for import in [
+            "{type: onchain, address: taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQE, network: mainnet}",
+            "{type: http, url: 'https://invalid.example/abi'}",
+            "{type: git, url: 'https://invalid.example/repo', ref: main, path: abi.yaml}",
+        ] {
+            let dependency =
+                dependency_abi().replace("types:", &format!("  imports: [{import}]\ntypes:"));
+            write_test_file(&dir, "dep.abi.yaml", &dependency);
+            let root = write_test_file(&dir, "root.abi.yaml", root_abi_with_path_imports());
+            let error = handle_prep_for_publish_command(
+                root,
+                vec![],
+                "mainnet".into(),
+                dir.path().join("publish.yaml"),
+                false,
+            )
+            .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("Remote import found in local dependency")
+            );
+            if !import.contains("onchain") {
+                let input =
+                    dependency_abi().replace("types:", &format!("  imports: [{import}]\ntypes:"));
+                let root = write_test_file(&dir, "root.abi.yaml", &input);
+                assert!(
+                    handle_prep_for_publish_command(
+                        root,
+                        vec![],
+                        "mainnet".into(),
+                        dir.path().join("publish.yaml"),
+                        false
+                    )
+                    .is_err()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn preparation_rejects_missing_program_roots_before_writing() {
+        let dir = TempDir::new().unwrap();
+        for role in ["instruction-root", "account-root", "errors", "events"] {
+            let input = dependency_abi().replace(
+                "types:", &format!("  options:\n    program-metadata:\n      root-types:\n        {role}: Missing\ntypes:"),
+            );
+            let root = write_test_file(&dir, "root.abi.yaml", &input);
+            let output = dir.path().join(format!("missing-{role}.yaml"));
+            let error = handle_prep_for_publish_command(
+                root,
+                vec![],
+                "mainnet".into(),
+                output.clone(),
+                false,
+            )
+            .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains(&format!("Unresolved declared {role} root 'Missing'"))
+            );
+            assert!(!output.exists());
+        }
     }
 }

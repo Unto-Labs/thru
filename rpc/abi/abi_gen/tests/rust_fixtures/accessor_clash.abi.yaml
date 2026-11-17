@@ -1,0 +1,20 @@
+abi:
+  package: "test.accessor_clash"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "A field named like a view method (size) next to the name it would be renamed to (size_)"
+types:
+  - name: "Sized"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "size"
+            field-type:
+              primitive: u8
+          - name: "size_"
+            field-type:
+              primitive: u8
+          - name: "check"
+            field-type:
+              primitive: u8

@@ -951,7 +951,7 @@ export class BrowserSDK implements WalletSDK {
       (payload.method === 'card'
         ? 'coinbase'
         : payload.method === 'crypto' ||
-            (payload.destination && enabledProviders.includes('unifold'))
+            (!payload.method && payload.destination && enabledProviders.includes('unifold'))
           ? 'unifold'
           : undefined);
     if (
@@ -1232,7 +1232,7 @@ export class BrowserSDK implements WalletSDK {
             network: destination.network,
             depositTarget: destination.depositTarget,
           }
-        : DepositTarget.THRUSD,
+        : DepositTarget.UUSD,
     );
     return {
       destination: destination

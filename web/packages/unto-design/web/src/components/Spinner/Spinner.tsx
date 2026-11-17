@@ -1,0 +1,23 @@
+import * as React from "react";
+import "./Spinner.css";
+
+export type SpinnerTone = "neutral" | "brick" | "inherit";
+
+export interface SpinnerProps extends React.HTMLAttributes<HTMLSpanElement> {
+  tone?: SpinnerTone;
+}
+
+/**
+ * Spinner — a subdued loading indicator (CSS only).
+ *
+ * Size, thickness, and speed are tunable via inline style
+ * (`width`/`height`, `borderWidth`, `animationDuration`).
+ */
+export const Spinner = React.forwardRef<HTMLSpanElement, SpinnerProps>(
+  function Spinner({ tone = "neutral", className, ...props }, ref) {
+    const cls = ["uds-spinner", `uds-spinner--${tone}`, className]
+      .filter(Boolean)
+      .join(" ");
+    return <span ref={ref} className={cls} role="status" aria-label="Loading" {...props} />;
+  },
+);

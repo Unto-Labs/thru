@@ -4,6 +4,8 @@ import { Collapsible } from "@base-ui/react/collapsible";
 import QRCode from "qrcode";
 import { cn } from "../../../utils";
 import { Button } from "../../Button/Button";
+import { Checkbox } from "../../Checkbox/Checkbox";
+import { Tag } from "../../Tag/Tag";
 import { Input } from "../../Input/Input";
 import { Spinner } from "../../Spinner/Spinner";
 import { Stepper } from "../../Stepper/Stepper";
@@ -57,6 +59,11 @@ const CardIcon = (p: React.SVGProps<SVGSVGElement>) => (
     <path d="M7 14.5h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square" />
   </svg>
 );
+const BankIcon = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" aria-hidden {...p}>
+    <path d="M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square" />
+  </svg>
+);
 const DropIcon = (p: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="none" aria-hidden {...p}>
     <path
@@ -74,7 +81,7 @@ const PhoneWaves = (p: React.SVGProps<SVGSVGElement>) => (
     <path d="M17.5 9a5 5 0 0 1 0 6M20 6.5a8.5 8.5 0 0 1 0 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
   </svg>
 );
-const Lock = (p: React.SVGProps<SVGSVGElement>) => (
+export const Lock = (p: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 16 16" fill="none" aria-hidden {...p}>
     <rect x="3" y="7" width="10" height="7" stroke="currentColor" strokeWidth="1.3" />
     <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" stroke="currentColor" strokeWidth="1.3" />
@@ -88,7 +95,7 @@ const ShieldCheck = (p: React.SVGProps<SVGSVGElement>) => (
 );
 
 /** `faucet` is the test faucet a wallet offers in developer mode. */
-export type WalletSheetDepositMethod = "crypto" | "card" | "faucet";
+export type WalletSheetDepositMethod = "crypto" | "card" | "bank" | "faucet";
 
 export interface DepositDestinationInfo {
   /** Account name, e.g. "Main". */
@@ -132,7 +139,7 @@ export interface DepositStepProgress {
 }
 
 /** The rail header with the stepper over it (nothing below two steps). */
-function StepHeader({
+export function StepHeader({
   title,
   description,
   step,
@@ -346,12 +353,15 @@ export function DepositPayButton({
 export interface WalletSheetDepositProps {
   title?: React.ReactNode;
   description?: React.ReactNode;
-  /** Which rails to offer (default both). */
+  /** Which rails to offer (default crypto and card). */
   methods?: WalletSheetDepositMethod[];
   cryptoTitle?: React.ReactNode;
   cryptoDescription?: React.ReactNode;
   /** Registry chain ids for the fanned logos (default Ethereum, Solana, Base). */
   cryptoChainIds?: number[];
+  bankTitle?: React.ReactNode;
+  bankDescription?: React.ReactNode;
+  bankTag?: React.ReactNode;
   cardTitle?: React.ReactNode;
   cardDescription?: React.ReactNode;
   faucetTitle?: React.ReactNode;
@@ -359,6 +369,7 @@ export interface WalletSheetDepositProps {
   /** "Deposits land in ● Main · taAAAA…AAMD" footer; omit to hide. */
   destination?: DepositDestinationInfo;
   onCrypto?: () => void;
+  onBank?: () => void;
   onCard?: () => void;
   onFaucet?: () => void;
   /**
@@ -369,18 +380,21 @@ export interface WalletSheetDepositProps {
    */
   open?: WalletSheetDepositMethod | null;
   onCollapse?: () => void;
-  /** Content unfolded under the crypto / card row (accordion mode). */
+  /** Content unfolded under each method row (accordion mode). */
   cryptoPanel?: React.ReactNode;
+  bankPanel?: React.ReactNode;
   cardPanel?: React.ReactNode;
   faucetPanel?: React.ReactNode;
   /** The panel bodies, for a host that renders into them (a portal). They
    *  stay mounted — hidden — while folded, so the refs are stable. */
   cryptoPanelRef?: React.Ref<HTMLDivElement>;
+  bankPanelRef?: React.Ref<HTMLDivElement>;
   cardPanelRef?: React.Ref<HTMLDivElement>;
   faucetPanelRef?: React.Ref<HTMLDivElement>;
 }
 
 interface DepositMethodRowProps {
+  tag?: React.ReactNode;
   art: React.ReactNode;
   title: React.ReactNode;
   description: React.ReactNode;
@@ -394,7 +408,7 @@ interface DepositMethodRowProps {
 
 /** One chooser row: a plain button, or (accordion mode) a collapsible whose
  *  panel unfolds the rail under the row. */
-function DepositMethodRow({ art, title, description, onSelect, open, onCollapse, panel, panelRef }: DepositMethodRowProps) {
+function DepositMethodRow({ art, title, description, tag, onSelect, open, onCollapse, panel, panelRef }: DepositMethodRowProps) {
   const row = (
     <>
       <span className="tds-dep__method-art">{art}</span>
@@ -402,6 +416,7 @@ function DepositMethodRow({ art, title, description, onSelect, open, onCollapse,
         <span className="tds-dep__method-title">{title}</span>
         <span className="tds-dep__method-sub">{description}</span>
       </span>
+      {tag != null && <Tag>{tag}</Tag>}
       <ChevronRight width={14} height={14} className="tds-dep__method-chev" />
     </>
   );
@@ -435,20 +450,26 @@ function DepositScreen({
   cryptoTitle = "Deposit crypto",
   cryptoDescription = "Any chain, any token · from a wallet or exchange",
   cryptoChainIds = [1, 501, 8453],
+  bankTitle = "Bank transfer",
+  bankDescription = "1-3 business days",
+  bankTag = "New",
   cardTitle = "Apple Pay or Google Pay",
   cardDescription = "Debit card via Coinbase · US only",
   faucetTitle = "Test faucet",
   faucetDescription = "Test tokens with no real value · developer mode",
   destination,
   onCrypto,
+  onBank,
   onCard,
   onFaucet,
   open,
   onCollapse,
   cryptoPanel,
+  bankPanel,
   cardPanel,
   faucetPanel,
   cryptoPanelRef,
+  bankPanelRef,
   cardPanelRef,
   faucetPanelRef,
 }: WalletSheetDepositProps) {
@@ -471,6 +492,19 @@ function DepositScreen({
             onCollapse={onCollapse}
             panel={cryptoPanel}
             panelRef={cryptoPanelRef}
+          />
+        )}
+        {methods.includes("bank") && (
+          <DepositMethodRow
+            art={<span className="tds-dep__method-glyph"><BankIcon width={20} height={20} /></span>}
+            title={bankTitle}
+            description={bankDescription}
+            tag={bankTag}
+            onSelect={onBank}
+            open={accordion ? open === "bank" : undefined}
+            onCollapse={onCollapse}
+            panel={bankPanel}
+            panelRef={bankPanelRef}
           />
         )}
         {methods.includes("card") && (
@@ -517,6 +551,67 @@ function DepositScreen({
       )}
     </Screen>
   );
+}
+
+export interface WalletSheetDepositAgreementProps {
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  step?: DepositStepProgress;
+  agreementLabel: React.ReactNode;
+  agreementHref: string;
+  openLabel?: React.ReactNode;
+  children: React.ReactNode;
+  agreed: boolean;
+  onAgreedChange: (agreed: boolean) => void;
+  agreeLabel: React.ReactNode;
+  continueLabel?: React.ReactNode;
+  onContinue: () => void;
+  embedded?: boolean;
+}
+
+function DepositAgreement({
+  title,
+  description,
+  step,
+  agreementLabel,
+  agreementHref,
+  openLabel = "Open",
+  children,
+  agreed,
+  onAgreedChange,
+  agreeLabel,
+  continueLabel = "Continue",
+  onContinue,
+  embedded = false,
+}: WalletSheetDepositAgreementProps) {
+  const labelId = React.useId();
+  const content = (
+    <>
+      <StepHeader title={title} description={description} step={step} />
+      <section className="tds-dep__field" aria-labelledby={labelId}>
+        <div className="tds-dep__agreement-label">
+          <span id={labelId} className="tds-dep__label">{agreementLabel}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            nativeButton={false}
+            render={<a href={agreementHref} target="_blank" rel="noopener noreferrer" aria-label="Open End-User Agreement" />}
+          >
+            {openLabel}
+          </Button>
+        </div>
+        <div className="tds-dep__agreement-box" tabIndex={0}>{children}</div>
+      </section>
+      <Checkbox className="tds-dep__agree" checked={agreed} onCheckedChange={onAgreedChange}>
+        {agreeLabel}
+      </Checkbox>
+      <Button variant="primary" className="tds-wsheet__cta" disabled={!agreed} onClick={onContinue}>
+        {continueLabel}
+      </Button>
+    </>
+  );
+  if (embedded) return <div className="tds-dep__agreement tds-dep__embedded">{content}</div>;
+  return <Screen className="tds-dep__agreement">{content}</Screen>;
 }
 
 export interface WalletSheetDepositCryptoProps {
@@ -1365,10 +1460,11 @@ function DepositVerify({
 }
 
 export interface WalletSheetDepositPendingProps {
+  step?: DepositStepProgress;
   method?: WalletSheetDepositMethod;
   title?: React.ReactNode;
   description?: React.ReactNode;
-  steps: StepItem[];
+  steps?: StepItem[];
   slowAfterMs?: number;
   note?: React.ReactNode;
   onClose?: () => void;
@@ -1376,6 +1472,7 @@ export interface WalletSheetDepositPendingProps {
 }
 
 function DepositPending({
+  step,
   method = "crypto",
   title,
   description,
@@ -1388,6 +1485,11 @@ function DepositPending({
   const { slow } = useWaitStages(method, slowAfterMs, 0, false);
   return (
     <Screen>
+      {step && (
+        <div className="tds-dep__pending-progress">
+          <Stepper count={step.count} active={step.active} label="Deposit progress" />
+        </div>
+      )}
       <WaitHero
         slow={slow}
         title={
@@ -1400,7 +1502,7 @@ function DepositPending({
         }
         content={description}
       />
-      <Steps items={steps} />
+      {steps && <Steps items={steps} />}
       <div className="tds-dep__pending-foot">
         <span className="tds-dep__note">{note}</span>
         {onClose && (
@@ -1409,6 +1511,41 @@ function DepositPending({
           </Button>
         )}
       </div>
+    </Screen>
+  );
+}
+
+export interface WalletSheetDepositVerifiedProps {
+  title?: React.ReactNode;
+  step?: DepositStepProgress;
+  items: StepItem[];
+  onDone: () => void;
+  doneLabel?: React.ReactNode;
+  /** The button can't be used yet (the bank details are still being set up). */
+  disabled?: boolean;
+  /** Read out by screen readers when it changes, e.g. "Bank details ready". */
+  announce?: React.ReactNode;
+}
+
+function DepositVerified({
+  title = "You’re verified",
+  step,
+  items,
+  onDone,
+  doneLabel = "Done",
+  disabled,
+  announce,
+}: WalletSheetDepositVerifiedProps) {
+  return (
+    <Screen>
+      <StepHeader title={title} step={step} />
+      <Steps items={items} />
+      <span role="status" className="tds-dep__sr-status">
+        {announce}
+      </span>
+      <Button variant="primary" className="tds-wsheet__cta" onClick={onDone} disabled={disabled}>
+        {doneLabel}
+      </Button>
     </Screen>
   );
 }
@@ -1459,6 +1596,7 @@ function DepositDone({ amount, description, rows, onDone, doneLabel = "Done" }: 
 export const DepositScreens = {
   Deposit: DepositScreen,
   DepositCrypto,
+  DepositAgreement,
   DepositCard,
   DepositFaucet,
   DepositContact,
@@ -1467,5 +1605,6 @@ export const DepositScreens = {
   DepositReview,
   DepositVerify,
   DepositPending,
+  DepositVerified,
   DepositDone,
 };

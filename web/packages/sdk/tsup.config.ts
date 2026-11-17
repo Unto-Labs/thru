@@ -5,6 +5,7 @@ export default defineConfig({
     compression: 'thru-ts-client-sdk/compression.ts',
     'programs/compression/abi/thru/program/compression/types': 'thru-ts-client-sdk/domain/programs/compression/abi/thru/program/compression/types.ts',
     'programs/compression/abi/thru/blockchain/state_proof/types': 'thru-ts-client-sdk/domain/programs/compression/abi/thru/blockchain/state_proof/types.ts',
+    'programs/compression/abi/thru/common/primitives/types': 'thru-ts-client-sdk/domain/programs/compression/abi/thru/common/primitives/types.ts',
     'programs/multicall/abi/thru/program/multicall/types': 'thru-ts-client-sdk/domain/programs/multicall/abi/thru/program/multicall/types.ts',
     'programs/multicall/abi/thru/common/primitives/types': 'thru-ts-client-sdk/domain/programs/multicall/abi/thru/common/primitives/types.ts',
     'programs/uploader/abi/thru/program/uploader/types': 'thru-ts-client-sdk/domain/programs/uploader/abi/thru/program/uploader/types.ts',

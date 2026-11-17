@@ -4,12 +4,18 @@ import {
   type OracleBooleanFeedData,
   type OraclePriceFeedData,
 } from "./abi/thru/program/oracle/types";
-import { ORACLE_FEED_TYPE_BOOLEAN, ORACLE_FEED_TYPE_PRICE } from "./constants";
 import { decodeCommonFeedData } from "./decode";
 import type { OracleBooleanFeed, OracleFeed, OraclePriceFeed } from "./types";
+import { decodeAccountRoot } from "../utils/account-root";
 
-const PRICE_FEED_ACCOUNT_LENGTH = 161;
-const BOOLEAN_FEED_ACCOUNT_LENGTH = 146;
+/**
+ * Decodes Oracle program account data through its account root. Byte 0 is
+ * the account type (price feed or boolean feed); returns null for any other
+ * type or a buffer whose size does not match that type exactly.
+ */
+export function decodeOracleFeedAccount(data: Uint8Array): OracleFeedAccount | null {
+  return decodeAccountRoot(data, (bytes) => OracleFeedAccount.from_array(bytes));
+}
 
 export function parseOracleFeedAccount(
   account: Account | Uint8Array,
@@ -17,27 +23,16 @@ export function parseOracleFeedAccount(
   const data = account instanceof Uint8Array ? account : account.data?.data;
   if (!data) throw new Error("Oracle feed account data is missing");
 
-  const feedType = data[0];
-  const expectedLength =
-    feedType === ORACLE_FEED_TYPE_PRICE
-      ? PRICE_FEED_ACCOUNT_LENGTH
-      : feedType === ORACLE_FEED_TYPE_BOOLEAN
-        ? BOOLEAN_FEED_ACCOUNT_LENGTH
-        : null;
-  if (expectedLength === null)
-    throw new Error(`Unknown Oracle feed type: ${feedType}`);
-  if (data.length !== expectedLength) {
+  const feed = decodeOracleFeedAccount(data);
+  if (!feed) {
     throw new Error(
-      `Malformed Oracle feed account: expected ${expectedLength} bytes, got ${data.length}`,
+      `Not an Oracle feed account: account type ${data[0]}, ${data.length} bytes`,
     );
   }
-
-  const feed = OracleFeedAccount.from_array(data);
-  if (!feed) throw new Error("Malformed Oracle feed account");
-
-  if (feedType === ORACLE_FEED_TYPE_PRICE)
-    return parsePriceFeed(feed.data().asPrice());
-  return parseBooleanFeed(feed.data().asBoolean());
+  const payload = feed.payload();
+  const price = payload.asPriceFeedV1();
+  if (price) return parsePriceFeed(price);
+  return parseBooleanFeed(payload.asBoolFeedV1());
 }
 
 function parsePriceFeed(data: OraclePriceFeedData | null): OraclePriceFeed {

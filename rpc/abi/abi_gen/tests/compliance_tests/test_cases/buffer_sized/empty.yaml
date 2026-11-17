@@ -1,0 +1,7 @@
+test-case:
+  name: "buffer_sized_empty"
+  abi-file: "../../abi_definitions/buffer_sized.abi.yaml"
+  type: "BufferSizedEntries"
+  description: "entries count = (4 - 4) / 8 = 0"
+  tags: ["arrays", "buffer-size", "sub", "div"]
+  binary-hex: "01000000"

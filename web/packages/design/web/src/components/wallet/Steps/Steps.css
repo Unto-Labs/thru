@@ -20,6 +20,11 @@
   color: var(--color-text-tertiary);
 }
 
+.tds-steps__detail {
+  margin-left: auto;
+  color: var(--color-text-secondary);
+}
+
 .tds-steps__glyph {
   width: 16px;
   height: 16px;
@@ -29,6 +34,9 @@
 }
 .tds-steps__check {
   color: var(--grass-400);
+}
+.tds-steps__cross {
+  color: var(--brick-400);
 }
 .tds-steps__spin {
   width: 11px;

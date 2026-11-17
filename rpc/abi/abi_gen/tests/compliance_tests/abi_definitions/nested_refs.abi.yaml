@@ -1,0 +1,143 @@
+abi:
+  package: "compliance.nested_refs"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Size and tag expressions that read fields of a nested struct (state-proof shape)"
+
+types:
+  - name: "ProofHeader"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "type_slot"
+            field-type:
+              primitive: u64
+          - name: "bitset"
+            field-type:
+              array:
+                size:
+                  literal:
+                    u32: 2
+                element-type:
+                  primitive: u8
+  - name: "Proof"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "hdr"
+            field-type:
+              type-ref:
+                name: "ProofHeader"
+          - name: "body"
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  bit-and:
+                    left:
+                      right-shift:
+                        left:
+                          field-ref:
+                            path: ["hdr", "type_slot"]
+                        right:
+                          literal:
+                            u8: 62
+                    right:
+                      literal:
+                        u8: 3
+                variants:
+                  - name: "existing"
+                    tag-value: 0
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "siblings"
+                            field-type:
+                              array:
+                                size:
+                                  add:
+                                    left:
+                                      popcount:
+                                        operand:
+                                          field-ref:
+                                            path: ["hdr", "bitset", 0]
+                                    right:
+                                      popcount:
+                                        operand:
+                                          field-ref:
+                                            path: ["hdr", "bitset", 1]
+                                element-type:
+                                  primitive: u32
+                  - name: "updating"
+                    tag-value: 1
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "leaf"
+                            field-type:
+                              primitive: u32
+                          - name: "siblings"
+                            field-type:
+                              array:
+                                size:
+                                  add:
+                                    left:
+                                      popcount:
+                                        operand:
+                                          field-ref:
+                                            path: ["hdr", "bitset", 0]
+                                    right:
+                                      popcount:
+                                        operand:
+                                          field-ref:
+                                            path: ["hdr", "bitset", 1]
+                                element-type:
+                                  primitive: u32
+  - name: "TxHeader"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "rw_cnt"
+            field-type:
+              primitive: u8
+          - name: "ro_cnt"
+            field-type:
+              primitive: u8
+          - name: "data_sz"
+            field-type:
+              primitive: u16
+  - name: "Tx"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "hdr"
+            field-type:
+              type-ref:
+                name: "TxHeader"
+          - name: "keys"
+            field-type:
+              array:
+                size:
+                  add:
+                    left:
+                      field-ref:
+                        path: ["hdr", "rw_cnt"]
+                    right:
+                      field-ref:
+                        path: ["hdr", "ro_cnt"]
+                element-type:
+                  primitive: u32
+          - name: "data"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["hdr", "data_sz"]
+                element-type:
+                  primitive: u8

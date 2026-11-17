@@ -1,4 +1,5 @@
-use crate::abi::resolved::{ResolvedType, ResolvedTypeKind};
+use crate::abi::expr::ExprKind;
+use crate::abi::resolved::{ResolvedType, ResolvedTypeKind, Size};
 use crate::codegen::shared::ir::TypeIr;
 use crate::codegen::ts_gen::{
     builder, emit_footprint_method, emit_from_array_method, emit_new_method, emit_type, runtime,
@@ -7,11 +8,25 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::sync::Arc;
 
-pub fn emit_functions(resolved_type: &ResolvedType, type_ir: Option<&TypeIr>) -> String {
+pub fn emit_functions(
+    resolved_type: &ResolvedType,
+    type_ir: Option<&TypeIr>,
+    type_lookup: &BTreeMap<String, ResolvedType>,
+) -> String {
     let mut output = String::new();
 
+    /* Size-discriminated union classes carry their own sizing and validation. */
+    if matches!(
+        resolved_type.kind,
+        ResolvedTypeKind::SizeDiscriminatedUnion { .. }
+    ) || (matches!(resolved_type.kind, ResolvedTypeKind::Union { .. })
+        && matches!(resolved_type.size, Size::Variable(_)))
+    {
+        return output;
+    }
+
     /* Emit methods inside the class */
-    output.push_str(&emit_footprint_method(resolved_type, type_ir));
+    output.push_str(&emit_footprint_method(resolved_type, type_ir, type_lookup));
     output.push_str(&emit_new_method(resolved_type, type_ir));
     output.push_str(&emit_from_array_method(resolved_type, type_ir));
 
@@ -56,6 +71,25 @@ impl TypeScriptCodeGenerator {
         resolved_types: &[(&ResolvedType, Option<TypeIr>)],
         all_types: Option<&[&ResolvedType]>,
     ) -> String {
+        /* `sizeof(T)` / `alignof(T)` become constants in every expression the
+        emitters read (counts, tags), as in the TypeScript IR. */
+        let constants = type_constants(resolved_types, all_types);
+        let folded: Vec<(ResolvedType, Option<TypeIr>)> = resolved_types
+            .iter()
+            .map(|(ty, ir)| (fold_type_constants(ty, &constants), ir.clone()))
+            .collect();
+        let folded_all: Option<Vec<ResolvedType>> = all_types.map(|all| {
+            all.iter()
+                .map(|ty| fold_type_constants(ty, &constants))
+                .collect()
+        });
+        let folded_refs: Vec<(&ResolvedType, Option<TypeIr>)> =
+            folded.iter().map(|(ty, ir)| (ty, ir.clone())).collect();
+        let folded_all_refs: Option<Vec<&ResolvedType>> =
+            folded_all.as_ref().map(|all| all.iter().collect());
+        let resolved_types = folded_refs.as_slice();
+        let all_types = folded_all_refs.as_deref();
+
         let mut output = String::new();
         output.push_str("/* Auto-generated TypeScript code */\n");
         output.push_str("/* WARNING: Do not modify this file directly. It is generated from ABI definitions. */\n\n");
@@ -110,7 +144,7 @@ impl TypeScriptCodeGenerator {
                 );
 
                 if self.options.emit_methods {
-                    let methods = emit_functions(resolved_type, type_ir.as_ref());
+                    let methods = emit_functions(resolved_type, type_ir.as_ref(), &type_lookup);
                     let namespace_marker = "\n}\n\nexport namespace";
                     let insert_pos = type_code
                         .rfind(namespace_marker)
@@ -293,4 +327,151 @@ fn relative_module_path(from: &str, to: &str) -> String {
     } else {
         rel_parts.join("/")
     }
+}
+
+/* (size if constant, alignment) per type name. */
+type TypeConstants = HashMap<String, (Option<u64>, u64)>;
+
+fn type_constants(
+    resolved_types: &[(&ResolvedType, Option<TypeIr>)],
+    all_types: Option<&[&ResolvedType]>,
+) -> TypeConstants {
+    let mut out = HashMap::new();
+    let mut add = |ty: &ResolvedType| {
+        let size = match ty.size {
+            Size::Const(n) => Some(n),
+            Size::Variable(_) => None,
+        };
+        out.insert(ty.name.clone(), (size, ty.alignment));
+    };
+    for (ty, _) in resolved_types {
+        add(ty);
+    }
+    for ty in all_types.unwrap_or(&[]) {
+        add(ty);
+    }
+    out
+}
+
+fn fold_expr_constants(expr: &ExprKind, constants: &TypeConstants) -> ExprKind {
+    use crate::abi::expr::LiteralExpr;
+    let f = |e: &ExprKind| Box::new(fold_expr_constants(e, constants));
+    let mut out = expr.clone();
+    match &mut out {
+        ExprKind::Sizeof(e) => {
+            if let Some((Some(size), _)) = constants.get(&e.type_name) {
+                return ExprKind::Literal(LiteralExpr::U64(*size));
+            }
+        }
+        ExprKind::Alignof(e) => {
+            if let Some((_, align)) = constants.get(&e.type_name) {
+                return ExprKind::Literal(LiteralExpr::U64(*align));
+            }
+        }
+        ExprKind::Add(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::Sub(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::Mul(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::Div(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::Mod(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::Pow(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::BitAnd(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::BitOr(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::BitXor(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::LeftShift(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::RightShift(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::Eq(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::Ne(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::Lt(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::Gt(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::Le(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::Ge(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::And(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::Or(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::Xor(e) => (e.left, e.right) = (f(&e.left), f(&e.right)),
+        ExprKind::BitNot(e) => e.operand = f(&e.operand),
+        ExprKind::Neg(e) => e.operand = f(&e.operand),
+        ExprKind::Not(e) => e.operand = f(&e.operand),
+        ExprKind::Popcount(e) => e.operand = f(&e.operand),
+        ExprKind::Literal(_) | ExprKind::FieldRef(_) => {}
+    }
+    out
+}
+
+/* A copy of `ty` whose expressions have `sizeof` / `alignof` folded. */
+fn fold_type_constants(ty: &ResolvedType, constants: &TypeConstants) -> ResolvedType {
+    let mut out = ty.clone();
+    fold_kind_constants(&mut out.kind, constants);
+    out
+}
+
+fn fold_kind_constants(kind: &mut ResolvedTypeKind, constants: &TypeConstants) {
+    match kind {
+        ResolvedTypeKind::Struct { fields, .. } => {
+            for field in fields {
+                fold_kind_constants(&mut field.field_type.kind, constants);
+            }
+        }
+        ResolvedTypeKind::Union { variants } => {
+            for variant in variants {
+                fold_kind_constants(&mut variant.field_type.kind, constants);
+            }
+        }
+        ResolvedTypeKind::Enum {
+            tag_expression,
+            variants,
+            ..
+        } => {
+            *tag_expression = fold_expr_constants(tag_expression, constants);
+            for variant in variants {
+                fold_kind_constants(&mut variant.variant_type.kind, constants);
+            }
+        }
+        ResolvedTypeKind::Array {
+            element_type,
+            size_expression,
+            ..
+        } => {
+            *size_expression = fold_expr_constants(size_expression, constants);
+            fold_kind_constants(&mut element_type.kind, constants);
+        }
+        ResolvedTypeKind::SizeDiscriminatedUnion { variants } => {
+            for variant in variants {
+                fold_kind_constants(&mut variant.variant_type.kind, constants);
+            }
+        }
+        ResolvedTypeKind::Primitive { .. } | ResolvedTypeKind::TypeRef { .. } => {}
+    }
+}
+
+/* Directories of the packages of one run (`a.b.c` -> `a/b/c`), by the rule
+shared with the other backends (`shared::package_paths`): distinct packages
+get distinct directories even on a case-insensitive file system
+(`cases.Foo` -> `cases/Foo`, `cases.foo` -> `cases/foo_`). Segments keep
+`[A-Za-z0-9_-]`; anything else becomes `_`. Imports between packages use
+these directories (`package_path_map`). */
+pub fn ts_package_paths<'p>(
+    packages: impl IntoIterator<Item = &'p String>,
+) -> std::collections::BTreeMap<String, Vec<String>> {
+    use crate::codegen::shared::package_paths::{PathRules, package_paths};
+    fn segment(s: &str) -> String {
+        let out: String = s
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        if out.is_empty() { "_".to_string() } else { out }
+    }
+    package_paths(
+        packages,
+        &PathRules {
+            segment,
+            root_reserved: &[],
+            child_reserved: &[],
+        },
+    )
 }
