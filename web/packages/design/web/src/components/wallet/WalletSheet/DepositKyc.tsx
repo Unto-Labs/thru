@@ -25,7 +25,37 @@ interface DepositKycValues {
   dob: string;
 }
 
+export type WalletSheetDepositKycSection = "details" | "address" | "identity";
+
+const sectionDefaults = {
+  details: {
+    title: "Your details",
+    description: "US residents only for now.",
+    submitLabel: "Continue",
+    submits: false,
+  },
+  address: {
+    title: "Home address",
+    description: undefined,
+    submitLabel: "Continue",
+    submits: false,
+  },
+  identity: {
+    title: "Your identity",
+    description: undefined,
+    submitLabel: "Verify with passkey",
+    submits: true,
+  },
+  all: {
+    title: "Your details",
+    description: "US residents only for now.",
+    submitLabel: "Verify with passkey",
+    submits: true,
+  },
+};
+
 export interface WalletSheetDepositKycProps {
+  section?: WalletSheetDepositKycSection;
   title?: React.ReactNode;
   description?: React.ReactNode;
   step?: DepositStepProgress;
@@ -45,22 +75,28 @@ export interface WalletSheetDepositKycProps {
   onSubmit: () => void;
 }
 
-export function DepositKyc({
-  title = "Your details",
-  description = "US residents only for now.",
-  step = { count: 3, active: 1 },
-  values,
-  onFieldChange,
-  errors = {},
-  blockedStates,
-  disabled,
-  submitLabel = "Verify with passkey",
-  submitting,
-  status,
-  notice,
-  errorAttempt = 0,
-  onSubmit,
-}: WalletSheetDepositKycProps) {
+export function DepositKyc(props: WalletSheetDepositKycProps) {
+  const defaults = sectionDefaults[props.section ?? "all"];
+  const {
+    section,
+    title = defaults.title,
+    description = defaults.description,
+    step = { count: 3, active: 1 },
+    values,
+    onFieldChange,
+    errors = {},
+    blockedStates,
+    disabled,
+    submitLabel = defaults.submitLabel,
+    submitting,
+    status,
+    notice,
+    errorAttempt = 0,
+    onSubmit,
+  } = props;
+  const showDetails = !section || section === "details";
+  const showAddress = !section || section === "address";
+  const showIdentity = !section || section === "identity";
   const formRef = React.useRef<HTMLFormElement>(null);
   React.useEffect(() => {
     if (errorAttempt)
@@ -96,94 +132,106 @@ export function DepositKyc({
           if (!submitting) onSubmit();
         }}
       >
-        <div className="tds-dep__kyc-group">
-          <div className="tds-dep__kyc-grid">
-            {input("firstName", {
-              label: "First name",
-              maxLength: 100,
-              autoComplete: "given-name",
-            })}
-            {input("lastName", {
-              label: "Last name",
-              maxLength: 100,
-              autoComplete: "family-name",
-            })}
+        {showDetails && (
+          <div className="tds-dep__kyc-group">
+            <div className="tds-dep__kyc-grid">
+              {input("firstName", {
+                label: "First name",
+                maxLength: 100,
+                autoComplete: "given-name",
+              })}
+              {input("lastName", {
+                label: "Last name",
+                maxLength: 100,
+                autoComplete: "family-name",
+              })}
+            </div>
+            <div className="tds-dep__kyc-grid tds-dep__kyc-contact">
+              {input("email", {
+                label: "Email",
+                type: "email",
+                maxLength: 254,
+                autoComplete: "email",
+              })}
+              {input("phone", {
+                label: "Phone",
+                type: "tel",
+                text: "ui",
+                inputMode: "tel",
+                autoComplete: "tel-national",
+              })}
+            </div>
           </div>
-          <div className="tds-dep__kyc-grid tds-dep__kyc-contact">
-            {input("email", {
-              label: "Email",
-              type: "email",
-              maxLength: 254,
-              autoComplete: "email",
+        )}
+        {showAddress && (
+          <fieldset className="tds-dep__kyc-address">
+            <legend
+              className={`tds-field__label${section ? " tds-dep__kyc-legend--hidden" : ""}`}
+            >
+              Home address
+            </legend>
+            {input("street", {
+              "aria-label": "Street",
+              placeholder: "Street",
+              maxLength: 200,
+              autoComplete: "address-line1",
             })}
-            {input("phone", {
-              label: "Phone",
-              type: "tel",
-              text: "ui",
-              inputMode: "tel",
-              autoComplete: "tel-national",
+            {input("apartment", {
+              "aria-label": "Apt, suite (optional)",
+              placeholder: "Apt, suite (optional)",
+              maxLength: 200,
+              autoComplete: "address-line2",
             })}
-          </div>
-        </div>
-        <fieldset className="tds-dep__kyc-address">
-          <legend className="tds-field__label">Home address</legend>
-          {input("street", {
-            "aria-label": "Street",
-            placeholder: "Street",
-            maxLength: 200,
-            autoComplete: "address-line1",
-          })}
-          {input("apartment", {
-            "aria-label": "Apt, suite (optional)",
-            placeholder: "Apt, suite (optional)",
-            maxLength: 200,
-            autoComplete: "address-line2",
-          })}
-          <div className="tds-dep__kyc-locality">
-            {input("city", {
-              label: "City",
-              maxLength: 100,
-              autoComplete: "address-level2",
-            })}
-            <UsStatePicker
-              label="State"
-              value={values.state}
-              onValueChange={(value) => onFieldChange("state", value)}
-              blocked={blockedStates}
-              error={errors.state}
+            <div className="tds-dep__kyc-locality">
+              {input("city", {
+                label: "City",
+                maxLength: 100,
+                autoComplete: "address-level2",
+              })}
+              <UsStatePicker
+                label="State"
+                value={values.state}
+                onValueChange={(value) => onFieldChange("state", value)}
+                blocked={blockedStates}
+                error={errors.state}
+                disabled={disabled}
+              />
+              {input("zip", {
+                label: "ZIP",
+                text: "ui",
+                inputMode: "numeric",
+                maxLength: 10,
+                autoComplete: "postal-code",
+              })}
+            </div>
+          </fieldset>
+        )}
+        {showIdentity && (
+          <div className="tds-dep__kyc-grid tds-dep__kyc-identity">
+            <IdentityNumberInput
+              kind="ssn"
+              label="SSN"
+              value={values.ssn}
+              onValueChange={(value) => onFieldChange("ssn", value)}
+              error={errors.ssn}
               disabled={disabled}
             />
-            {input("zip", {
-              label: "ZIP",
-              text: "ui",
-              inputMode: "numeric",
-              maxLength: 10,
-              autoComplete: "postal-code",
-            })}
+            <DobInput
+              label="Date of birth"
+              value={values.dob}
+              onValueChange={(value) => onFieldChange("dob", value)}
+              error={errors.dob}
+              disabled={disabled}
+            />
           </div>
-        </fieldset>
-        <div className="tds-dep__kyc-grid tds-dep__kyc-identity">
-          <IdentityNumberInput
-            kind="ssn"
-            label="SSN"
-            value={values.ssn}
-            onValueChange={(value) => onFieldChange("ssn", value)}
-            error={errors.ssn}
-            disabled={disabled}
-          />
-          <DobInput
-            label="Date of birth"
-            value={values.dob}
-            onValueChange={(value) => onFieldChange("dob", value)}
-            error={errors.dob}
-            disabled={disabled}
-          />
-        </div>
+        )}
         <div className="tds-dep__kyc-footer">
-          <div className="tds-dep__kyc-note">
-            <Lock width={12} height={12} />
-            Sent to Brale. Never stored by us.
-          </div>
+          {defaults.submits && (
+            <div className="tds-dep__kyc-note">
+              <Lock width={12} height={12} />
+              SSN and date of birth go only to our banking partner.
+            </div>
+          )}
           {(status || notice) && (
             <div className="tds-dep__note" role="status">
               {status || notice}
@@ -196,7 +244,9 @@ export function DepositKyc({
             disabled={submitting}
             aria-busy={submitting || undefined}
           >
-            {submitting ? <Spinner tone="inherit" /> : <PasskeyIcon />}
+            {submitting ? (
+              <Spinner tone="inherit" />
+            ) : defaults.submits ? <PasskeyIcon /> : null}
             {submitLabel}
           </Button>
         </div>

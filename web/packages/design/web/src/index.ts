@@ -261,7 +261,7 @@ export type { WalletOverlayProps } from "./components/wallet/WalletOverlay/Walle
 export { UusdLogo, type UusdLogoProps } from "./UusdLogo";
 export { isUusdSymbol } from "../../tokens/src/uusd";
 
-export type { WalletSheetDepositKycProps } from "./components/wallet/WalletSheet/DepositKyc";
+export type { WalletSheetDepositKycProps, WalletSheetDepositKycSection } from "./components/wallet/WalletSheet/DepositKyc";
 export type {
   WalletSheetDepositBankMethod,
   WalletSheetDepositBankRow,

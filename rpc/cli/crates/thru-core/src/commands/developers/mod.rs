@@ -1,5 +1,7 @@
-//! Public OAuth device grant, the per-machine RPC API key, and authenticated
+//! Public OAuth device grant, the per-machine RPC API key, API keys
+//! approved in the browser (`thru auth keys create`), and authenticated
 //! test-network funding.
+mod agent;
 mod cli_key;
 mod storage;
 #[cfg(test)]
@@ -22,6 +24,9 @@ use std::{
 use storage::{Store, storage_error};
 use url::{Host, Url};
 
+pub use agent::valid_agent_client;
+use agent::{InstallPaths, KnownClient, Runner, SystemRunner};
+
 const CLIENT_ID: &str = "thru-cli";
 const SCOPE: &str = "profile offline_access faucet:fund keys:cli";
 /// Scopes a Developers deployment that predates `keys:cli` accepts. Such a
@@ -29,6 +34,9 @@ const SCOPE: &str = "profile offline_access faucet:fund keys:cli";
 /// and skips key provisioning.
 const LEGACY_SCOPE: &str = "profile offline_access faucet:fund";
 const MAX_MACHINE_NAME_LEN: usize = 48;
+/// Consecutive network or server errors tolerated while polling a key
+/// request.
+const MAX_TRANSIENT_POLLS: u32 = 5;
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 struct Credentials {
@@ -218,14 +226,235 @@ struct OrgKeys {
     organization_limits: Option<RateLimits>,
     keys: Vec<OrgKey>,
 }
-/// `POST /api/cli/org/keys` 201 body. `plaintext` is printed once, never
-/// logged or stored.
+/// `POST /api/cli/key-requests` 201 body: a browser approval for one key.
 #[derive(Deserialize)]
-struct CreatedOrgKey {
+#[serde(rename_all = "camelCase")]
+struct KeyRequestResponse {
+    request_id: String,
+    user_code: String,
+    verification_uri: String,
     #[serde(default)]
-    organization: Option<Organization>,
-    key: OrgKey,
-    plaintext: String,
+    verification_uri_complete: Option<String>,
+    expires_in: u64,
+    interval: u64,
+    poll_token: String,
+}
+/// A validated key request, before polling.
+struct KeyRequest {
+    user_code: String,
+    /// Approval URL on the configured origin, with `ref=cli`.
+    verification: Url,
+    expires_in: u64,
+    interval: u64,
+    poll_token: String,
+}
+
+fn valid_request_code(code: &str) -> bool {
+    !code.is_empty()
+        && code.len() <= 32
+        && code
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+}
+
+/// The organization of an approved key.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct KeyOrganization {
+    id: String,
+    name: String,
+    #[serde(default)]
+    slug: Option<String>,
+}
+/// The key in an `approved` poll answer. `secret` is printed once or
+/// installed for the agent client; never logged or stored by the CLI.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ApprovedKey {
+    id: String,
+    name: String,
+    secret: String,
+    prefix: String,
+    #[serde(default)]
+    tags: Vec<String>,
+    #[serde(default)]
+    agent_client: Option<String>,
+    organization: KeyOrganization,
+}
+impl std::fmt::Debug for ApprovedKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApprovedKey")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("prefix", &self.prefix)
+            .finish_non_exhaustive()
+    }
+}
+impl ApprovedKey {
+    /// Text from the server is printed, so all of it is checked.
+    fn valid(&self) -> bool {
+        valid_key_id(&self.id)
+            && valid_api_key(&self.secret)
+            && self.tags.len() <= 16
+            && self.agent_client.as_deref().is_none_or(valid_agent_client)
+            && [
+                &self.name,
+                &self.prefix,
+                &self.organization.id,
+                &self.organization.name,
+            ]
+            .into_iter()
+            .chain(self.organization.slug.as_ref())
+            .chain(&self.tags)
+            .all(|text| valid_text(text))
+    }
+    /// The key as printed: never the secret.
+    fn public_json(&self) -> Value {
+        json!({
+            "id": self.id,
+            "name": self.name,
+            "prefix": self.prefix,
+            "tags": self.tags,
+            "agent_client": self.agent_client,
+        })
+    }
+}
+
+/// One answer to `POST /api/cli/key-requests/poll`.
+#[derive(Debug)]
+enum KeyPoll {
+    Pending,
+    /// Poll less often: the interval grows by 5 s.
+    SlowDown,
+    Approved(ApprovedKey),
+    /// A server error or unreadable answer; polling continues a few times.
+    Transient,
+    Failed(CliError),
+}
+
+/// Classifies a poll answer by its HTTP status and JSON body (`None` when
+/// the body is missing or not JSON).
+fn classify_key_poll(status: u16, body: Option<&Value>) -> KeyPoll {
+    let state = body
+        .and_then(|body| body.get("status"))
+        .and_then(Value::as_str);
+    match (status, state) {
+        (404, _) => KeyPoll::Failed(failure(
+            "KEY_REQUEST_NOT_FOUND",
+            "Thru Developers does not know this key request (it may have expired). Run the command again.",
+            Some(404),
+        )),
+        (_, Some("slow_down")) | (429, None) => KeyPoll::SlowDown,
+        (200..=299, Some("pending")) => KeyPoll::Pending,
+        (200..=299, Some("approved")) => {
+            match body
+                .and_then(|body| body.get("key"))
+                .and_then(|key| serde_json::from_value::<ApprovedKey>(key.clone()).ok())
+                .filter(ApprovedKey::valid)
+            {
+                Some(key) => KeyPoll::Approved(key),
+                None => KeyPoll::Failed(failure(
+                    "INVALID_RESPONSE",
+                    "Developers returned an invalid API key; no key was printed or installed. Revoke the unused key in the Thru Developers dashboard and run the command again.",
+                    Some(status),
+                )),
+            }
+        }
+        (_, Some("denied")) => KeyPoll::Failed(failure(
+            "access_denied",
+            "The key request was denied in the browser.",
+            Some(status),
+        )),
+        (_, Some("expired")) => KeyPoll::Failed(failure(
+            "expired_token",
+            "The browser approval expired before the key was approved. Run the command again.",
+            Some(status),
+        )),
+        (_, Some("consumed")) => KeyPoll::Failed(failure(
+            "KEY_REQUEST_CONSUMED",
+            "This key request was already completed. Run the command again for a new key, and revoke any key you did not receive in the Thru Developers dashboard.",
+            Some(status),
+        )),
+        _ if status >= 500 || body.is_none() => KeyPoll::Transient,
+        (200..=299, _) => KeyPoll::Failed(failure(
+            "INVALID_RESPONSE",
+            "Developers returned an unknown key request status",
+            Some(status),
+        )),
+        _ => KeyPoll::Failed(Developers::request_error(
+            status,
+            None,
+            body.unwrap_or(&Value::Null),
+        )),
+    }
+}
+
+/// `thru auth keys create` options.
+struct CreateKey {
+    name: Option<String>,
+    agent: Option<String>,
+    origins: Vec<String>,
+    print: bool,
+    no_skill: bool,
+    no_browser: bool,
+    no_wait: bool,
+    resume: bool,
+}
+
+/// A validated `thru auth keys create`: what to request and what to do with
+/// the approved key.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+struct KeyPlan {
+    name: String,
+    agent: Option<String>,
+    print: bool,
+    no_skill: bool,
+}
+impl KeyPlan {
+    fn valid(&self) -> bool {
+        valid_text(&self.name) && self.agent.as_deref().is_none_or(valid_agent_client)
+    }
+    /// The supported client the key is installed into, unless `--print`.
+    fn install_into(&self) -> Option<KnownClient> {
+        self.agent
+            .as_deref()
+            .and_then(KnownClient::from_label)
+            .filter(|_| !self.print)
+    }
+}
+
+/// A key request saved by `thru auth keys create --no-wait` for `--resume`.
+/// The poll token is a short-lived credential, so the file is owner-only and
+/// removed once the request is spent or expired.
+#[derive(Serialize, Deserialize)]
+struct PendingKeyRequest {
+    origin: String,
+    poll_token: String,
+    user_code: String,
+    verification_uri_complete: String,
+    interval: u64,
+    /// Unix seconds.
+    expires_at: u64,
+    plan: KeyPlan,
+}
+impl PendingKeyRequest {
+    /// The `--no-wait` output. Never includes the poll token.
+    fn to_json(&self) -> Value {
+        json!({"auth_key":{
+            "status":"pending",
+            "verification_uri_complete":self.verification_uri_complete,
+            "user_code":self.user_code,
+            "expires_in":self.expires_at.saturating_sub(now()),
+            "next":KEY_RESUME_COMMAND,
+        }})
+    }
+}
+
+const KEY_RESUME_COMMAND: &str = "thru auth keys create --resume";
+
+/// Whether a failed `--resume` poll leaves the saved key request unusable:
+/// anything but repeated network or server errors.
+fn spends_pending_key_request(error: &CliError) -> bool {
+    !matches!(error, CliError::Developers { code, status: None, .. } if code == "AUTH_UNAVAILABLE")
 }
 
 /// Result of provisioning the per-machine API key during login. Login never
@@ -626,6 +855,24 @@ impl Developers {
             signature,
         }
     }
+    /// [`Self::protocol_error`] for a non-funding request. A validation
+    /// failure's own message says what to fix; it is shown only when it is
+    /// plain, bounded text.
+    fn request_error(status: u16, retry_after: Option<u64>, value: &Value) -> CliError {
+        let mut error = Self::protocol_error(status, retry_after, value, false);
+        if status == 400
+            && let (Some(text), CliError::Developers { message, .. }) = (
+                value
+                    .pointer("/error/message")
+                    .and_then(Value::as_str)
+                    .filter(|text| valid_text(text)),
+                &mut error,
+            )
+        {
+            *message = text.to_owned();
+        }
+        error
+    }
     async fn token(&self, fields: &[(&str, &str)]) -> Result<Credentials, CliError> {
         let response = self
             .client
@@ -793,21 +1040,7 @@ impl Developers {
             result => result?,
         };
         if !(200..300).contains(&status) {
-            let mut error = Self::protocol_error(status, retry_after, &value, false);
-            // A validation failure's own message says what to fix; it is shown
-            // only when it is plain, bounded text.
-            if status == 400
-                && let (Some(text), CliError::Developers { message, .. }) = (
-                    value
-                        .pointer("/error/message")
-                        .and_then(Value::as_str)
-                        .filter(|text| valid_text(text)),
-                    &mut error,
-                )
-            {
-                *message = text.to_owned();
-            }
-            return Err(error);
+            return Err(Self::request_error(status, retry_after, &value));
         }
         Ok((status, value))
     }
@@ -855,57 +1088,6 @@ impl Developers {
                     Some(status),
                 )
             })
-    }
-
-    /// Creates a named organization key. The plaintext is returned for
-    /// printing once; it is never stored.
-    async fn create_org_key(
-        &self,
-        store: &Store,
-        name: &str,
-        origins: &[String],
-    ) -> Result<CreatedOrgKey, CliError> {
-        let mut body = json!({ "name": name });
-        if !origins.is_empty() {
-            body["originAllowlist"] = json!(origins);
-        }
-        let (status, value) = self
-            .authorized(store, Method::POST, "/api/cli/org/keys", Some(&body))
-            .await?;
-        let id = value
-            .pointer("/key/id")
-            .and_then(Value::as_str)
-            .filter(|id| valid_key_id(id))
-            .map(str::to_owned);
-        let created = serde_json::from_value::<CreatedOrgKey>(value)
-            .ok()
-            .filter(|created| {
-                valid_api_key(&created.plaintext)
-                    && created.key.valid()
-                    && created
-                        .organization
-                        .as_ref()
-                        .is_none_or(Organization::valid)
-            });
-        match created {
-            Some(created) => Ok(created),
-            None => {
-                // A key that cannot be shown is useless; revoke it.
-                let revoked = match &id {
-                    Some(id) => self.revoke_org_key(store, id).await.is_ok(),
-                    None => false,
-                };
-                Err(failure(
-                    "INVALID_RESPONSE",
-                    if revoked {
-                        "Developers returned an invalid API key response; the key was revoked"
-                    } else {
-                        "Developers returned an invalid API key response; check `thru auth keys list` for an unused key"
-                    },
-                    Some(status),
-                ))
-            }
-        }
     }
 
     /// Revokes an organization key by id.
@@ -1386,20 +1568,12 @@ impl Developers {
         json_format: bool,
     ) -> Result<(Credentials, bool), CliError> {
         let device = self.request_device_authorization().await?;
-        if json_format {
-            eprintln!(
-                "Approve at {}\nCode: {}",
-                device.verification, device.user_code
-            );
-        } else {
-            println!(
-                "Approve at {}\nCode: {}",
-                device.verification, device.user_code
-            );
-        }
-        if !no_browser && open_browser(device.verification.as_str()).is_err() {
-            eprintln!("Could not open a browser. Open the approval URL shown above.");
-        }
+        show_approval(
+            &device.verification,
+            &device.user_code,
+            no_browser,
+            json_format,
+        );
         let credentials = self
             .poll_device_token(
                 &device.device_code,
@@ -1478,6 +1652,157 @@ impl Developers {
         })
     }
 
+    /// Starts a browser approval for one API key (`POST
+    /// /api/cli/key-requests`, no login needed) and validates the answer.
+    async fn request_key(&self, body: &Value) -> Result<KeyRequest, CliError> {
+        let response = self
+            .client
+            .post(self.endpoint("/api/cli/key-requests"))
+            .json(body)
+            .send()
+            .await
+            .map_err(|_| Self::network_error(false))?;
+        let unsupported = || {
+            failure(
+                "UNSUPPORTED",
+                "This Developers server does not support approving API keys from the CLI yet.",
+                Some(404),
+            )
+        };
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Err(unsupported());
+        }
+        let (status, retry_after, value) = Self::body(response, false).await?;
+        if !(200..300).contains(&status) {
+            return Err(Self::request_error(status, retry_after, &value));
+        }
+        let invalid = || {
+            failure(
+                "INVALID_RESPONSE",
+                "Invalid Developers key request response",
+                Some(status),
+            )
+        };
+        let request: KeyRequestResponse = serde_json::from_value(value).map_err(|_| invalid())?;
+        if !valid_key_id(&request.request_id)
+            || !valid_request_code(&request.user_code)
+            || !valid_token(&request.poll_token)
+            || request.expires_in == 0
+            || request.expires_in > 3600
+            || !valid_interval(request.interval)
+        {
+            return Err(invalid());
+        }
+        let verification = Url::parse(
+            request
+                .verification_uri_complete
+                .as_deref()
+                .unwrap_or(&request.verification_uri),
+        )
+        .map_err(|_| invalid())?;
+        if !self.own_approval_url(&verification) {
+            return Err(failure(
+                "INVALID_RESPONSE",
+                "Browser approval URL must belong to the configured Developers origin",
+                Some(status),
+            ));
+        }
+        Ok(KeyRequest {
+            user_code: request.user_code,
+            verification: with_cli_ref(verification),
+            expires_in: request.expires_in,
+            interval: request.interval,
+            poll_token: request.poll_token,
+        })
+    }
+
+    /// Polls a key request every `interval` seconds (plus 5 s per
+    /// `slow_down`) until it is approved, fails, or `lifetime` elapses.
+    /// Network and server errors are retried, at most
+    /// [`MAX_TRANSIENT_POLLS`] times in a row.
+    async fn poll_key_request(
+        &self,
+        poll_token: &str,
+        interval: u64,
+        lifetime: Duration,
+    ) -> Result<ApprovedKey, CliError> {
+        let deadline = tokio::time::Instant::now() + lifetime;
+        let mut interval = Duration::from_secs(interval);
+        let mut transient = 0;
+        loop {
+            tokio::time::sleep(
+                interval.min(deadline.saturating_duration_since(tokio::time::Instant::now())),
+            )
+            .await;
+            if tokio::time::Instant::now() >= deadline {
+                return Err(failure(
+                    "expired_token",
+                    "The browser approval expired before the key was approved. Run the command again.",
+                    None,
+                ));
+            }
+            let answer = match self
+                .client
+                .post(self.endpoint("/api/cli/key-requests/poll"))
+                .json(&json!({ "pollToken": poll_token }))
+                .send()
+                .await
+            {
+                Err(_) => KeyPoll::Transient,
+                Ok(response) => {
+                    let status = response.status().as_u16();
+                    let body = Self::body(response, false)
+                        .await
+                        .ok()
+                        .map(|(_, _, value)| value);
+                    classify_key_poll(status, body.as_ref())
+                }
+            };
+            match answer {
+                KeyPoll::Pending => transient = 0,
+                KeyPoll::SlowDown => {
+                    transient = 0;
+                    interval = interval.saturating_add(Duration::from_secs(5));
+                }
+                KeyPoll::Approved(key) => return Ok(key),
+                KeyPoll::Transient => {
+                    transient += 1;
+                    if transient >= MAX_TRANSIENT_POLLS {
+                        return Err(Self::network_error(false));
+                    }
+                }
+                KeyPoll::Failed(error) => return Err(error),
+            }
+        }
+    }
+
+    /// Requests the key described by `body`, shows the approval link and
+    /// waits for the user's decision.
+    async fn approve_key(
+        &self,
+        body: &Value,
+        no_browser: bool,
+        json_format: bool,
+    ) -> Result<ApprovedKey, CliError> {
+        let request = self.request_key(body).await?;
+        show_approval(
+            &request.verification,
+            &request.user_code,
+            no_browser,
+            json_format,
+        );
+        eprintln!(
+            "Waiting for approval in the browser (expires in {} minutes)...\nAgents: if this tool call can time out, stop it and run the command with --no-wait instead, ask the user to approve, then run `{KEY_RESUME_COMMAND}`.",
+            request.expires_in.div_ceil(60)
+        );
+        self.poll_key_request(
+            &request.poll_token,
+            request.interval,
+            Duration::from_secs(request.expires_in),
+        )
+        .await
+    }
+
     /// Whether `url` is a browser approval URL on the configured origin.
     fn own_approval_url(&self, url: &Url) -> bool {
         url.origin() == self.origin.origin()
@@ -1526,6 +1851,19 @@ impl Developers {
                 Err(error) => return Err(error),
             }
         }
+    }
+}
+
+/// Prints the approval URL and code (on stderr with `--json`, so stdout
+/// stays one JSON document) and opens the browser unless `no_browser`.
+fn show_approval(url: &Url, code: &str, no_browser: bool, json_format: bool) {
+    if json_format {
+        eprintln!("Approve at {url}\nCode: {code}");
+    } else {
+        println!("Approve at {url}\nCode: {code}");
+    }
+    if !no_browser && open_browser(url.as_str()).is_err() {
+        eprintln!("Could not open a browser. Open the approval URL shown above.");
     }
 }
 
@@ -1631,16 +1969,309 @@ pub async fn handle_auth(
                 json_format,
             );
         }
-        AuthCommands::Keys { subcommand } => {
-            let created = matches!(subcommand, AuthKeysCommands::Create { .. });
-            let result = auth_keys(&developers, &Store::configured(&origin)?, subcommand).await?;
+        AuthCommands::Keys {
+            subcommand:
+                AuthKeysCommands::Create {
+                    name,
+                    agent,
+                    origins,
+                    print,
+                    no_skill,
+                    no_browser,
+                    no_wait,
+                    resume,
+                },
+        } => {
+            let options = CreateKey {
+                name,
+                agent,
+                origins,
+                print,
+                no_skill,
+                no_browser,
+                no_wait,
+                resume,
+            };
+            let (result, shown) = create_key(
+                &developers,
+                &Store::configured(&origin)?,
+                &options,
+                &machine_name(),
+                json_format,
+                &SystemRunner,
+                InstallPaths::configured,
+            )
+            .await?;
             output::print_output(result, json_format);
-            if created {
+            if shown {
                 eprintln!("{NEW_KEY_WARNING}");
             }
         }
+        AuthCommands::Keys { subcommand } => {
+            let result = auth_keys(&developers, &Store::configured(&origin)?, subcommand).await?;
+            output::print_output(result, json_format);
+        }
     }
     Ok(())
+}
+
+/// `thru auth keys create`: a browser approval for one key, then the key is
+/// printed once, or installed into the agent client named by `--agent`.
+/// `--no-wait` only starts the approval and saves it in `store`; `--resume`
+/// finishes it. Returns the output and whether it shows the secret. `paths`
+/// locates the clients' configuration and is only called to install a key.
+async fn create_key<R: Runner>(
+    developers: &Developers,
+    store: &Store,
+    options: &CreateKey,
+    machine: &str,
+    json_format: bool,
+    runner: &R,
+    paths: impl FnOnce() -> Result<InstallPaths, CliError>,
+) -> Result<(Value, bool), CliError> {
+    if options.resume {
+        return resume_key(developers, store, runner, paths).await;
+    }
+    let plan = plan_key(developers, options, machine)?;
+    // Checked before the approval so a bad setting does not waste it.
+    let url = plan_mcp_url(&plan)?;
+    if options.no_wait {
+        let pending = start_pending_key(developers, store, &plan, machine).await?;
+        return Ok((pending.to_json(), false));
+    }
+    let paths = plan_paths(&plan, paths)?;
+    let key = developers
+        .approve_key(
+            &key_request_body(&plan, machine),
+            options.no_browser,
+            json_format,
+        )
+        .await?;
+    finish_key(developers, &plan, url, key, runner, paths).await
+}
+
+/// Validates the options of a new key request.
+fn plan_key(
+    developers: &Developers,
+    options: &CreateKey,
+    machine: &str,
+) -> Result<KeyPlan, CliError> {
+    if !options.origins.is_empty() {
+        return Err(failure(
+            "ORIGIN_UNSUPPORTED",
+            &format!(
+                "--origin is not supported by `thru auth keys create`. Create the key, then set its allowed origins in the Thru Developers dashboard ({}).",
+                developers.endpoint("/keys")
+            ),
+            None,
+        ));
+    }
+    let agent = options.agent.as_deref();
+    if agent.is_some_and(|agent| !valid_agent_client(agent)) {
+        return Err(failure(
+            "INVALID_AGENT_CLIENT",
+            "--agent must be 1-32 lowercase letters, digits or '-', starting with a letter or digit",
+            None,
+        ));
+    }
+    let name = match (&options.name, agent) {
+        (Some(name), _) => name.trim().to_owned(),
+        (None, Some(agent)) => agent::default_key_name(agent, machine),
+        (None, None) => {
+            return Err(failure(
+                "NAME_REQUIRED",
+                "Pass --name <NAME>, --agent <CLIENT>, or both.",
+                None,
+            ));
+        }
+    };
+    if !valid_text(&name) {
+        return Err(failure(
+            "INVALID_NAME",
+            "--name must be non-empty printable text",
+            None,
+        ));
+    }
+    Ok(KeyPlan {
+        name,
+        agent: options.agent.clone(),
+        print: options.print,
+        no_skill: options.no_skill,
+    })
+}
+
+/// The MCP URL, for an agent key.
+fn plan_mcp_url(plan: &KeyPlan) -> Result<Option<String>, CliError> {
+    plan.agent.as_ref().map(|_| agent::mcp_url()).transpose()
+}
+
+/// The client config locations, when the key is installed.
+fn plan_paths(
+    plan: &KeyPlan,
+    paths: impl FnOnce() -> Result<InstallPaths, CliError>,
+) -> Result<Option<InstallPaths>, CliError> {
+    plan.install_into().map(|_| paths()).transpose()
+}
+
+/// `--no-wait`: starts the key request and saves it (owner-only, beside the
+/// login credentials) for [`resume_key`]. Never opens a browser.
+async fn start_pending_key(
+    developers: &Developers,
+    store: &Store,
+    plan: &KeyPlan,
+    machine: &str,
+) -> Result<PendingKeyRequest, CliError> {
+    let _guard = store.lock().await?;
+    let request = developers
+        .request_key(&key_request_body(plan, machine))
+        .await?;
+    let pending = PendingKeyRequest {
+        origin: developers.origin(),
+        poll_token: request.poll_token,
+        user_code: request.user_code,
+        verification_uri_complete: request.verification.to_string(),
+        interval: request.interval,
+        expires_at: now().saturating_add(request.expires_in),
+        plan: plan.clone(),
+    };
+    let raw = serde_json::to_vec(&pending)
+        .map_err(|_| storage_error("Could not serialize the pending key request"))?;
+    store.save_pending_key_request(&raw)?;
+    Ok(pending)
+}
+
+/// The key request saved by `--no-wait`, if it is valid, for this origin
+/// and not expired. An invalid or expired file is removed.
+fn load_pending_key(developers: &Developers, store: &Store) -> Result<PendingKeyRequest, CliError> {
+    let start_again = |message: &str| failure("NO_PENDING_KEY_REQUEST", message, None);
+    let raw = store.load_pending_key_request()?.ok_or_else(|| {
+        start_again(
+            "No pending key request to resume. Run `thru auth keys create --no-wait` again.",
+        )
+    })?;
+    let pending = serde_json::from_str::<PendingKeyRequest>(&raw)
+        .ok()
+        .filter(|pending| {
+            pending.origin == developers.origin()
+                && valid_token(&pending.poll_token)
+                && valid_request_code(&pending.user_code)
+                && valid_interval(pending.interval)
+                && pending.plan.valid()
+                && Url::parse(&pending.verification_uri_complete)
+                    .is_ok_and(|url| developers.own_approval_url(&url))
+        });
+    let Some(pending) = pending else {
+        let _ = store.clear_pending_key_request();
+        return Err(start_again(
+            "The saved key request is invalid. Run `thru auth keys create --no-wait` again.",
+        ));
+    };
+    if pending.expires_at <= now() {
+        let _ = store.clear_pending_key_request();
+        return Err(failure(
+            "expired_token",
+            "The pending key request expired. Run `thru auth keys create --no-wait` again.",
+            None,
+        ));
+    }
+    Ok(pending)
+}
+
+/// `--resume`: polls the request saved by `--no-wait` for its remaining
+/// lifetime, then prints or installs the key as planned then. The saved
+/// request is removed once it is spent (approved, denied, expired or
+/// unknown); it is kept after repeated network or server errors so
+/// `--resume` can be run again.
+async fn resume_key<R: Runner>(
+    developers: &Developers,
+    store: &Store,
+    runner: &R,
+    paths: impl FnOnce() -> Result<InstallPaths, CliError>,
+) -> Result<(Value, bool), CliError> {
+    let _guard = store.lock().await?;
+    let pending = load_pending_key(developers, store)?;
+    let url = plan_mcp_url(&pending.plan)?;
+    let paths = plan_paths(&pending.plan, paths)?;
+    eprintln!(
+        "Waiting for approval at {}\nCode: {}",
+        pending.verification_uri_complete, pending.user_code
+    );
+    let remaining = Duration::from_secs(pending.expires_at.saturating_sub(now()));
+    let result = developers
+        .poll_key_request(&pending.poll_token, pending.interval, remaining)
+        .await;
+    if result
+        .as_ref()
+        .map_or_else(spends_pending_key_request, |_| true)
+    {
+        let _ = store.clear_pending_key_request();
+    }
+    finish_key(developers, &pending.plan, url, result?, runner, paths).await
+}
+
+/// `POST /api/cli/key-requests` body for `plan`.
+fn key_request_body(plan: &KeyPlan, machine: &str) -> Value {
+    let mut body = json!({ "name": plan.name, "machine": machine });
+    if let Some(agent) = &plan.agent {
+        body["agentClient"] = json!(agent);
+    }
+    body
+}
+
+/// Prints or installs an approved key, then installs the skill.
+async fn finish_key<R: Runner>(
+    developers: &Developers,
+    plan: &KeyPlan,
+    url: Option<String>,
+    key: ApprovedKey,
+    runner: &R,
+    paths: Option<InstallPaths>,
+) -> Result<(Value, bool), CliError> {
+    let mut out = json!({
+        "organization": key.organization,
+        "key": key.public_json(),
+    });
+    let mut shown = false;
+    match (plan.install_into(), &paths, &url) {
+        (Some(client), Some(paths), Some(url)) => {
+            let installation = agent::install(runner, paths, client, url, &key.secret)
+                .await
+                .map_err(|error| {
+                    failure(
+                        "KEY_NOT_SAVED",
+                        &format!(
+                            "API key \"{}\" (id {}) was created but could neither be installed nor saved ({}). Revoke it in the Thru Developers dashboard ({}) and run the command again, with --print to show the key.",
+                            key.name,
+                            key.id,
+                            agent::error_message(&error),
+                            developers.endpoint("/keys")
+                        ),
+                        None,
+                    )
+                })?;
+            out["install"] = installation.to_json();
+        }
+        _ => {
+            out["plaintext"] = json!(key.secret);
+            shown = true;
+            if let Some(url) = &url {
+                out["mcp"] = json!({
+                    "url": url,
+                    "header": "Authorization",
+                    "value": "Bearer <key>",
+                });
+            }
+        }
+    }
+    if plan.agent.is_some() && !plan.no_skill {
+        eprintln!(
+            "Installing the Thru skill (npx skills add {})...",
+            agent::SKILL_SOURCE
+        );
+        let known = plan.agent.as_deref().and_then(KnownClient::from_label);
+        out["skill"] = agent::install_skill(runner, known).await;
+    }
+    Ok((json!({ "auth_key": out }), shown))
 }
 
 /// Shown after `thru auth keys create` prints a key.
@@ -1701,8 +2332,8 @@ async fn auth_status(
     Ok(json!({ "auth": status }))
 }
 
-/// `thru auth keys ...` output. A created key's plaintext is in the result,
-/// to be printed once; it is never logged or stored.
+/// `thru auth keys list` and `revoke` output, with the `thru auth login`
+/// credentials.
 async fn auth_keys(
     developers: &Developers,
     store: &Store,
@@ -1717,14 +2348,12 @@ async fn auth_keys(
                 "keys":list.keys,
             }}))
         }
-        AuthKeysCommands::Create { name, origins } => {
-            let created = developers.create_org_key(store, &name, &origins).await?;
-            Ok(json!({"auth_key":{
-                "organization":created.organization,
-                "key":created.key,
-                "plaintext":created.plaintext,
-            }}))
-        }
+        // Needs a browser approval, not the login: see [`create_key`].
+        AuthKeysCommands::Create { .. } => Err(failure(
+            "UNSUPPORTED",
+            "Creating a key needs a browser approval; run `thru auth keys create`.",
+            None,
+        )),
         AuthKeysCommands::Revoke { key_id } => {
             developers.revoke_org_key(store, &key_id).await?;
             Ok(json!({"auth_key":{"id":key_id,"status":"revoked"}}))

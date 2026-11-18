@@ -28,10 +28,6 @@ impl LanguageRunner for GoRunner {
         "go"
     }
 
-    fn codegen_language_param(&self) -> &str {
-        "go"
-    }
-
     fn run_test(
         &self,
         test_name: &str,

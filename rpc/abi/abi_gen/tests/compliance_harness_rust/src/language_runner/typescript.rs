@@ -21,10 +21,6 @@ impl LanguageRunner for TypeScriptRunner {
         "typescript"
     }
 
-    fn codegen_language_param(&self) -> &str {
-        "typescript"
-    }
-
     fn run_test(
         &self,
         test_name: &str,
@@ -69,56 +65,20 @@ impl LanguageRunner for TypeScriptRunner {
             println!("  [1/5] Generating TypeScript code...");
         }
 
-        let abi_gen_root = abi_gen_root();
-        let abi_gen_manifest = abi_gen_root.join("Cargo.toml");
-
         let ts_toolchain = resolve_ts_toolchain()?;
 
-        let codegen_result = Command::new("cargo")
-            .args(&["run", "--quiet", "--manifest-path"])
-            .arg(&abi_gen_manifest)
-            .arg("--")
-            .arg("codegen")
-            .arg("--files")
-            .arg(&abi_file_path)
-            .arg("--language")
-            .arg(self.codegen_language_param())
-            .arg("--output")
-            .arg(&generated_code_dir)
-            .current_dir(&abi_gen_root)
-            .output();
-
-        match codegen_result {
-            Ok(output) => {
-                let stderr_text = String::from_utf8_lossy(&output.stderr);
-                let has_errors = stderr_text.lines().any(|line| {
-                    let trimmed = line.trim_start();
-                    trimmed.starts_with("error:") || trimmed.starts_with("error[")
-                });
-
-                if !output.status.success() && has_errors {
-                    return Ok(TestResult {
-                        test_name: test_name.to_string(),
-                        test_file: test_file.to_string(),
-                        status: "fail".to_string(),
-                        duration_ms: start_time.elapsed().as_millis() as u64,
-                        stages: Some(stages),
-                        error: Some(TestError {
-                            stage: "code_generation".to_string(),
-                            message: "Code generation failed".to_string(),
-                            details: Some(stderr_text.to_string()),
-                        }),
-                    });
-                }
-
+        /* In-process, as the Rust, C and Go runners do: the abi-gen CLI's
+        codegen subcommand is this same call.  Shelling out to the CLI meant
+        building abi-gen as well as the harness before the first case. */
+        match abi_gen::cmds::codegen::run(
+            vec![abi_file_path.to_path_buf()],
+            Vec::new(),
+            abi_gen::cmds::codegen::Language::TypeScript,
+            generated_code_dir.clone(),
+            verbose,
+        ) {
+            Ok(()) => {
                 stages.code_generation = "ok".to_string();
-
-                if verbose && !stderr_text.is_empty() {
-                    println!(
-                        "  Code generation had {} bytes of stderr output (warnings)",
-                        stderr_text.len()
-                    );
-                }
             }
             Err(e) => {
                 return Ok(TestResult {
@@ -129,8 +89,8 @@ impl LanguageRunner for TypeScriptRunner {
                     stages: Some(stages),
                     error: Some(TestError {
                         stage: "code_generation".to_string(),
-                        message: format!("Failed to run codegen: {}", e),
-                        details: None,
+                        message: "Code generation failed".to_string(),
+                        details: Some(e.to_string()),
                     }),
                 });
             }
@@ -174,6 +134,7 @@ impl LanguageRunner for TypeScriptRunner {
                 "outDir": "./dist",
                 "rootDir": "./src",
                 "strict": true,
+                "lib": ["ES2020"],
                 "esModuleInterop": true,
                 "skipLibCheck": true,
                 "typeRoots": type_roots,
@@ -194,12 +155,12 @@ impl LanguageRunner for TypeScriptRunner {
         copy_dir_recursive(&generated_code_dir, &generated_dir)?;
 
         /* Drop a tsconfig for the generated-only transpile pass */
-        let generated_tsconfig = write_generated_tsconfig(&generated_dir)?;
-        if let Some(tsconfig) = generated_tsconfig.as_ref() {
-            run_noemit_strict_tsc(&ts_toolchain, tsconfig)?;
-        }
+        write_generated_tsconfig(&generated_dir)?;
 
-        /* Transpile generated code to JS once so NodeNext imports resolve */
+        /* Transpile generated code to JS once so NodeNext imports resolve.
+        The pass is strict with lib ES2020, so it is also the strict check
+        of the generated sources: a separate --noEmit pass over the same
+        project repeated exactly this type check. */
         transpile_generated_sources(&ts_toolchain, &generated_dir)?;
 
         /* Prepare type context (package + metadata) */
@@ -257,11 +218,9 @@ impl LanguageRunner for TypeScriptRunner {
         };
         fs::write(src_dir.join("test.ts"), test_runner_code)?;
 
-        /* Run strict no-emit check on the test project */
-        let project_tsconfig = test_project_dir.join("tsconfig.json");
-        run_noemit_strict_tsc(&ts_toolchain, &project_tsconfig)?;
-
-        /* Compile TypeScript using vendored toolchain */
+        /* Compile TypeScript using vendored toolchain.  The project is strict
+        with lib ES2020, so a type error fails this compile; it replaces a
+        separate --noEmit pass that checked the same project first. */
         let compile_result = {
             let mut cmd = Command::new(&ts_toolchain.tsc_path);
             cmd.arg("--project")
@@ -312,8 +271,9 @@ impl LanguageRunner for TypeScriptRunner {
         }
 
         let test_output = {
-            let mut cmd = Command::new("npm");
-            cmd.arg("run").arg("test").current_dir(&test_project_dir);
+            /* What `npm run test` runs, without npm's own start-up. */
+            let mut cmd = Command::new("node");
+            cmd.arg("dist/test.js").current_dir(&test_project_dir);
             cmd.output()
         };
 
@@ -493,6 +453,8 @@ fn transpile_generated_sources(ts_toolchain: &TsToolchain, src_dir: &Path) -> Re
         .arg("NodeNext")
         .arg("--esModuleInterop")
         .arg("--strict")
+        .arg("--lib")
+        .arg("ES2020")
         .arg("--project")
         .arg(src_dir);
     cmd.current_dir(src_dir);
@@ -1123,38 +1085,6 @@ fn run_strict_tsc_check(ts_toolchain: &TsToolchain, types_path: &Path) -> Result
     let stdout = String::from_utf8_lossy(&output.stdout);
     anyhow::bail!(
         "TypeScript strict check failed:\nstdout:\n{}\nstderr:\n{}",
-        stdout,
-        stderr
-    );
-}
-
-fn run_noemit_strict_tsc(ts_toolchain: &TsToolchain, tsconfig_path: &Path) -> Result<()> {
-    if !tsconfig_path.exists() {
-        return Ok(());
-    }
-    let mut cmd = Command::new(&ts_toolchain.tsc_path);
-    cmd.arg("--strict")
-        .arg("--noEmit")
-        .arg("--target")
-        .arg("ES2020")
-        .arg("--lib")
-        .arg("ES2020")
-        .arg("--project")
-        .arg(tsconfig_path);
-    let output = cmd.output().with_context(|| {
-        format!(
-            "failed to invoke tsc --strict --noEmit for {}",
-            tsconfig_path.display()
-        )
-    })?;
-    if output.status.success() {
-        return Ok(());
-    }
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    anyhow::bail!(
-        "Strict TypeScript check failed for {}:\nstdout:\n{}\nstderr:\n{}",
-        tsconfig_path.display(),
         stdout,
         stderr
     );

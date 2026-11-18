@@ -710,7 +710,8 @@
     font-size: 13px;
   }
 }
-.tds-dep__sr-status {
+.tds-dep__sr-status,
+.tds-dep__kyc-legend--hidden {
   position: absolute;
   width: 1px;
   height: 1px;

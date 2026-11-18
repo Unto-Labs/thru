@@ -48,7 +48,7 @@ describe('ThruHDWallet', () => {
   });
 
   describe('constants', () => {
-    it('uses the SLIP-44 coin type registered for Thru', () => {
+    it('uses the Thru coin type and derivation prefix', () => {
       expect(ThruHDWallet.THRU_COIN_TYPE).toBe(8478);
       expect(ThruHDWallet.THRU_DERIVATION_PATH).toBe("m/44'/8478'");
     });
@@ -149,6 +149,120 @@ describe('ThruHDWallet', () => {
       expect(ThruHDWallet.isValidPath('44/8478/0/0')).toBe(false); // no m prefix
       expect(ThruHDWallet.isValidPath('')).toBe(false);
       expect(ThruHDWallet.isValidPath('invalid')).toBe(false);
+    });
+
+    it('is syntax-only: it accepts paths a Ledger device rejects', () => {
+      for (const path of ["m/0'", "m/44'/60'/0'/0'", "m/44'/8478'/0'/1'", "m/44'/8478'/4294967295'/0'"]) {
+        expect(ThruHDWallet.isValidPath(path)).toBe(true);
+        expect(ThruHDWallet.isLedgerCompatiblePath(path)).toBe(false);
+      }
+    });
+  });
+
+  describe('account index and change bounds', () => {
+    it('accepts nonzero change for ordinary SDK derivation', async () => {
+      const account = await ThruHDWallet.getAccount(seed, 0, 1);
+      expect(account.path).toBe("m/44'/8478'/0'/1'");
+      expect(ThruHDWallet.isLedgerCompatiblePath(account.path)).toBe(false);
+    });
+
+    it('accepts the largest hardened account index, 2^31 - 1', async () => {
+      expect(ThruHDWallet.MAX_ACCOUNT_INDEX).toBe(2 ** 31 - 1);
+      const account = await ThruHDWallet.getAccount(seed, 2 ** 31 - 1);
+      expect(account.path).toBe("m/44'/8478'/2147483647'/0'");
+    });
+
+    it.each([2 ** 31, 2 ** 32, Number.MAX_SAFE_INTEGER])('rejects account index %d with a clear error', async (index) => {
+      await expect(ThruHDWallet.getAccount(seed, index)).rejects.toThrow('Account index must be below 2^31');
+      expect(() => ThruHDWallet.getAccountPath(index)).toThrow('Account index must be below 2^31');
+    });
+
+    it.each([0.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects non-integer account index %d', async (index) => {
+      await expect(ThruHDWallet.getAccount(seed, index)).rejects.toThrow(/Account index must be/);
+    });
+
+    it.each([-1, 2 ** 31])('rejects out-of-range change %d', async (change) => {
+      await expect(ThruHDWallet.getAccount(seed, 0, change)).rejects.toThrow(/Change index must be/);
+    });
+
+    it('still accepts an explicit change of 0', async () => {
+      const account = await ThruHDWallet.getAccount(seed, 1, 0);
+      expect(bytesToHex(account.publicKey)).toBe(VECTORS.find((v) => v.account === 1 && v.change === 0)!.publicKey);
+    });
+  });
+
+  describe('getAccountPath / getAccountAtPath', () => {
+    it('builds depth-4 (default) and depth-3 paths', () => {
+      expect(ThruHDWallet.getAccountPath(7)).toBe("m/44'/8478'/7'/0'");
+      expect(ThruHDWallet.getAccountPath(7, 4)).toBe("m/44'/8478'/7'/0'");
+      expect(ThruHDWallet.getAccountPath(7, 3)).toBe("m/44'/8478'/7'");
+      expect(() => ThruHDWallet.getAccountPath(7, 5 as 4)).toThrow(/Depth must be 3 or 4/);
+    });
+
+    it('derives the same depth-4 account as getAccount', async () => {
+      for (const { account: accountIndex, path, publicKey } of VECTORS.filter((v) => v.change === 0)) {
+        const account = await ThruHDWallet.getAccountAtPath(seed, path);
+        expect(account.path).toBe(path);
+        expect(bytesToHex(account.publicKey)).toBe(publicKey);
+        expect(account).toEqual(await ThruHDWallet.getAccount(seed, accountIndex));
+      }
+    });
+
+    it('derives a depth-3 account distinct from the depth-4 one', async () => {
+      const depth3 = await ThruHDWallet.getAccountAtPath(seed, ThruHDWallet.getAccountPath(0, 3));
+      expect(depth3.path).toBe("m/44'/8478'/0'");
+      expect(bytesToHex(depth3.publicKey)).not.toBe(VECTORS[0].publicKey);
+    });
+
+    it('rejects non-Ledger-compatible paths with the reason', async () => {
+      await expect(ThruHDWallet.getAccountAtPath(seed, "m/44'/8478'/0'/1'")).rejects.toThrow(
+        "Path m/44'/8478'/0'/1' is not Ledger-compatible: change must be 0'"
+      );
+      await expect(ThruHDWallet.getAccountAtPath(seed, "m/44'/8478'")).rejects.toThrow(/depth must be 3 or 4/);
+    });
+  });
+
+  describe('isLedgerCompatiblePath', () => {
+    it.each([
+      "m/44'/8478'/0'/0'",
+      "m/44'/8478'/2147483647'/0'",
+      "m/44'/8478'/0'",
+      "m/44'/8478'/2147483647'",
+    ])('accepts %s', (path) => {
+      expect(ThruHDWallet.isLedgerCompatiblePath(path)).toBe(true);
+      expect(ThruHDWallet.ledgerPathError(path)).toBeNull();
+      expect(() => ThruHDWallet.assertLedgerCompatiblePath(path)).not.toThrow();
+    });
+
+    it.each([
+      ["m/44'/8478'/0'/1'", "change must be 0'"],
+      ["m/44'/8478'/0'/2147483647'", "change must be 0'"],
+      ["m/44'/8478'/2147483648'/0'", 'out of range'],
+      ["m/44'/8478'/4294967295'", 'out of range'],
+      ["m/44'/8478'/00'/0'", 'syntax'],
+      ["m/44h/8478h/0h/0h", 'syntax'],
+      ["m/44'/8478'/0'/0'/", 'syntax'],
+      ["M/44'/8478'/0'/0'", 'syntax'],
+      [" m/44'/8478'/0'/0'", 'syntax'],
+      ["m/44'/9999'/0'/0'", "coin type must be 8478'"],
+      ['', 'syntax'],
+    ])('rejects %s (%s)', (path, reason) => {
+      expect(ThruHDWallet.isLedgerCompatiblePath(path)).toBe(false);
+      expect(ThruHDWallet.ledgerPathError(path)).toContain(reason);
+    });
+
+    it('checks raw u32 components as sent to the device', () => {
+      const H = ThruHDWallet.HARDENED_OFFSET;
+      expect(ThruHDWallet.isLedgerCompatiblePath([H + 44, H + 8478, 0xffff_ffff, H])).toBe(true);
+      expect(ThruHDWallet.isLedgerCompatiblePath([H + 44, H + 8478, H, H + 1])).toBe(false);
+      expect(ThruHDWallet.isLedgerCompatiblePath([H + 44, H + 8478, H, 2 ** 32])).toBe(false);
+      expect(ThruHDWallet.isLedgerCompatiblePath([H + 44, H + 8478, -1])).toBe(false);
+    });
+
+    it('parsePath produces the raw components', () => {
+      const H = ThruHDWallet.HARDENED_OFFSET;
+      expect(ThruHDWallet.parsePath('m')).toEqual([]);
+      expect(ThruHDWallet.parsePath("m/44'/8478'/2147483647'/0")).toEqual([H + 44, H + 8478, 0xffff_ffff, 0]);
     });
   });
 });

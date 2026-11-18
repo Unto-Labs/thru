@@ -21,6 +21,7 @@ packages:
   - 'chain-indexer'
   - 'compression-service'
   - 'edge-policy'
+  - 'mcp'
   - 'wallet-app'
   - 'wallet'
   - 'wallet/admin'

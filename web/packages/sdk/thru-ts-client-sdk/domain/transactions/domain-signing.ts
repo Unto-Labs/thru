@@ -32,6 +32,61 @@ const PUBKEY_SIZE = 32;
 const DST_SIZE = 16;
 
 /**
+ * Largest raw context C's `tn_signature_assemble_msg` accepts for the
+ * large-context domains (GOSSIP, MSG, NODE_RECORD): `TN_SIGNATURE_CTX_MAX` in
+ * `src/thru/util/tn_signature.c` (the sign-tile request MTU).
+ */
+export const SIGNATURE_CTX_MAX = 32768;
+
+/**
+ * Largest raw context C accepts for the remaining non-transaction domains
+ * (BLOCK_HEADER, BLOCK, EOA_CREATE, EOA_DELETE): `TN_SIGNATURE_COMMON_CTX_MAX`
+ * in `src/thru/util/tn_signature.c`.
+ */
+export const SIGNATURE_COMMON_CTX_MAX = 256;
+
+/**
+ * Largest raw context `domain` accepts, or `undefined` for TXN, whose context
+ * is hashed to 32 bytes first and is therefore unbounded here. Same table as
+ * C (`tn_signature_sign` / `tn_signature_verify`), Rust (`thru-base`
+ * `tn_signature.rs`) and Go (`domain_signing.go`).
+ */
+export function signatureContextMax(domain: SignatureDomain): number | undefined {
+    switch (domain) {
+        case SignatureDomain.TXN:
+            return undefined;
+        case SignatureDomain.GOSSIP:
+        case SignatureDomain.MSG:
+        case SignatureDomain.NODE_RECORD:
+            return SIGNATURE_CTX_MAX;
+        case SignatureDomain.BLOCK_HEADER:
+        case SignatureDomain.BLOCK:
+        case SignatureDomain.EOA_CREATE:
+        case SignatureDomain.EOA_DELETE:
+            return SIGNATURE_COMMON_CTX_MAX;
+        default:
+            throw new Error(`Invalid signature domain: ${domain}`);
+    }
+}
+
+/**
+ * Whether a `length`-byte context exceeds what C signs or verifies for
+ * `domain`. C fails both closed in that case (it never assembles `M`), so the
+ * SDK refuses to sign and never verifies such a message: otherwise it would
+ * sign, and worse accept, messages the node refuses.
+ */
+function contextTooLarge(domain: SignatureDomain, length: number): boolean {
+    const max = signatureContextMax(domain);
+    return max !== undefined && length > max;
+}
+
+function contextTooLargeError(domain: SignatureDomain, length: number): Error {
+    return new Error(
+        `Signature context of ${length} bytes exceeds the ${signatureContextMax(domain)}-byte limit for ${SignatureDomain[domain]}`,
+    );
+}
+
+/**
  * Fixed 16-byte ASCII domain-separation tags. Where the version suffix is
  * shorter than the tag width, the tag is padded with trailing '_' rather
  * than zero-digits (e.g. "v1__" instead of "v001"). TypeScript mirror of the
@@ -128,11 +183,17 @@ function encIsCanonical(enc: Uint8Array): boolean {
     return false; // y == p is non-canonical
 }
 
-/** M = DST_domain ‖ context. TXN context is SHA-256(message); else message. */
+/**
+ * M = DST_domain ‖ context. TXN context is SHA-256(message); else message.
+ * Throws if the context exceeds {@link signatureContextMax} for `domain`.
+ */
 export function buildSignedMessage(message: Uint8Array, domain: SignatureDomain): Uint8Array {
     const dst = DOMAIN_DST[domain];
     if (dst === undefined || dst.length !== DST_SIZE) {
         throw new Error(`Invalid signature domain: ${domain}`);
+    }
+    if (contextTooLarge(domain, message.length)) {
+        throw contextTooLargeError(domain, message.length);
     }
     if (domain === SignatureDomain.TXN) {
         return concatBytes(dst, new Uint8Array(sha256(message)));
@@ -142,6 +203,8 @@ export function buildSignedMessage(message: Uint8Array, domain: SignatureDomain)
 
 /**
  * Sign M = DST_domain ‖ context with standard RFC-8032 Ed25519.
+ * Throws if the context exceeds {@link signatureContextMax} for `domain`
+ * (checked first, as in C and Rust).
  */
 export async function signWithDomain(
     message: Uint8Array,
@@ -149,6 +212,9 @@ export async function signWithDomain(
     publicKey?: Uint8Array,
     domain: SignatureDomain = SignatureDomain.TXN,
 ): Promise<Uint8Array> {
+    if (contextTooLarge(domain, message.length)) {
+        throw contextTooLargeError(domain, message.length);
+    }
     if (privateKey.length !== PUBKEY_SIZE) {
         throw new Error("Private key must contain 32 bytes");
     }
@@ -192,7 +258,8 @@ export async function signWithDomain(
 /**
  * Strict/canonical verification: reject non-canonical A/R encodings, small-order
  * A/R, and non-canonical S, then the cofactorless equation [S]B == R + [k]A over
- * M = DST_domain ‖ context. Matches the C/Rust/Go strict policy.
+ * M = DST_domain ‖ context. Matches the C/Rust/Go strict policy, including
+ * returning false for a context above {@link signatureContextMax}.
  */
 export async function verifyWithDomain(
     signature: Uint8Array,
@@ -200,6 +267,9 @@ export async function verifyWithDomain(
     publicKey: Uint8Array,
     domain: SignatureDomain = SignatureDomain.TXN,
 ): Promise<boolean> {
+    if (contextTooLarge(domain, message.length)) {
+        return false;
+    }
     if (signature.length !== SIGNATURE_SIZE || publicKey.length !== PUBKEY_SIZE) {
         return false;
     }
@@ -376,7 +446,8 @@ export function attachTransactionSignature(
  * Sign a generic user / wallet message under {@link SignatureDomain.MSG}.
  * Distinct DST from txn / block / node record / EOA authorizations, so a
  * signature produced by a wallet's "sign message" flow can never be replayed
- * as any of them.
+ * as any of them. Messages longer than {@link SIGNATURE_CTX_MAX} (32768) bytes
+ * are refused, as by the node.
  */
 export function signMessage(
     message: Uint8Array,
@@ -386,7 +457,11 @@ export function signMessage(
     return signWithDomain(message, privateKey, publicKey, SignatureDomain.MSG);
 }
 
-/** Verify a generic user / wallet message signature produced by {@link signMessage}. */
+/**
+ * Verify a generic user / wallet message signature produced by
+ * {@link signMessage}. Returns false for messages longer than
+ * {@link SIGNATURE_CTX_MAX} bytes, as the node does.
+ */
 export function verifyMessage(
     signature: Uint8Array,
     message: Uint8Array,

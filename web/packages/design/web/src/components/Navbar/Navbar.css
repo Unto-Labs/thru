@@ -80,11 +80,15 @@
   flex: 1;
 }
 
+/* Bar controls (status, burger, ThemeToggle) share one height: 36.75px, the
+   ThemeToggle's size, so they line up side by side. */
 .tds-navbar__status {
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  padding: 8px 14px;
+  box-sizing: border-box;
+  height: 36.75px;
+  padding: 0 14px;
   margin: 0;
   background: color-mix(in srgb, var(--teal-0) 55%, transparent);
   border: 1px solid var(--teal-300);
@@ -205,20 +209,24 @@ button.tds-navbar__status:hover,
   display: none;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  box-sizing: border-box;
+  width: 36.75px;
+  height: 36.75px;
   margin: 0;
   padding: 0;
   background: var(--color-surface-higher);
-  border: none;
+  border: 1px solid var(--color-border-secondary);
   border-radius: var(--radius-none);
   color: var(--color-text-primary);
   cursor: pointer;
   flex: none;
-  transition: background-color var(--duration-fast) var(--ease-standard);
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
 }
 .tds-navbar__burger:hover {
   background: var(--color-surface-primary);
+  border-color: var(--color-border-strong);
 }
 
 /* The bar must sit above the scrim and panel (explorer gives it z-40) so the
@@ -337,7 +345,7 @@ button.tds-navbar__status:hover,
     display: none;
   }
   .tds-navbar__status {
-    padding: 7px 10px;
+    padding: 0 10px;
     gap: 7px;
   }
   .tds-navbar__status-slot {

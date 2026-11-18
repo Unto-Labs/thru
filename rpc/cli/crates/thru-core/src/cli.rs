@@ -1815,19 +1815,109 @@ pub enum AuthCommands {
     },
 }
 
-/// Organization API keys, managed with the `thru auth login` credentials
+/// Accepts an agent client label for `thru auth keys create --agent`:
+/// lowercase letters, digits and `-`, starting with a letter or digit, at
+/// most 32 characters.
+fn parse_agent_client(value: &str) -> Result<String, String> {
+    if crate::commands::developers::valid_agent_client(value) {
+        Ok(value.to_owned())
+    } else {
+        Err(format!(
+            "'{value}' is not a valid agent client: use 1-32 lowercase letters, digits or '-', starting with a letter or digit (for example claude-code, codex, cursor, vscode)"
+        ))
+    }
+}
+
+/// Organization API keys. `list` and `revoke` use the `thru auth login`
+/// credentials; `create` asks for approval in the browser instead.
 #[derive(Subcommand)]
 pub enum AuthKeysCommands {
     /// List the organization's API keys
     List,
-    /// Create a named API key; its secret is printed once
+    /// Create an API key after you approve it in the browser
+    ///
+    /// Every key needs your approval in the browser, even when this CLI is
+    /// logged in, and no `thru auth login` is needed: the command prints an
+    /// approval link and code and opens the browser (unless --no-browser).
+    /// Sign in there (this creates a Thru Developers account if you have
+    /// none), pick the key's organization and approve. The command waits
+    /// until you approve, deny, or the link expires.
+    ///
+    /// Agents: a tool call can time out while the command waits. Run it with
+    /// --no-wait, which prints the link and code, saves the pending request
+    /// and exits; show the link to the user, ask them to approve, then run
+    /// `thru auth keys create --resume` to finish (it uses the options given
+    /// with --no-wait).
+    ///
+    /// Without --agent, the new key is printed once; store it right away.
+    ///
+    /// With --agent <CLIENT>, the key is tagged as an agent key for that
+    /// client (named agent-<CLIENT>-<MACHINE> unless --name is given). For a
+    /// supported client the key is installed into the client's MCP
+    /// configuration and never printed, so it stays out of the agent's
+    /// transcript:
+    ///
+    ///   claude-code  runs `claude mcp add --scope user --transport http thru
+    ///                <MCP URL> --header "Authorization: Bearer <KEY>"`
+    ///   codex        sets [mcp_servers.thru] in ~/.codex/config.toml (or
+    ///                $CODEX_HOME) to read the key from THRU_MCP_API_KEY,
+    ///                saves the key to an owner-only file under ~/.thru/cli,
+    ///                and prints the export line for your shell profile
+    ///   cursor       sets mcpServers.thru in ~/.cursor/mcp.json
+    ///   vscode       sets servers.thru in VS Code's user mcp.json
+    ///
+    /// Other entries in these files are kept, and the previous file is saved
+    /// as <FILE>.bak. Reload MCP servers (start a new session) afterwards.
+    /// For any other client, or with --print, the key is printed once with
+    /// the MCP URL instead. With --agent the Thru skill is also installed
+    /// with `npx skills add https://thru.org` (skip with --no-skill).
+    ///
+    /// The MCP URL is https://mcp.thru.org/mcp; set THRU_MCP_URL to use a
+    /// different one (for testing). THRU_DEVELOPERS_URL selects the Thru
+    /// Developers server, as for `thru auth login`.
+    #[command(verbatim_doc_comment)]
+    #[command(group(
+        clap::ArgGroup::new("key_label")
+            .args(["name", "agent", "resume"])
+            .required(true)
+            .multiple(true)
+    ))]
     Create {
         /// Name of the key, for example the service or CI job that uses it
+        /// (default with --agent: agent-<CLIENT>-<MACHINE>)
         #[arg(long)]
-        name: String,
-        /// Hostname allowed to use the key from a browser (repeatable; `*.` prefix allowed)
-        #[arg(long = "origin", value_name = "HOST")]
+        name: Option<String>,
+        /// Agent client the key is for: claude-code, codex, cursor, vscode,
+        /// or another label (1-32 lowercase letters, digits or '-'). Tags
+        /// the key as an agent key and installs it for a supported client
+        #[arg(long, value_name = "CLIENT", value_parser = parse_agent_client)]
+        agent: Option<String>,
+        /// Not supported: set a key's allowed origins in the Thru Developers
+        /// dashboard
+        #[arg(long = "origin", value_name = "HOST", hide = true)]
         origins: Vec<String>,
+        /// Print the key (and the MCP URL with --agent) instead of
+        /// installing it into the agent client's configuration
+        #[arg(long)]
+        print: bool,
+        /// With --agent, do not install the Thru skill
+        #[arg(long)]
+        no_skill: bool,
+        /// Display the approval URL and code without opening a browser
+        #[arg(long)]
+        no_browser: bool,
+        /// Print the approval URL and code, save the pending request and
+        /// exit without waiting; finish with `thru auth keys create
+        /// --resume`. Never opens a browser
+        #[arg(long)]
+        no_wait: bool,
+        /// Wait for approval of the key requested with --no-wait, then print
+        /// or install it with the options given then
+        #[arg(
+            long,
+            conflicts_with_all = ["name", "agent", "origins", "print", "no_skill", "no_browser", "no_wait"]
+        )]
+        resume: bool,
     },
     /// Revoke an API key by id (see `thru auth keys list`)
     Revoke {

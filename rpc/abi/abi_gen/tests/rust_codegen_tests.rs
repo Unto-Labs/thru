@@ -1613,9 +1613,13 @@ use {}::functions::*;
     fs::write(src_dir.join("tests.rs"), tests_content)
         .map_err(|e| format!("Failed to write tests.rs: {}", e))?;
 
-    /* Run cargo test */
+    /* Run cargo test.  Only the `roundtrip` target holds tests: a plain
+    `cargo test` also compiled the generated library a second time as an
+    empty unit-test harness and ran rustdoc for doctests it has none of. */
     let output = Command::new("cargo")
         .arg("test")
+        .arg("--test")
+        .arg("roundtrip")
         .arg("--manifest-path")
         .arg(project_dir.join("Cargo.toml"))
         .output()
@@ -2607,7 +2611,7 @@ mod tests {
 "#,
     )
     .unwrap();
-    let result = run_cargo(&project, &["test", "--quiet"]);
+    let result = run_cargo(&project, &["test", "--lib", "--quiet"]);
     let _ = fs::remove_dir_all(&project);
     result.expect("generated API parity tests");
 }
@@ -2714,7 +2718,7 @@ fn run_generated_crate_tests(name: &str, abis: &[(&str, String)], tests: &str) {
         ),
     )
     .unwrap();
-    let result = run_cargo(&project, &["test", "--quiet"]);
+    let result = run_cargo(&project, &["test", "--lib", "--quiet"]);
     let _ = fs::remove_dir_all(&project);
     result.unwrap_or_else(|e| panic!("{} generated tests failed: {}", name, e));
 }
@@ -3317,7 +3321,7 @@ fn compliance_cases_and_fuzzed_values() {{
         ),
     )
     .unwrap();
-    let result = run_cargo(&project, &["test", "--quiet"]);
+    let result = run_cargo(&project, &["test", "--lib", "--quiet"]);
     if result.is_ok() {
         let _ = fs::remove_dir_all(&project);
     }
@@ -3790,7 +3794,7 @@ fn test_rust_short_buffer_reports_exact_required_size() {
         ),
     )
     .unwrap();
-    let result = run_cargo(&project, &["test", "--quiet"]);
+    let result = run_cargo(&project, &["test", "--lib", "--quiet"]);
     if result.is_ok() {
         let _ = fs::remove_dir_all(&project);
     }
@@ -5271,7 +5275,7 @@ mod tests {
 "#,
     )
     .unwrap();
-    let result = run_cargo(&project, &["test", "--quiet"]);
+    let result = run_cargo(&project, &["test", "--lib", "--quiet"]);
     let _ = fs::remove_dir_all(&project);
     result.unwrap_or_else(|e| panic!("package path tests failed: {e}"));
 }
@@ -5329,7 +5333,7 @@ mod tests {
 "#,
     )
     .unwrap();
-    let result = run_cargo(&project, &["test", "--quiet"]);
+    let result = run_cargo(&project, &["test", "--lib", "--quiet"]);
     let _ = fs::remove_dir_all(&project);
     result.unwrap_or_else(|e| panic!("parent package tests failed: {e}"));
 }

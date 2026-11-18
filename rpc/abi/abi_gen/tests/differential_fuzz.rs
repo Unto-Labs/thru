@@ -487,7 +487,10 @@ fn differential_fuzz_rust_go_c() {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(12);
-    let root = std::env::temp_dir().join(format!("abi_differential_fuzz_{}", std::process::id()));
+    /* A fixed directory under the target dir, not one named after the process:
+    the generated crate's paths are part of its vcache key, and CI maps the
+    checkout (and so the target dir) to a stable root (UNTO-3636). */
+    let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("abi_differential_fuzz");
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).unwrap();
     let with_c = c_available(&root.join("probe"));
@@ -1130,7 +1133,10 @@ fn ir_helpers_agree_rust_go_c() {
         eprintln!("skipping IR helper comparison: `go` not found");
         return;
     }
-    let root = std::env::temp_dir().join(format!("abi_ir_helpers_{}", std::process::id()));
+    /* A fixed directory under the target dir, not one named after the process:
+    the generated crate's paths are part of its vcache key, and CI maps the
+    checkout (and so the target dir) to a stable root (UNTO-3636). */
+    let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("abi_ir_helpers");
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).unwrap();
     let with_c = c_available(&root.join("probe"));

@@ -28,6 +28,11 @@
 #define TSDK_SEG_IDX_BLOCK_CTX (0x0004UL)
 
 #define TSDK_BLOCK_CTX_VM_SPACING (0x1000UL)
+/* TSDK_BLOCK_CTX_SPAN is the depth of the stored block history; it must
+   equal TN_RUNTIME_CTX_BLOCK_SPAN, which the runtime defines as twice its
+   state-hash delay (TN_RUNTIME_CTX_STATE_HASH_DELAY). */
+#define TSDK_BLOCK_CTX_STATE_HASH_DELAY (256UL)
+#define TSDK_BLOCK_CTX_SPAN             (TSDK_BLOCK_CTX_STATE_HASH_DELAY*2UL)
 
 #define TSDK_ADDR( seg_type, seg_idx, offset ) \
   (seg_type << 40UL | seg_idx << 24UL | offset)

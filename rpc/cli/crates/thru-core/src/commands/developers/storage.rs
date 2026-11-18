@@ -197,6 +197,31 @@ impl Store {
         remove_private(&self.pending_login_path())
     }
 
+    /// Owner-only file holding the key request that
+    /// `thru auth keys create --no-wait` started, until `--resume` finishes it.
+    pub(super) fn pending_key_request_path(&self) -> PathBuf {
+        self.path("key-request-pending")
+    }
+
+    /// Replaces the pending key request file with `raw` (0600 on Unix).
+    pub(super) fn save_pending_key_request(&self, raw: &[u8]) -> Result<(), CliError> {
+        ensure_private_dir(&self.root)?;
+        super::write_owner_only_file(&self.root, &self.pending_key_request_path(), raw)
+    }
+
+    /// The pending key request file's contents; `None` when there is none.
+    pub(super) fn load_pending_key_request(&self) -> Result<Option<String>, CliError> {
+        if !inspect_private_dir(&self.root)? {
+            return Ok(None);
+        }
+        read_private(&self.pending_key_request_path(), 16 * 1024)
+    }
+
+    /// Removes the pending key request file; absent is fine.
+    pub(super) fn clear_pending_key_request(&self) -> Result<(), CliError> {
+        remove_private(&self.pending_key_request_path())
+    }
+
     pub(super) async fn lock(&self) -> Result<Guard, CliError> {
         let file = secure_open(&self.path("lock"), true, true)?;
         let deadline = tokio::time::Instant::now() + Duration::from_secs(60);

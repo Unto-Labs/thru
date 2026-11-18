@@ -5,10 +5,10 @@ use clap::{Parser, Subcommand, ValueEnum};
 use cmds::analyze::IrOutputFormat;
 use std::path::PathBuf;
 
-mod abi;
-mod cmds;
-mod codegen;
-mod dependency;
+/* The binary uses the library rather than declaring the modules again,
+which compiled the whole crate a second time (and a third time for its
+test target, re-running every unit test). */
+use abi_gen::{abi, cmds, codegen, dependency};
 
 #[derive(Parser)]
 #[command(name = "abi")]

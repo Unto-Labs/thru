@@ -70,10 +70,6 @@ impl LanguageRunner for CRunner {
         "c"
     }
 
-    fn codegen_language_param(&self) -> &str {
-        "c"
-    }
-
     fn run_test(
         &self,
         test_name: &str,

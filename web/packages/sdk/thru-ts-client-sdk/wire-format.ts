@@ -55,8 +55,15 @@ export const TXN_HEADER_BODY_SIZE = 112;
 /** Transaction version 1 */
 export const TXN_VERSION_V1 = 0x01;
 
-/** Maximum number of accounts allowed in a transaction */
+/**
+ * Maximum number of accounts allowed in a transaction, counting the fee payer
+ * and the program (`TN_TXN_MAX_ACCOUNTS`). The rule is
+ * `TXN_FIXED_ACCOUNT_COUNT + rw_cnt + ro_cnt <= TXN_MAX_ACCOUNTS`.
+ */
 export const TXN_MAX_ACCOUNTS = 1024;
+
+/** Accounts every transaction carries in its header: the fee payer and the program. */
+export const TXN_FIXED_ACCOUNT_COUNT = 2;
 
 /** Size of state proof header in bytes */
 export const STATE_PROOF_HEADER_SIZE = 40;

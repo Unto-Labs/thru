@@ -251,7 +251,11 @@ fn main() -> Result<()> {
     println!("Failed: {}", output.test_run.failed);
     println!("Duration: {}ms", output.test_run.duration_ms);
 
-    if output.test_run.failed > 0 {
+    /* A case that errored (status "error": the runner returned Err, e.g. a
+    strict tsc pass or the toolchain setup failed) is not a pass either.
+    Counting only "fail" let such a case exit 0, so run_all_tests.sh
+    reported it as passed. */
+    if output.test_run.passed < output.test_run.total_tests {
         std::process::exit(1);
     }
 

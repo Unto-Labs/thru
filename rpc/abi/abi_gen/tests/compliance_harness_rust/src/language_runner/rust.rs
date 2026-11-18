@@ -22,10 +22,6 @@ impl LanguageRunner for RustRunner {
         "rust"
     }
 
-    fn codegen_language_param(&self) -> &str {
-        "rust"
-    }
-
     fn run_test(
         &self,
         test_name: &str,

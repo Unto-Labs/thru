@@ -101,6 +101,9 @@ export {
     attachTransactionSignature,
     signMessage,
     verifyMessage,
+    signatureContextMax,
+    SIGNATURE_CTX_MAX,
+    SIGNATURE_COMMON_CTX_MAX,
 } from "./domain/transactions/domain-signing";
 
 // Legacy (pre-RFC-8032) signing scheme, for downstream forks on their own

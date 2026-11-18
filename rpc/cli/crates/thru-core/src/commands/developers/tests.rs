@@ -158,14 +158,95 @@ fn parser_routes_thru_and_uusd_withdrawals_separately() {
         "*.b.example",
     ])
     .unwrap();
+    /* `--origin` still parses, so `create` can explain that it is unsupported. */
     assert!(matches!(parsed.command, Commands::Auth {
         subcommand: AuthCommands::Keys {
-            subcommand: AuthKeysCommands::Create { name, origins }
+            subcommand: AuthKeysCommands::Create { name: Some(name), agent: None, origins, .. }
         }
     } if name == "ci" && origins == ["a.example", "*.b.example"]));
+    let parsed = Cli::try_parse_from([
+        "thru",
+        "auth",
+        "keys",
+        "create",
+        "--agent",
+        "claude-code",
+        "--print",
+        "--no-skill",
+        "--no-browser",
+    ])
+    .unwrap();
+    assert!(matches!(parsed.command, Commands::Auth {
+        subcommand: AuthCommands::Keys {
+            subcommand: AuthKeysCommands::Create {
+                name: None,
+                agent: Some(agent),
+                print: true,
+                no_skill: true,
+                no_browser: true,
+                ..
+            }
+        }
+    } if agent == "claude-code"));
+    assert!(
+        Cli::try_parse_from([
+            "thru",
+            "auth",
+            "keys",
+            "create",
+            "--name",
+            "x",
+            "--agent",
+            "my-agent2"
+        ])
+        .is_ok()
+    );
     assert!(Cli::try_parse_from(["thru", "auth", "keys", "list"]).is_ok());
     assert!(Cli::try_parse_from(["thru", "auth", "keys", "revoke", "key-1"]).is_ok());
-    assert!(Cli::try_parse_from(["thru", "auth", "keys", "create"]).is_err());
+    for args in [
+        vec!["thru", "auth", "keys", "create"],
+        vec!["thru", "auth", "keys", "create", "--print"],
+        vec!["thru", "auth", "keys", "create", "--agent", "Claude"],
+        vec!["thru", "auth", "keys", "create", "--agent", "-x"],
+        vec!["thru", "auth", "keys", "create", "--agent", "a_b"],
+        vec!["thru", "auth", "keys", "create", "--agent", ""],
+        vec![
+            "thru",
+            "auth",
+            "keys",
+            "create",
+            "--agent",
+            "a23456789012345678901234567890123",
+        ],
+    ] {
+        assert!(Cli::try_parse_from(&args).is_err(), "{args:?}");
+    }
+    let mut command = <Cli as clap::CommandFactory>::command();
+    let help = command
+        .find_subcommand_mut("auth")
+        .and_then(|auth| auth.find_subcommand_mut("keys"))
+        .and_then(|keys| keys.find_subcommand_mut("create"))
+        .unwrap()
+        .render_long_help()
+        .to_string();
+    for text in [
+        "approval",
+        "--agent",
+        "claude mcp add",
+        "~/.codex/config.toml",
+        "~/.cursor/mcp.json",
+        "THRU_MCP_URL",
+        "npx skills add https://thru.org",
+        "--no-skill",
+        "--print",
+        "--no-wait",
+        "thru auth keys create --resume",
+        "--scope user",
+        "THRU_MCP_API_KEY",
+    ] {
+        assert!(help.contains(text), "help lacks {text}: {help}");
+    }
+    assert!(!help.contains("--origin"));
     let parsed = Cli::try_parse_from([
         "thru",
         "--network",
@@ -2224,84 +2305,6 @@ async fn keys_list_rejects_text_that_could_rewrite_the_terminal() {
 }
 
 #[tokio::test]
-async fn keys_create_prints_the_plaintext_once_and_never_stores_it() {
-    for (origins, body) in [
-        (
-            vec!["app.example.com".to_string()],
-            json!({"name":"ci","originAllowlist":["app.example.com"]}),
-        ),
-        (Vec::new(), json!({"name":"ci"})),
-    ] {
-        let server = MockServer::start().await;
-        let (developers, directory, store) = logged_in(&server).await;
-        Mock::given(method("POST"))
-            .and(path("/api/cli/org/keys"))
-            .and(header("authorization", "Bearer old-access"))
-            .and(wiremock::matchers::body_json(body))
-            .respond_with(ResponseTemplate::new(201).set_body_json(json!({
-                "organization": {"id": "org-1", "name": "Acme Labs"},
-                "key": org_keys_response()["keys"][0],
-                "plaintext": PLAINTEXT,
-            })))
-            .expect(1)
-            .mount(&server)
-            .await;
-        let output = auth_keys(
-            &developers,
-            &store,
-            AuthKeysCommands::Create {
-                name: "ci".into(),
-                origins,
-            },
-        )
-        .await
-        .unwrap();
-        assert_eq!(output["auth_key"]["plaintext"], PLAINTEXT);
-        assert_eq!(output["auth_key"]["key"]["id"], "key-1");
-        assert_eq!(
-            output["auth_key"]["key"]["origin_allowlist"][0],
-            "app.example.com"
-        );
-        assert_eq!(output["auth_key"]["organization"]["name"], "Acme Labs");
-        assert!(!all_file_contents(directory.path()).contains(PLAINTEXT));
-    }
-}
-
-#[tokio::test]
-async fn keys_create_revokes_a_key_whose_response_is_invalid() {
-    let server = MockServer::start().await;
-    let (developers, _directory, store) = logged_in(&server).await;
-    Mock::given(method("POST"))
-        .and(path("/api/cli/org/keys"))
-        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
-            "key": org_keys_response()["keys"][0],
-            "plaintext": "not-a-thru-key",
-        })))
-        .expect(1)
-        .mount(&server)
-        .await;
-    Mock::given(method("POST"))
-        .and(path("/api/cli/org/keys/key-1/revoke"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
-        .expect(1)
-        .mount(&server)
-        .await;
-    let error = auth_keys(
-        &developers,
-        &store,
-        AuthKeysCommands::Create {
-            name: "ci".into(),
-            origins: Vec::new(),
-        },
-    )
-    .await
-    .unwrap_err();
-    assert_eq!(code(&error), "INVALID_RESPONSE");
-    assert!(error.to_string().contains("was revoked"));
-    assert!(!error.to_string().contains("not-a-thru-key"));
-}
-
-#[tokio::test]
 async fn keys_revoke_posts_an_empty_body_for_the_id() {
     let server = MockServer::start().await;
     let (developers, _directory, store) = logged_in(&server).await;
@@ -2561,4 +2564,848 @@ async fn status_survives_other_organization_failures() {
             .unwrap()
             .contains("UNSUPPORTED")
     );
+}
+
+// ---------------------------------------------------------------------------
+// `thru auth keys create`: browser approval and agent install
+// ---------------------------------------------------------------------------
+
+const AGENT_SECRET: &str = "thru_live_agent_secret_value_123";
+
+/// Records each command and answers from a script, in order; `None` means
+/// the program is not installed.
+#[derive(Default)]
+struct FakeRunner {
+    answers: Mutex<std::collections::VecDeque<Option<(i32, &'static str)>>>,
+    calls: Mutex<Vec<(String, Vec<String>)>>,
+}
+impl FakeRunner {
+    fn new(answers: Vec<Option<(i32, &'static str)>>) -> Self {
+        Self {
+            answers: Mutex::new(answers.into()),
+            calls: Mutex::default(),
+        }
+    }
+    fn calls(&self) -> Vec<(String, Vec<String>)> {
+        self.calls.lock().unwrap().clone()
+    }
+}
+impl Runner for FakeRunner {
+    async fn run(
+        &self,
+        program: &str,
+        args: &[String],
+        _timeout: Duration,
+    ) -> std::io::Result<std::process::Output> {
+        use std::os::unix::process::ExitStatusExt;
+        self.calls
+            .lock()
+            .unwrap()
+            .push((program.to_owned(), args.to_vec()));
+        match self.answers.lock().unwrap().pop_front().flatten() {
+            None => Err(std::io::ErrorKind::NotFound.into()),
+            Some((code, output)) => Ok(std::process::Output {
+                status: std::process::ExitStatus::from_raw(code << 8),
+                stdout: output.as_bytes().to_vec(),
+                stderr: Vec::new(),
+            }),
+        }
+    }
+}
+
+fn install_paths(root: &std::path::Path) -> InstallPaths {
+    InstallPaths {
+        codex_home: root.join("codex"),
+        cursor_dir: root.join("cursor"),
+        vscode_user_dir: Some(root.join("Code").join("User")),
+        key_dir: root.join("thru").join("agent-keys"),
+    }
+}
+
+fn options(name: Option<&str>, agent: Option<&str>) -> CreateKey {
+    CreateKey {
+        name: name.map(str::to_owned),
+        agent: agent.map(str::to_owned),
+        origins: Vec::new(),
+        print: false,
+        no_skill: false,
+        no_browser: true,
+        no_wait: false,
+        resume: false,
+    }
+}
+
+/// [`create_key`] with a throwaway credential store.
+async fn create_key_in<R: Runner>(
+    developers: &Developers,
+    options: &CreateKey,
+    machine: &str,
+    json_format: bool,
+    runner: &R,
+    paths: impl FnOnce() -> Result<InstallPaths, CliError>,
+) -> Result<(Value, bool), CliError> {
+    let (_directory, store) = fixture(&developers.origin());
+    create_key(
+        developers,
+        &store,
+        options,
+        machine,
+        json_format,
+        runner,
+        paths,
+    )
+    .await
+}
+
+fn approved_key(agent: Option<&str>) -> Value {
+    json!({"status":"approved","key":{
+        "id":"key-9","name":"agent-cursor-test-machine","secret":AGENT_SECRET,"prefix":"thru_live_age",
+        "tags": if agent.is_some() { json!(["agent"]) } else { json!([]) },
+        "agentClient":agent,
+        "organization":{"id":"org-1","name":"Acme Labs","slug":"acme"},
+    }})
+}
+
+/// Mounts a key request that is approved on the second poll, and checks the
+/// request body.
+async fn mount_key_request(server: &MockServer, request: Value, approved: Value) {
+    Mock::given(method("POST"))
+        .and(path("/api/cli/key-requests"))
+        .and(wiremock::matchers::body_json(request))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "requestId":"req-1","userCode":"WXYZ-2345",
+            "verificationUri":format!("{}/cli/keys",server.uri()),
+            "verificationUriComplete":format!("{}/cli/keys?code=WXYZ-2345",server.uri()),
+            "expiresIn":60,"interval":1,"pollToken":"poll-token-1",
+        })))
+        .expect(1)
+        .mount(server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/cli/key-requests/poll"))
+        .and(wiremock::matchers::body_json(
+            json!({"pollToken":"poll-token-1"}),
+        ))
+        .respond_with(Sequence::new(vec![
+            ResponseTemplate::new(200).set_body_json(json!({"status":"pending"})),
+            ResponseTemplate::new(200).set_body_json(approved),
+        ]))
+        .expect(2)
+        .mount(server)
+        .await;
+}
+
+#[tokio::test]
+async fn keys_create_without_agent_prints_the_key_once_and_needs_no_login() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    mount_key_request(
+        &server,
+        json!({"name":"ci","machine":"test-machine"}),
+        approved_key(None),
+    )
+    .await;
+    let directory = tempfile::tempdir().unwrap();
+    let runner = FakeRunner::default();
+    let (output, shown) = create_key_in(
+        &developers,
+        &options(Some("ci"), None),
+        "test-machine",
+        true,
+        &runner,
+        || Ok(install_paths(directory.path())),
+    )
+    .await
+    .unwrap();
+    assert!(shown);
+    let key = &output["auth_key"];
+    assert_eq!(key["plaintext"], AGENT_SECRET);
+    assert_eq!(key["key"]["id"], "key-9");
+    assert_eq!(key["organization"]["slug"], "acme");
+    assert!(key.get("mcp").is_none() && key.get("skill").is_none());
+    assert_eq!(output.to_string().matches(AGENT_SECRET).count(), 1);
+    assert!(runner.calls().is_empty());
+    assert!(all_file_contents(directory.path()).is_empty());
+}
+
+#[tokio::test]
+async fn keys_create_for_cursor_installs_the_key_without_printing_it() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    mount_key_request(
+        &server,
+        json!({"name":"agent-cursor-test-machine","agentClient":"cursor","machine":"test-machine"}),
+        approved_key(Some("cursor")),
+    )
+    .await;
+    let directory = tempfile::tempdir().unwrap();
+    let paths = install_paths(directory.path());
+    fs::create_dir_all(&paths.cursor_dir).unwrap();
+    let config = paths.cursor_dir.join("mcp.json");
+    fs::write(
+        &config,
+        r#"{"mcpServers":{"other":{"url":"https://other.example/mcp"}},"extra":1}"#,
+    )
+    .unwrap();
+    let runner = FakeRunner::new(vec![Some((0, "installed"))]);
+    let (output, shown) = create_key_in(
+        &developers,
+        &options(None, Some("cursor")),
+        "test-machine",
+        true,
+        &runner,
+        || Ok(install_paths(directory.path())),
+    )
+    .await
+    .unwrap();
+    assert!(!shown);
+    let text = output.to_string();
+    assert!(!text.contains(AGENT_SECRET), "{text}");
+    let install = &output["auth_key"]["install"];
+    assert_eq!(install["status"], "installed");
+    assert_eq!(install["updated"], config.display().to_string());
+    assert_eq!(output["auth_key"]["key"]["agent_client"], "cursor");
+    assert_eq!(output["auth_key"]["skill"]["status"], "installed");
+    let written: Value = serde_json::from_str(&fs::read_to_string(&config).unwrap()).unwrap();
+    assert_eq!(
+        written,
+        json!({"mcpServers":{
+            "other":{"url":"https://other.example/mcp"},
+            "thru":{"url":agent::DEFAULT_MCP_URL,"headers":{"Authorization":format!("Bearer {AGENT_SECRET}")}},
+        },"extra":1})
+    );
+    assert!(paths.cursor_dir.join("mcp.json.bak").exists());
+    /* The skill is installed for the same client, never through a shell. */
+    assert_eq!(
+        runner.calls(),
+        vec![(
+            "npx".to_owned(),
+            [
+                "--yes",
+                "skills",
+                "add",
+                "https://thru.org",
+                "--global",
+                "--yes",
+                "--agent",
+                "cursor"
+            ]
+            .map(str::to_owned)
+            .to_vec()
+        )]
+    );
+}
+
+#[tokio::test]
+async fn keys_create_for_an_unknown_client_or_with_print_prints_the_key_and_mcp_url() {
+    for (agent, print, skills_agent) in [("my-agent", false, None), ("codex", true, Some("codex"))]
+    {
+        let server = MockServer::start().await;
+        let developers = Developers::new(&server.uri()).unwrap();
+        mount_key_request(
+            &server,
+            json!({"name":"bot","agentClient":agent,"machine":"test-machine"}),
+            approved_key(Some(agent)),
+        )
+        .await;
+        let directory = tempfile::tempdir().unwrap();
+        /* npx is missing: the skill command is reported, the key is still created. */
+        let runner = FakeRunner::new(vec![None]);
+        let mut create = options(Some("bot"), Some(agent));
+        create.print = print;
+        let (output, shown) =
+            create_key_in(&developers, &create, "test-machine", true, &runner, || {
+                panic!("nothing is installed")
+            })
+            .await
+            .unwrap();
+        assert!(shown);
+        let key = &output["auth_key"];
+        assert_eq!(key["plaintext"], AGENT_SECRET);
+        assert_eq!(key["mcp"]["url"], agent::DEFAULT_MCP_URL);
+        assert!(key.get("install").is_none());
+        assert_eq!(key["skill"]["status"], "manual");
+        let command = key["skill"]["command"].as_str().unwrap();
+        assert!(command.starts_with("npx skills add https://thru.org"));
+        assert_eq!(
+            command.contains("--agent"),
+            skills_agent.is_some(),
+            "{command}"
+        );
+        assert!(all_file_contents(directory.path()).is_empty());
+    }
+}
+
+#[tokio::test]
+async fn keys_create_skips_the_skill_with_no_skill() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    mount_key_request(
+        &server,
+        json!({"name":"bot","agentClient":"other","machine":"test-machine"}),
+        approved_key(Some("other")),
+    )
+    .await;
+    let runner = FakeRunner::default();
+    let mut create = options(Some("bot"), Some("other"));
+    create.no_skill = true;
+    let (output, _) = create_key_in(&developers, &create, "test-machine", true, &runner, || {
+        panic!("nothing is installed")
+    })
+    .await
+    .unwrap();
+    assert!(output["auth_key"].get("skill").is_none());
+    assert!(runner.calls().is_empty());
+}
+
+#[tokio::test]
+async fn keys_create_rejects_origin_before_any_request() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    let mut create = options(Some("ci"), None);
+    create.origins = vec!["app.example.com".into()];
+    let error = create_key_in(
+        &developers,
+        &create,
+        "test-machine",
+        true,
+        &FakeRunner::default(),
+        || panic!("nothing is installed"),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(code(&error), "ORIGIN_UNSUPPORTED");
+    assert!(error.to_string().contains("dashboard"), "{error}");
+    assert!(server.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn keys_create_reports_denial_an_old_server_and_validation_errors() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    Mock::given(method("POST"))
+        .and(path("/api/cli/key-requests"))
+        .respond_with(ResponseTemplate::new(404).set_body_string("<html>Not Found</html>"))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let error = create_key_in(
+        &developers,
+        &options(Some("ci"), None),
+        "m",
+        true,
+        &FakeRunner::default(),
+        || panic!("nothing is installed"),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(code(&error), "UNSUPPORTED");
+
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    Mock::given(method("POST"))
+        .and(path("/api/cli/key-requests"))
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({"error":{"code":"INVALID_NAME_LENGTH","message":"Key names must contain at most 64 characters."}})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let error = create_key_in(
+        &developers,
+        &options(Some("ci"), None),
+        "m",
+        true,
+        &FakeRunner::default(),
+        || panic!("nothing is installed"),
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        error.to_string().contains("at most 64 characters"),
+        "{error}"
+    );
+
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    mount_key_request(
+        &server,
+        json!({"name":"ci","machine":"m"}),
+        json!({"status":"denied"}),
+    )
+    .await;
+    let error = create_key_in(
+        &developers,
+        &options(Some("ci"), None),
+        "m",
+        true,
+        &FakeRunner::default(),
+        || panic!("nothing is installed"),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(code(&error), "access_denied");
+}
+
+#[test]
+fn key_poll_answers_map_to_states() {
+    assert!(matches!(
+        classify_key_poll(200, Some(&json!({"status":"pending"}))),
+        KeyPoll::Pending
+    ));
+    assert!(matches!(
+        classify_key_poll(429, Some(&json!({"status":"slow_down"}))),
+        KeyPoll::SlowDown
+    ));
+    assert!(matches!(classify_key_poll(429, None), KeyPoll::SlowDown));
+    assert!(matches!(
+        classify_key_poll(200, Some(&approved_key(Some("codex")))),
+        KeyPoll::Approved(key) if key.id == "key-9" && key.agent_client.as_deref() == Some("codex")
+    ));
+    for (status, state, expected) in [
+        (200, "consumed", "KEY_REQUEST_CONSUMED"),
+        (410, "consumed", "KEY_REQUEST_CONSUMED"),
+        (200, "denied", "access_denied"),
+        (403, "denied", "access_denied"),
+        (200, "expired", "expired_token"),
+        (410, "expired", "expired_token"),
+        (200, "mystery", "INVALID_RESPONSE"),
+    ] {
+        match classify_key_poll(status, Some(&json!({ "status": state }))) {
+            KeyPoll::Failed(error) => assert_eq!(code(&error), expected, "{state}"),
+            other => panic!("{state}: {other:?}"),
+        }
+    }
+    match classify_key_poll(404, Some(&json!({"error":"not_found"}))) {
+        KeyPoll::Failed(error) => assert_eq!(code(&error), "KEY_REQUEST_NOT_FOUND"),
+        other => panic!("{other:?}"),
+    }
+    assert!(matches!(classify_key_poll(503, None), KeyPoll::Transient));
+    assert!(matches!(
+        classify_key_poll(502, Some(&json!({"error":"x"}))),
+        KeyPoll::Transient
+    ));
+    assert!(matches!(
+        classify_key_poll(400, Some(&json!({"error":{"code":"BAD","message":"x"}}))),
+        KeyPoll::Failed(_)
+    ));
+    /* An approved key that is not a usable key is never printed or installed. */
+    for broken in [
+        json!({"status":"approved"}),
+        json!({"status":"approved","key":{"id":"k","name":"n","secret":"not-a-key","prefix":"p","organization":{"id":"o","name":"n"}}}),
+        json!({"status":"approved","key":{"id":"k","name":"evil\u{1b}[2J","secret":AGENT_SECRET,"prefix":"p","organization":{"id":"o","name":"n"}}}),
+        json!({"status":"approved","key":{"id":"../x","name":"n","secret":AGENT_SECRET,"prefix":"p","organization":{"id":"o","name":"n"}}}),
+    ] {
+        match classify_key_poll(200, Some(&broken)) {
+            KeyPoll::Failed(error) => {
+                assert_eq!(code(&error), "INVALID_RESPONSE");
+                assert!(!error.to_string().contains(AGENT_SECRET));
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+}
+
+#[tokio::test]
+async fn key_poll_backs_off_on_slow_down_and_stops_after_repeated_server_errors() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    let sequence = Sequence::new(vec![
+        ResponseTemplate::new(429).set_body_json(json!({"status":"slow_down"})),
+        ResponseTemplate::new(200).set_body_json(approved_key(None)),
+    ]);
+    let times = sequence.times.clone();
+    Mock::given(method("POST"))
+        .and(path("/api/cli/key-requests/poll"))
+        .respond_with(sequence)
+        .expect(2)
+        .mount(&server)
+        .await;
+    let key = developers
+        .poll_key_request("poll-token-1", 1, Duration::from_secs(30))
+        .await
+        .unwrap();
+    assert_eq!(key.id, "key-9");
+    {
+        let times = times.lock().unwrap();
+        assert!(times[1].duration_since(times[0]) >= Duration::from_secs(6));
+    }
+
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    Mock::given(method("POST"))
+        .and(path("/api/cli/key-requests/poll"))
+        .respond_with(ResponseTemplate::new(503).set_body_string("unavailable"))
+        .expect(u64::from(MAX_TRANSIENT_POLLS))
+        .mount(&server)
+        .await;
+    let error = developers
+        .poll_key_request("poll-token-1", 1, Duration::from_secs(30))
+        .await
+        .unwrap_err();
+    assert_eq!(code(&error), "AUTH_UNAVAILABLE");
+}
+
+#[tokio::test]
+async fn claude_code_install_runs_claude_and_replaces_an_existing_entry() {
+    let directory = tempfile::tempdir().unwrap();
+    let paths = install_paths(directory.path());
+    let runner = FakeRunner::new(vec![
+        Some((1, "MCP server thru already exists in local config")),
+        Some((0, "Removed")),
+        Some((
+            0,
+            "Added HTTP MCP server thru with header Authorization: Bearer thru_live_agent_secret_value_123",
+        )),
+    ]);
+    let installation = agent::install(
+        &runner,
+        &paths,
+        KnownClient::ClaudeCode,
+        "https://mcp.example/mcp",
+        AGENT_SECRET,
+    )
+    .await
+    .unwrap();
+    assert_eq!(installation.status, "installed");
+    let printed = installation.to_json().to_string();
+    assert!(!printed.contains(AGENT_SECRET), "{printed}");
+    assert!(
+        printed
+            .contains("claude mcp add --scope user --transport http thru https://mcp.example/mcp")
+    );
+    let calls = runner.calls();
+    let add: Vec<String> = [
+        "mcp",
+        "add",
+        "--scope",
+        "user",
+        "--transport",
+        "http",
+        "thru",
+        "https://mcp.example/mcp",
+        "--header",
+        &format!("Authorization: Bearer {AGENT_SECRET}"),
+    ]
+    .map(str::to_owned)
+    .to_vec();
+    assert_eq!(
+        calls,
+        vec![
+            ("claude".to_owned(), add.clone()),
+            (
+                "claude".to_owned(),
+                ["mcp", "remove", "--scope", "user", "thru"]
+                    .map(str::to_owned)
+                    .to_vec()
+            ),
+            ("claude".to_owned(), add),
+        ]
+    );
+    assert!(!paths.key_dir.exists());
+}
+
+#[tokio::test]
+async fn claude_code_install_without_claude_saves_the_key_to_an_owner_only_file() {
+    for answer in [None, Some((1, "boom: thru_live_agent_secret_value_123"))] {
+        let directory = tempfile::tempdir().unwrap();
+        let paths = install_paths(directory.path());
+        let runner = FakeRunner::new(vec![answer]);
+        let installation = agent::install(
+            &runner,
+            &paths,
+            KnownClient::ClaudeCode,
+            agent::DEFAULT_MCP_URL,
+            AGENT_SECRET,
+        )
+        .await
+        .unwrap();
+        assert_eq!(installation.status, "manual");
+        let file = installation.key_file.clone().unwrap();
+        assert_eq!(fs::read_to_string(&file).unwrap(), AGENT_SECRET);
+        assert_eq!(
+            fs::metadata(&file).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        let printed = installation.to_json().to_string();
+        assert!(!printed.contains(AGENT_SECRET), "{printed}");
+        assert!(
+            installation.next_steps[0].contains(&format!(
+                "claude mcp add --scope user --transport http thru https://mcp.thru.org/mcp --header \"Authorization: Bearer $(cat {})\"",
+                file.display()
+            )),
+            "{:?}",
+            installation.next_steps
+        );
+    }
+}
+
+#[tokio::test]
+async fn codex_install_writes_the_config_and_a_key_file_for_the_environment() {
+    let directory = tempfile::tempdir().unwrap();
+    let paths = install_paths(directory.path());
+    fs::create_dir_all(&paths.codex_home).unwrap();
+    let config = paths.codex_home.join("config.toml");
+    fs::write(&config, "model = \"o3\" # keep me\n").unwrap();
+    let installation = agent::install(
+        &FakeRunner::default(),
+        &paths,
+        KnownClient::Codex,
+        agent::DEFAULT_MCP_URL,
+        AGENT_SECRET,
+    )
+    .await
+    .unwrap();
+    assert_eq!(installation.status, "installed");
+    let written = fs::read_to_string(&config).unwrap();
+    assert!(written.starts_with("model = \"o3\" # keep me\n"));
+    assert!(written.contains("bearer_token_env_var = \"THRU_MCP_API_KEY\""));
+    assert!(!written.contains(AGENT_SECRET));
+    let file = installation.key_file.clone().unwrap();
+    assert_eq!(fs::read_to_string(&file).unwrap(), AGENT_SECRET);
+    assert_eq!(
+        fs::metadata(&file).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    assert!(installation.next_steps[0].contains(&format!(
+        "export THRU_MCP_API_KEY=\"$(cat {})\"",
+        file.display()
+    )));
+    assert!(!installation.to_json().to_string().contains(AGENT_SECRET));
+}
+
+#[tokio::test]
+async fn vscode_install_falls_back_to_a_key_file_for_json_with_comments() {
+    let directory = tempfile::tempdir().unwrap();
+    let paths = install_paths(directory.path());
+    let user = paths.vscode_user_dir.clone().unwrap();
+    fs::create_dir_all(&user).unwrap();
+    let original = "{\n  // my servers\n  \"servers\": {}\n}\n";
+    fs::write(user.join("mcp.json"), original).unwrap();
+    let installation = agent::install(
+        &FakeRunner::default(),
+        &paths,
+        KnownClient::VsCode,
+        agent::DEFAULT_MCP_URL,
+        AGENT_SECRET,
+    )
+    .await
+    .unwrap();
+    assert_eq!(installation.status, "manual");
+    assert!(installation.reason.as_deref().unwrap().contains("comments"));
+    assert_eq!(fs::read_to_string(user.join("mcp.json")).unwrap(), original);
+    assert!(!user.join("mcp.json.bak").exists());
+    assert_eq!(
+        fs::read_to_string(installation.key_file.unwrap()).unwrap(),
+        AGENT_SECRET
+    );
+}
+
+async fn mount_key_request_start(server: &MockServer, request: Value) {
+    Mock::given(method("POST"))
+        .and(path("/api/cli/key-requests"))
+        .and(wiremock::matchers::body_json(request))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "requestId":"req-1","userCode":"WXYZ-2345",
+            "verificationUri":format!("{}/cli/keys",server.uri()),
+            "verificationUriComplete":format!("{}/cli/keys?code=WXYZ-2345",server.uri()),
+            "expiresIn":60,"interval":1,"pollToken":"poll-token-1",
+        })))
+        .expect(1)
+        .mount(server)
+        .await;
+}
+
+#[tokio::test]
+async fn keys_create_no_wait_saves_the_request_and_resume_installs_the_key() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    let (_auth, store) = fixture(&developers.origin());
+    let directory = tempfile::tempdir().unwrap();
+    let paths = install_paths(directory.path());
+    mount_key_request_start(
+        &server,
+        json!({"name":"agent-cursor-test-machine","agentClient":"cursor","machine":"test-machine"}),
+    )
+    .await;
+    let mut create = options(None, Some("cursor"));
+    create.no_wait = true;
+    let runner = FakeRunner::new(vec![Some((0, "installed"))]);
+    let (pending, shown) = create_key(
+        &developers,
+        &store,
+        &create,
+        "test-machine",
+        true,
+        &runner,
+        || panic!("--no-wait installs nothing"),
+    )
+    .await
+    .unwrap();
+    assert!(!shown);
+    assert_eq!(pending["auth_key"]["status"], "pending");
+    assert_eq!(pending["auth_key"]["user_code"], "WXYZ-2345");
+    assert_eq!(
+        pending["auth_key"]["next"],
+        "thru auth keys create --resume"
+    );
+    assert!(
+        pending["auth_key"]["verification_uri_complete"]
+            .as_str()
+            .unwrap()
+            .ends_with("/cli/keys?code=WXYZ-2345&ref=cli")
+    );
+    assert!(!pending.to_string().contains("poll-token-1"));
+    let file = store.pending_key_request_path();
+    assert_eq!(
+        fs::metadata(&file).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    assert!(fs::read_to_string(&file).unwrap().contains("poll-token-1"));
+    /* Nothing was polled or installed yet. */
+    assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    assert!(runner.calls().is_empty());
+
+    Mock::given(method("POST"))
+        .and(path("/api/cli/key-requests/poll"))
+        .and(wiremock::matchers::body_json(
+            json!({"pollToken":"poll-token-1"}),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(approved_key(Some("cursor"))))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let mut resume = options(None, None);
+    resume.resume = true;
+    let (output, shown) = create_key(
+        &developers,
+        &store,
+        &resume,
+        "other-machine",
+        true,
+        &runner,
+        || Ok(install_paths(directory.path())),
+    )
+    .await
+    .unwrap();
+    assert!(!shown);
+    assert!(!output.to_string().contains(AGENT_SECRET));
+    assert_eq!(output["auth_key"]["install"]["status"], "installed");
+    assert!(
+        fs::read_to_string(paths.cursor_dir.join("mcp.json"))
+            .unwrap()
+            .contains(AGENT_SECRET)
+    );
+    /* The skill is installed for the client given with --no-wait. */
+    assert_eq!(runner.calls()[0].1.last().unwrap(), "cursor");
+    assert!(!file.exists());
+
+    let error = create_key(
+        &developers,
+        &store,
+        &resume,
+        "test-machine",
+        true,
+        &runner,
+        || panic!("nothing is installed"),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(code(&error), "NO_PENDING_KEY_REQUEST");
+}
+
+#[tokio::test]
+async fn keys_create_resume_keeps_the_request_after_server_errors_only() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    let (_auth, store) = fixture(&developers.origin());
+    mount_key_request_start(&server, json!({"name":"ci","machine":"m"})).await;
+    let mut create = options(Some("ci"), None);
+    create.no_wait = true;
+    let runner = FakeRunner::default();
+    create_key(&developers, &store, &create, "m", true, &runner, || {
+        panic!("nothing is installed")
+    })
+    .await
+    .unwrap();
+    let mut resume = options(None, None);
+    resume.resume = true;
+
+    let errors = Mock::given(method("POST"))
+        .and(path("/api/cli/key-requests/poll"))
+        .respond_with(ResponseTemplate::new(503).set_body_string("unavailable"))
+        .expect(u64::from(MAX_TRANSIENT_POLLS))
+        .mount_as_scoped(&server)
+        .await;
+    let error = create_key(&developers, &store, &resume, "m", true, &runner, || {
+        panic!("nothing is installed")
+    })
+    .await
+    .unwrap_err();
+    assert_eq!(code(&error), "AUTH_UNAVAILABLE");
+    assert!(store.pending_key_request_path().exists());
+    drop(errors);
+
+    Mock::given(method("POST"))
+        .and(path("/api/cli/key-requests/poll"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"status":"denied"})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let error = create_key(&developers, &store, &resume, "m", true, &runner, || {
+        panic!("nothing is installed")
+    })
+    .await
+    .unwrap_err();
+    assert_eq!(code(&error), "access_denied");
+    assert!(!store.pending_key_request_path().exists());
+}
+
+#[test]
+fn keys_create_no_wait_and_resume_parse_like_login() {
+    let parsed = Cli::try_parse_from([
+        "thru",
+        "auth",
+        "keys",
+        "create",
+        "--agent",
+        "codex",
+        "--no-wait",
+    ])
+    .unwrap();
+    assert!(matches!(
+        parsed.command,
+        Commands::Auth {
+            subcommand: AuthCommands::Keys {
+                subcommand: AuthKeysCommands::Create {
+                    no_wait: true,
+                    resume: false,
+                    ..
+                }
+            }
+        }
+    ));
+    let parsed = Cli::try_parse_from(["thru", "auth", "keys", "create", "--resume"]).unwrap();
+    assert!(matches!(
+        parsed.command,
+        Commands::Auth {
+            subcommand: AuthCommands::Keys {
+                subcommand: AuthKeysCommands::Create {
+                    resume: true,
+                    name: None,
+                    agent: None,
+                    ..
+                }
+            }
+        }
+    ));
+    for args in [
+        vec![
+            "thru", "auth", "keys", "create", "--resume", "--agent", "codex",
+        ],
+        vec!["thru", "auth", "keys", "create", "--resume", "--name", "x"],
+        vec!["thru", "auth", "keys", "create", "--resume", "--no-wait"],
+        vec!["thru", "auth", "keys", "create", "--resume", "--print"],
+        vec!["thru", "auth", "keys", "create", "--no-wait"],
+    ] {
+        assert!(Cli::try_parse_from(&args).is_err(), "{args:?}");
+    }
 }

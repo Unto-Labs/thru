@@ -4,7 +4,10 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { WalletSheet } from "./WalletSheet";
-import type { WalletSheetDepositKycProps } from "./DepositKyc";
+import type {
+  WalletSheetDepositKycProps,
+  WalletSheetDepositKycSection,
+} from "./DepositKyc";
 
 const values: WalletSheetDepositKycProps["values"] = {
   firstName: "",
@@ -56,7 +59,7 @@ it("renders US-only fields and prevents native form submission", async () => {
     "ZIP",
     "SSN",
     "Date of birth",
-    "Sent to Brale. Never stored by us.",
+    "SSN and date of birth go only to our banking partner.",
   ])
     expect(container.textContent).toContain(label);
   expect(
@@ -256,3 +259,142 @@ it.each([
     );
   },
 );
+
+const sections: WalletSheetDepositKycSection[] = ["details", "address", "identity"];
+const sectionFields = {
+  details: ["First name", "Last name", "Email", "Phone"],
+  address: ["Street", "Apt, suite (optional)", "City", "State", "ZIP"],
+  identity: ["SSN", "Date of birth"],
+};
+
+it.each(sections)("renders only the %s section with its defaults", async (section) => {
+  await act(async () =>
+    root.render(
+      <WalletSheet.DepositKyc
+        section={section}
+        values={values}
+        onFieldChange={() => {}}
+        onSubmit={() => {}}
+      />,
+    ),
+  );
+  const controls = Array.from(
+    container.querySelectorAll<HTMLInputElement | HTMLButtonElement>(
+      'input:not([aria-hidden="true"]), [role="combobox"]',
+    ),
+  );
+  const labels = controls.map((control) => {
+    const labelledBy = control.getAttribute("aria-labelledby");
+    return control.getAttribute("aria-label") ?? (
+      labelledBy
+        ? document.getElementById(labelledBy)?.textContent
+        : container.querySelector(`label[for="${control.id}"]`)?.textContent
+    );
+  });
+  for (const group of sections) {
+    for (const field of sectionFields[group]) {
+      expect(labels.includes(field)).toBe(group === section);
+    }
+  }
+  expect(controls).toHaveLength(sectionFields[section].length);
+  expect(container.querySelector(".tds-dep__rail-title")?.textContent).toBe({
+    details: "Your details",
+    address: "Home address",
+    identity: "Your identity",
+  }[section]);
+  const description = container.querySelector(".tds-dep__rail-sub");
+  if (section === "details") {
+    expect(description?.textContent).toBe("US residents only for now.");
+  } else {
+    expect(description).toBeNull();
+  }
+  const identity = section === "identity";
+  const note = container.querySelector(".tds-dep__kyc-note");
+  if (identity) {
+    expect(note?.textContent).toBe("SSN and date of birth go only to our banking partner.");
+    expect(note?.querySelector("svg")).not.toBeNull();
+  } else {
+    expect(note).toBeNull();
+  }
+  const button = container.querySelector('button[type="submit"]');
+  expect(button?.textContent).toBe(identity ? "Verify with passkey" : "Continue");
+  expect(button?.querySelector(".tds-passkey-icon") !== null).toBe(identity);
+  expect(button?.querySelectorAll("svg")).toHaveLength(identity ? 1 : 0);
+  if (section === "address") {
+    const legend = container.querySelector("fieldset legend");
+    expect(legend?.textContent).toBe("Home address");
+    expect(legend?.classList.contains("tds-dep__kyc-legend--hidden")).toBe(true);
+  }
+});
+
+it.each(sections)("focuses a drawn error on each attempt in %s", async (section) => {
+  const errors = { firstName: "Required", zip: "Invalid ZIP", ssn: "Invalid SSN" };
+  const render = (errorAttempt: number) => (
+    <WalletSheet.DepositKyc
+      section={section}
+      values={values}
+      errors={errors}
+      errorAttempt={errorAttempt}
+      onFieldChange={() => {}}
+      onSubmit={() => {}}
+    />
+  );
+  await act(async () => root.render(render(0)));
+  const invalid = container.querySelector<HTMLElement>('[aria-invalid="true"]');
+  expect(invalid).not.toBeNull();
+  expect(document.activeElement).not.toBe(invalid);
+  for (const attempt of [1, 2]) {
+    invalid?.blur();
+    await act(async () => root.render(render(attempt)));
+    expect(document.activeElement).toBe(invalid);
+  }
+});
+
+it.each(sections)("uses explicit copy in %s", async (section) => {
+  await act(async () =>
+    root.render(
+      <WalletSheet.DepositKyc
+        section={section}
+        title="Custom title"
+        description="Custom description"
+        submitLabel="Custom submit"
+        values={values}
+        onFieldChange={() => {}}
+        onSubmit={() => {}}
+      />,
+    ),
+  );
+  expect(container.querySelector(".tds-dep__rail-title")?.textContent).toBe("Custom title");
+  expect(container.querySelector(".tds-dep__rail-sub")?.textContent).toBe("Custom description");
+  expect(container.querySelector('button[type="submit"]')?.textContent).toBe("Custom submit");
+});
+
+it("locks the identity section and replaces its icon while submitting", async () => {
+  const onSubmit = vi.fn();
+  await act(async () =>
+    root.render(
+      <WalletSheet.DepositKyc
+        section="identity"
+        values={values}
+        disabled
+        submitting
+        status="Submitting details"
+        notice="Fallback notice"
+        onFieldChange={() => {}}
+        onSubmit={onSubmit}
+      />,
+    ),
+  );
+  for (const control of container.querySelectorAll<HTMLInputElement | HTMLButtonElement>("input, button")) {
+    expect(control.disabled).toBe(true);
+  }
+  const button = container.querySelector('button[type="submit"]');
+  expect(button?.getAttribute("aria-busy")).toBe("true");
+  expect(button?.querySelector(".tds-spinner")).not.toBeNull();
+  expect(button?.querySelector(".tds-passkey-icon")).toBeNull();
+  expect(container.querySelector(".tds-dep__note")?.textContent).toBe("Submitting details");
+  await act(async () =>
+    container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+  );
+  expect(onSubmit).not.toHaveBeenCalled();
+});

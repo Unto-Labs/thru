@@ -344,11 +344,31 @@ describe("accounts", () => {
       expect(transaction).toBeDefined();
       expect(transaction.feePayer.toBytes()).toEqual(publicKey);
       expect(transaction.feePayerStateProof).toBeDefined();
-      expect(transaction.requestedComputeUnits).toBe(0);
-      expect(transaction.requestedStateUnits).toBe(0);
-      expect(transaction.requestedMemoryUnits).toBe(0);
-      expect(Array.from(transaction.toWire().slice(8, 16))).toEqual(Array(8).fill(0));
+      /* The CLI's budget (build_create_with_fee_payer_proof); a zero budget
+         fails on chain with vmError -497. */
+      expect(transaction.requestedComputeUnits).toBe(10_000);
+      expect(transaction.requestedStateUnits).toBe(1);
+      expect(transaction.requestedMemoryUnits).toBe(10_000);
+      const wire = transaction.toWire();
+      const view = new DataView(wire.buffer, wire.byteOffset, wire.byteLength);
+      expect(view.getUint32(8, true)).toBe(10_000);
+      expect(view.getUint16(12, true)).toBe(1);
+      expect(view.getUint16(14, true)).toBe(10_000);
       expect(ctx.query.generateStateProof).toHaveBeenCalledTimes(1);
+    });
+
+    it("lets the caller override each resource unit", async () => {
+      const ctx = createMockContext();
+      vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(create(GenerateStateProofResponseSchema, {
+        proof: { proof: new Uint8Array(64).fill(0x42), slot: 1000n },
+      }));
+      const transaction = await createAccount(ctx, {
+        publicKey: generateTestPubkey(0x01),
+        header: { computeUnits: 20_000, stateUnits: 2 },
+      });
+      expect(transaction.requestedComputeUnits).toBe(20_000);
+      expect(transaction.requestedStateUnits).toBe(2);
+      expect(transaction.requestedMemoryUnits).toBe(10_000);
     });
 
     it("should use slot from proof response as startSlot", async () => {

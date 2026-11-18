@@ -47,6 +47,8 @@ jobs:
       ZIG_VERSION: "0.16.0"
       ZIG_SHA256: "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00"
       CARGO_ZIGBUILD_VERSION: "0.22.3"
+      # cargo-xwin 0.20+ needs rustc 1.89; the CLI is pinned to 1.88.
+      CARGO_XWIN_VERSION: "0.19.2"
     strategy:
       fail-fast: false
       matrix:
@@ -70,9 +72,15 @@ jobs:
           - os: macos-latest-xlarge
             target: x86_64-apple-darwin
             asset_platform: Darwin-x86_64
-          - os: windows-latest
+          # Windows is cross-compiled on Linux with cargo-xwin (clang-cl +
+          # lld-link against the downloaded MSVC CRT and Windows SDK): a cold
+          # build takes ~3.5 min here versus ~20 min on windows-latest. The
+          # binary cannot run on this runner, so smoke-test-windows-cli runs
+          # it on Windows before it becomes a release artifact.
+          - os: ubuntu-large
             target: x86_64-pc-windows-msvc
             asset_platform: Windows-x86_64
+            xwin: true
             best_effort: true
 
     steps:
@@ -110,6 +118,13 @@ jobs:
     # distro cross toolchain (gcc-aarch64-linux-gnu) is needed. zig is
     # downloaded straight from ziglang.org and checksum-verified instead of
     # going through a third-party setup action.
+    - name: Set up cargo-xwin
+      if: ${{ matrix.xwin }}
+      run: |
+        set -euo pipefail
+        .github/scripts/apt-install-with-retry.sh clang lld llvm
+        cargo install cargo-xwin --locked --version "${CARGO_XWIN_VERSION}"
+
     - name: Set up Zig and cargo-zigbuild
       if: ${{ matrix.glibc_floor != '' }}
       run: |
@@ -192,14 +207,16 @@ jobs:
         # the binaries run on older distros (see the matrix comment). The
         # output path is unaffected: zigbuild writes to the plain triple
         # directory, rpc/cli/target/<target>/release/.
-        if [ -n "${{ matrix.glibc_floor }}" ]; then
+        if [ "${{ matrix.xwin }}" = "true" ]; then
+          cargo xwin build --release --locked --target "${{ matrix.target }}" --manifest-path rpc/cli/Cargo.toml --bin thru
+        elif [ -n "${{ matrix.glibc_floor }}" ]; then
           cargo zigbuild --release --locked --target "${{ matrix.target }}.${{ matrix.glibc_floor }}" --manifest-path rpc/cli/Cargo.toml --bin thru
         else
           cargo build --release --locked --target "${{ matrix.target }}" --manifest-path rpc/cli/Cargo.toml --bin thru
         fi
 
     - name: Verify Linux CLI debug info
-      if: ${{ runner.os == 'Linux' }}
+      if: ${{ runner.os == 'Linux' && !matrix.xwin }}
       shell: bash
       run: |
         set -euo pipefail
@@ -237,18 +254,19 @@ jobs:
         fi
 
     - name: Smoke test thru CLI binary
-      # aarch64-linux is cross-compiled and cannot execute on the x86_64
-      # runner; every other target runs natively (Darwin-x86_64 via Rosetta
-      # on the arm64 macOS runners). The version assertion guards the
+      # aarch64-linux and Windows are cross-compiled and cannot execute on
+      # their build runners (Windows is checked in smoke-test-windows-cli);
+      # every other target runs natively (Darwin-x86_64 via Rosetta on the
+      # arm64 macOS runners). The version assertion guards the
       # THRU_BUILD_VERSION stamping above: a binary that reports the
       # crate-default "0.1.0-local+..." must not ship.
-      if: ${{ matrix.target != 'aarch64-unknown-linux-gnu' }}
+      if: ${{ matrix.target != 'aarch64-unknown-linux-gnu' && !matrix.xwin }}
       shell: bash
       run: |
         BIN_NAME="thru"
-        if [ "${{ runner.os }}" = "Windows" ]; then
-          BIN_NAME="thru.exe"
-        fi
+        case "${{ matrix.target }}" in
+          *-windows-*) BIN_NAME="thru.exe" ;;
+        esac
 
         VERSION_OUTPUT="$("rpc/cli/target/${{ matrix.target }}/release/${BIN_NAME}" --version)"
         echo "$VERSION_OUTPUT"
@@ -266,9 +284,9 @@ jobs:
       run: |
         ASSET_NAME="thru-cli-${{ matrix.asset_platform }}-${TAG_NAME}"
         BIN_NAME="thru"
-        if [ "${{ runner.os }}" = "Windows" ]; then
-          BIN_NAME="thru.exe"
-        fi
+        case "${{ matrix.target }}" in
+          *-windows-*) BIN_NAME="thru.exe" ;;
+        esac
 
         mkdir -p "cli-artifacts/${ASSET_NAME}"
         cp "rpc/cli/target/${{ matrix.target }}/release/${BIN_NAME}" "cli-artifacts/${ASSET_NAME}/${BIN_NAME}"
@@ -277,16 +295,65 @@ jobs:
 
         echo "asset_name=${ASSET_NAME}" >> "$GITHUB_OUTPUT"
 
+    # Cross-compiled Windows binaries go out under an unverified- name, which
+    # the cli-* downloads below never match; smoke-test-windows-cli re-uploads
+    # them as cli-Windows-x86_64 only after the binary runs on Windows.
     - name: Upload thru CLI artifacts to workflow
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
-        name: cli-${{ matrix.asset_platform }}
+        name: ${{ matrix.xwin && 'unverified-' || '' }}cli-${{ matrix.asset_platform }}
         path: cli-artifacts/${{ steps.package-cli.outputs.asset_name }}.tar.gz
+        retention-days: 90
+
+  # Run the cross-compiled Windows binary on Windows (same version assertion
+  # as the build job's smoke test) and only then publish it as the
+  # cli-Windows-x86_64 artifact. Best-effort like the Windows build: on any
+  # failure the artifact is simply absent, as if the build had failed.
+  smoke-test-windows-cli:
+    needs: [build-cli-artifacts]
+    runs-on: windows-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    env:
+      TAG_NAME: ${{ github.event.release.tag_name || inputs.tag }}
+      ASSET_PLATFORM: Windows-x86_64
+
+    steps:
+    - name: Download cross-compiled Windows CLI
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      with:
+        name: unverified-cli-Windows-x86_64
+        path: unverified
+
+    - name: Smoke test thru CLI binary
+      shell: bash
+      run: |
+        set -euo pipefail
+        ASSET_NAME="thru-cli-${ASSET_PLATFORM}-${TAG_NAME}"
+        mkdir -p extracted
+        tar -xzf "unverified/${ASSET_NAME}.tar.gz" -C extracted
+
+        VERSION_OUTPUT="$(extracted/thru.exe --version)"
+        echo "$VERSION_OUTPUT"
+        case "$VERSION_OUTPUT" in
+          *"${TAG_NAME#v}+"*) ;;
+          *)
+            echo "Binary reports '${VERSION_OUTPUT}', expected the release version ${TAG_NAME#v}." >&2
+            exit 1
+            ;;
+        esac
+        extracted/thru.exe --help >/dev/null
+
+    - name: Upload verified Windows CLI artifact
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: cli-Windows-x86_64
+        path: unverified/thru-cli-Windows-x86_64-${{ env.TAG_NAME }}.tar.gz
         retention-days: 90
 
   # Attach the CLI artifacts and checksums to the GitHub release.
   upload-cli-release-artifacts:
-    needs: [build-cli-artifacts]
+    needs: [build-cli-artifacts, smoke-test-windows-cli]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

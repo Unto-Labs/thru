@@ -6,7 +6,6 @@ use crate::{TestCaseData, TestResult};
 pub trait LanguageRunner {
     #[allow(dead_code)]
     fn language_name(&self) -> &str;
-    fn codegen_language_param(&self) -> &str;
     fn run_test(
         &self,
         test_name: &str,

@@ -1,15 +1,36 @@
 #!/bin/bash
 # Run all compliance tests
-# Usage: ./run_all_tests.sh [--verbose] [--language LANG] [--no-cleanup]
+# Usage: ./run_all_tests.sh [--verbose] [--language LANG] [--no-cleanup] [--jobs N]
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_CASES_DIR="${SCRIPT_DIR}/../compliance_tests/test_cases"
+
+# Internal mode: run one case and record its outcome. The main loop below
+# starts one of these per case through xargs -P, so that cases run in
+# parallel while their output is still printed in order afterwards.
+# Its inputs come from the environment the main loop exports.
+if [ "${1:-}" = "--run-one" ]; then
+  INDEX="$2"
+  TEST_FILE="$3"
+  CASE_DIR="$(basename "$(dirname "$TEST_FILE")")__$(basename "$TEST_FILE" .yaml)"
+  CASE_TEMP="${TEMP_BASE}/${CASE_DIR}"
+  mkdir -p "$CASE_TEMP"
+  # Word splitting of $HARNESS_ARGS is intended: it holds the flags below.
+  # shellcheck disable=SC2086
+  if "$HARNESS_BIN" "$TEST_FILE" $HARNESS_ARGS --temp-dir "$CASE_TEMP" > "${RESULTS_DIR}/${INDEX}.out" 2>&1; then
+    echo pass > "${RESULTS_DIR}/${INDEX}.status"
+  else
+    echo fail > "${RESULTS_DIR}/${INDEX}.status"
+  fi
+  exit 0
+fi
 
 # Parse arguments
 VERBOSE=""
 LANGUAGE=""
 NO_CLEANUP=""
 FAILED_ONLY=""
+JOBS="${ABI_COMPLIANCE_JOBS:-}"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -18,6 +39,10 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -l|--language)
+      if [ $# -lt 2 ]; then
+        echo "$1 needs a language"
+        exit 1
+      fi
       LANGUAGE="--language $2"
       shift 2
       ;;
@@ -29,6 +54,14 @@ while [[ $# -gt 0 ]]; do
       FAILED_ONLY="true"
       shift
       ;;
+    -j|--jobs)
+      if [ $# -lt 2 ]; then
+        echo "$1 needs a job count"
+        exit 1
+      fi
+      JOBS="$2"
+      shift 2
+      ;;
     -h|--help)
       echo "Usage: $0 [OPTIONS]"
       echo ""
@@ -37,6 +70,7 @@ while [[ $# -gt 0 ]]; do
       echo "  -l, --language LANG Run tests for specific language (rust, c, typescript, go, all)"
       echo "  --no-cleanup        Preserve temporary directories after tests"
       echo "  --failed-only       Only show failed tests"
+      echo "  -j, --jobs N        Cases to run at once (default: CPU count, or ABI_COMPLIANCE_JOBS)"
       echo "  -h, --help          Show this help message"
       exit 0
       ;;
@@ -47,6 +81,14 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [ -z "$JOBS" ]; then
+  JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)
+fi
+if ! [[ "$JOBS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "--jobs must be a positive integer, got '$JOBS'"
+  exit 1
+fi
 
 # Find all test case YAML files
 echo "=== Discovering Test Cases ==="
@@ -68,6 +110,7 @@ if [ ! -x "$HARNESS_BIN" ]; then
   echo "Compliance harness binary not found at $HARNESS_BIN"
   exit 1
 fi
+
 echo "Build complete"
 echo ""
 
@@ -75,6 +118,7 @@ echo ""
 # CI names. The generated crates are built through the vcache rustc wrapper,
 # and their target paths (-L dependency=<dir>/...) are part of its key: a new
 # mktemp path every run made each of them a miss that was stored and never hit.
+# Each case gets its own fixed subdirectory, so parallel cases never share one.
 if [ -n "${ABI_COMPLIANCE_TEMP_BASE:-}" ]; then
   TEMP_BASE="$ABI_COMPLIANCE_TEMP_BASE"
   rm -rf "$TEMP_BASE"
@@ -85,37 +129,43 @@ fi
 echo "Using temporary directory: $TEMP_BASE"
 echo ""
 
-# Run each test
+RESULTS_DIR=$(mktemp -d)
+trap 'rm -rf "$RESULTS_DIR"' EXIT
+
+echo "=== Running Tests ($JOBS at a time) ==="
+echo ""
+
+# Run each test, $JOBS at a time.
+HARNESS_ARGS="$LANGUAGE $VERBOSE $NO_CLEANUP"
+export HARNESS_BIN TEMP_BASE RESULTS_DIR HARNESS_ARGS
+INDEX=0
+for TEST_FILE in $TEST_FILES; do
+  INDEX=$((INDEX + 1))
+  printf '%s\0%s\0' "$INDEX" "$TEST_FILE"
+done | xargs -0 -n 2 -P "$JOBS" "${SCRIPT_DIR}/$(basename "$0")" --run-one
+
+# Report in discovery order, as the sequential loop did.
 PASSED=0
 FAILED=0
 FAILED_TESTS=()
-
-echo "=== Running Tests ==="
-echo ""
-
+INDEX=0
 for TEST_FILE in $TEST_FILES; do
-  # Get test name from file path
+  INDEX=$((INDEX + 1))
   TEST_NAME=$(basename "$TEST_FILE" .yaml)
   TEST_CATEGORY=$(basename "$(dirname "$TEST_FILE")")
+  STATUS=$(cat "${RESULTS_DIR}/${INDEX}.status" 2>/dev/null || echo fail)
 
-  # Run the test
-  if [ -z "$FAILED_ONLY" ]; then
-    echo -n "[$TEST_CATEGORY/$TEST_NAME] "
-  fi
-
-  if OUTPUT=$("$HARNESS_BIN" "$TEST_FILE" $LANGUAGE $VERBOSE $NO_CLEANUP --temp-dir "$TEMP_BASE" 2>&1); then
-    # Test passed
+  if [ "$STATUS" = "pass" ]; then
     ((PASSED++))
     if [ -z "$FAILED_ONLY" ]; then
-      echo "✓ PASSED"
+      echo "[$TEST_CATEGORY/$TEST_NAME] ✓ PASSED"
     fi
   else
-    # Test failed
     ((FAILED++))
     FAILED_TESTS+=("$TEST_CATEGORY/$TEST_NAME")
-    echo "✗ FAILED"
-    if [ -n "$VERBOSE" ]; then
-      echo "$OUTPUT" | sed 's/^/  /'
+    echo "[$TEST_CATEGORY/$TEST_NAME] ✗ FAILED"
+    if [ -n "$VERBOSE" ] && [ -f "${RESULTS_DIR}/${INDEX}.out" ]; then
+      sed 's/^/  /' "${RESULTS_DIR}/${INDEX}.out"
       echo ""
     fi
   fi

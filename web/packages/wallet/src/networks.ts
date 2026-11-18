@@ -22,14 +22,14 @@ export interface ResolvedWalletNetwork {
 }
 export const DEFAULT_WALLET_NETWORKS: readonly WalletNetworkPreset[] = [
   {
-    slug: "alphanet",
-    displayName: "Alphanet",
-    rpc: "https://rpc.alphanet.thru.org",
-  },
-  {
     slug: "betanet",
     displayName: "Betanet",
     rpc: "https://rpc.betanet.thru.org",
+  },
+  {
+    slug: "alphanet",
+    displayName: "Alphanet",
+    rpc: "https://rpc.alphanet.thru.org",
   },
 ];
 export const NETWORK_SELECTION_PARAM = "tn_wallet_network";

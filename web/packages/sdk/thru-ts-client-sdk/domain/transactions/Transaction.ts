@@ -15,6 +15,7 @@ import {
     STATE_PROOF_TYPE_CREATION,
     STATE_PROOF_TYPE_EXISTING,
     STATE_PROOF_TYPE_UPDATING,
+    TXN_FIXED_ACCOUNT_COUNT,
     TXN_FLAG_HAS_FEE_PAYER_PROOF,
     TXN_FLAG_MAY_COMPRESS_ACCOUNT,
     TXN_HEADER_BODY_SIZE,
@@ -228,16 +229,20 @@ export class Transaction {
             throw new Error(`Transaction header parsing mismatch (expected offset ${TXN_HEADER_BODY_SIZE}, got ${offset})`);
         }
 
-        const totalAccountCount = Number(readwriteAccountsCount + readonlyAccountsCount);
+        const inputAccountCount = readwriteAccountsCount + readonlyAccountsCount;
+        // The fee payer and program count toward the limit, matching C
+        // (tn_txn_account_cnt / tn_validate_txn_accounts) and Rust:
+        // 2 + rw_cnt + ro_cnt <= TXN_MAX_ACCOUNTS.
+        const totalAccountCount = TXN_FIXED_ACCOUNT_COUNT + inputAccountCount;
         if (strict && totalAccountCount > TXN_MAX_ACCOUNTS) {
             throw new Error(
-                `Transaction references ${totalAccountCount} accounts (maximum allowed ${TXN_MAX_ACCOUNTS})`,
+                `Transaction references ${totalAccountCount} accounts including fee payer and program (maximum allowed ${TXN_MAX_ACCOUNTS})`,
             );
         }
 
         // Calculate expected transaction size from header fields to handle
         // parsing multiple transactions from a buffer
-        const accountsSize = totalAccountCount * PUBKEY_SIZE;
+        const accountsSize = inputAccountCount * PUBKEY_SIZE;
         let expectedBodySize = accountsSize + instructionDataSize;
 
         // If fee payer proof flag is set, we need to peek at the proof to get its size

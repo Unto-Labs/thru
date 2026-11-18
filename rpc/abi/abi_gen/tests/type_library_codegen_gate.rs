@@ -72,10 +72,11 @@ fn oracle_rust_codegen_compiles() -> anyhow::Result<()> {
         .to_path_buf();
     let type_library = abi_root.join("type-library");
     let oracle_abi = type_library.join("tn_oracle_program.abi.yaml");
-    let project_dir = std::env::temp_dir().join(format!(
-        "thru-oracle-rust-codegen-compile-{}",
-        std::process::id()
-    ));
+    /* A fixed directory under the target dir, not one named after the process:
+    the generated crate's paths are part of its vcache key, and CI maps the
+    checkout (and so the target dir) to a stable root (UNTO-3636). */
+    let project_dir =
+        PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("thru-oracle-rust-codegen-compile");
     let generated_dir = project_dir.join("generated");
     let _ = fs::remove_dir_all(&project_dir);
 
@@ -96,6 +97,8 @@ edition = "2021"
 
 [lib]
 path = "generated/mod.rs"
+
+[workspace]
 "#,
     )?;
 

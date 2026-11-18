@@ -2,7 +2,14 @@ import { create } from "@bufbuild/protobuf";
 
 import type { ThruClientContext } from "../core/client";
 import { withCallOptions } from "../core/client";
-import { DEFAULT_ACCOUNT_VIEW, DEFAULT_MIN_CONSENSUS, DEFAULT_VERSION_CONTEXT } from "../defaults";
+import {
+    DEFAULT_ACCOUNT_VIEW,
+    DEFAULT_CREATE_ACCOUNT_COMPUTE_UNITS,
+    DEFAULT_CREATE_ACCOUNT_MEMORY_UNITS,
+    DEFAULT_CREATE_ACCOUNT_STATE_UNITS,
+    DEFAULT_MIN_CONSENSUS,
+    DEFAULT_VERSION_CONTEXT,
+} from "../defaults";
 import { Account } from "../domain/accounts";
 import { Filter } from "../domain/filters";
 import { PageRequest, PageResponse } from "../domain/pagination";
@@ -141,9 +148,10 @@ export async function createAccount(
         startSlot,
         chainId: options.header?.chainId ?? (await getChainId(ctx)),
         expiryAfter: 100,
-        computeUnits: 0,
-        memoryUnits: 0,
-        stateUnits: 0,
+        /* Same budget as the CLI's Rust builder; 0 fails on chain (vmError -497). */
+        computeUnits: DEFAULT_CREATE_ACCOUNT_COMPUTE_UNITS,
+        memoryUnits: DEFAULT_CREATE_ACCOUNT_MEMORY_UNITS,
+        stateUnits: DEFAULT_CREATE_ACCOUNT_STATE_UNITS,
     };
 
     const header = mergeTransactionHeader(headerDefaults, options.header);

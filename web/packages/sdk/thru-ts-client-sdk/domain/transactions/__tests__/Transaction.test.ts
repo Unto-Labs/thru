@@ -78,6 +78,53 @@ describe("Transaction wire format", () => {
         expect(() => Transaction.fromWire(withTrailing)).toThrow(/Transaction body has trailing bytes/);
     });
 
+    describe("account count limit (2 + rw + ro <= 1024, matching C/Rust)", () => {
+        /**
+         * Wire (body ‖ zero signature) with the given rw/ro counts and
+         * distinct, ascending account keys. Only the count rule is under test.
+         */
+        function wireWithAccountCounts(rwCount: number, roCount: number): Uint8Array {
+            const header = new Transaction({
+                feePayer: new Uint8Array(32).fill(0xfe),
+                program: new Uint8Array(32).fill(0xff),
+                header: { fee: 0n, nonce: 0n, startSlot: 0n },
+            }).toWireForSigning();
+            const total = rwCount + roCount;
+            const wire = new Uint8Array(header.length + total * 32 + 64);
+            wire.set(header, 0);
+            const view = new DataView(wire.buffer);
+            view.setUint16(2, rwCount, true);
+            view.setUint16(4, roCount, true);
+            for (let i = 0; i < total; i++) {
+                view.setUint16(header.length + i * 32, i, false);
+            }
+            return wire;
+        }
+
+        it("accepts exactly 1024 accounts including fee payer and program", () => {
+            expect(Transaction.fromWire(wireWithAccountCounts(1022, 0)).readWriteAccounts).toHaveLength(1022);
+            const split = Transaction.fromWire(wireWithAccountCounts(500, 522));
+            expect(split.readWriteAccounts).toHaveLength(500);
+            expect(split.readOnlyAccounts).toHaveLength(522);
+        });
+
+        it.each([
+            [1023, 0],
+            [0, 1023],
+            [600, 423],
+            [1024, 0],
+        ])("rejects rw=%i ro=%i (fee payer and program count toward the limit)", (rw, ro) => {
+            expect(() => Transaction.fromWire(wireWithAccountCounts(rw, ro))).toThrow(
+                /accounts including fee payer and program \(maximum allowed 1024\)/,
+            );
+        });
+
+        it("does not apply the limit in non-strict parsing", () => {
+            const wire = wireWithAccountCounts(1023, 0);
+            expect(Transaction.parseWire(wire).size).toBe(wire.length);
+        });
+    });
+
     it("returns consumed size from parseWire", () => {
         const wire = createTransaction().toWire();
         const { transaction, size } = Transaction.parseWire(wire);

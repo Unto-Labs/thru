@@ -414,6 +414,15 @@ fn format_auth_key(data: &Value) -> String {
     if data.get("status").and_then(Value::as_str) == Some("revoked") {
         return format!("Revoked API key {}.\n", text(data.get("id")));
     }
+    if data.get("status").and_then(Value::as_str) == Some("pending") {
+        return format!(
+            "Open this URL to approve the API key:\n  {}\nCode: {} (expires in {} seconds)\nAgents: show this link to the user and ask them to approve it, then run: {}\n",
+            text(data.get("verification_uri_complete")),
+            text(data.get("user_code")),
+            text(data.get("expires_in")),
+            text(data.get("next")),
+        );
+    }
     let key = data.get("key");
     let mut out = format!(
         "Created API key \"{}\" (id {}, prefix {})",
@@ -424,7 +433,71 @@ fn format_auth_key(data: &Value) -> String {
     if let Some(name) = data.pointer("/organization/name") {
         out.push_str(&format!(" in organization \"{}\"", format_value(name)));
     }
-    out.push_str(&format!(".\n\n{}\n", text(data.get("plaintext"))));
+    if let Some(client) = key
+        .and_then(|key| key.get("agent_client"))
+        .filter(|client| !client.is_null())
+    {
+        out.push_str(&format!(" for agent client {}", format_value(client)));
+    }
+    out.push_str(".\n");
+    if let Some(plaintext) = data.get("plaintext") {
+        out.push_str(&format!("\n{}\n", format_value(plaintext)));
+    }
+    if let Some(mcp) = data.get("mcp") {
+        out.push_str(&format!(
+            "\nThru MCP server: {}\nSend the key as the header: {}: {}\n",
+            text(mcp.get("url")),
+            text(mcp.get("header")),
+            text(mcp.get("value")).replace("<key>", "<the key above>"),
+        ));
+    }
+    if let Some(install) = data.get("install") {
+        out.push('\n');
+        let client = text(install.get("client"));
+        if install.get("status").and_then(Value::as_str) == Some("installed") {
+            out.push_str(&format!(
+                "Installed the key for {client}: updated {}",
+                text(install.get("updated"))
+            ));
+            if let Some(backup) = install.get("backup").filter(|value| !value.is_null()) {
+                out.push_str(&format!(
+                    " (previous file saved as {})",
+                    format_value(backup)
+                ));
+            }
+            out.push_str(".\n");
+        } else {
+            out.push_str(&format!(
+                "Could not install the key for {client}: {}.\n",
+                text(install.get("reason"))
+            ));
+        }
+        if let Some(file) = install.get("key_file").filter(|value| !value.is_null()) {
+            out.push_str(&format!(
+                "The key is saved, owner-only, in {}.\n",
+                format_value(file)
+            ));
+        }
+        for step in install
+            .get("next_steps")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            out.push_str(&format!("{}\n", format_value(step)));
+        }
+    }
+    if let Some(skill) = data.get("skill") {
+        if skill.get("status").and_then(Value::as_str) == Some("installed") {
+            out.push_str("Installed the Thru skill.\n");
+        } else {
+            out.push_str(&format!(
+                "Could not install the Thru skill ({}). Run: {}\n",
+                text(skill.get("reason")),
+                text(skill.get("command"))
+            ));
+        }
+    }
     out
 }
 
@@ -1108,6 +1181,48 @@ mod tests {
         assert_eq!(
             format_auth_key(&json!({"id":"key-3","status":"revoked"})),
             "Revoked API key key-3.\n"
+        );
+    }
+
+    #[test]
+    fn agent_keys_print_the_install_or_the_mcp_url() {
+        let installed = format_auth_key(&json!({
+            "organization":{"id":"org-1","name":"Acme Labs","slug":"acme"},
+            "key":{"id":"key-4","name":"agent-codex-laptop","prefix":"thru_live_jkl","tags":["agent"],"agent_client":"codex"},
+            "install":{"client":"codex","status":"installed","updated":"/h/.codex/config.toml","backup":"/h/.codex/config.toml.bak","key_file":"/h/.thru/cli/agent-keys/codex.key","reason":null,
+                "next_steps":["Add to your shell profile, then start Codex from a new shell: export THRU_MCP_API_KEY=\"$(cat /h/.thru/cli/agent-keys/codex.key)\"","Reload MCP servers (start a new session) to use the thru tools."]},
+            "skill":{"status":"manual","command":"npx skills add https://thru.org --global --yes --agent codex","reason":"npx is not on PATH"},
+        }));
+        assert!(installed.contains("in organization \"Acme Labs\" for agent client codex."));
+        assert!(installed.contains("Installed the key for codex: updated /h/.codex/config.toml (previous file saved as /h/.codex/config.toml.bak)."));
+        assert!(installed.contains("owner-only, in /h/.thru/cli/agent-keys/codex.key"));
+        assert!(installed.contains("export THRU_MCP_API_KEY="));
+        assert!(
+            installed.contains("Reload MCP servers (start a new session) to use the thru tools.")
+        );
+        assert!(installed.contains(
+            "Could not install the Thru skill (npx is not on PATH). Run: npx skills add https://thru.org"
+        ));
+
+        let printed = format_auth_key(&json!({
+            "organization":{"id":"org-1","name":"Acme Labs"},
+            "key":{"id":"key-5","name":"bot","prefix":"thru_live_mno","agent_client":"my-agent"},
+            "plaintext":"thru_live_secret",
+            "mcp":{"url":"https://mcp.thru.org/mcp","header":"Authorization","value":"Bearer <key>"},
+            "skill":{"status":"installed","command":"npx skills add https://thru.org --global --yes"},
+        }));
+        assert_eq!(printed.matches("thru_live_secret").count(), 1);
+        assert!(printed.contains("Thru MCP server: https://mcp.thru.org/mcp"));
+        assert!(printed.contains("Authorization: Bearer <the key above>"));
+        assert!(printed.contains("Installed the Thru skill."));
+
+        let pending = format_auth_key(
+            &json!({"status":"pending","verification_uri_complete":"https://dev.thru.org/cli/keys?code=WXYZ-2345&ref=cli","user_code":"WXYZ-2345","expires_in":600,"next":"thru auth keys create --resume"}),
+        );
+        assert!(pending.contains("https://dev.thru.org/cli/keys?code=WXYZ-2345&ref=cli"));
+        assert!(pending.contains("Code: WXYZ-2345 (expires in 600 seconds)"));
+        assert!(
+            pending.contains("ask them to approve it, then run: thru auth keys create --resume")
         );
     }
 }

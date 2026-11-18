@@ -27,3 +27,13 @@ export const DEFAULT_COMPUTE_UNITS = 0;
 export const DEFAULT_STATE_UNITS = 0;
 export const DEFAULT_MEMORY_UNITS = 0;
 export const DEFAULT_EXPIRY_AFTER = 100;
+
+/**
+ * Resource budget for `accounts.create` (a fee-payer-created account on the
+ * Noop program with a CREATING state proof). Matches the Rust builder
+ * `build_create_with_fee_payer_proof` (`rpc/thru-base/src/txn_tools.rs`) used
+ * by the CLI. A zero budget is rejected by the runtime (vmError -497).
+ */
+export const DEFAULT_CREATE_ACCOUNT_COMPUTE_UNITS = 10_000;
+export const DEFAULT_CREATE_ACCOUNT_MEMORY_UNITS = 10_000;
+export const DEFAULT_CREATE_ACCOUNT_STATE_UNITS = 1;
