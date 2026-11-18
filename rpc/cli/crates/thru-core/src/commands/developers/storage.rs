@@ -92,7 +92,7 @@ pub(super) fn write_private(root: &Path, path: &Path, raw: &[u8]) -> Result<(), 
 /// Atomically replaces `path` (inside `root`) with `raw`, without Unix
 /// ownership or mode handling. Refuses to replace a symlink or non-file.
 #[cfg(not(unix))]
-fn write_plain(root: &Path, path: &Path, raw: &[u8]) -> Result<(), CliError> {
+pub(super) fn write_plain(root: &Path, path: &Path, raw: &[u8]) -> Result<(), CliError> {
     if let Ok(meta) = fs::symlink_metadata(path) {
         if meta.file_type().is_symlink() || !meta.is_file() {
             return Err(storage_error("Refusing unsafe Developers credential file"));
