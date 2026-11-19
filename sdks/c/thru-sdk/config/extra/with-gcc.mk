@@ -4,14 +4,18 @@
 # Define toolchain prefix
 RISCV_PREFIX := riscv64-unknown-elf-
 
-# Function to find .thru/sdk/toolchain directory by walking up filesystem
+# Search project ancestors first, then the CLI's default installation directory.
 define find-thru-toolchain
-$(strip $(call _find-thru-toolchain-rec,$(CURDIR)))
+$(strip $(call _find-thru-toolchain-rec,$(CURDIR),$(HOME)/.thru/sdk/toolchain))
 endef
 
-# Recursive helper function to search up the directory tree
+# The second argument carries the fallback unchanged through the ancestor walk.
 define _find-thru-toolchain-rec
-$(if $(wildcard $(1)/.thru/sdk/toolchain/bin/$(RISCV_PREFIX)gcc),$(1)/.thru/sdk/toolchain,$(if $(filter $(1),/),$(error RISC-V toolchain not found - reached root directory),$(call _find-thru-toolchain-rec,$(dir $(1:/=)))))
+$(if $(wildcard $(1)/.thru/sdk/toolchain/bin/$(RISCV_PREFIX)gcc),$(1)/.thru/sdk/toolchain,\
+  $(if $(filter $(1),/),\
+    $(if $(wildcard $(2)/bin/$(RISCV_PREFIX)gcc),$(2),\
+      $(error RISC-V toolchain not found in parents of $(CURDIR) or at $(2). Run thru dev toolchain install or set RISCV_TOOLCHAIN_ROOT)),\
+    $(call _find-thru-toolchain-rec,$(dir $(1:/=)),$(2))))
 endef
 
 # Function to find sysroot in .thru/sdk/toolchain directory
