@@ -76,14 +76,29 @@ describe("Oracle read helpers", () => {
     );
   });
 
-  it("normalizes seeds and maps program errors", () => {
-    const seed = normalizeOracleFeedSeed(
-      "abcdefghijklmnopqrstuvwxyz0123456789",
-    );
+  it("pads a short seed and refuses to truncate a long one", () => {
+    const seed = normalizeOracleFeedSeed("BTC/USD");
     expect(seed).toHaveLength(32);
-    expect(new TextDecoder().decode(seed)).toBe(
-      "abcdefghijklmnopqrstuvwxyz012345",
+    expect(new TextDecoder().decode(seed.subarray(0, 7))).toBe("BTC/USD");
+    expect(seed.subarray(7).every((byte) => byte === 0)).toBe(true);
+
+    /* Exactly 32 bytes is the limit, not a truncation point. */
+    const full = normalizeOracleFeedSeed("abcdefghijklmnopqrstuvwxyz012345");
+    expect(full).toHaveLength(32);
+
+    /* Two labels sharing their first 32 bytes used to derive one feed PDA. */
+    const long = "abcdefghijklmnopqrstuvwxyz0123456789";
+    expect(() => normalizeOracleFeedSeed(long)).toThrow("at most 32 bytes");
+    expect(() => normalizeOracleFeedSeed(long.slice(0, 32) + "different")).toThrow(
+      "at most 32 bytes",
     );
+    expect(() => normalizeOracleFeedSeed(new Uint8Array(33))).toThrow(
+      "at most 32 bytes",
+    );
+    expect(normalizeOracleFeedSeed(new Uint8Array(32))).toHaveLength(32);
+  });
+
+  it("maps program errors", () => {
     expect(oracleProgramErrorFromCode(3n)).toBe(
       OracleProgramError.UnauthorizedOperation,
     );

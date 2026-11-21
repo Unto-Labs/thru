@@ -3,10 +3,23 @@ import { ORACLE_FEED_SEED_LENGTH } from "./constants";
 
 const TEXT_ENCODER = new TextEncoder();
 
+/**
+ * Normalize a caller-supplied feed seed to `ORACLE_FEED_SEED_LENGTH` bytes.
+ *
+ * Shorter seeds (string or bytes) are zero padded. Longer seeds throw: a
+ * silent truncation would make two distinct seeds that share their first 32
+ * bytes derive the same feed PDA, so a feed created for one label would be
+ * the feed every colliding label points at.
+ */
 export function normalizeOracleFeedSeed(seed: string | Uint8Array): Uint8Array {
   const source = typeof seed === "string" ? TEXT_ENCODER.encode(seed) : seed;
+  if (source.length > ORACLE_FEED_SEED_LENGTH) {
+    throw new Error(
+      `Oracle feed seed must be at most ${ORACLE_FEED_SEED_LENGTH} bytes, got ${source.length}`
+    );
+  }
   const normalized = new Uint8Array(ORACLE_FEED_SEED_LENGTH);
-  normalized.set(source.subarray(0, ORACLE_FEED_SEED_LENGTH));
+  normalized.set(source);
   return normalized;
 }
 

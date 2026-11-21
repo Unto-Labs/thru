@@ -502,7 +502,10 @@ export function crossLiquidateTx(ref: MarketRef, authority: string, seatIndex: n
 /* Margin accounts **********************************************************************/
 
 /** Creates margin account `accountId` of `owner` on `vault` (its address
-    derivePerpMarginAccountAddress); `proof` is the account's creation proof. */
+    derivePerpMarginAccountAddress); `proof` is the account's creation proof.
+    The owner is carried read-only: `margin_account_create` encodes its
+    index and the program reads the account, it does not write it (the
+    margin account itself is the writable one). */
 export function marginAccountCreateTx(
   deployment: { exchangeMeta: string },
   owner: string,
@@ -516,7 +519,7 @@ export function marginAccountCreateTx(
     `create margin account ${accountId}`,
     [{ ix: 'margin_account_create', owner, marginAccount: margin.address, vault, accountId, proof: bytesToHex(proof) }],
     [margin.address],
-    [vault],
+    [owner, vault],
     1,
   );
 }
@@ -542,7 +545,9 @@ export function marginLinkTx(ref: MarketRef, owner: string, seatIndex: number, a
 }
 
 /** Moves collateral between two linked seats of the account (a ledger move
-    in the shared vault): both seat arenas are written. */
+    in the shared vault): both seat arenas are written.  The owner is
+    carried read-only: `margin_transfer` encodes its index and the program
+    reads the account to check it against the margin record's. */
 export function marginTransferTx(
   deployment: { exchangeMeta: string },
   owner: string,
@@ -558,7 +563,7 @@ export function marginTransferTx(
     `move ${amount} from link ${fromLink} to link ${toLink}`,
     [{ ix: 'margin_transfer', marginRecordIndex: 0, fromLink, toLink, owner, amount: amount.toString() }],
     [from.seatArena, to.seatArena],
-    [],
+    [owner],
   );
   return withMarginRecord(base, { deployment }, account);
 }
