@@ -409,7 +409,7 @@ Audited and cleared, so this ground is not re-covered:
 malformed input. Each has a regression test that fails on the old code, and each is reproducible in the published
 `@thru/programs@0.5.2` build, not just in this checkout.
 
-**Outdrawn:** #9 (oracle seed truncation) — see above. Truncating to 32 bytes is the documented contract of
+**Withdrawn:** #9 (oracle seed truncation) — see above. Truncating to 32 bytes is the documented contract of
 `normalizeOracleFeedSeed`, so the change moved out of the PR and the existing behaviour is now pinned by a test.
 
 **Out, on purpose:** #2, #3, #4 and #5. Each needs a maintainer to confirm what the on-chain handler actually
