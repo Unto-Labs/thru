@@ -270,17 +270,21 @@ export function deriveAmmLpMintSeed(thru: Thru, poolBytes: Uint8Array | string):
 /**
  * Derives the two pool-bound vault seeds.
  *
- * Vault token accounts are derived by the token program as
- * `derive(mint, owner = AMM_PROGRAM, seed)`, so the seed must incorporate the pool
- * address — otherwise every pool pairing the same quote asset (e.g. WTHRU) derives the
- * identical vault token account and the second `init_pool` reverts.  Which error
- * depends on how far the call gets: the vault create/init failures (`Vault one
- * create`/`Vault two create` — AMM errors 10/11, or `Vault one init`/`Vault two init`
- * — 15/16), or `Account already initialized` (3) from the token program.
+ * A token account is `deriveProgramAddress(token, deriveAddress([owner, mint, seed]))`
+ * and `transfer_checked` takes its signing authority from the account's stored owner,
+ * so the seed fixes both the address and who may spend it.  Binding the seed to the
+ * pool therefore makes each vault unforgeable and independently authorised; the legacy
+ * fixed constants left every vault of a given mint sharing one owner and one of only
+ * two possible addresses.
  *
- * Because the legacy seed is a 32 byte value whose only varying byte is the constant,
- * such a pool has only two possible vault accounts network-wide; binding the pool
- * address removes that cap.
+ * With the fixed seed the second `init_pool` for a shared mint fails, on the vault
+ * create/init errors (`Vault one create`/`Vault two create` — 10/11, or `Vault one
+ * init`/`Vault two init` — 15/16) or on `Account already initialized` (3) — which one
+ * depends on how far the call gets, and on the owner the program supplies.
+ *
+ * The on-chain program derives the vault seeds itself (init_pool's payload has no vault
+ * seed field), so it must adopt this derivation for new pools; against a program still
+ * using the constants this change alone will not produce a creatable vault.
  */
 export function deriveAmmVaultSeeds(
   thru: Thru,
