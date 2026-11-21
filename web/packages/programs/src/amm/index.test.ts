@@ -41,6 +41,19 @@ function buildStaticSeedForTest(value: number): Uint8Array {
   return seed;
 }
 
+/** Two pools that pair different tokens against the same quote asset, which is the
+    shape that collided under the static vault seeds. */
+const sharedQuote = (() => {
+  const derive = (id: number, seedId: number) =>
+    deriveProgramAddress({ programAddress: key(id), seed: key(seedId) }).address;
+  return {
+    ammProgramAddress: derive(1, 2),
+    wthru: derive(3, 4),
+    tokenA: derive(5, 6),
+    tokenB: derive(7, 8),
+  };
+})();
+
 function context(indexes: Record<string, number>) {
   return {
     getAccountIndex(pubkey: Uint8Array): number {
@@ -115,22 +128,7 @@ describe('amm helpers', () => {
   it('derives distinct vault seeds for pools sharing a quote asset (WTHRU)', () => {
     // Simulates TOKEN_A/WTHRU and TOKEN_B/WTHRU, where WTHRU must not collide
     // on a shared vault token account.
-    const ammProgramAddress = deriveProgramAddress({
-      programAddress: key(1),
-      seed: key(2),
-    }).address;
-    const wthru = deriveProgramAddress({
-      programAddress: key(3),
-      seed: key(4),
-    }).address;
-    const tokenA = deriveProgramAddress({
-      programAddress: key(5),
-      seed: key(6),
-    }).address;
-    const tokenB = deriveProgramAddress({
-      programAddress: key(7),
-      seed: key(8),
-    }).address;
+    const { ammProgramAddress, wthru, tokenA, tokenB } = sharedQuote;
 
     const poolA = deriveAmmPoolAddresses(thru, {
       ammProgramAddress,
@@ -161,16 +159,7 @@ describe('amm helpers', () => {
      and assert the accounts differ for both vaults of two WTHRU pools. */
   it('derives distinct vault token accounts for pools sharing a quote asset', () => {
     const tokenProgramAddress = BOOTSTRAP_PROGRAM_ADDRESSES.token;
-    const ammProgramAddress = deriveProgramAddress({
-      programAddress: key(1),
-      seed: key(2),
-    }).address;
-    const wthru = deriveProgramAddress({
-      programAddress: key(3),
-      seed: key(4),
-    }).address;
-    const tokenA = deriveProgramAddress({ programAddress: key(5), seed: key(6) }).address;
-    const tokenB = deriveProgramAddress({ programAddress: key(7), seed: key(8) }).address;
+    const { ammProgramAddress, wthru, tokenA, tokenB } = sharedQuote;
 
     const vaultAccount = (mint: string, seed: Uint8Array): string => {
       const derivedSeed = deriveAddress([

@@ -100,26 +100,18 @@ const PUBKEY_LENGTH = 32;
 const LP_MINT_SEED_LABEL = asciiBytes('lp_mint');
 
 /**
- * @deprecated Fixed 1-byte vault seed. Pools sharing a mint (e.g. WTHRU) derived
- * identical vault token accounts with this seed, and the second `init_pool` reverted
- * with the vault create/init failures (`Vault one create`/`Vault two create` — AMM
- * errors 10/11 — or `Vault one init`/`Vault two init` — 15/16), or with `Account
- * already initialized` (3) if the token program's check trips first. Vault seeds are
- * now bound to the pool address; use `deriveAmmVaultSeeds` (or `deriveAmmPoolAddresses`)
- * instead. This constant is retained for backwards compatibility and will be removed in
- * a future release.
+ * Fixed 1-byte vault seeds. Pools sharing a mint (e.g. WTHRU) derived identical vault
+ * token accounts with these, and the second `init_pool` reverted with the vault
+ * create/init failures (`Vault one create`/`Vault two create` — AMM errors 10/11 — or
+ * `Vault one init`/`Vault two init` — 15/16), or with `Account already initialized` (3)
+ * if the token program's check trips first. Use `deriveAmmVaultSeeds` (or
+ * `deriveAmmPoolAddresses`) instead. Retained for backwards compatibility and will be
+ * removed in a future release.
+ *
+ * @deprecated
  */
 export const AMM_VAULT_ONE_SEED = oneByteSeed(0x01);
-/**
- * @deprecated Fixed 1-byte vault seed. Pools sharing a mint (e.g. WTHRU) derived
- * identical vault token accounts with this seed, and the second `init_pool` reverted
- * with the vault create/init failures (`Vault one create`/`Vault two create` — AMM
- * errors 10/11 — or `Vault one init`/`Vault two init` — 15/16), or with `Account
- * already initialized` (3) if the token program's check trips first. Vault seeds are
- * now bound to the pool address; use `deriveAmmVaultSeeds` (or `deriveAmmPoolAddresses`)
- * instead. This constant is retained for backwards compatibility and will be removed in
- * a future release.
- */
+/** @deprecated Companion to `AMM_VAULT_ONE_SEED`; see its note before using either. */
 export const AMM_VAULT_TWO_SEED = oneByteSeed(0x02);
 
 /* The pool-bound seed labels reuse the legacy constants.  Both are read-only
