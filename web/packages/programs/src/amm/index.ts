@@ -270,12 +270,14 @@ export function deriveAmmLpMintSeed(thru: Thru, poolBytes: Uint8Array | string):
 /**
  * Derives the two pool-bound vault seeds.
  *
- * A token account is `deriveProgramAddress(token, deriveAddress([owner, mint, seed]))`
- * and `transfer_checked` takes its signing authority from the account's stored owner,
- * so the seed fixes both the address and who may spend it.  Binding the seed to the
- * pool therefore makes each vault unforgeable and independently authorised; the legacy
- * fixed constants left every vault of a given mint sharing one owner and one of only
- * two possible addresses.
+ * A token account is `deriveProgramAddress(token, deriveAddress([owner, mint, seed]))`,
+ * so the seed feeds the address; who may spend the account is the `owner` the account
+ * stores, which the seed does not set.  Binding the seed to the pool gives each pool's
+ * vault of a mint its own address.  Whether that also separates spending authority
+ * depends on the owner the program supplied at creation, which is not visible from this
+ * package — if the owner is the program itself, every vault of a mint still shares one
+ * signer however the seed is derived.  The legacy constants left every vault of a given
+ * mint on one of only two possible addresses.
  *
  * With the fixed seed the second `init_pool` for a shared mint fails, on the vault
  * create/init errors (`Vault one create`/`Vault two create` — 10/11, or `Vault one
