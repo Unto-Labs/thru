@@ -8,6 +8,9 @@ export function hexToBytes(hex: string): Uint8Array {
   if (normalized.length % 2 !== 0) {
     throw new Error('Hex string must have even number of characters');
   }
+  if (!/^[0-9a-fA-F]*$/.test(normalized)) {
+    throw new Error('Hex string contains invalid characters');
+  }
   const bytes = new Uint8Array(normalized.length / 2);
   for (let i = 0; i < normalized.length; i += 2) {
     bytes[i / 2] = parseInt(normalized.substring(i, i + 2), 16);
