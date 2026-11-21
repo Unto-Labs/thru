@@ -260,6 +260,21 @@ bare `parseInt` assignment in both copies. So the two packages genuinely disagre
 outside `[0-9a-fA-F]` throws `Hex string contains invalid characters`, and the odd-length error is unchanged. Tests
 in `token/format.test.ts` cover both copies, plus a mistyped real seed through `deriveMintAddress`.
 
+**Exhaustiveness check (recorded because an earlier draft of this section was wrong).** A first pass claimed a
+*fourth* lenient copy at `perp/sdk/instructions.ts:137`, and carried that claim into the PR body as a follow-up.
+It is false: that decoder already rejects with `if (clean.length % 2 || /[^0-9a-f]/i.test(clean)) throw` in the
+base commit, and is untouched by this PR. A sweep of every `parseInt(x, 16)` in `web/packages/*/src` finds three
+kind of site:
+
+| Site | Guard | Verdict |
+|------|-------|---------|
+| `token/{format,derivation,instructions/initialize-mint}.ts` | none in base | **lenient — fixed here** |
+| `perp/sdk/instructions.ts:137` | `/[^0-9a-f]/i` regex | already strict |
+| `core-manager/{live-state,plan}.ts`, `wallet/encoding.ts`, `sdk/src/helpers/encoding.ts` | `^[0-9a-f]{64}$` guard, `Number.isNaN` check, or a checked delegate | already strict |
+
+So the three fixed here are the only lenient decoders in the tree, and the "one left behind" caveat was an error
+rather than a scoping decision.
+
 ---
 
 ## 7. Compression uploader: authority index coupling — LOW, fragile not broken — **deferred**
