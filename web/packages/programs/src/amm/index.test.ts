@@ -16,6 +16,7 @@ import {
   createSwapInstruction,
   createWithdrawLiquidityInstruction,
   deriveAmmPoolAddresses,
+  deriveAmmVaultSeeds,
   parseAmmPoolMetadata,
   quoteAmmSwapExactIn,
   sortAmmMints,
@@ -33,6 +34,25 @@ function key(id: number): Uint8Array {
   bytes[0] = id;
   return bytes;
 }
+
+function buildStaticSeedForTest(value: number): Uint8Array {
+  const seed = new Uint8Array(32);
+  seed[0] = value;
+  return seed;
+}
+
+/** Two pools that pair different tokens against the same quote asset, which is the
+    shape that collided under the static vault seeds. */
+const sharedQuote = (() => {
+  const derive = (id: number, seedId: number) =>
+    deriveProgramAddress({ programAddress: key(id), seed: key(seedId) }).address;
+  return {
+    ammProgramAddress: derive(1, 2),
+    wthru: derive(3, 4),
+    tokenA: derive(5, 6),
+    tokenB: derive(7, 8),
+  };
+})();
 
 function context(indexes: Record<string, number>) {
   return {
@@ -96,8 +116,83 @@ describe('amm helpers', () => {
 
     expect(addresses.poolAddress).toBe(again.poolAddress);
     expect(addresses.lpMintSeed).toEqual(again.lpMintSeed);
-    expect(addresses.vaultOneSeed[0]).toBe(1);
-    expect(addresses.vaultTwoSeed[0]).toBe(2);
+    expect(addresses.vaultOneSeed).toEqual(again.vaultOneSeed);
+    expect(addresses.vaultTwoSeed).toEqual(again.vaultTwoSeed);
+    // Vault seeds are bound to the pool address, not fixed 1-byte constants.
+    expect(addresses.vaultOneSeed).toEqual(deriveAmmVaultSeeds(thru, addresses.poolBytes).vaultOneSeed);
+    expect(addresses.vaultTwoSeed).toEqual(deriveAmmVaultSeeds(thru, addresses.poolBytes).vaultTwoSeed);
+    expect(addresses.vaultOneSeed).not.toEqual(buildStaticSeedForTest(0x01));
+    expect(addresses.vaultTwoSeed).not.toEqual(buildStaticSeedForTest(0x02));
+  });
+
+  it('derives distinct vault seeds for pools sharing a quote asset (WTHRU)', () => {
+    // Simulates TOKEN_A/WTHRU and TOKEN_B/WTHRU, where WTHRU must not collide
+    // on a shared vault token account.
+    const { ammProgramAddress, wthru, tokenA, tokenB } = sharedQuote;
+
+    const poolA = deriveAmmPoolAddresses(thru, {
+      ammProgramAddress,
+      mintAAddress: tokenA,
+      mintBAddress: wthru,
+      swapFeeBps: 30,
+    });
+    const poolB = deriveAmmPoolAddresses(thru, {
+      ammProgramAddress,
+      mintAAddress: tokenB,
+      mintBAddress: wthru,
+      swapFeeBps: 30,
+    });
+
+    expect(poolA.poolAddress).not.toBe(poolB.poolAddress);
+    expect(poolA.vaultOneSeed).not.toEqual(poolB.vaultOneSeed);
+    expect(poolA.vaultTwoSeed).not.toEqual(poolB.vaultTwoSeed);
+
+    // The WTHRU side (mintTwo here) derives distinct vault seeds per pool.
+    const wthruSeedA = poolA.mintTwoAddress === wthru ? poolA.vaultTwoSeed : poolA.vaultOneSeed;
+    const wthruSeedB = poolB.mintTwoAddress === wthru ? poolB.vaultTwoSeed : poolB.vaultOneSeed;
+    expect(wthruSeedA).not.toEqual(wthruSeedB);
+  });
+
+  /* The seed inequality above is a proxy; what actually collided is the vault
+     token account.  Derive those the way the token program does —
+     deriveProgramAddress(token, deriveAddress([owner = AMM, mint, seed])) —
+     and assert the accounts differ for both vaults of two WTHRU pools. */
+  it('derives distinct vault token accounts for pools sharing a quote asset', () => {
+    const tokenProgramAddress = BOOTSTRAP_PROGRAM_ADDRESSES.token;
+    const { ammProgramAddress, wthru, tokenA, tokenB } = sharedQuote;
+
+    const vaultAccount = (mint: string, seed: Uint8Array): string => {
+      const derivedSeed = deriveAddress([
+        Pubkey.from(ammProgramAddress).toBytes(),
+        Pubkey.from(mint).toBytes(),
+        seed,
+      ]).bytes;
+      return deriveProgramAddress({ programAddress: tokenProgramAddress, seed: derivedSeed }).address;
+    };
+
+    const poolA = deriveAmmPoolAddresses(thru, { ammProgramAddress, mintAAddress: tokenA, mintBAddress: wthru, swapFeeBps: 30 });
+    const poolB = deriveAmmPoolAddresses(thru, { ammProgramAddress, mintAAddress: tokenB, mintBAddress: wthru, swapFeeBps: 30 });
+
+    /* Each vault account takes its own side's mint: vault one holds mint one, vault
+       two holds mint two, after sortAmmMints.  Zipping them here keeps that pairing
+       honest instead of deriving both vaults against the same mint. */
+    const vaultsOf = (pool: ReturnType<typeof deriveAmmPoolAddresses>) => [
+      { mint: pool.mintOneAddress, account: vaultAccount(pool.mintOneAddress, pool.vaultOneSeed) },
+      { mint: pool.mintTwoAddress, account: vaultAccount(pool.mintTwoAddress, pool.vaultTwoSeed) },
+    ];
+    const vaultHolding = (pool: ReturnType<typeof deriveAmmPoolAddresses>, mint: string): string => {
+      const vault = vaultsOf(pool).find((entry) => entry.mint === mint);
+      if (!vault) throw new Error(`pool has no vault for ${mint}`);
+      return vault.account;
+    };
+
+    // The collision this fix removes: both pools hold WTHRU, so both would have
+    // derived the same WTHRU vault account under the static seeds.
+    expect(vaultHolding(poolA, wthru)).not.toBe(vaultHolding(poolB, wthru));
+
+    // And a pool's own two vaults must not alias each other, each against its real mint.
+    const [vaultOne, vaultTwo] = vaultsOf(poolA);
+    expect(vaultOne!.account).not.toBe(vaultTwo!.account);
   });
 
   it('packs init_pool as the C header layout', async () => {
