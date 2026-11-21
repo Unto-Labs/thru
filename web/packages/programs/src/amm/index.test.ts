@@ -16,6 +16,7 @@ import {
   createSwapInstruction,
   createWithdrawLiquidityInstruction,
   deriveAmmPoolAddresses,
+  deriveAmmVaultSeeds,
   parseAmmPoolMetadata,
   quoteAmmSwapExactIn,
   sortAmmMints,
@@ -32,6 +33,12 @@ function key(id: number): Uint8Array {
   const bytes = new Uint8Array(32);
   bytes[0] = id;
   return bytes;
+}
+
+function buildStaticSeedForTest(value: number): Uint8Array {
+  const seed = new Uint8Array(32);
+  seed[0] = value;
+  return seed;
 }
 
 function context(indexes: Record<string, number>) {
@@ -96,8 +103,56 @@ describe('amm helpers', () => {
 
     expect(addresses.poolAddress).toBe(again.poolAddress);
     expect(addresses.lpMintSeed).toEqual(again.lpMintSeed);
-    expect(addresses.vaultOneSeed[0]).toBe(1);
-    expect(addresses.vaultTwoSeed[0]).toBe(2);
+    expect(addresses.vaultOneSeed).toEqual(again.vaultOneSeed);
+    expect(addresses.vaultTwoSeed).toEqual(again.vaultTwoSeed);
+    // Vault seeds are bound to the pool address, not fixed 1-byte constants.
+    expect(addresses.vaultOneSeed).toEqual(deriveAmmVaultSeeds(thru, addresses.poolBytes).vaultOneSeed);
+    expect(addresses.vaultTwoSeed).toEqual(deriveAmmVaultSeeds(thru, addresses.poolBytes).vaultTwoSeed);
+    expect(addresses.vaultOneSeed).not.toEqual(buildStaticSeedForTest(0x01));
+    expect(addresses.vaultTwoSeed).not.toEqual(buildStaticSeedForTest(0x02));
+  });
+
+  it('derives distinct vault seeds for pools sharing a quote asset (WTHRU)', () => {
+    // Simulates TOKEN_A/WTHRU and TOKEN_B/WTHRU, where WTHRU must not collide
+    // on a shared vault token account.
+    const ammProgramAddress = deriveProgramAddress({
+      programAddress: key(1),
+      seed: key(2),
+    }).address;
+    const wthru = deriveProgramAddress({
+      programAddress: key(3),
+      seed: key(4),
+    }).address;
+    const tokenA = deriveProgramAddress({
+      programAddress: key(5),
+      seed: key(6),
+    }).address;
+    const tokenB = deriveProgramAddress({
+      programAddress: key(7),
+      seed: key(8),
+    }).address;
+
+    const poolA = deriveAmmPoolAddresses(thru, {
+      ammProgramAddress,
+      mintAAddress: tokenA,
+      mintBAddress: wthru,
+      swapFeeBps: 30,
+    });
+    const poolB = deriveAmmPoolAddresses(thru, {
+      ammProgramAddress,
+      mintAAddress: tokenB,
+      mintBAddress: wthru,
+      swapFeeBps: 30,
+    });
+
+    expect(poolA.poolAddress).not.toBe(poolB.poolAddress);
+    expect(poolA.vaultOneSeed).not.toEqual(poolB.vaultOneSeed);
+    expect(poolA.vaultTwoSeed).not.toEqual(poolB.vaultTwoSeed);
+
+    // The WTHRU side (mintTwo here) derives distinct vault seeds per pool.
+    const wthruSeedA = poolA.mintTwoAddress === wthru ? poolA.vaultTwoSeed : poolA.vaultOneSeed;
+    const wthruSeedB = poolB.mintTwoAddress === wthru ? poolB.vaultTwoSeed : poolB.vaultOneSeed;
+    expect(wthruSeedA).not.toEqual(wthruSeedB);
   });
 
   it('packs init_pool as the C header layout', async () => {
