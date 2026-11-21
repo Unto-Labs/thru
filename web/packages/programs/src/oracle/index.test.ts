@@ -76,26 +76,25 @@ describe("Oracle read helpers", () => {
     );
   });
 
-  it("pads a short seed and refuses to truncate a long one", () => {
+  it("truncates and zero pads the seed to exactly 32 bytes", () => {
+    /* Documented contract: UTF-8, truncated to 32 bytes, zero padded when
+     * shorter. This is deliberate, so the test pins it rather than guarding it. */
     const seed = normalizeOracleFeedSeed("BTC/USD");
     expect(seed).toHaveLength(32);
     expect(new TextDecoder().decode(seed.subarray(0, 7))).toBe("BTC/USD");
     expect(seed.subarray(7).every((byte) => byte === 0)).toBe(true);
 
-    /* Exactly 32 bytes is the limit, not a truncation point. */
     const full = normalizeOracleFeedSeed("abcdefghijklmnopqrstuvwxyz012345");
     expect(full).toHaveLength(32);
 
-    /* Two labels sharing their first 32 bytes used to derive one feed PDA. */
-    const long = "abcdefghijklmnopqrstuvwxyz0123456789";
-    expect(() => normalizeOracleFeedSeed(long)).toThrow("at most 32 bytes");
-    expect(() => normalizeOracleFeedSeed(long.slice(0, 32) + "different")).toThrow(
-      "at most 32 bytes",
+    /* A longer label keeps only its first 32 bytes, so two labels that share a
+     * 32-byte prefix resolve to the same feed. Callers disambiguate. */
+    const prefix = "abcdefghijklmnopqrstuvwxyz012345";
+    expect(normalizeOracleFeedSeed(prefix + "6789")).toEqual(
+      normalizeOracleFeedSeed(prefix + "different"),
     );
-    expect(() => normalizeOracleFeedSeed(new Uint8Array(33))).toThrow(
-      "at most 32 bytes",
-    );
-    expect(normalizeOracleFeedSeed(new Uint8Array(32))).toHaveLength(32);
+    expect(normalizeOracleFeedSeed(new Uint8Array(33))).toHaveLength(32);
+    expect(normalizeOracleFeedSeed(new Uint8Array(33)).at(-1)).toBe(0);
   });
 
   it("maps program errors", () => {

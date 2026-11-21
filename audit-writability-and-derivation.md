@@ -2,11 +2,31 @@
 
 **Scope:** `web/packages` — `programs`, `bridge`, `wallet`, `passkey`, `sdk/thru-ts-client-sdk`.
 **Cross-checked against:** `rpc/thru-base` (Rust transaction builders) and `rpc/cli`, the reference
-implementations the official tooling itself uses.
+implementations the official tooling itself uses — and against the artifacts the maintainers actually publish,
+`@thru/programs@0.5.2` and `@thru/sdk@0.5.2` from the npm registry, plus the [official
+docs](https://thru.org/docs/sdks/web-packages/programs/).
 
-**Status:** report, plus the fixes for findings **#1, #6, #8 and #9** (the four that are pure TypeScript
-with no on-chain dependency). Findings **#2, #3, #4 and #5** need a maintainer to confirm the program
-handlers first and are deliberately left out; see [Scope of the accompanying PR](#scope-of-the-accompanying-pr).
+**Status:** report, plus the fixes for findings **#1, #6 and #8** (pure TypeScript, no on-chain dependency).
+**#9** was raised here and then **withdrawn** once the docs showed the truncation is intended. Findings **#2, #3,
+#4 and #5** need a maintainer to confirm the program handlers first and are deliberately left out; see
+[Scope of the accompanying PR](#scope-of-the-accompanying-pr).
+
+## How each finding was verified
+
+The mirror only proves what this checkout does, not what the maintainers ship or intend. Each finding was
+therefore checked three ways, and a finding is only listed as a bug when the source contradicts the documented
+or published behaviour:
+
+1. **Read the code** in this checkout, and reproduce the failure where possible.
+2. **Compare against the published package.** `npm pack`-equivalent download of `@thru/programs@0.5.2` and
+   `@thru/sdk@0.5.2` from `registry.npmjs.org`, then read `dist/`. This distinguishes a defect in the mirror from
+   a defect in what users install. All three remaining fixes are present-and-broken in the published 0.5.2 build,
+   so they are real for npm consumers today.
+3. **Check the official docs** for the intended contract. This is what withdrew #9: the docs state truncation as
+   the behaviour of the very function I had flagged.
+
+Where the docs are silent — the perp program has no published page — the finding is stated with its assumption
+and left for a maintainer, rather than asserted as settled.
 
 **Related:** the AMM pool-vault collision is fixed separately in `2f66621` and is *not* listed here.
 
@@ -47,7 +67,7 @@ silent one. Finding 4 below is of that shape.
 | 6 | `token/{format,derivation,initialize-mint}.ts` | invalid hex → `0x00` | Medium | Yes | **fixed** |
 | 7 | `sdk/.../compression/instructions.ts` | authority index coupling | Low | Yes | deferred |
 | 8 | `wallet/crypto.ts` | no DER bounds checks | Low | Yes | **fixed** |
-| 9 | `oracle/derivation.ts` | silent seed truncation | Low | Yes | **fixed** |
+| 9 | `oracle/derivation.ts` | silent seed truncation | **Not a bug** | — | withdrawn |
 | 10 | `deploy/workflows.ts` upgrade | abi_meta read-only | **Not a bug** | — | — |
 | 11 | AMM instruction builders / `buildPasskeyReadWriteAccounts` | dead code | Info | — | — |
 
@@ -104,6 +124,26 @@ A test with `feePayer !== owner` fails today.
 it; the margin account / seat arenas are what is written). Regression tests in `tx.test.ts` now encode both
 builders through `encodePerpTransaction` with a fee payer that is neither the owner nor the margin account, and
 check the encoded indices resolve back to the owner.
+
+**Independent checks, added after the first draft:**
+
+* *The published 0.5.2 build is affected too.* In `@thru/programs@0.5.2`, `dist/perps/index.js` has
+  `marginAccountCreateTx` with `[margin.address]` / `[vault]` and `marginTransferTx` with
+  `[from.seatArena, to.seatArena]` / `[]`. So this is not a mirror artefact — npm consumers hit it today.
+* *The omission cannot be deliberate.* `margin_account_create` writes its payload field `owner_account_idx`, and
+  a fee payer omitted from the list is exactly what `Account not found in transaction accounts` already rejects
+  elsewhere, so the builder is internally inconsistent rather than relying on the fee payer coincidentally being
+  the owner.
+* *Moving the owner to read-write would be wrong.* The perp program rejects a caller that is not the owner with
+  `MARGIN_UNAUTHORIZED` (`-227`, `"the signer is not the margin account owner"`), so the runtime already
+  authorises the owner through the fee-payer signature rather than through account writability. Read-only is the
+  correct classification; the bug is the missing entry, not its access mode.
+
+**Assumption to confirm:** that Thru has a single signature slot, so the owner can only be authorised when it is
+the fee payer. That is what `TransactionBuilder.buildAndSign` and the perp `signers.ts` both imply, and it is
+consistent with the create path. If a future release adds co-signing, the owner becomes a signer rather than a
+plain read-only account and this fix should be revisited — the tests assert the encoded index resolves to the
+owner, which holds either way.
 
 ---
 
@@ -213,9 +253,12 @@ So a seed or mint hex string with a typo derives a **different, valid-looking ad
 nobody controls — funds can be minted or deposited to an unreachable account.
 
 **The SDK's own copies are correct:** `sdk/.../helpers.ts` and `sdk/.../abi/utils.ts` check `Number.isNaN` and
-throw. The three above now match: a character outside `[0-9a-fA-F]` throws
-`Hex string contains invalid characters`, and the odd-length error is unchanged. Tests in
-`token/format.test.ts` cover both copies, plus a mistyped real seed through `deriveMintAddress`.
+throw. Confirmed in the published `@thru/sdk@0.5.2` (`dist/chunk-UDIXYJXC.js` throws
+`Hex string contains invalid characters`), while the published `@thru/programs@0.5.2` token chunk still has the
+bare `parseInt` assignment in both copies. So the two packages genuinely disagree, and the fix aligns
+`@thru/programs` with `@thru/sdk` rather than inventing a new contract. The three above now match: a character
+outside `[0-9a-fA-F]` throws `Hex string contains invalid characters`, and the odd-length error is unchanged. Tests
+in `token/format.test.ts` cover both copies, plus a mistyped real seed through `deriveMintAddress`.
 
 ---
 
@@ -255,15 +298,51 @@ than the short one all throw `Invalid DER signature: …`. Valid short-form sign
 leading-`0x00` form and trailing bytes after the declared sequence, parse exactly as before, so the passkey
 package's fixtures are unchanged.
 
+**Why this is a defect and not a deliberate trade-off:** the published `@thru/programs@0.5.2`
+(`dist/chunk-47DAOFNN.js`) parses DER by walking `der[offset++]` with no bounds check, and its
+`normalizeSignatureComponent` only rejects lengths *after* the slices have already been taken — so a truncated
+signature is padded or silently re-sliced into a plausible-looking `r`/`s` instead of throwing. A signature parser
+that accepts malformed input is unsound by default; there is no documented contract to preserve here, unlike #9.
+
 ---
 
-## 9. Oracle feed seed silently truncates to 32 bytes — LOW — **fixed**
+## 9. Oracle feed seed silently truncates to 32 bytes — WITHDRAWN: documented behaviour
 
 **File:** `web/packages/programs/src/oracle/derivation.ts` — `normalizeOracleFeedSeed`.
 
-Padded **or truncated** to 32 bytes without error. Two distinct caller-supplied seeds sharing their first 32 bytes
-derive the same feed PDA. `normalizeOracleFeedSeed` now pads short seeds and throws on input longer than
-`ORACLE_FEED_SEED_LENGTH`, so a colliding label can no longer be created by accident.
+Padded **or truncated** to 32 bytes without error, so two distinct caller-supplied seeds sharing their first 32
+bytes derive the same feed PDA. I raised this as a defect and started fixing it by throwing on over-long input.
+That fix was then withdrawn. Truncation is the contract, not an oversight:
+
+* The official reference states it as behaviour of this package: *"String seeds are UTF-8 encoded, truncated to
+  32 bytes, and zero-padded when shorter."* — [@thru/programs](https://thru.org/docs/sdks/web-packages/programs/),
+  the section documenting `normalizeOracleFeedSeed` by name.
+* The published `@thru/programs@0.5.2` tarball does exactly that, so the docs match the shipped code:
+
+  ```js
+  // dist/oracle/index.js
+  const normalized = new Uint8Array(ORACLE_FEED_SEED_LENGTH);
+  normalized.set(source.subarray(0, ORACLE_FEED_SEED_LENGTH));
+  ```
+
+Both a string and a byte seed are normalised the same way, the seed is a caller-chosen *label* rather than a
+secret, and a 32-byte truncation point sits far beyond any realistic feed name (`BTC/USD`). The collision is real
+but it is reachable by design, in the same way that any fixed-width identifier collides.
+
+**Why withdrawn rather than kept as a hardening change:** throwing is a behaviour change to a documented public
+function, and it migrates *by error* any caller that today passes a longer label legally. That is a breaking
+change to negotiate with the maintainers, not a defect fix to slip into a hardening PR. Reverting also keeps this
+PR's other three fixes from being reviewed behind a disputed API change.
+
+**Recommendation for the maintainers**, as a separate discussion: either document that labels are compared on
+their first 32 bytes, or add a non-breaking `assertSeedFits` helper that callers can opt into. The test now pins
+the truncation so the contract is at least covered:
+
+```ts
+expect(normalizeOracleFeedSeed(prefix + "6789")).toEqual(
+  normalizeOracleFeedSeed(prefix + "different"),
+);
+```
 
 ---
 
@@ -325,15 +404,19 @@ Audited and cleared, so this ground is not re-covered:
 
 ## Scope of the accompanying PR
 
-**In:** #1 (margin owner), #6 (strict hex decoding), #8 (DER bounds checks), #9 (oracle seed). All four are
-confined to `web/packages/programs/src` and need nothing from the program: they either add an account to a list,
-reject malformed input, or bound a length. Each has a regression test that fails on the old code.
+**In:** #1 (margin owner), #6 (strict hex decoding), #8 (DER bounds checks). All three are confined to
+`web/packages/programs/src` and need nothing from the program: they either add an account to a list or reject
+malformed input. Each has a regression test that fails on the old code, and each is reproducible in the published
+`@thru/programs@0.5.2` build, not just in this checkout.
+
+**Outdrawn:** #9 (oracle seed truncation) — see above. Truncating to 32 bytes is the documented contract of
+`normalizeOracleFeedSeed`, so the change moved out of the PR and the existing behaviour is now pinned by a test.
 
 **Out, on purpose:** #2, #3, #4 and #5. Each needs a maintainer to confirm what the on-chain handler actually
 writes (or, for #5, to decide whether the base mint belongs in perp market identity). Changing an account's
 writability on a guess either reverts every transaction on that path or silently narrows a writable set the
 program depends on, so they belong in their own PR with the program source in hand. #7 is a documentation /
-ergonomics change and is left out to keep this PR to the four verified defects.
+ergonomics change and is left out to keep this PR to the three verified defects.
 
 **Suggested order for the rest:**
 
@@ -341,5 +424,6 @@ ergonomics change and is left out to keep this PR to the four verified defects.
    SDK workaround and document it as one.
 2. **#7** — document or make explicit the uploader authority requirement.
 3. **#3** (bridge mint), **#4** (margin account writability), **#5** (perp market seed).
+4. **#9** — decide whether the 32-byte truncation stays documented as-is or gains an opt-in strict helper.
 
 **No action:** **#10** (confirmed correct), **#11** (dead code).
