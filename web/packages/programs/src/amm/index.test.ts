@@ -155,6 +155,42 @@ describe('amm helpers', () => {
     expect(wthruSeedA).not.toEqual(wthruSeedB);
   });
 
+  /* The seed inequality above is a proxy; what actually collided is the vault
+     token account.  Derive those the way the token program does —
+     deriveProgramAddress(token, deriveAddress([owner = AMM, mint, seed])) —
+     and assert the accounts differ for both vaults of two WTHRU pools. */
+  it('derives distinct vault token accounts for pools sharing a quote asset', () => {
+    const tokenProgramAddress = BOOTSTRAP_PROGRAM_ADDRESSES.token;
+    const ammProgramAddress = deriveProgramAddress({
+      programAddress: key(1),
+      seed: key(2),
+    }).address;
+    const wthru = deriveProgramAddress({
+      programAddress: key(3),
+      seed: key(4),
+    }).address;
+    const tokenA = deriveProgramAddress({ programAddress: key(5), seed: key(6) }).address;
+    const tokenB = deriveProgramAddress({ programAddress: key(7), seed: key(8) }).address;
+
+    const vaultAccount = (mint: string, seed: Uint8Array): string => {
+      const derivedSeed = deriveAddress([
+        Pubkey.from(ammProgramAddress).toBytes(),
+        Pubkey.from(mint).toBytes(),
+        seed,
+      ]).bytes;
+      return deriveProgramAddress({ programAddress: tokenProgramAddress, seed: derivedSeed }).address;
+    };
+
+    const poolA = deriveAmmPoolAddresses(thru, { ammProgramAddress, mintAAddress: tokenA, mintBAddress: wthru, swapFeeBps: 30 });
+    const poolB = deriveAmmPoolAddresses(thru, { ammProgramAddress, mintAAddress: tokenB, mintBAddress: wthru, swapFeeBps: 30 });
+
+    expect(vaultAccount(wthru, poolA.vaultOneSeed)).not.toBe(vaultAccount(wthru, poolB.vaultOneSeed));
+    expect(vaultAccount(wthru, poolA.vaultTwoSeed)).not.toBe(vaultAccount(wthru, poolB.vaultTwoSeed));
+
+    // And a pool's own two vaults must not alias each other either.
+    expect(vaultAccount(wthru, poolA.vaultOneSeed)).not.toBe(vaultAccount(wthru, poolA.vaultTwoSeed));
+  });
+
   it('packs init_pool as the C header layout', async () => {
     const seed = new Uint8Array(32).fill(0xaa);
     const poolProof = new Uint8Array([0x10, 0x11]);

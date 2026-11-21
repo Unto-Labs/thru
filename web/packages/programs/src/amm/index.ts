@@ -98,25 +98,35 @@ export const AMM_ERROR_LABELS: Record<number, string> = {
 
 const PUBKEY_LENGTH = 32;
 const LP_MINT_SEED_LABEL = asciiBytes('lp_mint');
-const VAULT_ONE_SEED_LABEL = oneByteSeed(0x01);
-const VAULT_TWO_SEED_LABEL = oneByteSeed(0x02);
 
 /**
  * @deprecated Fixed 1-byte vault seed. Pools sharing a mint (e.g. WTHRU) derived
  * identical vault token accounts with this seed, and the second `init_pool` reverted
- * with `Account already initialized`. Vault seeds are now bound to the pool address;
- * use `deriveAmmVaultSeeds` (or `deriveAmmPoolAddresses`) instead. This constant is
- * retained for backwards compatibility and will be removed in a future release.
+ * with the vault create/init failures (`Vault one create`/`Vault two create` — AMM
+ * errors 10/11 — or `Vault one init`/`Vault two init` — 15/16), or with `Account
+ * already initialized` (3) if the token program's check trips first. Vault seeds are
+ * now bound to the pool address; use `deriveAmmVaultSeeds` (or `deriveAmmPoolAddresses`)
+ * instead. This constant is retained for backwards compatibility and will be removed in
+ * a future release.
  */
 export const AMM_VAULT_ONE_SEED = oneByteSeed(0x01);
 /**
  * @deprecated Fixed 1-byte vault seed. Pools sharing a mint (e.g. WTHRU) derived
  * identical vault token accounts with this seed, and the second `init_pool` reverted
- * with `Account already initialized`. Vault seeds are now bound to the pool address;
- * use `deriveAmmVaultSeeds` (or `deriveAmmPoolAddresses`) instead. This constant is
- * retained for backwards compatibility and will be removed in a future release.
+ * with the vault create/init failures (`Vault one create`/`Vault two create` — AMM
+ * errors 10/11 — or `Vault one init`/`Vault two init` — 15/16), or with `Account
+ * already initialized` (3) if the token program's check trips first. Vault seeds are
+ * now bound to the pool address; use `deriveAmmVaultSeeds` (or `deriveAmmPoolAddresses`)
+ * instead. This constant is retained for backwards compatibility and will be removed in
+ * a future release.
  */
 export const AMM_VAULT_TWO_SEED = oneByteSeed(0x02);
+
+/* The pool-bound seed labels reuse the legacy constants.  Both are read-only
+   inputs to deriveAddress, so sharing one allocation is safe, and it keeps the
+   legacy bytes and the seed bytes from drifting apart. */
+const VAULT_ONE_SEED_LABEL = AMM_VAULT_ONE_SEED;
+const VAULT_TWO_SEED_LABEL = AMM_VAULT_TWO_SEED;
 
 export type AccountLookupContext = {
   getAccountIndex: (pubkey: Uint8Array) => number;
@@ -263,8 +273,14 @@ export function deriveAmmLpMintSeed(thru: Thru, poolBytes: Uint8Array | string):
  * Vault token accounts are derived by the token program as
  * `derive(mint, owner = AMM_PROGRAM, seed)`, so the seed must incorporate the pool
  * address — otherwise every pool pairing the same quote asset (e.g. WTHRU) derives the
- * identical vault token account and the second `init_pool` reverts with
- * `Account already initialized` (AMM errors 10/11/15/16).
+ * identical vault token account and the second `init_pool` reverts.  Which error
+ * depends on how far the call gets: the vault create/init failures (`Vault one
+ * create`/`Vault two create` — AMM errors 10/11, or `Vault one init`/`Vault two init`
+ * — 15/16), or `Account already initialized` (3) from the token program.
+ *
+ * Because the legacy seed is a 32 byte value whose only varying byte is the constant,
+ * such a pool has only two possible vault accounts network-wide; binding the pool
+ * address removes that cap.
  */
 export function deriveAmmVaultSeeds(
   thru: Thru,
