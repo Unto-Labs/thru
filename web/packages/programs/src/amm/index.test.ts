@@ -184,11 +184,26 @@ describe('amm helpers', () => {
     const poolA = deriveAmmPoolAddresses(thru, { ammProgramAddress, mintAAddress: tokenA, mintBAddress: wthru, swapFeeBps: 30 });
     const poolB = deriveAmmPoolAddresses(thru, { ammProgramAddress, mintAAddress: tokenB, mintBAddress: wthru, swapFeeBps: 30 });
 
-    expect(vaultAccount(wthru, poolA.vaultOneSeed)).not.toBe(vaultAccount(wthru, poolB.vaultOneSeed));
-    expect(vaultAccount(wthru, poolA.vaultTwoSeed)).not.toBe(vaultAccount(wthru, poolB.vaultTwoSeed));
+    /* Each vault account takes its own side's mint: vault one holds mint one, vault
+       two holds mint two, after sortAmmMints.  Zipping them here keeps that pairing
+       honest instead of deriving both vaults against the same mint. */
+    const vaultsOf = (pool: ReturnType<typeof deriveAmmPoolAddresses>) => [
+      { mint: pool.mintOneAddress, account: vaultAccount(pool.mintOneAddress, pool.vaultOneSeed) },
+      { mint: pool.mintTwoAddress, account: vaultAccount(pool.mintTwoAddress, pool.vaultTwoSeed) },
+    ];
+    const vaultHolding = (pool: ReturnType<typeof deriveAmmPoolAddresses>, mint: string): string => {
+      const vault = vaultsOf(pool).find((entry) => entry.mint === mint);
+      if (!vault) throw new Error(`pool has no vault for ${mint}`);
+      return vault.account;
+    };
 
-    // And a pool's own two vaults must not alias each other either.
-    expect(vaultAccount(wthru, poolA.vaultOneSeed)).not.toBe(vaultAccount(wthru, poolA.vaultTwoSeed));
+    // The collision this fix removes: both pools hold WTHRU, so both would have
+    // derived the same WTHRU vault account under the static seeds.
+    expect(vaultHolding(poolA, wthru)).not.toBe(vaultHolding(poolB, wthru));
+
+    // And a pool's own two vaults must not alias each other, each against its real mint.
+    const [vaultOne, vaultTwo] = vaultsOf(poolA);
+    expect(vaultOne!.account).not.toBe(vaultTwo!.account);
   });
 
   it('packs init_pool as the C header layout', async () => {
