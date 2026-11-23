@@ -920,6 +920,8 @@ fn candidate_fixture(flags: u8) -> (Value, thru_client::Account) {
         is_ephemeral: false,
         is_deleted: false,
         is_privileged: false,
+        is_uncompressable: false,
+        is_native_receiver: false,
         slot: None,
         block_timestamp: None,
         version_seq: None,

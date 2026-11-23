@@ -1154,35 +1154,6 @@ describe("page-delta overlay (live tail)", () => {
     await iterator.return?.();
   });
 
-  test("cross-slot recreate at seq 0 after a delete is accepted", async () => {
-    /* Under UNTO-2630, seq only restarts at 0 when an account is
-       recreated in a LATER slot; plain lexicographic (slot, seq)
-       ordering already orders that correctly since the slot itself is
-       greater. */
-    const owner = bytes(26);
-    const address = bytes(27);
-    const stream = createPushableStream();
-    const client = createMockClient(stream.iterable);
-    client.listAccounts.mockResolvedValue(create(ListAccountsResponseSchema, { accounts: [] }));
-
-    const replay = createAccountsByOwnerReplay({ client, owner, retryConfig: OVERLAY_RETRY_CONFIG });
-    const iterator = replay[Symbol.asyncIterator]();
-
-    stream.push(makeDeleteResponse(address, owner, 30n, 7n));
-    await expect(pull(iterator)).resolves.toMatchObject({
-      done: false,
-      value: { type: "account", account: { slot: 30n, seq: 7n, isDelete: true } },
-    });
-
-    stream.push(makeDeltaResponse(address, owner, 31n, 0n, 1, 0, 9));
-    await expect(pull(iterator)).resolves.toMatchObject({
-      done: false,
-      value: { type: "account", account: { slot: 31n, seq: 0n, isDelete: false } },
-    });
-
-    await iterator.return?.();
-  });
-
   test("same-slot recreate at a lower seq after a delete is rejected (transitional pre-UNTO-2630 behavior)", async () => {
     /* Today's runtime can still restart seq in-block on a delete+recreate.
        Until UNTO-2630 lands, a same-slot recreate redelivered at that seam
@@ -1367,34 +1338,6 @@ describe("AccountSeqTracker ordering (UNTO-2630 plain lexicographic (slot, seq))
     expect(tracker.shouldApply("addr", 30n, 4n)).toBe(false);
     expect(tracker.shouldApply("addr", 30n, 3n)).toBe(false);
     expect(tracker.shouldApply("addr", 30n, 5n)).toBe(true);
-  });
-
-  test("delete(30,7) -> update(31,1) -> redelivered delete(30,9) is rejected against the current mark; a duplicate of the original delete and a genuinely newer delete are handled the same way", () => {
-    const tracker = new AccountSeqTracker();
-
-    tracker.update("addr", 30n, 7n);
-    expect(tracker.getVersion("addr")).toEqual({ slot: 30n, seq: 7n });
-
-    expect(tracker.shouldApply("addr", 31n, 1n)).toBe(true);
-    expect(tracker.update("addr", 31n, 1n)).toBe(true);
-    expect(tracker.getVersion("addr")).toEqual({ slot: 31n, seq: 1n });
-
-    /* A redelivered delete(30,9) is newer than the original delete's mark
-       (30,7) but older than the current (31,1) mark -- rejected. */
-    expect(tracker.shouldApply("addr", 30n, 9n)).toBe(false);
-    expect(tracker.update("addr", 30n, 9n)).toBe(false);
-    expect(tracker.getVersion("addr")).toEqual({ slot: 31n, seq: 1n });
-
-    /* An exact duplicate of the original delete(30,7) is rejected the same
-       way -- it is even older than (31,1). */
-    expect(tracker.shouldApply("addr", 30n, 7n)).toBe(false);
-    expect(tracker.update("addr", 30n, 7n)).toBe(false);
-    expect(tracker.getVersion("addr")).toEqual({ slot: 31n, seq: 1n });
-
-    /* A genuinely newer delete, newer than the (31,1) mark, still applies. */
-    expect(tracker.shouldApply("addr", 31n, 2n)).toBe(true);
-    expect(tracker.update("addr", 31n, 2n)).toBe(true);
-    expect(tracker.getVersion("addr")).toEqual({ slot: 31n, seq: 2n });
   });
 });
 

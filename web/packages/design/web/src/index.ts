@@ -168,9 +168,18 @@ export { UsStatePicker } from "./components/wallet/UsStatePicker/UsStatePicker";
 export type { UsStatePickerProps } from "./components/wallet/UsStatePicker/UsStatePicker";
 export { US_STATES } from "./components/wallet/UsStatePicker/usStates";
 export type { UsStateCode, UsStateBlocks } from "./components/wallet/UsStatePicker/usStates";
+export { CountryPicker } from "./components/wallet/CountryPicker/CountryPicker";
+export type {
+  CountryPickerProps,
+  CountryBlocks,
+} from "./components/wallet/CountryPicker/CountryPicker";
 export { DobInput } from "./components/wallet/DobInput/DobInput";
 export type { DobInputProps } from "./components/wallet/DobInput/DobInput";
-export { formatDob, parseDob, dobToIso, validateDob } from "./components/wallet/DobInput/dob";
+export { parseDob, dobToIso, validateDob } from "./components/wallet/DobInput/dob";
+export { DocumentCapture } from "./components/wallet/DocumentCapture/DocumentCapture";
+export type { DocumentCaptureProps } from "./components/wallet/DocumentCapture/DocumentCapture";
+export { checkDocument, formatDocumentSize, DOCUMENT_ACCEPT, DOCUMENT_CAMERA_ACCEPT, DOCUMENT_MAX_BYTES } from "./components/wallet/DocumentCapture/document";
+export type { DocumentKind, DocumentCheck } from "./components/wallet/DocumentCapture/document";
 export { Steps } from "./components/wallet/Steps/Steps";
 export type { StepsProps, StepItem, StepStatus } from "./components/wallet/Steps/Steps";
 export { Checklist } from "./components/wallet/Checklist/Checklist";
@@ -261,9 +270,26 @@ export type { WalletOverlayProps } from "./components/wallet/WalletOverlay/Walle
 export { UusdLogo, type UusdLogoProps } from "./UusdLogo";
 export { isUusdSymbol } from "../../tokens/src/uusd";
 
-export type { WalletSheetDepositKycProps, WalletSheetDepositKycSection } from "./components/wallet/WalletSheet/DepositKyc";
+export {
+  depositKycIdLabels,
+  type DepositKycIdType,
+  type DepositKycValues,
+  type WalletSheetDepositKycProps,
+  type WalletSheetDepositKycSection,
+  type WalletSheetInternationalDepositKycProps,
+} from "./components/wallet/WalletSheet/DepositKyc";
+export type { WalletSheetDepositDocumentsProps } from "./components/wallet/WalletSheet/DepositDocuments";
 export type {
   WalletSheetDepositBankMethod,
   WalletSheetDepositBankRow,
   WalletSheetDepositActivityRow,
 } from "./components/wallet/WalletSheet/DepositBank";
+export type {
+  WalletSheetCashOutBank,
+  WalletSheetCashOutSpeed,
+  WalletSheetCashOutProps,
+  WalletSheetCashOutBankProps,
+  WalletSheetCashOutAmountProps,
+  WalletSheetCashOutReviewProps,
+  WalletSheetCashOutStatusProps,
+} from "./components/wallet/WalletSheet/CashOut";

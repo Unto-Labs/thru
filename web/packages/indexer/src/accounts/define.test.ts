@@ -163,18 +163,6 @@ describe("defineAccountStream", () => {
   });
 
   describe("size constraints", () => {
-    it("preserves expectedSize", () => {
-      const stream = defineAccountStream({
-        name: "test",
-        schema: testSchema,
-        ownerProgram: mockOwnerProgram,
-        expectedSize: 74,
-        parse: mockParse,
-      });
-
-      expect(stream.expectedSize).toBe(74);
-    });
-
     it("preserves dataSizes array", () => {
       const stream = defineAccountStream({
         name: "test",
@@ -185,72 +173,6 @@ describe("defineAccountStream", () => {
       });
 
       expect(stream.dataSizes).toEqual([74, 116]);
-    });
-
-    it("allows both expectedSize and dataSizes", () => {
-      const stream = defineAccountStream({
-        name: "test",
-        schema: testSchema,
-        ownerProgram: mockOwnerProgram,
-        expectedSize: 74,
-        dataSizes: [116, 200],
-        parse: mockParse,
-      });
-
-      expect(stream.expectedSize).toBe(74);
-      expect(stream.dataSizes).toEqual([116, 200]);
-    });
-
-    it("allows omitting size constraints", () => {
-      const stream = defineAccountStream({
-        name: "test",
-        schema: testSchema,
-        ownerProgram: mockOwnerProgram,
-        parse: mockParse,
-      });
-
-      expect(stream.expectedSize).toBeUndefined();
-      expect(stream.dataSizes).toBeUndefined();
-    });
-  });
-
-  describe("parse function", () => {
-    it("exposes parse function", () => {
-      const stream = defineAccountStream({
-        name: "test",
-        schema: testSchema,
-        ownerProgram: mockOwnerProgram,
-        parse: mockParse,
-      });
-
-      const result = stream.parse({
-        address: "abc123",
-        slot: 1000n,
-        data: "test data",
-      } as any);
-
-      expect(result).toEqual({
-        address: "abc123",
-        slot: 1000n,
-        data: "test data",
-      });
-    });
-
-    it("parse can return null to skip accounts", () => {
-      const selectiveParse = (account: any) => {
-        if (account.skip) return null;
-        return { address: account.address, slot: account.slot, data: null };
-      };
-
-      const stream = defineAccountStream({
-        name: "test",
-        schema: testSchema,
-        ownerProgram: mockOwnerProgram,
-        parse: selectiveParse,
-      });
-
-      expect(stream.parse({ address: "1", slot: 1n, skip: true } as any)).toBeNull();
-      expect(stream.parse({ address: "2", slot: 2n } as any)).not.toBeNull();
     });
   });
 

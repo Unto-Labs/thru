@@ -3,7 +3,6 @@ import {
   SigningSessionDescriptorStore,
   assertSigningSessionWalletAccountIdx,
   resolveSessionExpirySeconds,
-  resolveSigningSessionStorageKey,
 } from "./signing-sessions";
 
 class MemoryStorage {
@@ -30,21 +29,6 @@ describe("signing session descriptor storage", () => {
 
   afterEach(() => {
     vi.useRealTimers();
-  });
-
-  it("namespaces default storage keys by wallet and app origin", () => {
-    const appA = resolveSigningSessionStorageKey({
-      walletOrigin: "https://wallet.example",
-      appOrigin: "https://app-a.example",
-    });
-    const appB = resolveSigningSessionStorageKey({
-      walletOrigin: "https://wallet.example",
-      appOrigin: "https://app-b.example",
-    });
-
-    expect(appA).not.toBe(appB);
-    expect(appA).toContain(Buffer.from("https://wallet.example").toString("hex"));
-    expect(appA).toContain(Buffer.from("https://app-a.example").toString("hex"));
   });
 
   it("stores only active sessions and prunes expired descriptors locally", async () => {

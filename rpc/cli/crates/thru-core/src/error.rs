@@ -116,6 +116,18 @@ pub enum CliError {
     #[allow(dead_code)]
     MetaAccountClosed(String),
 
+    /// Ledger hardware-wallet errors (device locked, wrong app, rejected, ...).
+    /// `message` states the fix; `code` is a stable machine-readable class.
+    #[error("Ledger: {message}")]
+    Ledger {
+        code: String,
+        message: String,
+        status_word: Option<u16>,
+        /// Canonical reason class (corpus `sw_class`) for transaction and
+        /// request rejections, e.g. `rw_unsorted`.
+        reason: Option<String>,
+    },
+
     /// Generic error with context
     #[error("{message}")]
     Generic { message: String },

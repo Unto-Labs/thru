@@ -1,10 +1,11 @@
 import * as React from "react";
 import { cn } from "../../utils";
 import { Dialog } from "../Dialog/Dialog";
+import { UntoWordmark } from "../wallet/Brand/Brand";
 import "./Navbar.css";
 
 /**
- * Navbar — the Thru "scan" top bar, exposed as styled parts (compose freely).
+ * Navbar — the Unto "scan" top bar, exposed as styled parts (compose freely).
  * Parts take a `render` element for routing links or an interactive button.
  *
  *   <Navbar.Root>
@@ -14,7 +15,7 @@ import "./Navbar.css";
  *       <Navbar.Item render={<button onClick={…} />}>Blocks</Navbar.Item>
  *     </Navbar.Nav>
  *     <Navbar.Spacer />
- *     <Navbar.Status network="thru-devnet" slot="59,421" connected />
+ *     <Navbar.Status network="unto-devnet" slot="59,421" connected />
  *   </Navbar.Root>
  */
 
@@ -30,7 +31,7 @@ export interface NavbarBrandProps extends React.HTMLAttributes<HTMLElement> {
   /** A link element (e.g. a Next `<Link/>`) to wrap the brand. */
   render?: React.ReactElement;
   /** Override the wordmark — e.g. a logo lockup `<img>`/`<Image>`. Defaults to
-   *  the italic `thru` text wordmark. */
+   *  the Unto Labs wordmark. */
   children?: React.ReactNode;
 }
 function Brand({
@@ -42,7 +43,7 @@ function Brand({
 }: NavbarBrandProps) {
   const content = (
     <>
-      {children ?? <span className="uds-navbar__wordmark">thru</span>}
+      {children ?? <UntoWordmark size={12} className="uds-navbar__wordmark" />}
       {tag != null && <span className="uds-navbar__tag">{tag}</span>}
     </>
   );

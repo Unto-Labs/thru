@@ -19,7 +19,7 @@ const check = process.argv.includes('--check');
 // Never regenerate in place before this check: that would hide stale inputs.
 const preparation = spawnSync(process.execPath, ['--import', 'tsx',
   join(repo, 'programs/bootstrap/prepare-abis.ts'),
-  '--network', process.env.THRU_ABI_NETWORK ?? 'alphanet', '--check'], {
+  '--network', process.env.THRU_ABI_NETWORK ?? 'betanet', '--check'], {
   cwd: join(repo, 'programs/bootstrap'), stdio: 'inherit', env: process.env,
 });
 if (preparation.error) throw preparation.error;

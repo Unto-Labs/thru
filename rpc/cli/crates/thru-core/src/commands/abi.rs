@@ -492,7 +492,7 @@ impl AbiProgramManager {
         let block_height = self.rpc_client.get_block_height().await.map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get current slot: {}", e))
         })?;
-        Ok(block_height.finalized_height)
+        Ok(block_height.locally_executed_height)
     }
 
     async fn submit_and_verify_transaction(
@@ -969,8 +969,7 @@ async fn create_abi_account_official(
         .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
         let mut transaction = transaction.with_chain_id(abi_program_manager.chain_id());
-        transaction
-            .sign(&abi_program_manager.fee_payer().private_key)
+        crate::signing::sign_transaction(&mut transaction, abi_program_manager.fee_payer())
             .map_err(|e| CliError::Crypto(e.to_string()))?;
         abi_program_manager
             .submit_and_verify_transaction(&transaction)
@@ -1056,8 +1055,7 @@ async fn create_abi_account_official(
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
     let mut transaction = transaction.with_chain_id(abi_program_manager.chain_id());
-    transaction
-        .sign(&abi_program_manager.fee_payer().private_key)
+    crate::signing::sign_transaction(&mut transaction, abi_program_manager.fee_payer())
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     abi_program_manager
@@ -1259,8 +1257,7 @@ async fn create_abi_account_external(
         .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
         let mut transaction = transaction.with_chain_id(abi_program_manager.chain_id());
-        transaction
-            .sign(&abi_program_manager.fee_payer().private_key)
+        crate::signing::sign_transaction(&mut transaction, abi_program_manager.fee_payer())
             .map_err(|e| CliError::Crypto(e.to_string()))?;
         abi_program_manager
             .submit_and_verify_transaction(&transaction)
@@ -1343,8 +1340,7 @@ async fn create_abi_account_external(
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
     let mut transaction = transaction.with_chain_id(abi_program_manager.chain_id());
-    transaction
-        .sign(&abi_program_manager.fee_payer().private_key)
+    crate::signing::sign_transaction(&mut transaction, abi_program_manager.fee_payer())
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     abi_program_manager
@@ -1528,8 +1524,7 @@ async fn upgrade_abi_account_official(
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
     let mut transaction = transaction.with_chain_id(abi_program_manager.chain_id());
-    transaction
-        .sign(&abi_program_manager.fee_payer().private_key)
+    crate::signing::sign_transaction(&mut transaction, abi_program_manager.fee_payer())
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     abi_program_manager
@@ -1703,8 +1698,7 @@ async fn upgrade_abi_account_external(
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
     let mut transaction = transaction.with_chain_id(abi_program_manager.chain_id());
-    transaction
-        .sign(&abi_program_manager.fee_payer().private_key)
+    crate::signing::sign_transaction(&mut transaction, abi_program_manager.fee_payer())
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     abi_program_manager
@@ -1840,8 +1834,7 @@ async fn finalize_abi_account_official(
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
     let mut transaction = transaction.with_chain_id(abi_program_manager.chain_id());
-    transaction
-        .sign(&abi_program_manager.fee_payer().private_key)
+    crate::signing::sign_transaction(&mut transaction, abi_program_manager.fee_payer())
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     abi_program_manager
@@ -1937,8 +1930,7 @@ async fn finalize_abi_account_external(
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
     let mut transaction = transaction.with_chain_id(abi_program_manager.chain_id());
-    transaction
-        .sign(&abi_program_manager.fee_payer().private_key)
+    crate::signing::sign_transaction(&mut transaction, abi_program_manager.fee_payer())
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     abi_program_manager
@@ -2046,8 +2038,7 @@ async fn close_abi_account_official(
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
     let mut transaction = transaction.with_chain_id(abi_program_manager.chain_id());
-    transaction
-        .sign(&abi_program_manager.fee_payer().private_key)
+    crate::signing::sign_transaction(&mut transaction, abi_program_manager.fee_payer())
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     abi_program_manager
@@ -2143,8 +2134,7 @@ async fn close_abi_account_external(
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
     let mut transaction = transaction.with_chain_id(abi_program_manager.chain_id());
-    transaction
-        .sign(&abi_program_manager.fee_payer().private_key)
+    crate::signing::sign_transaction(&mut transaction, abi_program_manager.fee_payer())
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     abi_program_manager

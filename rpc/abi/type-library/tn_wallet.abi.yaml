@@ -84,19 +84,42 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Create wallet
       fields:
       - name: wallet_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: wallet
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(wallet_account_idx)'
+        display-name: Wallet
+        user-display: true
       - name: authority_record
+        user-display: false
         field-type:
           type-ref:
             name: AuthorityRecord
+      - name: authority_type
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if authority_record.authority.tag == 1 { "Passkey" } else if authority_record.authority.tag == 2 { "Public key" } else { "Unknown" }'
+        display-name: Authority type
+        user-display: true
+      - name: authority_expires
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if authority_record.expires_at_block_time_seconds == 18446744073709551615 { "Never" } else { `${authority_record.expires_at_block_time_seconds}` }'
+        display-name: Authority expires (block time, seconds)
+        user-display: true
       - name: seed
+        user-display: false
         field-type:
           type-ref:
             name: Seed32
       - name: state_proof
+        user-display: false
         field-type:
           type-ref:
             name: StateProof
@@ -107,28 +130,48 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Call program from wallet
       fields:
       - name: wallet_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: wallet
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(wallet_account_idx)'
+        display-name: Wallet
+        user-display: true
+      - name: target_program
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(target_instruction.program_idx)'
+        display-name: Program called
+        user-display: true
       - name: auth_idx
+        user-display: false
         field-type:
           primitive: u8
       - name: signature_r
+        user-display: false
         field-type:
           type-ref:
             name: P256Point
       - name: signature_s
+        user-display: false
         field-type:
           type-ref:
             name: P256Point
       - name: authenticator_data_len
+        user-display: false
         field-type:
           primitive: u16
       - name: client_data_len
+        user-display: false
         field-type:
           primitive: u16
       - name: authenticator_data
+        user-display: false
         field-type:
           array:
             size:
@@ -138,6 +181,7 @@ types:
               primitive: u8
       - name: client_data
         format: json
+        user-display: false
         field-type:
           array:
             size:
@@ -146,6 +190,7 @@ types:
             element-type:
               primitive: u8
       - name: target_instruction
+        user-display: false
         field-type:
           type-ref:
             name: InstructionData
@@ -156,14 +201,30 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Send from wallet
       fields:
       - name: wallet_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: wallet
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(wallet_account_idx)'
+        display-name: Wallet
+        user-display: true
       - name: to_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: to_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(to_account_idx)'
+        display-name: Destination account
+        user-display: true
       - name: amount
+        display-name: Amount (base units)
         field-type:
           primitive: u64
 
@@ -172,25 +233,55 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Add wallet authority
       fields:
       - name: wallet_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: wallet
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(wallet_account_idx)'
+        display-name: Wallet
+        user-display: true
       - name: authority_record
+        user-display: false
         field-type:
           type-ref:
             name: AuthorityRecord
+      - name: authority_type
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if authority_record.authority.tag == 1 { "Passkey" } else if authority_record.authority.tag == 2 { "Public key" } else { "Unknown" }'
+        display-name: Authority type
+        user-display: true
+      - name: authority_expires
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if authority_record.expires_at_block_time_seconds == 18446744073709551615 { "Never" } else { `${authority_record.expires_at_block_time_seconds}` }'
+        display-name: Authority expires (block time, seconds)
+        user-display: true
 
 # REMOVE_AUTHORITY (tag 0x05): 3 bytes
 - name: RemoveAuthorityArgs
   kind:
     struct:
       packed: true
+      display-name: Remove wallet authority
       fields:
       - name: wallet_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: wallet
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(wallet_account_idx)'
+        display-name: Wallet
+        user-display: true
       - name: auth_idx
+        display-name: Authority slot
         field-type:
           primitive: u8
 
@@ -199,18 +290,35 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Register passkey lookup
       fields:
       - name: wallet_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: wallet
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(wallet_account_idx)'
+        display-name: Wallet
+        user-display: true
       - name: lookup_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: lookup_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(lookup_account_idx)'
+        display-name: Passkey lookup account
+        user-display: true
       - name: seed
+        user-display: false
         field-type:
           type-ref:
             name: Seed32
       - name: state_proof
+        user-display: false
         field-type:
           type-ref:
             name: StateProof
@@ -224,6 +332,7 @@ types:
       packed: true
       fields:
       - name: tag
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -278,6 +387,7 @@ types:
       packed: true
       fields:
       - name: account_type
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -305,14 +415,24 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Wallet
       fields:
       - name: num_auth
+        user-display: false
         field-type:
           primitive: u8
+      - name: authority_count
+        type: synthetic
+        return-type: { primitive: u16 }
+        expression: 'num_auth + 1'
+        display-name: Authorities
+        user-display: true
       - name: nonce
+        display-name: Nonce
         field-type:
           primitive: u64
       - name: authorities
+        user-display: false
         field-type:
           array:
             size:
@@ -333,8 +453,10 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Passkey lookup
       fields:
       - name: wallet
+        display-name: Wallet
         field-type:
           type-ref:
             name: Pubkey
@@ -346,28 +468,40 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Wallet created
       fields:
       - name: wallet
+        display-name: Wallet
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: authority
+        user-display: false
         field-type:
           type-ref:
             name: Authority
+      - name: authority_type
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if authority.tag == 1 { "Passkey" } else if authority.tag == 2 { "Public key" } else { "Unknown" }'
+        display-name: Authority type
+        user-display: true
 
 - name: WalletValidatedEventData
   kind:
     struct:
       packed: true
+      display-name: Wallet call authorized
       fields:
       - name: wallet
+        display-name: Wallet
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: new_nonce
+        display-name: Nonce after
         field-type:
           primitive: u64
 
@@ -375,18 +509,22 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Sent from wallet
       fields:
       - name: wallet
+        display-name: Wallet
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: to
+        display-name: Destination account
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: amount
+        display-name: Amount (base units)
         field-type:
           primitive: u64
 
@@ -394,13 +532,16 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Passkey lookup registered
       fields:
       - name: wallet
+        display-name: Wallet
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: lookup
+        display-name: Passkey lookup account
         field-type:
           type-ref:
             name: Pubkey
@@ -412,6 +553,7 @@ types:
       packed: true
       fields:
       - name: event_type
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -457,3 +599,50 @@ types:
       - name: code
         field-type:
           primitive: u64
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: invalid_instruction
+              tag-value: 81
+              comment: Instruction data is malformed or is not a known wallet instruction.
+            - name: invalid_account_idx
+              tag-value: 82
+              comment: An account index in the instruction is outside the account list of the transaction.
+            - name: account_not_found
+              tag-value: 83
+              comment: The wallet account does not exist or is not a wallet account.
+            - name: account_not_writable
+              tag-value: 84
+              comment: The wallet account is not writable in this transaction.
+            - name: invalid_size
+              tag-value: 85
+              comment: The wallet account or a size given in the instruction is not valid.
+            - name: invalid_owner
+              tag-value: 86
+              comment: The wallet account is not owned by the wallet program.
+            - name: invalid_signature
+              tag-value: 87
+              comment: The passkey signature did not verify.
+            - name: not_validated
+              tag-value: 88
+              comment: The wallet was not unlocked by a passkey or session key before this instruction.
+            - name: account_already_exists
+              tag-value: 89
+              comment: The account to create already exists.
+            - name: invalid_challenge
+              tag-value: 90
+              comment: The passkey signed a different challenge than this transaction expects.
+            - name: authority_expired
+              tag-value: 91
+              comment: The session key used to sign has expired.
+            - name: passkey_required
+              tag-value: 92
+              comment: This action needs the passkey itself and cannot be done with a session key.
+            - name: session_expiry_too_long
+              tag-value: 93
+              comment: The requested session key expiry is later than allowed.

@@ -206,7 +206,7 @@ import {
 } from "@thru/programs/oracle";
 
 const thru = createThruClient({
-  baseUrl: "https://rpc.alphanet.thru.org",
+  baseUrl: "https://rpc.betanet.thru.org",
 });
 const { address: feedAddress } = deriveOracleFeedAddress(
   thru,

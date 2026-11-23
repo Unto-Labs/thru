@@ -39,13 +39,5 @@ contents:
     expand: true
     file_info:
       mode: 0755
-# The binaries are linked against a glibc 2.17 floor (see the glibc_floor
-# matrix value in cli-artifacts.yml) with all other C dependencies vendored
-# and statically linked, so glibc is the only runtime dependency.
-overrides:
-  deb:
-    depends:
-      - libc6 (>= 2.17)
-  rpm:
-    depends:
-      - glibc >= 2.17
+# No runtime dependencies: the binaries are static musl executables with
+# every C dependency vendored (see the matrix in cli-artifacts.yml).

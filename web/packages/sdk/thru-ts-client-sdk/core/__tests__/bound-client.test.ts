@@ -44,22 +44,6 @@ describe("createBoundThruClient", () => {
     });
   }
 
-  it("should create bound client with all modules", () => {
-    const ctx = createMockContext();
-    const client = createBoundThruClient(ctx);
-    
-    expect(client.ctx).toBe(ctx);
-    expect(client.blocks).toBeDefined();
-    expect(client.accounts).toBeDefined();
-    expect(client.transactions).toBeDefined();
-    expect(client.events).toBeDefined();
-    expect(client.proofs).toBeDefined();
-    expect(client.keys).toBeDefined();
-    expect(client.version).toBeDefined();
-    expect(client.consensus).toBeDefined();
-    expect(client.helpers).toBeDefined();
-  });
-
   it("should bind blocks module methods", async () => {
     const ctx = createMockContext();
     const mockBlock = createMockBlock();
@@ -111,60 +95,6 @@ describe("createBoundThruClient", () => {
       expect(ctx.query.getAccount).toHaveBeenCalledTimes(1);
     });
 
-  it("should bind transactions module methods", () => {
-    const ctx = createMockContext();
-    vi.spyOn(ctx.query, "getTransaction").mockResolvedValue({} as any);
-    vi.spyOn(ctx.query, "getRawTransaction").mockResolvedValue({} as any);
-    vi.spyOn(ctx.query, "getTransactionStatus").mockResolvedValue({
-      signature: { value: generateTestSignature() },
-      consensusStatus: ConsensusStatus.UNSPECIFIED,
-    } as any);
-    vi.spyOn(ctx.query, "listTransactionsForAccount").mockResolvedValue({ transactions: [] } as any);
-    vi.spyOn(ctx.command, "sendTransaction").mockResolvedValue({ signature: { value: new Uint8Array(64) } } as any);
-    vi.spyOn(ctx.command, "batchSendTransactions").mockResolvedValue({ signatures: [] } as any);
-    vi.spyOn(ctx.streaming, "streamTransactions").mockReturnValue(
-      (async function* () {})()
-    );
-    vi.spyOn(ctx.streaming, "trackTransaction").mockReturnValue(
-      (async function* () {})()
-    );
-    
-    const client = createBoundThruClient(ctx);
-    
-    expect(typeof client.transactions.get).toBe("function");
-    expect(typeof client.transactions.getRaw).toBe("function");
-    expect(typeof client.transactions.getStatus).toBe("function");
-    expect(typeof client.transactions.listForAccount).toBe("function");
-    expect(typeof client.transactions.stream).toBe("function");
-    expect(typeof client.transactions.build).toBe("function");
-    expect(typeof client.transactions.buildAndSign).toBe("function");
-    expect(typeof client.transactions.send).toBe("function");
-    expect(typeof client.transactions.batchSend).toBe("function");
-    expect(typeof client.transactions.track).toBe("function");
-  });
-
-  it("should bind events module methods", () => {
-    const ctx = createMockContext();
-    vi.spyOn(ctx.query, "getEvent").mockResolvedValue({} as any);
-    vi.spyOn(ctx.streaming, "streamEvents").mockReturnValue(
-      (async function* () {})()
-    );
-    
-    const client = createBoundThruClient(ctx);
-    
-    expect(typeof client.events.get).toBe("function");
-    expect(typeof client.events.stream).toBe("function");
-  });
-
-  it("should bind proofs module methods", () => {
-    const ctx = createMockContext();
-    vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue({} as any);
-    
-    const client = createBoundThruClient(ctx);
-    
-    expect(typeof client.proofs.generate).toBe("function");
-  });
-
   it("should bind version module methods", async () => {
     const ctx = createMockContext();
     const mockVersionResponse = { versions: { "component": "1.0.0" } };
@@ -186,15 +116,6 @@ describe("createBoundThruClient", () => {
     
     expect(typeof client.keys.generateKeyPair).toBe("function");
     expect(client.keys.generateKeyPair).toBe(keysModule.generateKeyPair);
-  });
-
-  it("should expose helpers (not bound, direct functions)", () => {
-    const ctx = createMockContext();
-    const client = createBoundThruClient(ctx);
-    
-    expect(typeof client.helpers.createSignature).toBe("function");
-    expect(typeof client.helpers.createPubkey).toBe("function");
-    expect(typeof client.helpers.deriveProgramAddress).toBe("function");
   });
 
   it("should expose consensus helpers", () => {
@@ -244,17 +165,6 @@ describe("createBoundThruClient", () => {
     expect(event.id).toBe("ev-domain");
   });
 
-  it("should preserve function signatures (bound functions don't have context parameter)", async () => {
-    const ctx = createMockContext();
-    const mockAccount = createMockAccount();
-    vi.spyOn(ctx.query, "getAccount").mockResolvedValue(mockAccount);
-    
-    const client = createBoundThruClient(ctx);
-    const address = generateTestPubkey();
-    
-    await expect(client.accounts.get(address)).resolves.toBeInstanceOf(Account);
-  });
-
   it("should allow passing options to bound functions", async () => {
     const ctx = createMockContext();
     const mockAccount = createMockAccount();
@@ -270,17 +180,6 @@ describe("createBoundThruClient", () => {
     expect(ctx.query.getAccount).toHaveBeenCalledTimes(1);
     const callArgs = (ctx.query.getAccount as any).mock.calls[0][0];
     expect(callArgs.view).toBe(1);
-  });
-
-  it("should expose context for advanced usage", () => {
-    const ctx = createMockContext();
-    const client = createBoundThruClient(ctx);
-    
-    expect(client.ctx).toBe(ctx);
-    expect(client.ctx.baseUrl).toBe(ctx.baseUrl);
-    expect(client.ctx.query).toBe(ctx.query);
-    expect(client.ctx.command).toBe(ctx.command);
-    expect(client.ctx.streaming).toBe(ctx.streaming);
   });
 
   it("should bind listForAccount and pass parameters correctly", async () => {

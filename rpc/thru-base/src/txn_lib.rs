@@ -452,6 +452,65 @@ impl Transaction {
         Ok(())
     }
 
+    /// Sign the transaction through any [`Signer`](crate::signer::Signer)
+    /// (local key, HSM/MPC, hardware wallet).  Validates the account layout
+    /// first (like [`Transaction::sign`]), then builds the body with
+    /// [`Transaction::to_wire_for_signing`], asks the signer to sign the body
+    /// ([`Signer::sign_transaction_body`](crate::signer::Signer::sign_transaction_body)),
+    /// and strictly verifies the signature before attaching it
+    /// ([`crate::signer::attach_signature`]).  For a local Ed25519 key this
+    /// produces byte-identical output to [`Transaction::sign`].
+    pub fn sign_with_signer<S: crate::signer::Signer + ?Sized>(
+        &mut self,
+        signer: &S,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.sign_with_signer_wire(signer).map(|_| ())
+    }
+
+    /// Like [`Transaction::sign_with_signer`], and return the signed wire
+    /// (`body ‖ sig`) assembled from the frozen body snapshot that was
+    /// actually signed ([`crate::signer::attach_signature`]).  Submit these
+    /// bytes: they are exactly what the signer saw plus its signature.
+    pub fn sign_with_signer_wire<S: crate::signer::Signer + ?Sized>(
+        &mut self,
+        signer: &S,
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        self.validate()?;
+        let body = self.to_wire_for_signing();
+        let signed = crate::signer::sign_transaction_body_with(signer, &body)?;
+        self.attach_signed_wire(&signed)?;
+        Ok(signed)
+    }
+
+    /// Attach the signature from a signed wire `body ‖ sig` (as returned by
+    /// [`crate::signer::attach_signature`]) after checking that it is exactly
+    /// this transaction: `body` equals [`Transaction::to_wire_for_signing`],
+    /// the signature verifies over it under the fee payer, and
+    /// [`Transaction::to_wire`] with the signature attached reproduces
+    /// `signed` byte for byte.  Nothing is attached on any mismatch, so a
+    /// signature is never paired with re-serialized bytes that differ from
+    /// the bytes that were signed.
+    pub fn attach_signed_wire(&mut self, signed: &[u8]) -> Result<(), RpcError> {
+        let body = self.to_wire_for_signing();
+        if signed.len() != body.len() + 64 || signed[..body.len()] != body[..] {
+            return Err(RpcError::InvalidParams(
+                "signed bytes do not match this transaction's signing body",
+            ));
+        }
+        let mut sig = [0u8; 64];
+        sig.copy_from_slice(&signed[body.len()..]);
+        verify_transaction(&body, &sig, &self.fee_payer)
+            .map_err(|_| RpcError::InvalidTransactionSignature)?;
+        let previous = self.signature.replace(sig);
+        if self.serialize_wire() != signed {
+            self.signature = previous;
+            return Err(RpcError::InvalidParams(
+                "the transaction's wire serialization differs from the signed bytes",
+            ));
+        }
+        Ok(())
+    }
+
     /// Validate account count and duplicate-account rules before signing or serialization.
     pub fn validate(&self) -> Result<(), RpcError> {
         let rw_accs = self.rw_accs.as_deref().unwrap_or(&[]);
@@ -470,7 +529,7 @@ impl Transaction {
 
     /// Create wire format for signing (excluding trailing signature)
     /// The message is: header + accounts + instr_data + state_proof + account_meta
-    fn to_wire_for_signing(&self) -> Vec<u8> {
+    pub fn to_wire_for_signing(&self) -> Vec<u8> {
         // Zero out all bytes first to ensure deterministic padding
         let mut wire: WireTxnHdrV1 = unsafe { core::mem::zeroed() };
         wire.transaction_version = 1;
@@ -1141,6 +1200,91 @@ mod tests {
 
     fn make_valid_txn_bytes() -> Vec<u8> {
         make_valid_txn_bytes_with_flags(0)
+    }
+
+    #[test]
+    fn sign_with_signer_is_byte_identical_to_sign() {
+        use crate::signer::LocalSigner;
+        let seed = [1u8; 32];
+        let fee_payer = SigningKey::from(&seed).verifying_key().to_bytes();
+        let build = || {
+            let mut tx = Transaction::new(fee_payer, [2u8; 32], 100, 42)
+                .with_chain_id(7)
+                .with_start_slot(9)
+                .with_expiry_after(100)
+                .with_compute_units(1234);
+            tx.rw_accs = Some(vec![[3u8; 32], [4u8; 32]]);
+            tx.r_accs = Some(vec![[5u8; 32]]);
+            tx.instructions = Some(vec![1, 2, 3, 4]);
+            tx
+        };
+        let mut old = build();
+        old.sign(&seed).unwrap();
+        let mut new = build();
+        new.sign_with_signer(&LocalSigner::from_seed(seed)).unwrap();
+        assert_eq!(old.to_wire(), new.to_wire());
+        assert!(new.verify());
+    }
+
+    #[test]
+    fn sign_with_signer_validates_layout_and_key() {
+        use crate::signer::LocalSigner;
+        let seed = [1u8; 32];
+        let fee_payer = SigningKey::from(&seed).verifying_key().to_bytes();
+        // Duplicate account: rejected before signing, like `sign`.
+        let mut tx = Transaction::new(fee_payer, [2u8; 32], 100, 42);
+        tx.rw_accs = Some(vec![[3u8; 32], [3u8; 32]]);
+        assert!(tx.sign_with_signer(&LocalSigner::from_seed(seed)).is_err());
+        assert!(tx.signature.is_none());
+        // Wrong key for the fee payer: rejected, nothing attached.
+        let mut tx = Transaction::new(fee_payer, [2u8; 32], 100, 42);
+        let wrong_key = LocalSigner::from_seed([9u8; 32]);
+        assert!(tx.sign_with_signer(&wrong_key).is_err());
+        assert!(tx.signature.is_none());
+    }
+
+    /// Audit A-042: the signature is attached to the exact bytes that were
+    /// signed.  `sign_with_signer_wire` returns the frozen `body ‖ sig`, which
+    /// equals `to_wire()`, and `attach_signed_wire` refuses signed bytes that
+    /// do not match this transaction (attaching nothing).
+    #[test]
+    fn signed_wire_is_the_exact_signed_body() {
+        use crate::signer::{LocalSigner, sign_transaction_body_with};
+        let seed = [1u8; 32];
+        let signer = LocalSigner::from_seed(seed);
+        let fee_payer = SigningKey::from(&seed).verifying_key().to_bytes();
+        let build = || {
+            let mut tx = Transaction::new(fee_payer, [2u8; 32], 100, 42).with_chain_id(7);
+            tx.rw_accs = Some(vec![[3u8; 32], [4u8; 32]]);
+            tx.instructions = Some(vec![1, 2, 3, 4]);
+            tx
+        };
+        let mut tx = build();
+        let signed = tx.sign_with_signer_wire(&signer).unwrap();
+        assert_eq!(signed, tx.to_wire());
+        assert_eq!(&signed[..signed.len() - 64], &tx.to_wire_for_signing()[..]);
+        assert!(tx.verify());
+
+        // Signed bytes for a different body (another nonce): refused, and the
+        // unsigned transaction stays unsigned.
+        let mut other = build();
+        other.nonce = 43;
+        let other_signed =
+            sign_transaction_body_with(&signer, &other.to_wire_for_signing()).unwrap();
+        let mut target = build();
+        assert!(target.attach_signed_wire(&other_signed).is_err());
+        assert!(target.signature.is_none());
+        // Right body, corrupted signature: refused.
+        let mut bad = signed.clone();
+        *bad.last_mut().unwrap() ^= 1;
+        assert!(target.attach_signed_wire(&bad).is_err());
+        assert!(target.signature.is_none());
+        // Truncated: refused.
+        let truncated = &signed[..signed.len() - 1];
+        assert!(target.attach_signed_wire(truncated).is_err());
+        // The genuine bytes attach.
+        target.attach_signed_wire(&signed).unwrap();
+        assert_eq!(target.to_wire(), signed);
     }
 
     #[test]

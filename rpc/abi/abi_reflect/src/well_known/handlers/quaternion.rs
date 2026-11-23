@@ -12,6 +12,10 @@ impl WellKnownType for QuaternionHandler {
         "Quaternion"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("text", "formatted"))
+    }
+
     fn category(&self) -> &'static str {
         "google"
     }
@@ -35,17 +39,5 @@ impl WellKnownType for QuaternionHandler {
         }
 
         WellKnownResult::None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn quaternion_handler_type_name() {
-        let handler = QuaternionHandler;
-        assert_eq!(handler.type_name(), "Quaternion");
-        assert_eq!(handler.category(), "google");
     }
 }

@@ -12,6 +12,10 @@ impl WellKnownType for FixedPointHandler {
         "FixedPoint"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("decimal", "formatted"))
+    }
+
     fn process(&self, ctx: &WellKnownContext) -> WellKnownResult {
         let Some(fields) = ctx.fields else {
             return WellKnownResult::None;

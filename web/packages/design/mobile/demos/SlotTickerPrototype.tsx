@@ -91,8 +91,8 @@ export function SlotTickerPrototype(): React.JSX.Element {
   const status = statusForStep(step);
 
   const rows: MetaTableRow[] = [
-    { label: 'Network', value: 'alphanet' },
-    { label: 'RPC', value: 'rpc.alphanet.thru.sh' },
+    { label: 'Network', value: 'betanet' },
+    { label: 'RPC', value: 'rpc.betanet.thru.org' },
     { label: 'Height', value: hasData ? '+3 / sec' : 'awaiting' },
   ];
 

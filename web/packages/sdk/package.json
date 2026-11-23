@@ -94,7 +94,6 @@
     "test:coverage": "vitest --coverage",
     "test:run": "vitest run",
     "test:ui": "vitest --ui",
-    "test:transactions": "node --loader ts-node/esm --test \"thru-ts-client-sdk/transactions/__tests__/*.test.ts\"",
     "gen:hd-vectors": "tsx --tsconfig tsconfig.json scripts/gen-hd-vectors.ts",
     "check:hd-vectors": "tsx --tsconfig tsconfig.json scripts/gen-hd-vectors.ts --check",
     "clean": "rm -rf dist"

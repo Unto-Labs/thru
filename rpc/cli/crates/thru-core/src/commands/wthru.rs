@@ -5,14 +5,15 @@
 //! destination token account named by the instruction. The program cannot pull
 //! the funds itself (the runtime only lets a program transfer from accounts it
 //! owns), so the native transfer into the vault is the client's job and must be
-//! in the same transaction as the deposit instruction (e.g. batched via the
-//! multicall program). Funding the vault in a separate transaction leaves the
-//! delta unattributed on-chain, creditable by whichever caller runs `deposit`
-//! next.
+//! in the same transaction as the deposit instruction. Funding the vault in a
+//! separate transaction leaves the delta unattributed on-chain, creditable by
+//! whichever caller runs `deposit` next.
 //!
-//! `deposit_wthru` below does not meet that requirement yet: it submits the
-//! transfer and the deposit as two transactions. Batching them is tracked
-//! separately.
+//! `deposit_wthru` below is atomic: it sends one Multicall transaction that
+//! invokes the EOA program's `Transfer` into the vault and then the WTHRU
+//! `Deposit`. Either both land or the whole transaction reverts. Only
+//! `--skip-transfer` sends a deposit instruction on its own, to settle a delta
+//! that is already pending in the vault.
 use base64::{Engine, engine::general_purpose};
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -35,8 +36,8 @@ use thru_base::txn_tools::{EOA_PROGRAM, TransactionBuilder};
 use thru_client::{Account as ChainAccount, Client, ClientBuilder, TransactionDetails};
 
 const WTHRU_PROGRAM_FEE: u64 = 0;
-const WTHRU_TRANSFER_FEE: u64 = 1;
-const WTHRU_DECIMALS: u8 = 8;
+const WTHRU_TRANSFER_FEE: u64 = 0;
+const WTHRU_DECIMALS: u8 = 9;
 const TX_TIMEOUT_SECS: u64 = 30;
 /* tn_wthru_vault_metadata (tn_wthru_program.h): packed, account_type
 (TN_WTHRU_ACCOUNT_TYPE_VAULT_V1) at byte 0, then the mint and last balance. */
@@ -163,16 +164,14 @@ async fn initialize_wthru(
         vault_proof,
         WTHRU_PROGRAM_FEE,
         nonce,
-        block_height.finalized_height,
+        block_height.locally_executed_height,
     )
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?;
 
     let mut transaction = transaction.with_chain_id(chain_info.chain_id);
-    transaction
-        .sign(&fee_payer_keypair.private_key)
-        .map_err(|e| {
-            CliError::TransactionSubmission(format!("Failed to sign transaction: {}", e))
-        })?;
+    crate::signing::sign_transaction(&mut transaction, &fee_payer_keypair).map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to sign transaction: {}", e))
+    })?;
 
     let transaction_details = submit_transaction(&client, &transaction).await?;
     check_transaction_result(&transaction_details, json_format)?;
@@ -207,11 +206,15 @@ async fn initialize_wthru(
 
 /// Wrap native THRU into WTHRU.
 ///
-/// Sends the native transfer into the vault (unless `skip_transfer`) and then
-/// the deposit instruction. The deposit instruction mints whatever native
-/// balance the vault has not yet accounted for, so the transfer and the deposit
-/// are only safely attributed to `dest_token_account` when they share a
-/// transaction; see the module comment.
+/// Without `skip_transfer` this sends ONE Multicall transaction: the EOA
+/// program's `Transfer` of `amount` from the fee payer into the vault, then the
+/// WTHRU `Deposit` crediting `dest_token_account`. Both callees revert the
+/// whole transaction on failure, so the funds cannot sit unattributed in the
+/// vault between the two steps; see the module comment.
+///
+/// With `skip_transfer` it sends only the deposit instruction, which settles
+/// the delta already pending in the vault (whoever funded it) and mints it to
+/// `dest_token_account`. `amount` must equal that delta.
 async fn deposit_wthru(
     config: &Config,
     dest_token_account: &str,
@@ -249,8 +252,7 @@ async fn deposit_wthru(
     let mint_info = fetch_account(&client, &mint_account_pubkey, "mint").await?;
     ensure_account_owner(&mint_info, &token_program_bytes, "mint")?;
 
-    let (mut vault_meta, mut vault_balance) =
-        fetch_vault_state(&client, &vault_account_pubkey).await?;
+    let (vault_meta, vault_balance) = fetch_vault_state(&client, &vault_account_pubkey).await?;
     if vault_meta.mint != mint_account_bytes {
         return Err(CliError::Validation(
             "Vault metadata mint does not match derived WTHRU mint".to_string(),
@@ -266,18 +268,26 @@ async fn deposit_wthru(
     )
     .await?;
 
-    let (mut nonce, balance) = fetch_nonce_and_balance(&client, &fee_payer_keypair).await?;
+    let (nonce, balance) = fetch_nonce_and_balance(&client, &fee_payer_keypair).await?;
 
+    // The deposit mints the vault's whole pending delta. Refuse to fold a
+    // delta someone else left behind into this deposit; --skip-transfer is the
+    // explicit way to settle it. This is best effort: a standalone transfer
+    // that lands after this read but before our transaction executes is still
+    // minted to our destination.
     if !skip_transfer && vault_balance != vault_meta.last_balance {
         return Err(CliError::Validation(
             "Vault has pending deposits; settle them (use --skip-transfer if needed)".to_string(),
         ));
     }
 
-    let mut transfer_signature = None;
-
-    if !skip_transfer {
-        let required = amount + WTHRU_TRANSFER_FEE;
+    let multicall_program_bytes = if skip_transfer {
+        check_pending_matches_amount(vault_balance, vault_meta.last_balance, amount)?;
+        None
+    } else {
+        let required = amount.checked_add(WTHRU_TRANSFER_FEE).ok_or_else(|| {
+            CliError::Validation("Deposit amount plus fee overflows".to_string())
+        })?;
         if balance < required {
             return Err(CliError::Validation(format!(
                 "Insufficient balance. Required {} (deposit {} + fee {}), available {}",
@@ -285,48 +295,99 @@ async fn deposit_wthru(
             )));
         }
 
-        let block_height = client.get_block_height().await.map_err(|e| {
-            CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
+        let multicall_program_pubkey = config.get_multicall_program_pubkey()?;
+        ensure_account_exists(&client, &multicall_program_pubkey, "multicall program").await?;
+        let bytes = multicall_program_pubkey.to_bytes().map_err(|e| {
+            CliError::Crypto(format!("Failed to decode multicall program pubkey: {}", e))
         })?;
+        Some(bytes)
+    };
 
-        let chain_info = client.get_chain_info().await.map_err(|e| {
-            CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-        })?;
+    let block_height = client.get_block_height().await.map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
+    })?;
 
-        let transfer_tx = TransactionBuilder::build_transfer(
+    let chain_info = client.get_chain_info().await.map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
+    })?;
+
+    let deposit_tx = match multicall_program_bytes {
+        Some(multicall_program_bytes) => TransactionBuilder::build_wthru_deposit_with_transfer(
             fee_payer_keypair.public_key,
+            multicall_program_bytes,
             EOA_PROGRAM,
+            wthru_program_bytes,
+            token_program_bytes,
+            mint_account_bytes,
             vault_account_bytes,
+            dest_token_bytes,
             amount,
             WTHRU_TRANSFER_FEE,
             nonce,
-            block_height.finalized_height,
-        )
-        .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transfer: {}", e)))?;
+            block_height.locally_executed_height,
+        ),
+        None => TransactionBuilder::build_wthru_deposit(
+            fee_payer_keypair.public_key,
+            wthru_program_bytes,
+            token_program_bytes,
+            mint_account_bytes,
+            vault_account_bytes,
+            dest_token_bytes,
+            WTHRU_PROGRAM_FEE,
+            nonce,
+            block_height.locally_executed_height,
+        ),
+    }
+    .map_err(|e| CliError::TransactionSubmission(format!("Failed to build deposit: {}", e)))?;
 
-        let mut transfer_tx = transfer_tx.with_chain_id(chain_info.chain_id);
-        transfer_tx
-            .sign(&fee_payer_keypair.private_key)
-            .map_err(|e| {
-                CliError::TransactionSubmission(format!("Failed to sign transfer: {}", e))
-            })?;
+    let mut deposit_tx = deposit_tx.with_chain_id(chain_info.chain_id);
+    crate::signing::sign_transaction(&mut deposit_tx, &fee_payer_keypair).map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to sign deposit transaction: {}", e))
+    })?;
 
-        let transfer_details = submit_transaction(&client, &transfer_tx).await?;
-        check_transaction_result(&transfer_details, json_format)?;
-        transfer_signature = Some(transfer_details.signature.as_str().to_string());
-        nonce = nonce.saturating_add(1);
+    let deposit_details = submit_transaction(&client, &deposit_tx).await?;
+    check_transaction_result(&deposit_details, json_format)?;
 
-        // Refresh vault balance after transfer
-        let state = fetch_vault_state(&client, &vault_account_pubkey).await?;
-        vault_meta = state.0;
-        vault_balance = state.1;
+    let signature = deposit_details.signature.as_str().to_string();
+    let transfer_included = !skip_transfer;
+    if json_format {
+        output::print_output(
+            deposit_json(
+                &signature,
+                transfer_included,
+                amount,
+                &mint_account_pubkey,
+                &vault_account_pubkey,
+                &dest_token_pubkey,
+            ),
+            true,
+        );
+    } else {
+        if transfer_included {
+            println!(
+                "Transferred {} native THRU into vault {} in the deposit transaction",
+                amount, vault_account_pubkey
+            );
+        }
+        println!(
+            "Minted {} WTHRU into {} (deposit signature: {})",
+            amount, dest_token_pubkey, signature
+        );
     }
 
-    let pending_amount = vault_balance
-        .checked_sub(vault_meta.last_balance)
-        .ok_or_else(|| {
-            CliError::Validation("Vault balance dropped below recorded last balance".to_string())
-        })?;
+    Ok(())
+}
+
+/// With `--skip-transfer` the deposit settles the vault's pending delta, which
+/// must be non-zero and equal to `amount`.
+fn check_pending_matches_amount(
+    vault_balance: u64,
+    last_balance: u64,
+    amount: u64,
+) -> Result<(), CliError> {
+    let pending_amount = vault_balance.checked_sub(last_balance).ok_or_else(|| {
+        CliError::Validation("Vault balance dropped below recorded last balance".to_string())
+    })?;
 
     if pending_amount == 0 {
         return Err(CliError::Validation(
@@ -341,62 +402,37 @@ async fn deposit_wthru(
         )));
     }
 
-    let block_height = client.get_block_height().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
-    })?;
-
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
-
-    let deposit_tx = TransactionBuilder::build_wthru_deposit(
-        fee_payer_keypair.public_key,
-        wthru_program_bytes,
-        token_program_bytes,
-        mint_account_bytes,
-        vault_account_bytes,
-        dest_token_bytes,
-        WTHRU_PROGRAM_FEE,
-        nonce,
-        block_height.finalized_height,
-    )
-    .map_err(|e| CliError::TransactionSubmission(format!("Failed to build deposit: {}", e)))?;
-
-    let mut deposit_tx = deposit_tx.with_chain_id(chain_info.chain_id);
-    deposit_tx
-        .sign(&fee_payer_keypair.private_key)
-        .map_err(|e| {
-            CliError::TransactionSubmission(format!("Failed to sign deposit transaction: {}", e))
-        })?;
-
-    let deposit_details = submit_transaction(&client, &deposit_tx).await?;
-    check_transaction_result(&deposit_details, json_format)?;
-
-    let deposit_signature = deposit_details.signature.as_str().to_string();
-    if json_format {
-        let response = json!({
-            "deposit": {
-                "status": "success",
-                "native_transfer_signature": transfer_signature,
-                "deposit_signature": deposit_signature,
-                "amount": pending_amount,
-                "mint": mint_account_pubkey.to_string(),
-                "vault": vault_account_pubkey.to_string(),
-                "dest_token_account": dest_token_pubkey.to_string(),
-            }
-        });
-        output::print_output(response, true);
-    } else {
-        if let Some(sig) = transfer_signature.as_ref() {
-            println!("Native transfer signature: {}", sig);
-        }
-        println!(
-            "Minted {} WTHRU into {} (deposit signature: {})",
-            pending_amount, dest_token_pubkey, deposit_signature
-        );
-    }
-
     Ok(())
+}
+
+/// JSON result of `thru wthru deposit`.
+///
+/// The transfer and the deposit share one transaction, so `signature` is the
+/// only signature. `deposit_signature` and `native_transfer_signature` are kept
+/// for compatibility with the old two-transaction output and are deprecated:
+/// both carry the same signature, and `native_transfer_signature` is `null`
+/// when `--skip-transfer` sent no transfer.
+fn deposit_json(
+    signature: &str,
+    transfer_included: bool,
+    amount: u64,
+    mint: &Pubkey,
+    vault: &Pubkey,
+    dest_token_account: &Pubkey,
+) -> serde_json::Value {
+    json!({
+        "deposit": {
+            "status": "success",
+            "signature": signature,
+            "native_transfer_included": transfer_included,
+            "native_transfer_signature": transfer_included.then_some(signature),
+            "deposit_signature": signature,
+            "amount": amount,
+            "mint": mint.to_string(),
+            "vault": vault.to_string(),
+            "dest_token_account": dest_token_account.to_string(),
+        }
+    })
 }
 
 async fn withdraw_wthru(
@@ -496,16 +532,14 @@ async fn withdraw_wthru(
         amount,
         WTHRU_PROGRAM_FEE,
         nonce,
-        block_height.finalized_height,
+        block_height.locally_executed_height,
     )
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build withdraw: {}", e)))?;
 
     let mut withdraw_tx = withdraw_tx.with_chain_id(chain_info.chain_id);
-    withdraw_tx
-        .sign(&fee_payer_keypair.private_key)
-        .map_err(|e| {
-            CliError::TransactionSubmission(format!("Failed to sign withdraw transaction: {}", e))
-        })?;
+    crate::signing::sign_transaction(&mut withdraw_tx, &fee_payer_keypair).map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to sign withdraw transaction: {}", e))
+    })?;
 
     let withdraw_details = submit_transaction(&client, &withdraw_tx).await?;
     check_transaction_result(&withdraw_details, json_format)?;
@@ -893,5 +927,41 @@ mod tests {
         assert_eq!(parsed.amount, 77);
         assert!(parsed.is_frozen);
         assert!(parse_token_account(&[0u8; 74]).is_err());
+    }
+
+    #[test]
+    fn skip_transfer_requires_a_pending_delta_equal_to_amount() {
+        assert!(check_pending_matches_amount(1_500, 1_000, 500).is_ok());
+        // Nothing pending.
+        assert!(check_pending_matches_amount(1_000, 1_000, 500).is_err());
+        // Pending delta differs from --amount.
+        assert!(check_pending_matches_amount(1_400, 1_000, 500).is_err());
+        // Vault below its recorded balance.
+        assert!(check_pending_matches_amount(900, 1_000, 500).is_err());
+    }
+
+    #[test]
+    fn deposit_json_reports_one_signature_for_the_atomic_transaction() {
+        let (mint, vault, dest) = (
+            Pubkey::from_bytes(&[1u8; 32]),
+            Pubkey::from_bytes(&[2u8; 32]),
+            Pubkey::from_bytes(&[3u8; 32]),
+        );
+
+        let atomic = deposit_json("sig", true, 42, &mint, &vault, &dest);
+        let d = &atomic["deposit"];
+        assert_eq!(d["signature"], "sig");
+        assert_eq!(d["deposit_signature"], "sig");
+        assert_eq!(d["native_transfer_signature"], "sig");
+        assert_eq!(d["native_transfer_included"], true);
+        assert_eq!(d["amount"], 42);
+        assert_eq!(d["vault"], vault.to_string());
+        assert_eq!(d["dest_token_account"], dest.to_string());
+
+        let settle_only = deposit_json("sig", false, 42, &mint, &vault, &dest);
+        let d = &settle_only["deposit"];
+        assert_eq!(d["deposit_signature"], "sig");
+        assert!(d["native_transfer_signature"].is_null());
+        assert_eq!(d["native_transfer_included"], false);
     }
 }

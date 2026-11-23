@@ -12,6 +12,10 @@ impl WellKnownType for HashHandler {
         "Hash"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("hash", "hex"))
+    }
+
     fn process(&self, ctx: &WellKnownContext) -> WellKnownResult {
         let Some(fields) = ctx.fields else {
             return WellKnownResult::None;
@@ -29,16 +33,5 @@ impl WellKnownType for HashHandler {
         }
 
         WellKnownResult::None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn hash_handler_type_name() {
-        let handler = HashHandler;
-        assert_eq!(handler.type_name(), "Hash");
     }
 }

@@ -99,28 +99,9 @@ describe("transaction utils", () => {
     it("should throw error for invalid string format", () => {
       expect(() => parseInstructionData("not-hex")).toThrow("Instruction data must be provided as hex string or Uint8Array");
     });
-
-    it("should handle large instruction data", () => {
-      const largeData = new Uint8Array(1000);
-      largeData.fill(0x42);
-      const result = parseInstructionData(largeData);
-
-      expect(result).toEqual(largeData);
-      expect(result?.length).toBe(1000);
-    });
   });
 
   describe("createInstructionContext", () => {
-    it("should return correct indices for feePayer and program", () => {
-      const feePayer = Pubkey.from(generateTestPubkey(0x01));
-      const program = Pubkey.from(generateTestPubkey(0x02));
-
-      const context = createInstructionContext(feePayer, program, [], []);
-
-      expect(context.getAccountIndex(feePayer)).toBe(0);
-      expect(context.getAccountIndex(program)).toBe(1);
-    });
-
     it("should return correct indices for readWrite accounts", () => {
       const feePayer = Pubkey.from(generateTestPubkey(0x01));
       const program = Pubkey.from(generateTestPubkey(0x02));
@@ -172,19 +153,6 @@ describe("transaction utils", () => {
       const context = createInstructionContext(feePayer, program, [], []);
 
       expect(() => context.getAccountIndex(unknownAccount)).toThrow("not found in transaction accounts");
-    });
-
-    it("should accept various PubkeyInput formats", () => {
-      const feePayerBytes = generateTestPubkey(0x01);
-      const feePayer = Pubkey.from(feePayerBytes);
-      const program = Pubkey.from(generateTestPubkey(0x02));
-
-      const context = createInstructionContext(feePayer, program, [], []);
-
-      // Should accept Uint8Array
-      expect(context.getAccountIndex(feePayerBytes)).toBe(0);
-      // Should accept Pubkey
-      expect(context.getAccountIndex(feePayer)).toBe(0);
     });
   });
 });

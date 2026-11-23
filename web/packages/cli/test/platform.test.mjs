@@ -24,10 +24,6 @@ test( "maps every supported platform to package, asset, and binary names", () =>
   }
 } );
 
-test( "windows binary name carries the .exe suffix", () => {
-  assert.equal( releasePlatform( "win32", "x64" ).binName, "thru.exe" );
-} );
-
 test( "rejects unsupported platforms with the supported list", () => {
   assert.throws(
     () => releasePlatform( "freebsd", "x64" ),

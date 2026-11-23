@@ -9,6 +9,7 @@ import type {
 } from './types/messages';
 import type {
   IframeReadyData,
+  RequestKeepAliveEventPayload,
   UiHideEventPayload,
   UiEdgeEventPayload,
   WalletDeveloperModeMessage,
@@ -42,6 +43,11 @@ const TRUSTED_IFRAME_ORIGINS = [
   'https://wallet.staging.web.5f1.net',
 ];
 
+/* How long a request may go without a sign of life from the wallet. While
+   the wallet shows a sheet for a request it sends `request_keepalive`, which
+   restarts the timer (a Ledger review with blind signing or account settings
+   can take far longer than 5 minutes), so the timeout only releases a host
+   whose wallet frame stopped answering. */
 const SLOW_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 const FAST_REQUEST_TIMEOUT_MS = 30 * 1000;
 const MANAGED_HIDE_MAX_EXIT_MS = 1000;
@@ -222,6 +228,8 @@ export class IframeManager {
     string,
     (response: PostMessageResponse) => void
   >();
+  /* Restarts a pending request's timeout; called on a keep-alive. */
+  private requestTimers = new Map<string, () => void>();
   private messageListener: ((event: MessageEvent) => void) | null = null;
   private readyPromise: Promise<void> | null = null;
   private displayMode: 'modal' | 'inline' = 'modal';
@@ -807,8 +815,9 @@ export class IframeManager {
         ? SLOW_REQUEST_TIMEOUT_MS
         : FAST_REQUEST_TIMEOUT_MS;
 
-      const timeout = setTimeout(() => {
+      const expire = () => {
         this.messageHandlers.delete(request.id);
+        this.requestTimers.delete(request.id);
         this.record(TELEMETRY_EVENTS.BRIDGE_REQUEST_TIMEOUT, {
           requestId: request.id,
           operation: request.type,
@@ -818,13 +827,19 @@ export class IframeManager {
           durationMs: Date.now() - startedAt,
         });
         reject(new Error('Request timeout - wallet did not respond'));
-      }, timeoutMs);
+      };
+      let timeout = setTimeout(expire, timeoutMs);
+      this.requestTimers.set(request.id, () => {
+        clearTimeout(timeout);
+        timeout = setTimeout(expire, timeoutMs);
+      });
 
         this.messageHandlers.set(
           request.id,
           (response: PostMessageResponse) => {
         clearTimeout(timeout);
         this.messageHandlers.delete(request.id);
+        this.requestTimers.delete(request.id);
 
         if (response.success) {
           this.record(TELEMETRY_EVENTS.BRIDGE_REQUEST_COMPLETED, {
@@ -878,6 +893,7 @@ export class IframeManager {
       } catch (error) {
         clearTimeout(timeout);
         this.messageHandlers.delete(request.id);
+        this.requestTimers.delete(request.id);
         this.record(TELEMETRY_EVENTS.BRIDGE_REQUEST_FAILED, {
           requestId: request.id,
           operation: request.type,
@@ -949,6 +965,14 @@ export class IframeManager {
   }
 
   private handleEvent(data: PostMessageEvent): void {
+    /* The user is still on the wallet's sheet for this request: restart its
+       timeout. Bridge housekeeping, not an app event, so it is not passed on. */
+    if (data.event === EMBEDDED_PROVIDER_EVENTS.REQUEST_KEEPALIVE) {
+      const requestId = (data.data as RequestKeepAliveEventPayload | undefined)
+        ?.requestId;
+      if (typeof requestId === 'string') this.requestTimers.get(requestId)?.();
+      return;
+    }
     this.record(TELEMETRY_EVENTS.BRIDGE_EVENT_RECEIVED, {
       operation: data.event,
     });
@@ -1061,5 +1085,6 @@ export class IframeManager {
     }
 
     this.messageHandlers.clear();
+    this.requestTimers.clear();
   }
 }

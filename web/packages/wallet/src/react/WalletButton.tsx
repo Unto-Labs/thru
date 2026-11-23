@@ -36,7 +36,7 @@ export interface WalletButtonProps {
   /** Formatted balance for the connected chip, as the host displays it. */
   balance?: string;
   showBalance?: boolean;
-  /** Network label for the chip's menu header, e.g. "alphanet". */
+  /** Network label for the chip's menu header, e.g. "betanet". */
   network?: string;
   /** Explorer page of the connected account, for the menu. */
   explorerUrl?: string;

@@ -27,45 +27,83 @@ types:
 - name: MarketRecordInstruction
   kind:
     struct:
+      display-name: Select market
       packed: true
       fields:
       - name: market_record_idx
+        display-name: Market record
         field-type:
           primitive: u8
       - name: seat_arena_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: market
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(seat_arena_account_idx)'
+        display-name: Market
+        user-display: true
       - name: order_arena_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: bids_cbook_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: asks_cbook_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: seat_authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: seat_authority
+        type: synthetic
+        return-type: { optional: { type-ref: { name: Pubkey } } }
+        expression: 'if seat_authority_account_idx == 65535 { none } else { accountAddress(seat_authority_account_idx) }'
+        display-name: Seat authority
+        user-display: true
       - name: seat_idx
+        user-display: false
         field-type:
           primitive: u32
+      - name: seat
+        type: synthetic
+        return-type: { optional: { primitive: u32 } }
+        expression: 'if seat_authority_account_idx == 65535 { none } else { seat_idx }'
+        display-name: Seat
+        user-display: true
       - name: exchange_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: token_program_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: base_vault_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: quote_vault_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: market_authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: market_authority
+        type: synthetic
+        return-type: { optional: { type-ref: { name: Pubkey } } }
+        expression: 'if market_authority_account_idx == 65535 { none } else { accountAddress(market_authority_account_idx) }'
+        display-name: Market authority
+        user-display: true
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -76,15 +114,19 @@ types:
 - name: TokenTransferInstruction
   kind:
     struct:
+      display-name: Deposit or withdraw tokens
       packed: true
       fields:
       - name: market_record_idx
+        display-name: Market record
         field-type:
           primitive: u8
       - name: token_program_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -93,15 +135,31 @@ types:
             element-type:
               primitive: u8
       - name: amount
+        display-name: Amount (base units)
         field-type:
           primitive: u64
       - name: from_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: source_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(from_account_idx)'
+        display-name: Source token account
+        user-display: true
       - name: to_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: destination_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(to_account_idx)'
+        display-name: Destination token account
+        user-display: true
       - name: reserved1
+        user-display: false
         field-type:
           array:
             size:
@@ -112,15 +170,25 @@ types:
 - name: SeatCreateInstruction
   kind:
     struct:
+      display-name: Create seat
       packed: true
       fields:
       - name: market_record_idx
+        display-name: Market record
         field-type:
           primitive: u8
       - name: seat_authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: seat_authority
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(seat_authority_account_idx)'
+        display-name: Seat authority
+        user-display: true
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -131,15 +199,31 @@ types:
 - name: CreateOrderEntryInstruction
   kind:
     struct:
+      display-name: Place order
       packed: true
       fields:
       - name: instruction_flags
+        user-display: false
         field-type:
           primitive: u8
+      - name: side
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if instruction_flags % 2 == 1 { "Buy" } else { "Sell" }'
+        display-name: Side
+        user-display: true
+      - name: order_type
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if (instruction_flags / 2) % 8 == 0 { "Good till cancelled" } else { if (instruction_flags / 2) % 8 == 1 { "Market to limit" } else { if (instruction_flags / 2) % 8 == 2 { "Post only" } else { if (instruction_flags / 2) % 8 == 3 { "Immediate or cancel" } else { if (instruction_flags / 2) % 8 == 4 { "Fill or kill" } else { `Unknown (${(instruction_flags / 2) % 8})` } } } } }'
+        display-name: Order type
+        user-display: true
       - name: market_record_idx
+        display-name: Market record
         field-type:
           primitive: u8
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -148,15 +232,25 @@ types:
             element-type:
               primitive: u8
       - name: price
+        display-name: Price (raw)
         field-type:
           primitive: u64
       - name: quantity
+        display-name: Quantity (base units)
         field-type:
           primitive: u64
       - name: exp_time
+        user-display: false
         field-type:
           primitive: i64
+      - name: expires_at
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if exp_time < 0 { `Slot ${0 - exp_time}` } else { `Block time ${exp_time} ns` }'
+        display-name: Expires at
+        user-display: true
       - name: client_id
+        user-display: false
         field-type:
           array:
             size:
@@ -182,15 +276,31 @@ types:
 - name: CreateSeatlessOrderEntryInstruction
   kind:
     struct:
+      display-name: Place seatless order
       packed: true
       fields:
       - name: instruction_flags
+        user-display: false
         field-type:
           primitive: u8
+      - name: side
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if instruction_flags % 2 == 1 { "Buy" } else { "Sell" }'
+        display-name: Side
+        user-display: true
+      - name: order_type
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if (instruction_flags / 2) % 8 == 0 { "Good till cancelled" } else { if (instruction_flags / 2) % 8 == 1 { "Market to limit" } else { if (instruction_flags / 2) % 8 == 2 { "Post only" } else { if (instruction_flags / 2) % 8 == 3 { "Immediate or cancel" } else { if (instruction_flags / 2) % 8 == 4 { "Fill or kill" } else { `Unknown (${(instruction_flags / 2) % 8})` } } } } }'
+        display-name: Order type
+        user-display: true
       - name: market_record_idx
+        display-name: Market record
         field-type:
           primitive: u8
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -199,18 +309,35 @@ types:
             element-type:
               primitive: u8
       - name: price
+        display-name: Price (raw)
         field-type:
           primitive: u64
       - name: quantity
+        display-name: Quantity (base units)
         field-type:
           primitive: u64
       - name: quote_wallet_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: quote_token_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(quote_wallet_idx)'
+        display-name: Quote token account
+        user-display: true
       - name: base_wallet_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: base_token_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(base_wallet_idx)'
+        display-name: Base token account
+        user-display: true
       - name: reserved1
+        user-display: false
         field-type:
           array:
             size:
@@ -219,6 +346,7 @@ types:
             element-type:
               primitive: u8
       - name: client_id
+        user-display: false
         field-type:
           array:
             size:
@@ -244,27 +372,47 @@ types:
 - name: ModifyOrderEntryInstruction
   kind:
     struct:
+      display-name: Modify order
       packed: true
       fields:
       - name: instruction_flags
+        user-display: false
         field-type:
           primitive: u8
       - name: market_record_idx
+        display-name: Market record
         field-type:
           primitive: u8
       - name: reserved0
+        user-display: false
         field-type:
           primitive: u8
       - name: order_entry_idx
+        display-name: Order entry
         field-type:
           primitive: u32
+      - name: action
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if quantity == 0 || exp_time == 0 { "Cancel order" } else { "Reduce quantity or change expiry" }'
+        display-name: Action
+        user-display: true
       - name: quantity
+        display-name: New quantity (base units)
         field-type:
           primitive: u64
       - name: exp_time
+        user-display: false
         field-type:
           primitive: i64
+      - name: expires_at
+        type: synthetic
+        return-type: { optional: { type-ref: { name: Text } } }
+        expression: 'if exp_time == 0 { none } else { if exp_time < 0 { `Slot ${0 - exp_time}` } else { `Block time ${exp_time} ns` } }'
+        display-name: Expires at
+        user-display: true
       - name: metadata
+        user-display: false
         field-type:
           array:
             size:
@@ -310,12 +458,39 @@ types:
 - name: MarketCreateInstruction
   kind:
     struct:
+      display-name: Create market
       packed: true
       fields:
+      - name: market
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(seat_arena_account_idx)'
+        display-name: Market
+        user-display: true
+      - name: base_mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(base_mint_idx)'
+        display-name: Base mint
+        user-display: true
+      - name: quote_mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(quote_mint_idx)'
+        display-name: Quote mint
+        user-display: true
+      - name: market_authority
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(market_authority_account_idx)'
+        display-name: Market authority
+        user-display: true
       - name: market_record_idx
+        user-display: false
         field-type:
           primitive: u8
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -324,45 +499,89 @@ types:
             element-type:
               primitive: u8
       - name: lot_size
+        display-name: Lot size (base units)
         field-type:
           primitive: u64
       - name: tick_size
+        display-name: Tick size (raw)
         field-type:
           primitive: u64
       - name: token_program_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: exchange_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: base_mint_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: quote_mint_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: seat_arena_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: order_arena_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: order_arena
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(order_arena_account_idx)'
+        display-name: Order arena
+        user-display: true
       - name: bids_cbook_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: bids_book
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(bids_cbook_account_idx)'
+        display-name: Bids book
+        user-display: true
       - name: asks_cbook_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: asks_book
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(asks_cbook_account_idx)'
+        display-name: Asks book
+        user-display: true
       - name: base_vault_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: base_vault
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(base_vault_account_idx)'
+        display-name: Base vault
+        user-display: true
       - name: quote_vault_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: quote_vault
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(quote_vault_account_idx)'
+        display-name: Quote vault
+        user-display: true
       - name: market_authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: reserved1
+        user-display: false
         field-type:
           array:
             size:
@@ -371,24 +590,31 @@ types:
             element-type:
               primitive: u8
       - name: proof_sz_seat_arena
+        user-display: false
         field-type:
           primitive: u32
       - name: proof_sz_order_arena
+        user-display: false
         field-type:
           primitive: u32
       - name: proof_sz_bids_cbook
+        user-display: false
         field-type:
           primitive: u32
       - name: proof_sz_asks_cbook
+        user-display: false
         field-type:
           primitive: u32
       - name: proof_sz_base_vault
+        user-display: false
         field-type:
           primitive: u32
       - name: proof_sz_quote_vault
+        user-display: false
         field-type:
           primitive: u32
       - name: proof_seat_arena
+        user-display: false
         field-type:
           array:
             size:
@@ -397,6 +623,7 @@ types:
             element-type:
               primitive: u8
       - name: proof_order_arena
+        user-display: false
         field-type:
           array:
             size:
@@ -405,6 +632,7 @@ types:
             element-type:
               primitive: u8
       - name: proof_bids_cbook
+        user-display: false
         field-type:
           array:
             size:
@@ -413,6 +641,7 @@ types:
             element-type:
               primitive: u8
       - name: proof_asks_cbook
+        user-display: false
         field-type:
           array:
             size:
@@ -421,6 +650,7 @@ types:
             element-type:
               primitive: u8
       - name: proof_base_vault
+        user-display: false
         field-type:
           array:
             size:
@@ -429,6 +659,7 @@ types:
             element-type:
               primitive: u8
       - name: proof_quote_vault
+        user-display: false
         field-type:
           array:
             size:
@@ -439,30 +670,63 @@ types:
 - name: ExchangeInitializeInstruction
   kind:
     struct:
+      display-name: Initialize exchange
       packed: true
       fields:
       - name: reserved0
+        user-display: false
         field-type:
           primitive: u8
       - name: exchange_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: exchange
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(exchange_meta_account_idx)'
+        display-name: Exchange
+        user-display: true
       - name: program_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: deployment_authority
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Deployment authority
+        user-display: true
       - name: token_program_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: token_program
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(token_program_idx)'
+        display-name: Token program
+        user-display: true
       - name: exchange_admin_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: exchange_admin
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(exchange_admin_account_idx)'
+        display-name: Exchange admin
+        user-display: true
       - name: proof_sz
+        user-display: false
         field-type:
           primitive: u32
       - name: proof
+        user-display: false
         field-type:
           array:
             size:
@@ -473,15 +737,25 @@ types:
 - name: MarketSetStatusInstruction
   kind:
     struct:
+      display-name: Set market status
       packed: true
       fields:
       - name: market_record_idx
+        display-name: Market record
         field-type:
           primitive: u8
       - name: status_flags
+        user-display: false
         field-type:
           primitive: u8
+      - name: status
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if status_flags == 0 { "No restrictions" } else { `${if status_flags % 2 == 1 { "Paused" } else { "" }}${if (status_flags / 2) % 2 == 1 { if status_flags % 2 != 0 { ", post-only" } else { "Post-only" } } else { "" }}${if (status_flags / 4) % 2 == 1 { if status_flags % 4 != 0 { ", withdrawals frozen" } else { "Withdrawals frozen" } } else { "" }}${if (status_flags / 8) % 2 == 1 { if status_flags % 8 != 0 { ", deposits frozen" } else { "Deposits frozen" } } else { "" }}${if status_flags >= 16 { if status_flags % 16 != 0 { ", unknown flags" } else { "Unknown flags" } } else { "" }}` }'
+        display-name: New status
+        user-display: true
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -492,58 +766,129 @@ types:
 - name: ExchangeSetStatusInstruction
   kind:
     struct:
+      display-name: Set exchange status
       packed: true
       fields:
+      - name: exchange
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(exchange_meta_account_idx)'
+        display-name: Exchange
+        user-display: true
+      - name: exchange_admin
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(exchange_admin_account_idx)'
+        display-name: Exchange admin
+        user-display: true
+      - name: status
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if status_flags == 0 { "No restrictions" } else { `${if status_flags % 2 == 1 { "Paused" } else { "" }}${if (status_flags / 2) % 2 == 1 { if status_flags % 2 != 0 { ", post-only" } else { "Post-only" } } else { "" }}${if (status_flags / 4) % 2 == 1 { if status_flags % 4 != 0 { ", withdrawals frozen" } else { "Withdrawals frozen" } } else { "" }}${if (status_flags / 8) % 2 == 1 { if status_flags % 8 != 0 { ", deposits frozen" } else { "Deposits frozen" } } else { "" }}${if status_flags >= 16 { if status_flags % 16 != 0 { ", unknown flags" } else { "Unknown flags" } } else { "" }}` }'
+        display-name: New status
+        user-display: true
       - name: status_flags
+        user-display: false
         field-type:
           primitive: u8
       - name: exchange_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: exchange_admin_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: reserved0
+        user-display: false
         field-type:
           primitive: u16
 - name: ExchangeSetAdminInstruction
   kind:
     struct:
+      display-name: Set exchange admin
       packed: true
       fields:
       - name: reserved0
+        user-display: false
         field-type:
           primitive: u8
       - name: exchange_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: exchange
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(exchange_meta_account_idx)'
+        display-name: Exchange
+        user-display: true
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: exchange_admin
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Exchange admin
+        user-display: true
       - name: new_admin_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: new_admin
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(new_admin_account_idx)'
+        display-name: New exchange admin
+        user-display: true
 - name: ExchangeRecoverAdminInstruction
   kind:
     struct:
+      display-name: Recover exchange admin
       packed: true
       fields:
       - name: reserved0
+        user-display: false
         field-type:
           primitive: u8
       - name: exchange_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: exchange
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(exchange_meta_account_idx)'
+        display-name: Exchange
+        user-display: true
       - name: program_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: deployment_authority
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Deployment authority
+        user-display: true
       - name: new_admin_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: new_admin
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(new_admin_account_idx)'
+        display-name: New exchange admin
+        user-display: true
       - name: reserved1
+        user-display: false
         field-type:
           array:
             size:
@@ -554,21 +899,39 @@ types:
 - name: MarketSetExchangeStatusInstruction
   kind:
     struct:
+      display-name: Set market exchange status
       packed: true
       fields:
       - name: market_record_idx
+        display-name: Market record
         field-type:
           primitive: u8
       - name: status_flags
+        user-display: false
         field-type:
           primitive: u8
+      - name: status
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if status_flags == 0 { "No restrictions" } else { `${if status_flags % 2 == 1 { "Paused" } else { "" }}${if (status_flags / 2) % 2 == 1 { if status_flags % 2 != 0 { ", post-only" } else { "Post-only" } } else { "" }}${if (status_flags / 4) % 2 == 1 { if status_flags % 4 != 0 { ", withdrawals frozen" } else { "Withdrawals frozen" } } else { "" }}${if (status_flags / 8) % 2 == 1 { if status_flags % 8 != 0 { ", deposits frozen" } else { "Deposits frozen" } } else { "" }}${if status_flags >= 16 { if status_flags % 16 != 0 { ", unknown flags" } else { "Unknown flags" } } else { "" }}` }'
+        display-name: New exchange status
+        user-display: true
       - name: reserved0
+        user-display: false
         field-type:
           primitive: u8
       - name: exchange_admin_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: exchange_admin
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(exchange_admin_account_idx)'
+        display-name: Exchange admin
+        user-display: true
       - name: reserved1
+        user-display: false
         field-type:
           primitive: u16
 - name: ClobInstruction
@@ -577,6 +940,7 @@ types:
       packed: true
       fields:
       - name: discriminant
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -661,15 +1025,31 @@ types:
 - name: MarketAccount
   kind:
     struct:
+      display-name: Market
       packed: true
       fields:
       - name: status_flags
+        user-display: false
         field-type:
           primitive: u8
+      - name: status
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if status_flags == 0 { "No restrictions" } else { `${if status_flags % 2 == 1 { "Paused" } else { "" }}${if (status_flags / 2) % 2 == 1 { if status_flags % 2 != 0 { ", post-only" } else { "Post-only" } } else { "" }}${if (status_flags / 4) % 2 == 1 { if status_flags % 4 != 0 { ", withdrawals frozen" } else { "Withdrawals frozen" } } else { "" }}${if (status_flags / 8) % 2 == 1 { if status_flags % 8 != 0 { ", deposits frozen" } else { "Deposits frozen" } } else { "" }}${if status_flags >= 16 { if status_flags % 16 != 0 { ", unknown flags" } else { "Unknown flags" } } else { "" }}` }'
+        display-name: Status (market authority)
+        user-display: true
       - name: exchange_status_flags
+        user-display: false
         field-type:
           primitive: u8
+      - name: exchange_status
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if exchange_status_flags == 0 { "No restrictions" } else { `${if exchange_status_flags % 2 == 1 { "Paused" } else { "" }}${if (exchange_status_flags / 2) % 2 == 1 { if exchange_status_flags % 2 != 0 { ", post-only" } else { "Post-only" } } else { "" }}${if (exchange_status_flags / 4) % 2 == 1 { if exchange_status_flags % 4 != 0 { ", withdrawals frozen" } else { "Withdrawals frozen" } } else { "" }}${if (exchange_status_flags / 8) % 2 == 1 { if exchange_status_flags % 8 != 0 { ", deposits frozen" } else { "Deposits frozen" } } else { "" }}${if exchange_status_flags >= 16 { if exchange_status_flags % 16 != 0 { ", unknown flags" } else { "Unknown flags" } } else { "" }}` }'
+        display-name: Status (exchange admin)
+        user-display: true
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -678,40 +1058,49 @@ types:
             element-type:
               primitive: u8
       - name: lot_size
+        display-name: Lot size (base units)
         field-type:
           primitive: u64
       - name: tick_size
+        display-name: Tick size (raw)
         field-type:
           primitive: u64
       - name: next_order_id
+        display-name: Next order ID
         field-type:
           primitive: u64
       - name: order_entry_pubkey
+        display-name: Order arena
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: bids_cbook_pubkey
+        display-name: Bids book
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: asks_cbook_pubkey
+        display-name: Asks book
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: base_vault_pubkey
+        display-name: Base vault
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: quote_vault_pubkey
+        display-name: Quote vault
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: market_authority_pubkey
+        display-name: Market authority
         field-type:
           type-ref:
             name: Pubkey
@@ -719,12 +1108,21 @@ types:
 - name: ExchangeMetaAccount
   kind:
     struct:
+      display-name: Exchange
       packed: true
       fields:
       - name: status_flags
+        user-display: false
         field-type:
           primitive: u8
+      - name: status
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if status_flags == 0 { "No restrictions" } else { `${if status_flags % 2 == 1 { "Paused" } else { "" }}${if (status_flags / 2) % 2 == 1 { if status_flags % 2 != 0 { ", post-only" } else { "Post-only" } } else { "" }}${if (status_flags / 4) % 2 == 1 { if status_flags % 4 != 0 { ", withdrawals frozen" } else { "Withdrawals frozen" } } else { "" }}${if (status_flags / 8) % 2 == 1 { if status_flags % 8 != 0 { ", deposits frozen" } else { "Deposits frozen" } } else { "" }}${if status_flags >= 16 { if status_flags % 16 != 0 { ", unknown flags" } else { "Unknown flags" } } else { "" }}` }'
+        display-name: Status
+        user-display: true
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -733,16 +1131,19 @@ types:
             element-type:
               primitive: u8
       - name: token_program_pubkey
+        display-name: Token program
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: exchange_admin_pubkey
+        display-name: Exchange admin
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: reserved1
+        user-display: false
         field-type:
           array:
             size:
@@ -971,6 +1372,7 @@ types:
       packed: true
       fields:
       - name: account_type
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -1010,20 +1412,254 @@ types:
       - name: code
         field-type:
           primitive: u64
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: invalid_instr_size
+              tag-value: -101
+              comment: Instruction data is too short or the wrong size for this instruction.
+            - name: invalid_instr_type
+              tag-value: -102
+              comment: Instruction is not a known exchange instruction.
+            - name: invalid_exchange_init_proof_size
+              tag-value: -103
+              comment: The state proof size in the exchange setup instruction is larger than the instruction data.
+            - name: invalid_status_flags
+              tag-value: -104
+              comment: The status flags contain a value that is not known.
+            - name: indivisible_price_ticks
+              tag-value: -201
+              comment: The price is not a multiple of the tick size of the market.
+            - name: indivisible_qty_lots
+              tag-value: -202
+              comment: The amount is not a whole number of lots.
+            - name: over_max_price
+              tag-value: -203
+              comment: The price is above what this market accepts.
+            - name: invalid_lot_or_tick_size
+              tag-value: -204
+              comment: The lot size or tick size is zero.
+            - name: notional_overflow
+              tag-value: -205
+              comment: The order is too large for this market.
+            - name: gtt_order_expired
+              tag-value: -301
+              comment: The expiry time of the order has already passed.
+            - name: order_id_not_found
+              tag-value: -302
+              comment: No open order has this order id.
+            - name: client_id_not_found
+              tag-value: -303
+              comment: No open order has this client id.
+            - name: modify_increase_not_allowed
+              tag-value: -304
+              comment: The size of an order can be reduced but not increased.
+            - name: ask_bid_side_undef
+              tag-value: -305
+              comment: The order does not say whether it is a bid or an ask.
+            - name: cbook_full
+              tag-value: -306
+              comment: The price is too far from the best price for this side of the book.
+            - name: invalid_seatless_order_type
+              tag-value: -307
+              comment: Orders placed without a seat must be immediate-or-cancel or fill-or-kill.
+            - name: ob_side_state_mismatch
+              tag-value: -308
+              comment: The order book changed under the order.
+            - name: insufficient_funds_quote
+              tag-value: -401
+              comment: Not enough of the quote token for this order.
+            - name: insufficient_funds_base
+              tag-value: -402
+              comment: Not enough of the base token for this order.
+            - name: market_deposits_frozen
+              tag-value: -501
+              comment: Deposits to this market are frozen.
+            - name: market_withdrawals_frozen
+              tag-value: -502
+              comment: Withdrawals from this market are frozen.
+            - name: market_paused
+              tag-value: -503
+              comment: Trading on this market is paused.
+            - name: market_postonly_mode
+              tag-value: -504
+              comment: This market only accepts post-only orders right now.
+            - name: seat_not_found
+              tag-value: -601
+              comment: The trading seat does not exist.
+            - name: seat_arena_data_not_found
+              tag-value: -602
+              comment: The seat storage account of the market is missing.
+            - name: seat_arena_full
+              tag-value: -603
+              comment: This market has no free trading seats left.
+            - name: entry_idx_out_of_bounds
+              tag-value: -604
+              comment: The order or seat index is out of range.
+            - name: reserved_seat_idx
+              tag-value: -605
+              comment: This seat index is reserved for orders placed without a seat.
+            - name: arena_entry_not_active
+              tag-value: -606
+              comment: The order or seat is no longer active.
+            - name: arena_full
+              tag-value: -607
+              comment: The order storage of this market is full.
+            - name: invalid_account_type
+              tag-value: -701
+              comment: An account is not the kind of exchange account this instruction expects.
+            - name: invalid_account_idx
+              tag-value: -702
+              comment: An account index in the instruction is outside the account list of the transaction.
+            - name: invalid_vault_pubkey
+              tag-value: -703
+              comment: The vault account is neither the base vault nor the quote vault of this market.
+            - name: exchange_meta_invalid_idx
+              tag-value: -704
+              comment: The exchange metadata account index is outside the account list of the transaction.
+            - name: exchange_meta_not_found
+              tag-value: -705
+              comment: The exchange metadata account does not exist.
+            - name: exchange_meta_wrong_owner
+              tag-value: -706
+              comment: The exchange metadata account is not owned by the exchange program.
+            - name: exchange_meta_invalid_size
+              tag-value: -707
+              comment: The exchange metadata account is the wrong size.
+            - name: exchange_meta_invalid_account_type
+              tag-value: -708
+              comment: The account is not an exchange metadata account.
+            - name: program_meta_invalid_idx
+              tag-value: -710
+              comment: The program metadata account index is outside the account list of the transaction.
+            - name: program_meta_not_found
+              tag-value: -711
+              comment: The program metadata account does not exist.
+            - name: program_meta_wrong_owner
+              tag-value: -712
+              comment: The account is not a valid program metadata account.
+            - name: program_meta_invalid_size
+              tag-value: -713
+              comment: The program metadata account is the wrong size.
+            - name: token_program_invalid_idx
+              tag-value: -714
+              comment: The token program account index is outside the account list of the transaction.
+            - name: token_program_not_found
+              tag-value: -715
+              comment: The token program account does not exist.
+            - name: token_account_not_program
+              tag-value: -716
+              comment: The token program account is not a program.
+            - name: token_program_not_canonical
+              tag-value: -717
+              comment: The token program account is not the official token program.
+            - name: invalid_token_account
+              tag-value: -718
+              comment: The account is not a token account.
+            - name: mismatch_pubkey
+              tag-value: -801
+              comment: An account is not the one the market expects.
+            - name: mismatch_token_program_pubkey
+              tag-value: -802
+              comment: The token program is not the one the exchange was set up with.
+            - name: mismatch_seat_auth_pubkey
+              tag-value: -803
+              comment: The seat authority account is not the authority of this seat.
+            - name: mismatch_base_vault_pubkey
+              tag-value: -804
+              comment: The base vault account is not the base vault of this market.
+            - name: mismatch_quote_vault_pubkey
+              tag-value: -805
+              comment: The quote vault account is not the quote vault of this market.
+            - name: mismatch_market_auth_pubkey
+              tag-value: -806
+              comment: The market authority account is not the authority of this market.
+            - name: mismatch_order_arena_pubkey
+              tag-value: -807
+              comment: The order storage account is not the order storage of this market.
+            - name: mismatch_bids_cbook_pubkey
+              tag-value: -808
+              comment: The bids book account is not the bids book of this market.
+            - name: mismatch_asks_cbook_pubkey
+              tag-value: -809
+              comment: The asks book account is not the asks book of this market.
+            - name: mismatch_exchange_meta_pubkey
+              tag-value: -810
+              comment: The exchange metadata account is not at the expected address.
+            - name: mismatch_program_pubkey
+              tag-value: -811
+              comment: The program metadata account belongs to a different program.
+            - name: unauthorized_seat_auth
+              tag-value: -901
+              comment: The seat authority did not authorize this transaction.
+            - name: unauthorized_market_auth
+              tag-value: -902
+              comment: The market authority did not authorize this transaction.
+            - name: unauthorized_wallet_owner
+              tag-value: -903
+              comment: The owner of the token account did not authorize this transaction.
+            - name: exchange_auth_invalid_idx
+              tag-value: -904
+              comment: The exchange authority account index is outside the account list of the transaction.
+            - name: exchange_auth_not_signer
+              tag-value: -905
+              comment: The exchange authority did not authorize this transaction.
+            - name: exchange_auth_mismatch
+              tag-value: -906
+              comment: The signer is not the authority of the exchange program.
+            - name: exchange_admin_invalid_idx
+              tag-value: -907
+              comment: The exchange admin account index is outside the account list of the transaction.
+            - name: exchange_admin_not_signer
+              tag-value: -908
+              comment: The exchange admin did not authorize this transaction.
+            - name: exchange_admin_mismatch
+              tag-value: -909
+              comment: The signer is not the admin of this exchange.
+            - name: new_exchange_admin_invalid_idx
+              tag-value: -910
+              comment: The new exchange admin account index is outside the account list of the transaction.
+            - name: program_owned_wallet
+              tag-value: -911
+              comment: The token account is owned by the exchange program and cannot be used as a wallet.
+            - name: invalid_market_record_idx
+              tag-value: -1001
+              comment: The market record index is zero or out of range.
+            - name: market_record_missing_seat_authority
+              tag-value: -1002
+              comment: The market record has no seat authority, so it cannot be used to trade.
+            - name: market_record_missing_seat_arena
+              tag-value: -1003
+              comment: The market record has no seat storage account.
+            - name: market_record_missing_market_auth
+              tag-value: -1004
+              comment: The market record has no market authority, so it cannot be used to manage the market.
+            - name: market_record_mismatch_seat_idx
+              tag-value: -1006
+              comment: The order belongs to a different seat.
 - name: SeatAssignedEvent
   kind:
     struct:
+      display-name: Seat assigned
       packed: true
       fields:
       - name: seat_idx
+        display-name: Seat
         field-type:
           primitive: u32
       - name: seat_authority
+        display-name: Seat authority
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: market
+        display-name: Market
         field-type:
           type-ref:
             name: Pubkey
@@ -1031,55 +1667,67 @@ types:
 - name: MarketCreatedEvent
   kind:
     struct:
+      display-name: Market created
       packed: true
       fields:
       - name: lot_size
+        display-name: Lot size (base units)
         field-type:
           primitive: u64
       - name: tick_size
+        display-name: Tick size (raw)
         field-type:
           primitive: u64
       - name: base_mint
+        display-name: Base mint
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: quote_mint
+        display-name: Quote mint
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: market_authority
+        display-name: Market authority
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: market
+        display-name: Market
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: order_arena
+        display-name: Order arena
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: bids_cbook
+        display-name: Bids book
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: asks_cbook
+        display-name: Asks book
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: base_vault
+        display-name: Base vault
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: quote_vault
+        display-name: Quote vault
         field-type:
           type-ref:
             name: Pubkey
@@ -1087,18 +1735,41 @@ types:
 - name: OrderCancelledEvent
   kind:
     struct:
+      display-name: Order cancelled
       packed: true
       fields:
       - name: seat_idx
+        user-display: false
         field-type:
           primitive: u32
+      - name: seat
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if seat_idx == 1 { "Seatless" } else { `${seat_idx}` }'
+        display-name: Seat
+        user-display: true
       - name: side
+        user-display: false
         field-type:
           primitive: u8
+      - name: side_name
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if side == 0 { "Buy" } else { if side == 1 { "Sell" } else { `Unknown (${side})` } }'
+        display-name: Side
+        user-display: true
       - name: order_type
+        user-display: false
         field-type:
           primitive: u8
+      - name: order_type_name
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if order_type == 0 { "Good till cancelled" } else { if order_type == 1 { "Market to limit" } else { if order_type == 2 { "Post only" } else { if order_type == 3 { "Immediate or cancel" } else { if order_type == 4 { "Fill or kill" } else { `Unknown (${order_type})` } } } } }'
+        display-name: Order type
+        user-display: true
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -1107,40 +1778,68 @@ types:
             element-type:
               primitive: u8
       - name: price
+        display-name: Price (raw)
         field-type:
           primitive: u64
       - name: qty
+        display-name: Quantity cancelled (base units)
         field-type:
           primitive: u64
       - name: client_id
+        display-name: Client ID
         field-type:
           type-ref:
             name: ClientId
       - name: market
+        display-name: Market
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: seat_authority
+        user-display: false
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
+      - name: seat_authority_or_none
+        type: synthetic
+        return-type: { optional: { type-ref: { name: Pubkey } } }
+        expression: 'if seat_idx == 1 { none } else { seat_authority }'
+        display-name: Seat authority
+        user-display: true
 - name: OrderFilledEvent
   kind:
     struct:
+      display-name: Order filled
       packed: true
       fields:
       - name: taker_seat_idx
+        user-display: false
         field-type:
           primitive: u32
+      - name: taker_seat
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if taker_seat_idx == 1 { "Seatless" } else { `${taker_seat_idx}` }'
+        display-name: Taker seat
+        user-display: true
       - name: maker_seat_idx
+        display-name: Maker seat
         field-type:
           primitive: u32
       - name: taker_side
+        user-display: false
         field-type:
           primitive: u8
+      - name: taker_side_name
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if taker_side == 0 { "Buy" } else { if taker_side == 1 { "Sell" } else { `Unknown (${taker_side})` } }'
+        display-name: Taker side
+        user-display: true
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -1149,29 +1848,42 @@ types:
             element-type:
               primitive: u8
       - name: price
+        display-name: Price (raw)
         field-type:
           primitive: u64
       - name: qty
+        display-name: Quantity (base units)
         field-type:
           primitive: u64
       - name: maker_order_id
+        display-name: Maker order ID
         field-type:
           primitive: u64
       - name: maker_client_id
+        display-name: Maker client ID
         field-type:
           type-ref:
             name: ClientId
       - name: market
+        display-name: Market
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: taker_seat_authority
+        user-display: false
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
+      - name: taker_seat_authority_or_none
+        type: synthetic
+        return-type: { optional: { type-ref: { name: Pubkey } } }
+        expression: 'if taker_seat_idx == 1 { none } else { taker_seat_authority }'
+        display-name: Taker seat authority
+        user-display: true
       - name: maker_seat_authority
+        display-name: Maker seat authority
         field-type:
           type-ref:
             name: Pubkey
@@ -1179,18 +1891,35 @@ types:
 - name: OrderPostedEvent
   kind:
     struct:
+      display-name: Order posted
       packed: true
       fields:
       - name: seat_idx
+        display-name: Seat
         field-type:
           primitive: u32
       - name: side
+        user-display: false
         field-type:
           primitive: u8
+      - name: side_name
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if side == 0 { "Buy" } else { if side == 1 { "Sell" } else { `Unknown (${side})` } }'
+        display-name: Side
+        user-display: true
       - name: order_type
+        user-display: false
         field-type:
           primitive: u8
+      - name: order_type_name
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if order_type == 0 { "Good till cancelled" } else { if order_type == 1 { "Market to limit" } else { if order_type == 2 { "Post only" } else { if order_type == 3 { "Immediate or cancel" } else { if order_type == 4 { "Fill or kill" } else { `Unknown (${order_type})` } } } } }'
+        display-name: Order type
+        user-display: true
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -1199,24 +1928,30 @@ types:
             element-type:
               primitive: u8
       - name: price
+        display-name: Price (raw)
         field-type:
           primitive: u64
       - name: qty
+        display-name: Quantity (base units)
         field-type:
           primitive: u64
       - name: order_id
+        display-name: Order ID
         field-type:
           primitive: u64
       - name: client_id
+        display-name: Client ID
         field-type:
           type-ref:
             name: ClientId
       - name: market
+        display-name: Market
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: seat_authority
+        display-name: Seat authority
         field-type:
           type-ref:
             name: Pubkey
@@ -1224,18 +1959,35 @@ types:
 - name: OrderEntryRemovedEvent
   kind:
     struct:
+      display-name: Order removed
       packed: true
       fields:
       - name: seat_idx
+        display-name: Seat
         field-type:
           primitive: u32
       - name: side
+        user-display: false
         field-type:
           primitive: u8
+      - name: side_name
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if side == 0 { "Buy" } else { if side == 1 { "Sell" } else { `Unknown (${side})` } }'
+        display-name: Side
+        user-display: true
       - name: reason
+        user-display: false
         field-type:
           primitive: u8
+      - name: reason_name
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if reason == 0 { "Filled" } else { if reason == 1 { "Expired" } else { if reason == 2 { "Evicted" } else { if reason == 3 { "Cancelled by user" } else { `Unknown (${reason})` } } } }'
+        display-name: Reason
+        user-display: true
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -1244,24 +1996,30 @@ types:
             element-type:
               primitive: u8
       - name: price
+        display-name: Price (raw)
         field-type:
           primitive: u64
       - name: qty
+        display-name: Quantity (base units)
         field-type:
           primitive: u64
       - name: order_id
+        display-name: Order ID
         field-type:
           primitive: u64
       - name: client_id
+        display-name: Client ID
         field-type:
           type-ref:
             name: ClientId
       - name: market
+        display-name: Market
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: seat_authority
+        display-name: Seat authority
         field-type:
           type-ref:
             name: Pubkey
@@ -1269,15 +2027,25 @@ types:
 - name: OrderModifiedEvent
   kind:
     struct:
+      display-name: Order modified
       packed: true
       fields:
       - name: seat_idx
+        display-name: Seat
         field-type:
           primitive: u32
       - name: side
+        user-display: false
         field-type:
           primitive: u8
+      - name: side_name
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if side == 0 { "Buy" } else { if side == 1 { "Sell" } else { `Unknown (${side})` } }'
+        display-name: Side
+        user-display: true
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -1286,27 +2054,40 @@ types:
             element-type:
               primitive: u8
       - name: price
+        display-name: Price (raw)
         field-type:
           primitive: u64
       - name: qty
+        display-name: Quantity (base units)
         field-type:
           primitive: u64
       - name: order_id
+        display-name: Order ID
         field-type:
           primitive: u64
       - name: client_id
+        display-name: Client ID
         field-type:
           type-ref:
             name: ClientId
       - name: exp_time
+        user-display: false
         field-type:
           primitive: i64
+      - name: expires_at
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if exp_time < 0 { `Slot ${0 - exp_time}` } else { `Block time ${exp_time} ns` }'
+        display-name: Expires at
+        user-display: true
       - name: market
+        display-name: Market
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: seat_authority
+        display-name: Seat authority
         field-type:
           type-ref:
             name: Pubkey
@@ -1314,15 +2095,25 @@ types:
 - name: TokenBalanceEvent
   kind:
     struct:
+      display-name: Tokens deposited or withdrawn
       packed: true
       fields:
       - name: seat_idx
+        display-name: Seat
         field-type:
           primitive: u32
       - name: token_side
+        user-display: false
         field-type:
           primitive: u8
+      - name: token
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if token_side == 0 { "Base" } else { if token_side == 1 { "Quote" } else { `Unknown (${token_side})` } }'
+        display-name: Token
+        user-display: true
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -1331,30 +2122,37 @@ types:
             element-type:
               primitive: u8
       - name: amount
+        display-name: Amount (base units)
         field-type:
           primitive: u64
       - name: quantity_base
+        display-name: Seat base balance after (base units)
         field-type:
           primitive: u64
       - name: quantity_quote
+        display-name: Seat quote balance after (base units)
         field-type:
           primitive: u64
       - name: market
+        display-name: Market
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: seat_authority
+        display-name: Seat authority
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: wallet
+        display-name: Token account
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: vault
+        display-name: Vault
         field-type:
           type-ref:
             name: Pubkey
@@ -1362,12 +2160,21 @@ types:
 - name: MarketStatusEvent
   kind:
     struct:
+      display-name: Market status set
       packed: true
       fields:
       - name: status_flags
+        user-display: false
         field-type:
           primitive: u8
+      - name: status
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if status_flags == 0 { "No restrictions" } else { `${if status_flags % 2 == 1 { "Paused" } else { "" }}${if (status_flags / 2) % 2 == 1 { if status_flags % 2 != 0 { ", post-only" } else { "Post-only" } } else { "" }}${if (status_flags / 4) % 2 == 1 { if status_flags % 4 != 0 { ", withdrawals frozen" } else { "Withdrawals frozen" } } else { "" }}${if (status_flags / 8) % 2 == 1 { if status_flags % 8 != 0 { ", deposits frozen" } else { "Deposits frozen" } } else { "" }}${if status_flags >= 16 { if status_flags % 16 != 0 { ", unknown flags" } else { "Unknown flags" } } else { "" }}` }'
+        display-name: Status
+        user-display: true
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -1376,11 +2183,13 @@ types:
             element-type:
               primitive: u8
       - name: market
+        display-name: Market
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: market_authority
+        display-name: Market authority
         field-type:
           type-ref:
             name: Pubkey
@@ -1388,12 +2197,15 @@ types:
 - name: ExchangeInitializedEvent
   kind:
     struct:
+      display-name: Exchange initialized
       packed: true
       fields:
       - name: status_flags
+        user-display: false
         field-type:
           primitive: u8
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -1402,16 +2214,19 @@ types:
             element-type:
               primitive: u8
       - name: exchange_meta
+        display-name: Exchange
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: token_program
+        display-name: Token program
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: exchange_admin
+        display-name: Exchange admin
         field-type:
           type-ref:
             name: Pubkey
@@ -1419,15 +2234,31 @@ types:
 - name: ExchangeStatusEvent
   kind:
     struct:
+      display-name: Exchange status changed
       packed: true
       fields:
       - name: old_status_flags
+        user-display: false
         field-type:
           primitive: u8
+      - name: previous_status
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if old_status_flags == 0 { "No restrictions" } else { `${if old_status_flags % 2 == 1 { "Paused" } else { "" }}${if (old_status_flags / 2) % 2 == 1 { if old_status_flags % 2 != 0 { ", post-only" } else { "Post-only" } } else { "" }}${if (old_status_flags / 4) % 2 == 1 { if old_status_flags % 4 != 0 { ", withdrawals frozen" } else { "Withdrawals frozen" } } else { "" }}${if (old_status_flags / 8) % 2 == 1 { if old_status_flags % 8 != 0 { ", deposits frozen" } else { "Deposits frozen" } } else { "" }}${if old_status_flags >= 16 { if old_status_flags % 16 != 0 { ", unknown flags" } else { "Unknown flags" } } else { "" }}` }'
+        display-name: Previous status
+        user-display: true
       - name: new_status_flags
+        user-display: false
         field-type:
           primitive: u8
+      - name: new_status
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if new_status_flags == 0 { "No restrictions" } else { `${if new_status_flags % 2 == 1 { "Paused" } else { "" }}${if (new_status_flags / 2) % 2 == 1 { if new_status_flags % 2 != 0 { ", post-only" } else { "Post-only" } } else { "" }}${if (new_status_flags / 4) % 2 == 1 { if new_status_flags % 4 != 0 { ", withdrawals frozen" } else { "Withdrawals frozen" } } else { "" }}${if (new_status_flags / 8) % 2 == 1 { if new_status_flags % 8 != 0 { ", deposits frozen" } else { "Deposits frozen" } } else { "" }}${if new_status_flags >= 16 { if new_status_flags % 16 != 0 { ", unknown flags" } else { "Unknown flags" } } else { "" }}` }'
+        display-name: New status
+        user-display: true
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -1436,11 +2267,13 @@ types:
             element-type:
               primitive: u8
       - name: exchange_meta
+        display-name: Exchange
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: exchange_admin
+        display-name: Exchange admin
         field-type:
           type-ref:
             name: Pubkey
@@ -1448,12 +2281,15 @@ types:
 - name: ExchangeAdminEvent
   kind:
     struct:
+      display-name: Exchange admin changed
       packed: true
       fields:
       - name: is_recovery
+        user-display: false
         field-type:
           primitive: u8
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -1462,34 +2298,53 @@ types:
             element-type:
               primitive: u8
       - name: exchange_meta
+        display-name: Exchange
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: old_admin
+        display-name: Previous exchange admin
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: new_admin
+        display-name: New exchange admin
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: authority
+        display-name: Authority
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
+      - name: recovery
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if is_recovery != 0 { "Yes" } else { "No" }'
+        display-name: Recovery
+        user-display: true
 - name: MarketExchangeStatusEvent
   kind:
     struct:
+      display-name: Market exchange status set
       packed: true
       fields:
       - name: status_flags
+        user-display: false
         field-type:
           primitive: u8
+      - name: status
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if status_flags == 0 { "No restrictions" } else { `${if status_flags % 2 == 1 { "Paused" } else { "" }}${if (status_flags / 2) % 2 == 1 { if status_flags % 2 != 0 { ", post-only" } else { "Post-only" } } else { "" }}${if (status_flags / 4) % 2 == 1 { if status_flags % 4 != 0 { ", withdrawals frozen" } else { "Withdrawals frozen" } } else { "" }}${if (status_flags / 8) % 2 == 1 { if status_flags % 8 != 0 { ", deposits frozen" } else { "Deposits frozen" } } else { "" }}${if status_flags >= 16 { if status_flags % 16 != 0 { ", unknown flags" } else { "Unknown flags" } } else { "" }}` }'
+        display-name: Exchange status
+        user-display: true
       - name: reserved0
+        user-display: false
         field-type:
           array:
             size:
@@ -1498,11 +2353,13 @@ types:
             element-type:
               primitive: u8
       - name: market
+        display-name: Market
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: exchange_admin
+        display-name: Exchange admin
         field-type:
           type-ref:
             name: Pubkey
@@ -1513,6 +2370,7 @@ types:
       packed: true
       fields:
       - name: event_type
+        user-display: false
         field-type:
           primitive: u64
       - name: payload

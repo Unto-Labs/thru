@@ -16,7 +16,7 @@ test('every browser event reaches the real metric provider with fixed operation 
       metrics.record('apps.browser.events', { operation: event.event, outcome: 'observed' });
       if (event.durationMs !== undefined) metrics.record('apps.browser.duration', { operation: event.event, outcome: 'observed' }, event.durationMs / 1000);
     } });
-    const extra = name => name === 'launch' ? { value: 1200, milestone: 'balance', mode: 'browser', cache: 'cold', outcome: 'value', network: 'alphanet' } : target(name) ? { target: target(name) } : {};
+    const extra = name => name === 'launch' ? { value: 1200, milestone: 'balance', mode: 'browser', cache: 'cold', outcome: 'value', network: 'betanet' } : target(name) ? { target: target(name) } : {};
     const events = BROWSER_EVENTS.map(event => ({ event, timestamp: Date.now(), ...extra(event), ...(['request_failed', 'rpc_failed'].includes(event) ? { durationMs: 125 } : {}) }));
     const response = await handle(new Request('https://app.example/api/telemetry/browser', { method: 'POST', headers: { origin: 'https://app.example', 'content-type': 'application/json' }, body: JSON.stringify({ version: 1, events }) }));
     assert.equal(response.status, 204);

@@ -16,7 +16,7 @@ abi:
       root-types:
         instruction-root: NftMarketInstruction
         account-root: NftMarketProgramAccount
-        errors: null
+        errors: NftMarketError
         events: NftMarketEvent
 types:
 # ============================================================================
@@ -647,3 +647,64 @@ types:
               variant-type:
                 type-ref:
                   name: ConfigUpdatedEventData
+- name: NftMarketError
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: code
+        field-type:
+          primitive: u64
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: invalid_instruction
+              tag-value: 1
+              comment: Instruction data is malformed, the wrong size, or not a known NFT market instruction.
+            - name: invalid_account
+              tag-value: 2
+              comment: An account index is out of range, or an account is not the kind of account this instruction expects.
+            - name: unauthorized
+              tag-value: 3
+              comment: The required signer, such as the order maker or the market admin, did not authorize this transaction.
+            - name: invalid_amount
+              tag-value: 4
+              comment: The order amount is zero.
+            - name: invalid_seed
+              tag-value: 5
+              comment: The order account seed does not match the NFT and the maker.
+            - name: order_expired
+              tag-value: 6
+              comment: The order has expired.
+            - name: invalid_side
+              tag-value: 7
+              comment: The order is a bid where an ask is expected, or an ask where a bid is expected.
+            - name: invalid_fee_bps
+              tag-value: 8
+              comment: The marketplace fee is above the 50 percent maximum.
+            - name: cpi_failed
+              tag-value: 9
+              comment: A call to the token program or the NFT program failed.
+            - name: fee_overflow
+              tag-value: 10
+              comment: The marketplace fee on this amount is too large to compute.
+            - name: vault_mismatch
+              tag-value: 11
+              comment: The vault account is not the vault of this order.
+            - name: maker_mismatch
+              tag-value: 12
+              comment: The maker account is not the maker of this order.
+            - name: nft_mismatch
+              tag-value: 13
+              comment: The NFT account is not the NFT of this order.
+            - name: invalid_token_program
+              tag-value: 14
+              comment: The token program account is not the official token program.
+            - name: invalid_nft_program
+              tag-value: 15
+              comment: The NFT program account is not the official NFT program.

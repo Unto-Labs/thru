@@ -1,0 +1,94 @@
+.tds-cashout__head .tds-screen__sub {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.tds-cashout__amount {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.4px;
+  color: var(--color-text-primary);
+}
+.tds-cashout__mono {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.tds-cashout__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.tds-cashout__choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.tds-dep__method.tds-cashout__choice:has([data-checked]) {
+  border-color: var(--color-border-primary);
+}
+.tds-cashout__note,
+.tds-cashout__error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.tds-cashout__error {
+  color: var(--color-text-danger);
+}
+
+.tds-cashout__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.tds-cashout__type {
+  display: flex;
+}
+.tds-cashout__type .tds-seg__btn {
+  flex: 1;
+}
+
+.tds-cashout__max {
+  flex: none;
+  align-self: stretch;
+  margin-right: calc(-1 * var(--space-3));
+}
+.tds-cashout__max.tds-btn:focus-visible {
+  outline-offset: -2px;
+}
+
+.tds-cashout__rows,
+.tds-cashout__rows dd {
+  margin: 0;
+}
+.tds-cashout__rows dd {
+  min-width: 0;
+}
+
+.tds-cashout__status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.tds-cashout__status-note {
+  font-size: 12px;
+  font-weight: var(--fw-regular);
+  letter-spacing: normal;
+  color: var(--color-text-tertiary);
+  text-wrap: pretty;
+}
+
+/* A link drawn as the sheet's button, also where the host has no reset. */
+.tds-cashout__support {
+  box-sizing: border-box;
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .tds-cashout__type .tds-seg__btn {
+    min-height: 44px;
+  }
+}

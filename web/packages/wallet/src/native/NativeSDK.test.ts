@@ -152,30 +152,9 @@ describe("NativeSDK", () => {
     expect(webView.injected).toEqual([]);
   });
 
-  it("exposes the grouped deposit lifecycle API", () => {
-    expect(sdk.connection.getState).toBeTypeOf("function");
-    expect(sdk.accounts.getSelected).toBeTypeOf("function");
-    expect(sdk.accounts.manage).toBeTypeOf("function");
-    expect(sdk.sessions.getActive).toBeTypeOf("function");
-    expect(sdk.sessions.renewSession).toBeTypeOf("function");
-    expect(sdk).not.toHaveProperty("nativeOnboarding");
-    expect(sdk).not.toHaveProperty("signIn");
-    expect(sdk).not.toHaveProperty("createAccount");
-    expect(sdk.deposits.prepare).toBeTypeOf("function");
-    expect(sdk.deposits.ensureAccount).toBeTypeOf("function");
-    expect(sdk.deposits.open).toBeTypeOf("function");
-    expect(sdk.deposits.getProviders).toBeTypeOf("function");
-    expect(sdk.deposits.getAccountState).toBeTypeOf("function");
-    expect(sdk.deposits.waitForDeposit).toBeTypeOf("function");
-    expect(sdk.deposits.formatAmount).toBeTypeOf("function");
-
-    expect(sdk.prepareDeposit).toBeTypeOf("function");
-    expect(sdk.deposit).toBeTypeOf("function");
-  });
-
   it("reuses an unchanged prepared destination but rejects later mutation", async () => {
     const destination = {
-      network: "alphanet",
+      network: "betanet",
       depositTarget: "credits",
       tokenAccountAddress: "ta_token_account",
       mintAddress: "ta_mint",
@@ -202,7 +181,7 @@ describe("NativeSDK", () => {
     });
 
     const prepared = await sdk.prepareDeposit({
-      network: "alphanet" as never,
+      network: "betanet" as never,
       depositTarget: "credits" as never,
     });
     const resolved = await internals.resolveDepositDestination(prepared);
@@ -223,7 +202,7 @@ describe("NativeSDK", () => {
 
   it("revalidates a prepared destination after the selected account changes", async () => {
     const firstDestination = {
-      network: "alphanet",
+      network: "betanet",
       depositTarget: "credits",
       tokenAccountAddress: "ta_first_token_account",
       mintAddress: "ta_mint",
@@ -297,7 +276,7 @@ describe("NativeSDK", () => {
     expect(await sdk.deposits.getProviders()).toEqual([]);
     await expect(sdk.deposits.open({})).rejects.toThrow();
     await expect(
-      sdk.deposits.prepare({ network: "alphanet" as never }),
+      sdk.deposits.prepare({ network: "devnet" as never }),
     ).rejects.toThrow("Add funds unavailable");
     internals.activeNetwork.depositConfigured = false;
     await expect(

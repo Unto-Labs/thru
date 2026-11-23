@@ -21,12 +21,11 @@ use crate::utils::validate_address_or_hex;
 use std::sync::Arc;
 
 use thru_base::rpc_types::ProofType;
+use thru_base::signer::{EoaAuthKind, sign_eoa_auth_with};
 use thru_base::tn_public_address::create_program_defined_account_address;
 use thru_base::tn_tools::Pubkey;
 use thru_base::txn_lib::Transaction;
-use thru_base::txn_tools::{
-    TransactionBuilder, bp_bond_account_address, bp_bond_ta_address, bp_sign_eoa_creation,
-};
+use thru_base::txn_tools::{TransactionBuilder, bp_bond_account_address, bp_bond_ta_address};
 use thru_client::{Account as ChainAccount, Client, ClientBuilder, TransactionDetails};
 
 const BOND_PROGRAM_FEE: u64 = 0;
@@ -334,19 +333,21 @@ async fn bond_create(
     }
 
     let (nonce, _balance) = fetch_nonce_and_balance(&client, &fee_payer_keypair).await?;
-    let block_height = fetch_finalized_height(&client).await?;
+    let block_height = fetch_locally_executed_height(&client).await?;
     let chain_id = fetch_chain_id(&client).await?;
 
     let bond_proof = make_state_proof(&client, &bond_pubkey, ProofType::Creating, None).await?;
     let ta_proof = make_state_proof(&client, &bond_ta_pubkey, ProofType::Creating, None).await?;
     let (eoa_proof, signer_eoa_signature) = if create_signer_eoa {
         let proof = make_state_proof(&client, &signer_pubkey, ProofType::Creating, None).await?;
-        let sig = bp_sign_eoa_creation(
-            &signer_keypair.private_key,
+        let sig = sign_eoa_auth_with(
+            &signer_keypair,
+            EoaAuthKind::Create,
             chain_id,
             &fee_payer_keypair.public_key,
             &signer_bytes,
-        );
+        )
+        .map_err(|e| CliError::Crypto(format!("Failed to sign EOA authorization: {e}")))?;
         (proof, sig)
     } else {
         (Vec::new(), [0u8; 64])
@@ -440,7 +441,7 @@ async fn bond_deposit(
 
     let client = create_rpc_client(config)?;
     let (nonce, _balance) = fetch_nonce_and_balance(&client, &fee_payer_keypair).await?;
-    let block_height = fetch_finalized_height(&client).await?;
+    let block_height = fetch_locally_executed_height(&client).await?;
     let chain_id = fetch_chain_id(&client).await?;
 
     let transaction = TransactionBuilder::build_bp_deposit(
@@ -503,7 +504,7 @@ async fn bond_update(
 
     let client = create_rpc_client(config)?;
     let (nonce, _balance) = fetch_nonce_and_balance(&client, &fee_payer_keypair).await?;
-    let block_height = fetch_finalized_height(&client).await?;
+    let block_height = fetch_locally_executed_height(&client).await?;
     let chain_id = fetch_chain_id(&client).await?;
 
     let transaction = TransactionBuilder::build_bp_update_bond(
@@ -594,7 +595,7 @@ async fn bond_withdraw(
 
     let client = create_rpc_client(config)?;
     let (nonce, _balance) = fetch_nonce_and_balance(&client, &fee_payer_keypair).await?;
-    let block_height = fetch_finalized_height(&client).await?;
+    let block_height = fetch_locally_executed_height(&client).await?;
     let chain_id = fetch_chain_id(&client).await?;
 
     let transaction = TransactionBuilder::build_bp_withdrawal(
@@ -660,7 +661,7 @@ async fn bond_set_authority(
 
     let client = create_rpc_client(config)?;
     let (nonce, _balance) = fetch_nonce_and_balance(&client, &fee_payer_keypair).await?;
-    let block_height = fetch_finalized_height(&client).await?;
+    let block_height = fetch_locally_executed_height(&client).await?;
     let chain_id = fetch_chain_id(&client).await?;
 
     let transaction = TransactionBuilder::build_bp_set_authority(
@@ -730,7 +731,7 @@ async fn bond_sweep(
 
     let client = create_rpc_client(config)?;
     let (nonce, _balance) = fetch_nonce_and_balance(&client, &fee_payer_keypair).await?;
-    let block_height = fetch_finalized_height(&client).await?;
+    let block_height = fetch_locally_executed_height(&client).await?;
     let chain_id = fetch_chain_id(&client).await?;
 
     let transaction = TransactionBuilder::build_bp_sweep(
@@ -788,7 +789,7 @@ async fn bond_delete(
 
     let client = create_rpc_client(config)?;
     let (nonce, _balance) = fetch_nonce_and_balance(&client, &fee_payer_keypair).await?;
-    let block_height = fetch_finalized_height(&client).await?;
+    let block_height = fetch_locally_executed_height(&client).await?;
     let chain_id = fetch_chain_id(&client).await?;
 
     let transaction = TransactionBuilder::build_bp_delete_account(
@@ -1073,11 +1074,11 @@ async fn fetch_nonce_and_balance(
     }
 }
 
-async fn fetch_finalized_height(client: &Client) -> Result<u64, CliError> {
+async fn fetch_locally_executed_height(client: &Client) -> Result<u64, CliError> {
     let block_height = client.get_block_height().await.map_err(|e| {
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
-    Ok(block_height.finalized_height)
+    Ok(block_height.locally_executed_height)
 }
 
 async fn fetch_chain_id(client: &Client) -> Result<u16, CliError> {
@@ -1096,11 +1097,9 @@ async fn sign_and_submit(
     json_format: bool,
 ) -> Result<String, CliError> {
     let mut transaction = transaction.with_chain_id(chain_id);
-    transaction
-        .sign(&fee_payer_keypair.private_key)
-        .map_err(|e| {
-            CliError::TransactionSubmission(format!("Failed to sign transaction: {}", e))
-        })?;
+    crate::signing::sign_transaction(&mut transaction, fee_payer_keypair).map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to sign transaction: {}", e))
+    })?;
 
     let details = submit_transaction(client, &transaction).await?;
     check_transaction_result(&details, json_format)?;

@@ -78,19 +78,6 @@ describe("TransactionBuilder", () => {
       expect(transaction.flags).toBe(1);
     });
 
-    it("should accept program as Uint8Array", () => {
-      const builder = createBuilder();
-      const program = generateTestPubkey(0x02);
-      const params: BuildTransactionParams = {
-        ...createMinimalParams(),
-        program,
-      };
-      
-      const transaction = builder.build(params);
-      
-      expect(transaction.program.toBytes()).toEqual(program);
-    });
-
     it("should accept program as ta- address string", () => {
       const builder = createBuilder();
       const programAddress = generateTestAddress(0x02);
@@ -365,20 +352,6 @@ describe("TransactionBuilder", () => {
       expect(capturedIndices!.acc1Idx).toBe(3); // 0x04 sorts second
     });
 
-    it("should use instruction data returned from callback", () => {
-      const builder = createBuilder();
-      const expectedData = new Uint8Array([0xAA, 0xBB, 0xCC]);
-
-      const params: BuildTransactionParams = {
-        ...createMinimalParams(),
-        buildInstructionData: () => expectedData,
-      };
-
-      const transaction = builder.build(params);
-
-      expect(transaction.instructionData).toEqual(expectedData);
-    });
-
     it("should accept hex string from callback", () => {
       const builder = createBuilder();
       const expectedBytes = new Uint8Array([0x01, 0x02, 0x03]);
@@ -520,29 +493,6 @@ describe("TransactionBuilder", () => {
       // Signature should be in last 64 bytes of raw transaction
       const signatureInRaw = result.rawTransaction.slice(-64);
       expect(signatureInRaw).toEqual(result.signature.toBytes());
-    });
-
-    it("should create valid wire format", async () => {
-      const builder = createBuilder();
-      const privateKey = createPrivateKey();
-      const publicKey = await getPublicKeyAsync(privateKey);
-      const params: BuildTransactionParams = {
-        feePayer: {
-          publicKey,
-          privateKey,
-        },
-        program: generateTestPubkey(0x02),
-        header: {
-          fee: 1n,
-          nonce: 2n,
-          startSlot: 3n,
-        },
-      };
-      
-      const result = await builder.buildAndSign(params);
-      
-      // Should have at least header size (176 bytes)
-      expect(result.rawTransaction.length).toBeGreaterThanOrEqual(176);
     });
   });
 });

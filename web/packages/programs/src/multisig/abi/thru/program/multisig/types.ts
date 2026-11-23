@@ -1757,7 +1757,13 @@ export class CreateRequestArgsBuilder {
     return this.__tnFamWriter_proof!;
   }
 
+  private __tnSyncLengths(): void {
+    if (this.__tnFam_request_dataCount !== null) this.set_request_data_sz(__tnToBigInt(this.__tnFam_request_dataCount));
+    if (this.__tnFam_proofCount !== null) this.set_proof_sz(__tnToBigInt(this.__tnFam_proofCount));
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = CreateRequestArgs.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -1767,6 +1773,7 @@ export class CreateRequestArgsBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = CreateRequestArgs.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("CreateRequestArgsBuilder: target buffer too small");
@@ -2310,8 +2317,499 @@ const __tn_ir_MultisigError = {
   root: { op: "const", value: 8n }
 } as const;
 
+export class MultisigError_error_invalid_instruction_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_invalid_instruction_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_invalid_instruction_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_invalid_instruction_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_invalid_account_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_invalid_account_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_invalid_account_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_invalid_account_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_invalid_state_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_invalid_state_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_invalid_state_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_invalid_state_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_unauthorized_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_unauthorized_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_unauthorized_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_unauthorized_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_account_create_failed_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_account_create_failed_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_account_create_failed_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_account_create_failed_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_account_resize_failed_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_account_resize_failed_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_account_resize_failed_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_account_resize_failed_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_account_write_failed_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_account_write_failed_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_account_write_failed_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_account_write_failed_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_invalid_member_count_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_invalid_member_count_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_invalid_member_count_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_invalid_member_count_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_invalid_threshold_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_invalid_threshold_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_invalid_threshold_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_invalid_threshold_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_duplicate_member_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_duplicate_member_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_duplicate_member_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_duplicate_member_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_not_a_member_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_not_a_member_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_not_a_member_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_not_a_member_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_duplicate_approval_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_duplicate_approval_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_duplicate_approval_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_duplicate_approval_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_request_stale_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_request_stale_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_request_stale_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_request_stale_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_request_not_open_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_request_not_open_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_request_not_open_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_request_not_open_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_request_not_approved_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_request_not_approved_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_request_not_approved_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_request_not_approved_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_invalid_request_kind_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_invalid_request_kind_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_invalid_request_kind_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_invalid_request_kind_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_invalid_request_data_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_invalid_request_data_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_invalid_request_data_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_invalid_request_data_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_request_too_large_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_request_too_large_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_request_too_large_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_request_too_large_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_cpi_failed_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_cpi_failed_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_cpi_failed_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_cpi_failed_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_request_not_deletable_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_request_not_deletable_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_request_not_deletable_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_request_not_deletable_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_outstanding_requests_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_outstanding_requests_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_outstanding_requests_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_outstanding_requests_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_too_many_requests_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_too_many_requests_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_too_many_requests_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_too_many_requests_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_request_mismatch_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_request_mismatch_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MultisigError_error_request_mismatch_Inner.__tnCreateView requires a Uint8Array");
+    return new MultisigError_error_request_mismatch_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MultisigError_error_Inner {
+  private view: DataView;
+  private __tnFieldContext: Record<string, number | bigint> | null = null;
+  private constructor(private buffer: Uint8Array, private descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    this.__tnFieldContext = fieldContext ?? null;
+  }
+
+  static __tnCreate(payload: Uint8Array, descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>): MultisigError_error_Inner {
+    return new MultisigError_error_Inner(new Uint8Array(payload), descriptor, fieldContext);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MultisigError_error_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["code"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 1)) descriptor = { name: "invalid_instruction", tag: 1, payloadSize: 0 };
+      if (__tnTagEquals(tag, 2)) descriptor = { name: "invalid_account", tag: 2, payloadSize: 0 };
+      if (__tnTagEquals(tag, 3)) descriptor = { name: "invalid_state", tag: 3, payloadSize: 0 };
+      if (__tnTagEquals(tag, 4)) descriptor = { name: "unauthorized", tag: 4, payloadSize: 0 };
+      if (__tnTagEquals(tag, 5)) descriptor = { name: "account_create_failed", tag: 5, payloadSize: 0 };
+      if (__tnTagEquals(tag, 6)) descriptor = { name: "account_resize_failed", tag: 6, payloadSize: 0 };
+      if (__tnTagEquals(tag, 7)) descriptor = { name: "account_write_failed", tag: 7, payloadSize: 0 };
+      if (__tnTagEquals(tag, 8)) descriptor = { name: "invalid_member_count", tag: 8, payloadSize: 0 };
+      if (__tnTagEquals(tag, 9)) descriptor = { name: "invalid_threshold", tag: 9, payloadSize: 0 };
+      if (__tnTagEquals(tag, 10)) descriptor = { name: "duplicate_member", tag: 10, payloadSize: 0 };
+      if (__tnTagEquals(tag, 11)) descriptor = { name: "not_a_member", tag: 11, payloadSize: 0 };
+      if (__tnTagEquals(tag, 12)) descriptor = { name: "duplicate_approval", tag: 12, payloadSize: 0 };
+      if (__tnTagEquals(tag, 13)) descriptor = { name: "request_stale", tag: 13, payloadSize: 0 };
+      if (__tnTagEquals(tag, 14)) descriptor = { name: "request_not_open", tag: 14, payloadSize: 0 };
+      if (__tnTagEquals(tag, 15)) descriptor = { name: "request_not_approved", tag: 15, payloadSize: 0 };
+      if (__tnTagEquals(tag, 16)) descriptor = { name: "invalid_request_kind", tag: 16, payloadSize: 0 };
+      if (__tnTagEquals(tag, 17)) descriptor = { name: "invalid_request_data", tag: 17, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18)) descriptor = { name: "request_too_large", tag: 18, payloadSize: 0 };
+      if (__tnTagEquals(tag, 19)) descriptor = { name: "cpi_failed", tag: 19, payloadSize: 0 };
+      if (__tnTagEquals(tag, 20)) descriptor = { name: "request_not_deletable", tag: 20, payloadSize: 0 };
+      if (__tnTagEquals(tag, 21)) descriptor = { name: "outstanding_requests", tag: 21, payloadSize: 0 };
+      if (__tnTagEquals(tag, 22)) descriptor = { name: "too_many_requests", tag: 22, payloadSize: 0 };
+      if (__tnTagEquals(tag, 23)) descriptor = { name: "request_mismatch", tag: 23, payloadSize: 0 };
+    }
+    return new MultisigError_error_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
+  bytes(): Uint8Array {
+    return new Uint8Array(this.buffer);
+  }
+
+  variant(): __TnVariantDescriptor | null {
+    return this.descriptor;
+  }
+
+  asInvalidInstruction(): MultisigError_error_invalid_instruction_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1)) return null;
+    return MultisigError_error_invalid_instruction_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidAccount(): MultisigError_error_invalid_account_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2)) return null;
+    return MultisigError_error_invalid_account_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidState(): MultisigError_error_invalid_state_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 3)) return null;
+    return MultisigError_error_invalid_state_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asUnauthorized(): MultisigError_error_unauthorized_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4)) return null;
+    return MultisigError_error_unauthorized_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAccountCreateFailed(): MultisigError_error_account_create_failed_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 5)) return null;
+    return MultisigError_error_account_create_failed_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAccountResizeFailed(): MultisigError_error_account_resize_failed_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 6)) return null;
+    return MultisigError_error_account_resize_failed_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAccountWriteFailed(): MultisigError_error_account_write_failed_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 7)) return null;
+    return MultisigError_error_account_write_failed_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidMemberCount(): MultisigError_error_invalid_member_count_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 8)) return null;
+    return MultisigError_error_invalid_member_count_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidThreshold(): MultisigError_error_invalid_threshold_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 9)) return null;
+    return MultisigError_error_invalid_threshold_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asDuplicateMember(): MultisigError_error_duplicate_member_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 10)) return null;
+    return MultisigError_error_duplicate_member_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asNotAMember(): MultisigError_error_not_a_member_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 11)) return null;
+    return MultisigError_error_not_a_member_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asDuplicateApproval(): MultisigError_error_duplicate_approval_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 12)) return null;
+    return MultisigError_error_duplicate_approval_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asRequestStale(): MultisigError_error_request_stale_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 13)) return null;
+    return MultisigError_error_request_stale_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asRequestNotOpen(): MultisigError_error_request_not_open_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 14)) return null;
+    return MultisigError_error_request_not_open_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asRequestNotApproved(): MultisigError_error_request_not_approved_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 15)) return null;
+    return MultisigError_error_request_not_approved_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidRequestKind(): MultisigError_error_invalid_request_kind_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 16)) return null;
+    return MultisigError_error_invalid_request_kind_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidRequestData(): MultisigError_error_invalid_request_data_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 17)) return null;
+    return MultisigError_error_invalid_request_data_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asRequestTooLarge(): MultisigError_error_request_too_large_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18)) return null;
+    return MultisigError_error_request_too_large_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asCpiFailed(): MultisigError_error_cpi_failed_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 19)) return null;
+    return MultisigError_error_cpi_failed_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asRequestNotDeletable(): MultisigError_error_request_not_deletable_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 20)) return null;
+    return MultisigError_error_request_not_deletable_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asOutstandingRequests(): MultisigError_error_outstanding_requests_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 21)) return null;
+    return MultisigError_error_outstanding_requests_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asTooManyRequests(): MultisigError_error_too_many_requests_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 22)) return null;
+    return MultisigError_error_too_many_requests_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asRequestMismatch(): MultisigError_error_request_mismatch_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 23)) return null;
+    return MultisigError_error_request_mismatch_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+}
+
 export class MultisigError {
   private view: DataView;
+  private static readonly __tnFieldOffset_error = 8;
 
   private constructor(private buffer: Uint8Array) {
     this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
@@ -2331,6 +2829,170 @@ export class MultisigError {
     return MultisigError.from_array(buffer);
   }
 
+  static readonly errorVariantDescriptors = Object.freeze([
+    {
+      name: "invalid_instruction",
+      tag: 1,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::invalid_instruction",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_account",
+      tag: 2,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::invalid_account",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_state",
+      tag: 3,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::invalid_state",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "unauthorized",
+      tag: 4,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::unauthorized",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "account_create_failed",
+      tag: 5,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::account_create_failed",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "account_resize_failed",
+      tag: 6,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::account_resize_failed",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "account_write_failed",
+      tag: 7,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::account_write_failed",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_member_count",
+      tag: 8,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::invalid_member_count",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_threshold",
+      tag: 9,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::invalid_threshold",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "duplicate_member",
+      tag: 10,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::duplicate_member",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "not_a_member",
+      tag: 11,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::not_a_member",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "duplicate_approval",
+      tag: 12,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::duplicate_approval",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "request_stale",
+      tag: 13,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::request_stale",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "request_not_open",
+      tag: 14,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::request_not_open",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "request_not_approved",
+      tag: 15,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::request_not_approved",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_request_kind",
+      tag: 16,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::invalid_request_kind",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_request_data",
+      tag: 17,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::invalid_request_data",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "request_too_large",
+      tag: 18,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::request_too_large",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "cpi_failed",
+      tag: 19,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::cpi_failed",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "request_not_deletable",
+      tag: 20,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::request_not_deletable",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "outstanding_requests",
+      tag: 21,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::outstanding_requests",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "too_many_requests",
+      tag: 22,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::too_many_requests",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "request_mismatch",
+      tag: 23,
+      payloadSize: 0,
+      payloadType: "MultisigError::error::request_mismatch",
+      createPayloadBuilder: () => null,
+    },
+  ] as const);
+
   get_code(): bigint {
     const offset = 0;
     return this.view.getBigUint64(offset, true); /* little-endian */
@@ -2347,6 +3009,22 @@ export class MultisigError {
 
   set code(value: bigint) {
     this.set_code(value);
+  }
+
+  errorVariant(): typeof MultisigError.errorVariantDescriptors[number] | null {
+    const tag: number | bigint | null = this.get_code();
+    return MultisigError.errorVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
+  }
+
+  error(): MultisigError_error_Inner {
+    const descriptor = this.errorVariant();
+    if (!descriptor) throw new Error("MultisigError: unknown error variant");
+    const offset = MultisigError.__tnFieldOffset_error;
+    const remaining = this.buffer.length - offset;
+    const payloadLength = descriptor.payloadSize ?? remaining;
+    if (payloadLength < 0 || offset + payloadLength > this.buffer.length) throw new Error("MultisigError: payload exceeds buffer bounds");
+    const slice = this.buffer.subarray(offset, offset + payloadLength);
+    return MultisigError_error_Inner.__tnCreate(slice, descriptor, undefined);
   }
 
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
@@ -2380,17 +3058,45 @@ export class MultisigError {
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
     if (buffer.length < 8) return { ok: false, code: "tn.buffer_too_small", consumed: 8 };
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed: 8 };
   }
 
-  static new(code: bigint): MultisigError {
-    const buffer = new Uint8Array(8);
-    const view = new DataView(buffer.buffer);
-
-    let offset = 0;
-    view.setBigUint64(0, code, true); /* code (little-endian) */
-
-    return new MultisigError(buffer);
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 8 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 1n: t3 = 0; break;
+  case 2n: t3 = 0; break;
+  case 3n: t3 = 0; break;
+  case 4n: t3 = 0; break;
+  case 5n: t3 = 0; break;
+  case 6n: t3 = 0; break;
+  case 7n: t3 = 0; break;
+  case 8n: t3 = 0; break;
+  case 9n: t3 = 0; break;
+  case 10n: t3 = 0; break;
+  case 11n: t3 = 0; break;
+  case 12n: t3 = 0; break;
+  case 13n: t3 = 0; break;
+  case 14n: t3 = 0; break;
+  case 15n: t3 = 0; break;
+  case 16n: t3 = 0; break;
+  case 17n: t3 = 0; break;
+  case 18n: t3 = 0; break;
+  case 19n: t3 = 0; break;
+  case 20n: t3 = 0; break;
+  case 21n: t3 = 0; break;
+  case 22n: t3 = 0; break;
+  case 23n: t3 = 0; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array): MultisigError | null {
@@ -2408,35 +3114,213 @@ export class MultisigError {
 }
 
 export class MultisigErrorBuilder {
-  private buffer: Uint8Array;
-  private view: DataView;
+  private tag: number | null = null;
+  private payload: Uint8Array | null = null;
 
-  constructor() {
-    this.buffer = new Uint8Array(8);
-    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  constructor() {}
+
+  select_invalid_instruction(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_instruction expects 0 bytes");
+    this.tag = 1;
+    this.payload = new Uint8Array(bytes);
+    return this;
   }
 
-  set_code(value: bigint): this {
-    const cast = __tnToBigInt(value);
-    this.view.setBigUint64(0, cast, true);
+  select_invalid_account(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_account expects 0 bytes");
+    this.tag = 2;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_state(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_state expects 0 bytes");
+    this.tag = 3;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_unauthorized(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_unauthorized expects 0 bytes");
+    this.tag = 4;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_account_create_failed(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_account_create_failed expects 0 bytes");
+    this.tag = 5;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_account_resize_failed(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_account_resize_failed expects 0 bytes");
+    this.tag = 6;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_account_write_failed(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_account_write_failed expects 0 bytes");
+    this.tag = 7;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_member_count(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_member_count expects 0 bytes");
+    this.tag = 8;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_threshold(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_threshold expects 0 bytes");
+    this.tag = 9;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_duplicate_member(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_duplicate_member expects 0 bytes");
+    this.tag = 10;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_not_a_member(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_not_a_member expects 0 bytes");
+    this.tag = 11;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_duplicate_approval(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_duplicate_approval expects 0 bytes");
+    this.tag = 12;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_request_stale(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_request_stale expects 0 bytes");
+    this.tag = 13;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_request_not_open(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_request_not_open expects 0 bytes");
+    this.tag = 14;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_request_not_approved(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_request_not_approved expects 0 bytes");
+    this.tag = 15;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_request_kind(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_request_kind expects 0 bytes");
+    this.tag = 16;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_request_data(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_request_data expects 0 bytes");
+    this.tag = 17;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_request_too_large(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_request_too_large expects 0 bytes");
+    this.tag = 18;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_cpi_failed(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_cpi_failed expects 0 bytes");
+    this.tag = 19;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_request_not_deletable(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_request_not_deletable expects 0 bytes");
+    this.tag = 20;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_outstanding_requests(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_outstanding_requests expects 0 bytes");
+    this.tag = 21;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_too_many_requests(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_too_many_requests expects 0 bytes");
+    this.tag = 22;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_request_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_request_mismatch expects 0 bytes");
+    this.tag = 23;
+    this.payload = new Uint8Array(bytes);
     return this;
   }
 
   build(): Uint8Array {
-    const buffer = this.buffer.slice();
+    if (this.tag === null || !this.payload) throw new Error("MultisigError builder missing variant");
+    const buffer = new Uint8Array(1 + this.payload.length);
+    buffer[0] = this.tag;
+    buffer.set(this.payload, 1);
     __tnBuilderValidateOrThrow("MultisigError", MultisigError.validate(buffer));
     return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
-    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
-    __tnBuilderValidateOrThrow("MultisigError", MultisigError.validate(this.buffer));
-    target.set(this.buffer, offset);
+    const bytes = this.build();
+    if (target.length - offset < bytes.length) throw new Error("target buffer too small");
+    target.set(bytes, offset);
     return target;
   }
 
   finish(): MultisigError {
-    const view = MultisigError.from_array(this.buffer.slice());
+    const view = MultisigError.from_array(this.build());
     if (!view) throw new Error("failed to build MultisigError");
     return view;
   }
@@ -5531,7 +6415,12 @@ export class MultisigRequestBuilder {
     return this.__tnFamWriter_request_data!;
   }
 
+  private __tnSyncLengths(): void {
+    if (this.__tnFam_request_dataCount !== null) this.set_request_data_sz(__tnToBigInt(this.__tnFam_request_dataCount));
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = MultisigRequest.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -5541,6 +6430,7 @@ export class MultisigRequestBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = MultisigRequest.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("MultisigRequestBuilder: target buffer too small");

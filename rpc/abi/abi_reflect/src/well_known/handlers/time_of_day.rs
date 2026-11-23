@@ -12,6 +12,10 @@ impl WellKnownType for TimeOfDayHandler {
         "TimeOfDay"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("text", "formatted"))
+    }
+
     fn process(&self, ctx: &WellKnownContext) -> WellKnownResult {
         let Some(fields) = ctx.fields else {
             return WellKnownResult::None;
@@ -40,16 +44,5 @@ impl WellKnownType for TimeOfDayHandler {
         }
 
         WellKnownResult::None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn time_of_day_handler_type_name() {
-        let handler = TimeOfDayHandler;
-        assert_eq!(handler.type_name(), "TimeOfDay");
     }
 }

@@ -12,6 +12,7 @@ pub mod faucet;
 pub mod feature_gates;
 pub mod governance;
 pub mod keys;
+pub mod message;
 pub mod multisig;
 pub mod name_service;
 pub mod network;

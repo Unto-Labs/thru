@@ -238,7 +238,7 @@ async fn setup_fee_payer_context(
         fee_payer_keypair,
         client,
         nonce,
-        start_slot: block_height.finalized_height,
+        start_slot: block_height.locally_executed_height,
         chain_id: chain_info.chain_id,
         timeout_seconds: config.timeout_seconds,
     })
@@ -391,8 +391,7 @@ async fn execute_transaction(
 ) -> Result<TransactionDetails, CliError> {
     // Set chain ID and sign transaction
     transaction = transaction.with_chain_id(context.chain_id);
-    transaction
-        .sign(&context.fee_payer_keypair.private_key)
+    crate::signing::sign_transaction(&mut transaction, &context.fee_payer_keypair)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;
 
     // Submit transaction
@@ -946,7 +945,7 @@ async fn initialize_registry(
         registrar_proof_bytes,
         THRU_REGISTRAR_PROGRAM_FEE,
         nonce,
-        block_height.finalized_height,
+        block_height.locally_executed_height,
     )
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?;
 
@@ -956,8 +955,7 @@ async fn initialize_registry(
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
     transaction = transaction.with_chain_id(chain_info.chain_id);
-    transaction
-        .sign(&fee_payer_keypair.private_key)
+    crate::signing::sign_transaction(&mut transaction, &fee_payer_keypair)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;
 
     // Submit transaction

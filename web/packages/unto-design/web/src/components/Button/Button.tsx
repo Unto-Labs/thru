@@ -2,7 +2,7 @@ import * as React from "react";
 import { Button as BaseButton } from "@base-ui/react/button";
 import "./Button.css";
 
-export type ButtonVariant = "primary" | "secondary" | "outline" | "ghost";
+export type ButtonVariant = "primary" | "accent" | "outline" | "ghost";
 export type ButtonSize = "lg" | "md" | "sm" | "xs";
 
 type BaseButtonProps = React.ComponentProps<typeof BaseButton>;

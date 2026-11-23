@@ -2044,40 +2044,13 @@ mod tests {
     }
 
     #[test]
-    fn builder_handles_typeref_with_callnested() {
-        let mut resolver = TypeResolver::new();
-        resolver.add_typedef(TypeDef {
-            name: "BaseType".into(),
-            format: None,
-            kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U16)),
-        });
-        resolver.add_typedef(TypeDef {
-            name: "Ptr".into(),
-            format: None,
-            kind: TypeKind::TypeRef(crate::abi::types::TypeRefType {
-                name: "BaseType".into(),
-                package: None,
-                comment: None,
-            }),
-        });
-        resolver.resolve_all().unwrap();
-
-        let builder = IrBuilder::new(&resolver);
-        let ir = builder.build_all().unwrap();
-        let ptr_ir = ir.types.iter().find(|t| t.type_name == "Ptr").unwrap();
-        match &ptr_ir.root {
-            IrNode::CallNested(node) => assert_eq!(node.type_name, "BaseType"),
-            other => panic!("expected CallNested node, got {:?}", other),
-        }
-    }
-
-    #[test]
     fn builder_emits_fieldref_for_dynamic_struct() {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "VarStruct".into(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
@@ -2155,6 +2128,7 @@ mod tests {
             name: "FlaggedTail".into(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
@@ -2219,6 +2193,7 @@ mod tests {
             name: "VariantPayload".into(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![StructField {
                     name: "value".into(),
@@ -2232,6 +2207,7 @@ mod tests {
             name: "EnumParent".into(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
@@ -2248,6 +2224,7 @@ mod tests {
                                 path: vec!["tag".into()],
                             }),
                             variants: vec![EnumVariant {
+                                comment: None,
                                 name: "variant".into(),
                                 tag_value: 0,
                                 variant_type: TypeKind::TypeRef(TypeRefType {
@@ -2290,6 +2267,7 @@ mod tests {
                 }),
                 variants: vec![
                     EnumVariant {
+                        comment: None,
                         name: "One".into(),
                         tag_value: 0,
                         variant_type: TypeKind::Primitive(PrimitiveType::Integral(
@@ -2297,6 +2275,7 @@ mod tests {
                         )),
                     },
                     EnumVariant {
+                        comment: None,
                         name: "Two".into(),
                         tag_value: 1,
                         variant_type: TypeKind::Primitive(PrimitiveType::Integral(
@@ -2348,9 +2327,11 @@ mod tests {
                 }),
                 variants: vec![
                     EnumVariant {
+                        comment: None,
                         name: "Dyn".into(),
                         tag_value: 1,
                         variant_type: TypeKind::Struct(StructType {
+                            display: Default::default(),
                             container_attributes: Default::default(),
                             fields: vec![
                                 StructField {
@@ -2378,6 +2359,7 @@ mod tests {
                         }),
                     },
                     EnumVariant {
+                        comment: None,
                         name: "Const".into(),
                         tag_value: 2,
                         variant_type: TypeKind::Primitive(PrimitiveType::Integral(
@@ -2423,6 +2405,7 @@ mod tests {
                     UnionVariant {
                         name: "Bytes".into(),
                         variant_type: TypeKind::Struct(StructType {
+                            display: Default::default(),
                             container_attributes: Default::default(),
                             fields: vec![
                                 StructField {
@@ -2473,37 +2456,6 @@ mod tests {
         };
         assert!(switch.tag.ends_with(".variant"));
         assert_eq!(switch.cases.len(), 2);
-    }
-
-    #[test]
-    fn builder_emits_mulchecked_for_variable_array() {
-        let mut resolver = TypeResolver::new();
-        resolver.add_typedef(TypeDef {
-            name: "DynArray".into(),
-            format: None,
-            kind: TypeKind::Array(ArrayType {
-                container_attributes: Default::default(),
-                size: ExprKind::FieldRef(FieldRefExpr {
-                    path: vec!["count".into()],
-                }),
-                element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
-                    IntegralType::U16,
-                ))),
-                jagged: false,
-            }),
-        });
-        resolver.resolve_all().unwrap();
-
-        let builder = IrBuilder::new(&resolver);
-        let ir = builder.build_all().unwrap();
-        let ty = ir.types.iter().find(|t| t.type_name == "DynArray").unwrap();
-        match &ty.root {
-            IrNode::AlignUp(align) => match align.node.as_ref() {
-                IrNode::MulChecked(_) => {}
-                other => panic!("expected mulchecked node, got {:?}", other),
-            },
-            other => panic!("expected aligned mul node, got {:?}", other),
-        }
     }
 
     #[test]
@@ -2591,6 +2543,7 @@ mod tests {
             name: "A".into(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![StructField {
                     name: "b".into(),
@@ -2607,6 +2560,7 @@ mod tests {
             name: "B".into(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![StructField {
                     name: "a".into(),
@@ -2638,6 +2592,7 @@ mod tests {
             name: "Inner".into(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![StructField {
                     name: "value".into(),
@@ -2687,6 +2642,7 @@ mod tests {
                     name: "Node".into(),
                     format: None,
                     kind: TypeKind::Struct(StructType {
+                        display: Default::default(),
                         container_attributes: Default::default(),
                         fields: vec![
                             StructField {

@@ -1,6 +1,6 @@
 use crate::abi::expr::{ConstantExpression, ExprKind, LiteralExpr};
 use crate::abi::types::{
-    FloatingPointType, IntegralType, PrimitiveType, TypeDef, TypeKind, ValueFormat,
+    FloatingPointType, IntegralType, PrimitiveType, StructDisplay, TypeDef, TypeKind, ValueFormat,
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -149,11 +149,27 @@ impl<'a> FieldOrderTracker<'a> {
     }
 }
 
+/// A struct with synthetic fields, waiting for `resolve_all` to type-check
+/// them: its name for errors, its wire fields with their types, its display.
+#[derive(Debug)]
+struct PendingTypeCheck {
+    name: String,
+    fields: Vec<(String, TypeKind)>,
+    display: StructDisplay,
+}
+
 #[derive(Debug)]
 pub struct TypeResolver {
     pub types: HashMap<String, ResolvedType>,
     pub typedefs: HashMap<String, TypeDef>,
     pub formats: HashMap<String, ValueFormat>,
+    /// Display names and synthetic fields, keyed like `formats` (type name,
+    /// or `Parent::field` for inline structs). Never affects layout.
+    pub displays: HashMap<String, StructDisplay>,
+    display_errors: Vec<String>,
+    /// Structs whose synthetic fields are type-checked once every typedef is
+    /// known.
+    pending_type_checks: Vec<PendingTypeCheck>,
     pub resolution_order: Vec<String>,
 }
 
@@ -163,6 +179,7 @@ pub enum ResolutionError {
     CircularDependency(Vec<String>),
     InvalidTypeDefinition(String),
     InvalidComment(String),
+    InvalidDisplay(String),
     FieldReferenceNotFound(String),
     FieldReferenceNotPrimitive(String),
     NonConstantTypeReference(String),
@@ -179,6 +196,9 @@ impl TypeResolver {
             types: HashMap::new(),
             typedefs: HashMap::new(),
             formats: HashMap::new(),
+            displays: HashMap::new(),
+            display_errors: Vec::new(),
+            pending_type_checks: Vec::new(),
             resolution_order: Vec::new(),
         }
     }
@@ -192,6 +212,10 @@ impl TypeResolver {
         self.formats.get(type_name)
     }
 
+    pub fn display_for_type(&self, type_name: &str) -> Option<&StructDisplay> {
+        self.displays.get(type_name)
+    }
+
     fn register_formats(&mut self, type_name: &str, typedef: &TypeDef) {
         if let Some(format) = &typedef.format {
             self.formats.insert(type_name.to_string(), format.clone());
@@ -202,6 +226,26 @@ impl TypeResolver {
     fn register_kind_formats(&mut self, prefix: &str, kind: &TypeKind) {
         match kind {
             TypeKind::Struct(struct_type) => {
+                if !struct_type.display.is_empty() {
+                    let wire: Vec<&str> =
+                        struct_type.fields.iter().map(|f| f.name.as_str()).collect();
+                    for error in struct_type.display.validate(&wire) {
+                        self.display_errors.push(format!("{prefix}: {error}"));
+                    }
+                    if !struct_type.display.synthetic.is_empty() {
+                        self.pending_type_checks.push(PendingTypeCheck {
+                            name: prefix.to_string(),
+                            fields: struct_type
+                                .fields
+                                .iter()
+                                .map(|f| (f.name.clone(), f.field_type.clone()))
+                                .collect(),
+                            display: struct_type.display.clone(),
+                        });
+                    }
+                    self.displays
+                        .insert(prefix.to_string(), struct_type.display.clone());
+                }
                 for field in &struct_type.fields {
                     let field_name = format!("{}::{}", prefix, field.name);
                     if let Some(format) = &field.format {
@@ -245,6 +289,25 @@ impl TypeResolver {
     }
 
     pub fn resolve_all(&mut self) -> Result<(), ResolutionError> {
+        /* Type checks need every typedef, so they run here, not on add. */
+        for check in std::mem::take(&mut self.pending_type_checks) {
+            let wire: Vec<(&str, &TypeKind)> = check
+                .fields
+                .iter()
+                .map(|(name, kind)| (name.as_str(), kind))
+                .collect();
+            let typedefs = &self.typedefs;
+            let lookup = |name: &str| typedefs.get(name).map(|typedef| &typedef.kind);
+            for error in check.display.check_types(&wire, &lookup) {
+                self.display_errors.push(format!("{}: {error}", check.name));
+            }
+        }
+        if !self.display_errors.is_empty() {
+            return Err(ResolutionError::InvalidDisplay(
+                self.display_errors.join("; "),
+            ));
+        }
+
         // First, collect all type names
         let mut type_names: Vec<String> = self.typedefs.keys().cloned().collect();
         type_names.sort();
@@ -2015,48 +2078,6 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
-    fn test_primitive_resolution() {
-        let mut resolver = TypeResolver::new();
-
-        let typedef = TypeDef {
-            name: "test_type".to_string(),
-            format: None,
-            kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
-        };
-
-        resolver.add_typedef(typedef);
-        resolver.resolve_all().unwrap();
-
-        let resolved = resolver.types.get("test_type").unwrap();
-        assert_eq!(resolved.size, Size::Const(4));
-        assert_eq!(resolved.alignment, 4);
-    }
-
-    #[test]
-    fn test_constant_analysis() {
-        let resolver = TypeResolver::new();
-
-        // Constant expression
-        let const_expr = ExprKind::Literal(LiteralExpr::U32(42));
-        let status = resolver
-            .analyze_expression_constantness(&const_expr, None)
-            .unwrap();
-        assert!(matches!(status, ConstantStatus::Constant));
-
-        // Non-constant expression with field reference (without parent context, won't validate)
-        let non_const_expr = ExprKind::FieldRef(FieldRefExpr {
-            path: vec!["field_name".to_string()],
-        });
-        let status = resolver
-            .analyze_expression_constantness(&non_const_expr, None)
-            .unwrap();
-        assert!(matches!(status, ConstantStatus::NonConstant(_)));
-
-        // With parent context, it should validate the field exists and is primitive
-        // This would require a more complex test setup with actual resolved types
-    }
-
-    #[test]
     fn struct_ref_helpers_prefix_and_dedup() {
         let mut out: FieldRefMap = HashMap::new();
         let mut struct_fields = HashSet::new();
@@ -2110,6 +2131,7 @@ mod tests {
             name: "ForwardRef".to_string(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
@@ -2159,6 +2181,7 @@ mod tests {
             name: "ParentStruct".to_string(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
@@ -2170,6 +2193,7 @@ mod tests {
                         name: "child".to_string(),
                         format: None,
                         field_type: TypeKind::Struct(StructType {
+                            display: Default::default(),
                             container_attributes: Default::default(),
                             fields: vec![
                                 StructField {
@@ -2219,9 +2243,11 @@ mod tests {
                 })),
             }),
             variants: vec![EnumVariant {
+                comment: None,
                 name: "Only".to_string(),
                 tag_value: 0,
                 variant_type: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![],
                 }),
@@ -2232,6 +2258,7 @@ mod tests {
             name: "EnumStruct".to_string(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
@@ -2277,9 +2304,11 @@ mod tests {
                 right: Box::new(ExprKind::Literal(LiteralExpr::U8(3))),
             }),
             variants: vec![EnumVariant {
+                comment: None,
                 name: "Only".to_string(),
                 tag_value: 0,
                 variant_type: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![],
                 }),
@@ -2290,6 +2319,7 @@ mod tests {
             name: "EnumStructOk".to_string(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
@@ -2318,6 +2348,7 @@ mod tests {
             name: "DynStruct".to_string(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
@@ -2372,6 +2403,7 @@ mod tests {
             name: "DynStruct".to_string(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {

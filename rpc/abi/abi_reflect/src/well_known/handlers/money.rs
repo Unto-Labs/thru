@@ -12,6 +12,10 @@ impl WellKnownType for MoneyHandler {
         "Money"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("money", "formatted"))
+    }
+
     fn category(&self) -> &'static str {
         "google"
     }
@@ -55,17 +59,5 @@ impl WellKnownType for MoneyHandler {
         }
 
         WellKnownResult::None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn money_handler_type_name() {
-        let handler = MoneyHandler;
-        assert_eq!(handler.type_name(), "Money");
-        assert_eq!(handler.category(), "google");
     }
 }

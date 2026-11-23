@@ -3,7 +3,7 @@
 .uds-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(21, 30, 30, 0.64);
+  background: var(--color-scrim);
   z-index: 100;
   transition: opacity var(--duration-med) var(--ease-standard);
 }
@@ -22,7 +22,7 @@
   background: var(--color-surface-higher);
   border: 1px solid var(--color-border-secondary);
   box-shadow: var(--shadow-lg);
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
   padding: var(--space-6);
   z-index: 101;
   transition:
@@ -61,15 +61,16 @@
 .uds-dialog__title {
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 22px;
+  font-size: var(--text-title);
+  line-height: 1.2;
   font-weight: var(--fw-semibold);
-  letter-spacing: -0.3px;
+  letter-spacing: var(--tracking-display);
   color: var(--color-text-primary);
 }
 
 .uds-dialog__sub {
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--text-ui);
   color: var(--color-text-tertiary);
   margin: var(--space-2) 0 var(--space-5);
 }
@@ -78,8 +79,8 @@
   background: none;
   border: none;
   cursor: pointer;
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: var(--text-caption);
   color: var(--color-text-tertiary);
   padding: var(--space-1);
 }
@@ -92,4 +93,9 @@
   gap: var(--space-2);
   justify-content: flex-end;
   margin-top: var(--space-2);
+}
+
+.uds-dialog__close:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
 }

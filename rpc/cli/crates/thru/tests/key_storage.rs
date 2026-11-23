@@ -1415,3 +1415,469 @@ async fn invalid_network_url_reports_the_parse_reason_without_saving() {
     );
     assert_eq!(std::fs::read(path).unwrap(), before);
 }
+
+/// Assert a failed `--json` command reported only an error: no key, no phrase.
+fn assert_error_only(output: &Output) {
+    assert!(!output.status.success(), "{output:?}");
+    if output.stdout.is_empty() {
+        return; // clap usage errors go to stderr
+    }
+    let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(value.get("error").is_some(), "{output:?}");
+    assert!(value.get("keys").is_none(), "{output:?}");
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("mnemonic"));
+}
+
+/// The shared BIP-39 / SLIP-0010 vectors (`specs/hd-derivation/thru-hd-derivation.md`).
+fn hd_vectors() -> Value {
+    serde_json::from_str(include_str!(
+        "../../../../../web/packages/sdk/test/vectors/thru-hd-derivation.json"
+    ))
+    .unwrap()
+}
+
+/// Assert no phrase word reaches the process output or any file under `root`.
+fn assert_no_phrase(output: &Output, root: &Path, phrase: &str) {
+    for word in phrase.split_whitespace() {
+        assert_no_seed(output, word);
+    }
+    for entry in std::fs::read_dir(root).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            assert_no_phrase(output, &path, phrase);
+        } else if let Ok(text) = std::fs::read_to_string(&path) {
+            assert!(!text.contains(phrase), "phrase on disk in {path:?}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn recovery_phrase_import_reproduces_shared_vectors_and_signs() {
+    let home = tempfile::tempdir().unwrap();
+    std::fs::set_permissions(home.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+    let (url, _shutdown) = rpc().await;
+    let vectors = hd_vectors();
+    let phrase = vectors["mnemonic"].as_str().unwrap();
+    let address = |index: usize| vectors["vectors"][index]["address"].as_str().unwrap();
+    assert_eq!(
+        vectors["vectors"][0]["path"], "m/44'/8478'/0'/0'",
+        "vector order changed"
+    );
+
+    // Default path from stdin, an account index, and an explicit path with change 1.
+    let input = format!("{phrase}\n");
+    for (name, extra, index, path) in [
+        ("zero", vec![], 0, "m/44'/8478'/0'/0'"),
+        ("one", vec!["--account", "1"], 1, "m/44'/8478'/1'/0'"),
+        (
+            "change",
+            vec!["--path", "m/44'/8478'/0'/1'"],
+            3,
+            "m/44'/8478'/0'/1'",
+        ),
+    ] {
+        let mut args = vec!["keys", "add", name, "--mnemonic", "--stdin"];
+        args.extend(extra);
+        let output = cli(home.path(), &url, &args, Some(&input)).await;
+        let response = success(&output);
+        assert_eq!(response["keys"]["public_key"], address(index), "{name}");
+        assert_eq!(response["keys"]["derivation_path"], path, "{name}");
+        assert_no_phrase(&output, home.path(), phrase);
+    }
+
+    // An owner-only file in a private directory, stored in a new managed file
+    // (the phrase file itself is never registered).
+    let phrase_file = home.path().join("phrase.txt");
+    std::fs::write(&phrase_file, phrase).unwrap();
+    std::fs::set_permissions(&phrase_file, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let output = cli(
+        home.path(),
+        &url,
+        &[
+            "keys",
+            "add",
+            "two",
+            "--mnemonic",
+            "--file",
+            "phrase.txt",
+            "--account",
+            "2",
+        ],
+        None,
+    )
+    .await;
+    let response = success(&output);
+    assert_eq!(response["keys"]["public_key"], address(2));
+    assert_ne!(source_path(&response), phrase_file);
+    std::fs::remove_file(&phrase_file).unwrap();
+    assert_no_phrase(&output, home.path(), phrase);
+
+    // The derived key signs like any other key.
+    let program = hex::encode([9; 32]);
+    let signed = cli(
+        home.path(),
+        &url,
+        &["txn", "sign", &program, "0102", "--fee-payer", "one"],
+        None,
+    )
+    .await;
+    verify_signed(&signed, address(1));
+}
+
+#[tokio::test]
+async fn invalid_recovery_phrases_and_positional_words_are_rejected_without_echo() {
+    let home = tempfile::tempdir().unwrap();
+    let url = "http://127.0.0.1:1";
+    let phrase = hd_vectors()["mnemonic"].as_str().unwrap().to_owned();
+    let bad_checksum = phrase.replacen("about", "abandon", 1);
+    for (input, expected) in [
+        (bad_checksum.as_str(), "checksum"),
+        ("abandon zzzq", "2 words"),
+        (&phrase.replacen("about", "zzzq", 1), "word 12"),
+    ] {
+        let output = cli(
+            home.path(),
+            url,
+            &["keys", "add", "bad", "--mnemonic", "--stdin"],
+            Some(input),
+        )
+        .await;
+        assert!(!output.status.success());
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(expected)
+                || String::from_utf8_lossy(&output.stdout).contains(expected),
+            "{expected}: {output:?}"
+        );
+        assert_no_seed(&output, "abandon");
+        assert_no_seed(&output, "zzzq");
+    }
+
+    // Words passed as arguments are refused before any of them is retained.
+    let mut args = vec!["keys", "add", "bad", "--mnemonic", "--stdin"];
+    args.extend(phrase.split(' '));
+    let output = cli(home.path(), url, &args, None).await;
+    assert!(!output.status.success());
+    assert_no_seed(&output, "abandon");
+
+    // Derivation options require --mnemonic, exclude each other, and are
+    // validated, on both import and generation.
+    for (command, extra) in [
+        ("add", vec!["--account", "1"]),
+        ("add", vec!["--path", "m/44'/8478'/0'/0'"]),
+        (
+            "add",
+            vec![
+                "--mnemonic",
+                "--account",
+                "1",
+                "--path",
+                "m/44'/8478'/1'/0'",
+            ],
+        ),
+        ("add", vec!["--mnemonic", "--path", "m/44'/8478'/0'/0"]),
+        ("add", vec!["--mnemonic", "--path", "m/44'/9999'/0'/0'"]),
+        ("add", vec!["--mnemonic", "--account", "2147483648"]),
+        ("generate", vec!["--account", "1"]),
+        ("generate", vec!["--path", "m/44'/8478'/0'/0'"]),
+        (
+            "generate",
+            vec![
+                "--mnemonic",
+                "--account",
+                "1",
+                "--path",
+                "m/44'/8478'/1'/0'",
+            ],
+        ),
+        ("generate", vec!["--mnemonic", "--account", "2147483648"]),
+        ("generate", vec!["--mnemonic", "--path", "m/44'/8478'/0'/0"]),
+    ] {
+        let mut args = vec!["keys", command, "bad"];
+        if command == "add" {
+            args.push("--stdin");
+        }
+        args.extend(extra.iter().copied());
+        let output = cli(home.path(), url, &args, Some(&phrase)).await;
+        assert_error_only(&output);
+        assert_no_seed(&output, "abandon");
+    }
+    assert!(
+        !home.path().join(".thru/cli/keys").exists()
+            || std::fs::read_dir(home.path().join(".thru/cli/keys"))
+                .unwrap()
+                .next()
+                .is_none(),
+        "a rejected import left a key file"
+    );
+}
+
+#[tokio::test]
+async fn generated_recovery_phrase_is_shown_once_and_restores_the_same_key() {
+    let home = tempfile::tempdir().unwrap();
+    let url = "http://127.0.0.1:1";
+    let output = cli(
+        home.path(),
+        url,
+        &["keys", "generate", "fresh", "--mnemonic", "--account", "4"],
+        None,
+    )
+    .await;
+    let response = success(&output);
+    let phrase = response["keys"]["mnemonic"].as_str().unwrap().to_owned();
+    assert_eq!(phrase.split(' ').count(), 24);
+    assert_eq!(response["keys"]["derivation_path"], "m/44'/8478'/4'/0'");
+    let address = response["keys"]["public_key"].as_str().unwrap().to_owned();
+
+    // Nothing on disk holds the phrase, and later commands never show it.
+    let empty = Output {
+        status: output.status,
+        stdout: Vec::new(),
+        stderr: Vec::new(),
+    };
+    assert_no_phrase(&empty, home.path(), &phrase);
+    for args in [vec!["keys", "list"], vec!["keys", "get", "fresh"]] {
+        let listed = cli(home.path(), url, &args, None).await;
+        success(&listed);
+        assert!(!String::from_utf8_lossy(&listed.stdout).contains(&phrase));
+    }
+
+    let restored = cli(
+        home.path(),
+        url,
+        &[
+            "keys",
+            "add",
+            "restored",
+            "--mnemonic",
+            "--stdin",
+            "--account",
+            "4",
+        ],
+        Some(&phrase),
+    )
+    .await;
+    assert_eq!(success(&restored)["keys"]["public_key"], address);
+    assert!(success(&restored)["keys"].get("mnemonic").is_none());
+}
+
+#[tokio::test]
+async fn failed_generation_prints_no_phrase_and_keeps_the_registration() {
+    let home = tempfile::tempdir().unwrap();
+    let url = "http://127.0.0.1:1";
+    let first = success(&cli(home.path(), url, &["keys", "generate", "taken"], None).await);
+    let address = first["keys"]["public_key"].clone();
+    let output = cli(
+        home.path(),
+        url,
+        &["keys", "generate", "taken", "--mnemonic"],
+        None,
+    )
+    .await;
+    assert_error_only(&output);
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("Recovery phrase"));
+    let kept = success(&cli(home.path(), url, &["keys", "get", "taken"], None).await);
+    assert_eq!(kept["keys"]["public_key"], address);
+}
+
+#[tokio::test]
+async fn human_generation_output_shows_the_phrase_once_with_a_warning() {
+    let home = tempfile::tempdir().unwrap();
+    let url = "http://127.0.0.1:1";
+    let output = tokio::process::Command::new(env!("CARGO_BIN_EXE_thru"))
+        .args([
+            "--quiet",
+            "--url",
+            url,
+            "keys",
+            "generate",
+            "human",
+            "--mnemonic",
+        ])
+        .env("HOME", home.path())
+        .env("NO_COLOR", "1")
+        .current_dir(home.path())
+        .stdin(Stdio::null())
+        .kill_on_drop(true)
+        .output()
+        .await
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let lines: Vec<&str> = stdout.lines().collect();
+    let header = lines
+        .iter()
+        .position(|line| *line == "Recovery phrase (shown once, not stored):")
+        .expect("phrase header");
+    let phrase = lines[header + 1].trim();
+    assert_eq!(phrase.split(' ').count(), 24);
+    assert_eq!(stdout.matches(phrase).count(), 1);
+    assert!(stdout.contains("Derivation path: m/44'/8478'/0'/0'"));
+    let address = lines
+        .iter()
+        .find_map(|line| line.trim().strip_prefix("Address: "))
+        .expect("address line");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("keep it offline")
+            || stdout.contains("keep it offline")
+    );
+
+    let restored = cli(
+        home.path(),
+        url,
+        &["keys", "add", "restored", "--mnemonic", "--stdin"],
+        Some(phrase),
+    )
+    .await;
+    assert_eq!(success(&restored)["keys"]["public_key"], address);
+}
+
+/// A pseudo-terminal pair: the CLI reads the replica as its stdin; the test
+/// types into the controller and reads back whatever the terminal echoes.
+struct Pty {
+    controller: std::os::fd::OwnedFd,
+    replica: std::os::fd::OwnedFd,
+}
+
+impl Pty {
+    fn open() -> Self {
+        use std::os::fd::FromRawFd;
+        unsafe {
+            let controller = libc::posix_openpt(libc::O_RDWR | libc::O_NOCTTY);
+            assert!(controller >= 0, "posix_openpt");
+            assert_eq!(libc::grantpt(controller), 0);
+            assert_eq!(libc::unlockpt(controller), 0);
+            let name = std::ffi::CStr::from_ptr(libc::ptsname(controller)).to_owned();
+            let replica = libc::open(name.as_ptr(), libc::O_RDWR | libc::O_NOCTTY);
+            assert!(replica >= 0, "open replica");
+            Self {
+                controller: std::os::fd::OwnedFd::from_raw_fd(controller),
+                replica: std::os::fd::OwnedFd::from_raw_fd(replica),
+            }
+        }
+    }
+
+    fn echo_enabled(&self) -> bool {
+        use std::os::fd::AsRawFd;
+        let mut attributes = std::mem::MaybeUninit::<libc::termios>::uninit();
+        assert_eq!(
+            unsafe { libc::tcgetattr(self.replica.as_raw_fd(), attributes.as_mut_ptr()) },
+            0
+        );
+        unsafe { attributes.assume_init() }.c_lflag & libc::ECHO != 0
+    }
+
+    /// Wait until the CLI has turned echo off (it is waiting for the phrase).
+    async fn wait_for_echo_off(&self) {
+        for _ in 0..1000 {
+            if !self.echo_enabled() {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        panic!("the CLI never turned terminal echo off");
+    }
+
+    fn type_line(&self, text: &str) {
+        use std::os::fd::AsRawFd;
+        let line = format!("{text}\n");
+        let written = unsafe {
+            libc::write(
+                self.controller.as_raw_fd(),
+                line.as_ptr().cast(),
+                line.len(),
+            )
+        };
+        assert_eq!(written, line.len() as isize);
+    }
+
+    /// Everything the terminal has echoed so far.
+    fn echoed(&self) -> String {
+        use std::os::fd::AsRawFd;
+        let fd = self.controller.as_raw_fd();
+        unsafe {
+            libc::fcntl(
+                fd,
+                libc::F_SETFL,
+                libc::fcntl(fd, libc::F_GETFL) | libc::O_NONBLOCK,
+            )
+        };
+        let mut echoed = Vec::new();
+        let mut buffer = [0u8; 4096];
+        loop {
+            let count = unsafe { libc::read(fd, buffer.as_mut_ptr().cast(), buffer.len()) };
+            if count <= 0 {
+                break;
+            }
+            echoed.extend_from_slice(&buffer[..count as usize]);
+        }
+        String::from_utf8_lossy(&echoed).into_owned()
+    }
+
+    fn stdin(&self) -> Stdio {
+        Stdio::from(self.replica.try_clone().unwrap())
+    }
+}
+
+#[tokio::test]
+async fn terminal_phrase_input_is_not_echoed_and_echo_is_restored() {
+    let home = tempfile::tempdir().unwrap();
+    let vectors = hd_vectors();
+    let phrase = vectors["mnemonic"].as_str().unwrap();
+    let pty = Pty::open();
+    assert!(pty.echo_enabled());
+    let child = cli_command(
+        home.path(),
+        "http://127.0.0.1:1",
+        &["keys", "add", "typed", "--mnemonic", "--stdin"],
+    )
+    .stdin(pty.stdin())
+    .spawn()
+    .unwrap();
+    pty.wait_for_echo_off().await;
+    pty.type_line(phrase);
+    let output = tokio::time::timeout(Duration::from_secs(120), child.wait_with_output())
+        .await
+        .expect("CLI timed out")
+        .unwrap();
+    let response = success(&output);
+    assert_eq!(
+        response["keys"]["public_key"],
+        vectors["vectors"][0]["address"]
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("input is hidden"));
+    assert_no_seed(&output, "abandon");
+    let echoed = pty.echoed();
+    assert!(!echoed.contains("abandon"), "phrase echoed: {echoed:?}");
+    assert!(pty.echo_enabled(), "echo not restored");
+}
+
+#[tokio::test]
+async fn interrupting_the_hidden_prompt_restores_echo() {
+    use std::os::unix::process::ExitStatusExt;
+    let home = tempfile::tempdir().unwrap();
+    let pty = Pty::open();
+    let child = cli_command(
+        home.path(),
+        "http://127.0.0.1:1",
+        &["keys", "add", "typed", "--mnemonic", "--stdin"],
+    )
+    .stdin(pty.stdin())
+    .spawn()
+    .unwrap();
+    pty.wait_for_echo_off().await;
+    unsafe { libc::kill(child.id().unwrap() as libc::pid_t, libc::SIGINT) };
+    let output = tokio::time::timeout(Duration::from_secs(120), child.wait_with_output())
+        .await
+        .expect("CLI timed out")
+        .unwrap();
+    assert_eq!(output.status.signal(), Some(libc::SIGINT), "{output:?}");
+    assert!(pty.echo_enabled(), "echo not restored after SIGINT");
+    assert!(
+        !home.path().join(".thru/cli/keys").exists() || {
+            std::fs::read_dir(home.path().join(".thru/cli/keys"))
+                .unwrap()
+                .next()
+                .is_none()
+        }
+    );
+}

@@ -422,6 +422,9 @@ impl ImportResolver {
                     for field in &value.fields {
                         visit(&field.field_type, packages);
                     }
+                    for field in &value.display.synthetic {
+                        visit(field.return_type.inner(), packages);
+                    }
                 }
                 TypeKind::Union(value) => {
                     for variant in &value.variants {

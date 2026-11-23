@@ -1457,7 +1457,7 @@ async fn submit_transaction(
             "executor collides with fixed slots; approved indexes cannot be rewritten",
         ));
     }
-    let transaction = super::txn::build_and_sign_transaction(
+    let (wire, _fee_payer_signer) = super::txn::build_and_sign_transaction(
         config,
         program,
         bytes,
@@ -1471,7 +1471,6 @@ async fn submit_transaction(
         &accounts.read_only,
     )
     .await?;
-    let wire = transaction.to_wire();
     if wire.len() > 32768 {
         return Err(invalid(
             "signed transaction including proofs exceeds 32768-byte MTU",

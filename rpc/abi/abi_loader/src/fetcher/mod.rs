@@ -155,13 +155,13 @@ impl Default for OnchainFetcherConfig {
     fn default() -> Self {
         let mut rpc_endpoints = std::collections::HashMap::new();
         rpc_endpoints.insert(
-            "alphanet".to_string(),
-            "https://rpc.alphanet.thru.org".to_string(),
+            "betanet".to_string(),
+            "https://rpc.betanet.thru.org".to_string(),
         );
 
         Self {
             rpc_endpoints,
-            default_network: "alphanet".to_string(),
+            default_network: "betanet".to_string(),
             timeout_seconds: 30,
             abi_manager_program_id: bootstrap_address::ABI_MANAGER_PROGRAM_ADDRESS.to_string(),
             abi_manager_is_ephemeral: false,

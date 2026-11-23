@@ -6,7 +6,7 @@
   border: 1px solid var(--color-border-tertiary);
   background: var(--color-surface-primary);
   width: 100%;
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
 }
 
 .uds-deposit__qr {
@@ -35,13 +35,13 @@
   min-width: 0;
 }
 .uds-deposit__label {
-  font-size: 13px;
+  font-size: var(--text-ui);
   font-weight: var(--fw-medium);
   color: var(--color-text-primary);
 }
 .uds-deposit__addr {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-micro);
   color: var(--color-text-tertiary);
   word-break: break-all;
   max-width: 22ch;
@@ -50,15 +50,7 @@
 
 .uds-deposit__copy {
   flex: none;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--color-text-tertiary);
-  display: inline-flex;
   padding: var(--space-2);
-}
-.uds-deposit__copy:hover {
-  color: var(--color-text-primary);
 }
 
 :where([data-theme="dark"], :root[data-theme="dark"]) .uds-deposit__qr {

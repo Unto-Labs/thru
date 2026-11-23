@@ -15,7 +15,9 @@ import { Collapsible } from "@base-ui/react/collapsible";
 import { useWaitStages, WaitHero, WALLET_SHEET_SLOW_MS, WALLET_SHEET_ESCALATE_MS } from "./wait";
 import { DepositScreens } from "./DepositScreens";
 import { DepositKyc } from "./DepositKyc";
+import { DepositDocuments } from "./DepositDocuments";
 import { DepositBankDetails, DepositActivity } from "./DepositBank";
+import { CashOut, CashOutBank, CashOutAmount, CashOutReview, CashOutStatus } from "./CashOut";
 import "./WalletSheet.css";
 
 const Check = (p: React.SVGProps<SVGSVGElement>) => (
@@ -387,7 +389,6 @@ export interface WalletSheetTxInstruction {
   calls?: WalletSheetTxCall[];
   /** Extra decoded content shown under the calls (a value tree). */
   children?: React.ReactNode;
-  /** Open the instruction section by default. */
   defaultOpen?: boolean;
 }
 
@@ -411,11 +412,9 @@ export interface WalletSheetTxApproveProps {
    *  the same figures the explorer shows for a landed transaction. */
   fees?: WalletSheetTxField[];
   feesLabel?: React.ReactNode;
-  /** Accounts the transaction touches, with their roles. */
   accounts?: WalletSheetTxAccount[];
   /** The instruction data section; omit to hide it. */
   instruction?: WalletSheetTxInstruction;
-  /** Raw transaction bytes as hex. */
   rawHex?: string;
   /** Byte length of `rawHex`; derived from the hex when omitted. */
   rawSize?: number;
@@ -712,7 +711,13 @@ export const WalletSheet = {
   TxDone,
   ...DepositScreens,
   DepositKyc,
+  DepositDocuments,
   DepositBankDetails,
   DepositActivity,
+  CashOut,
+  CashOutBank,
+  CashOutAmount,
+  CashOutReview,
+  CashOutStatus,
   PoweredBy,
 };

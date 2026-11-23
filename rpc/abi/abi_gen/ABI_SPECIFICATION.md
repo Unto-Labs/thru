@@ -1111,6 +1111,67 @@ Programs write the discriminator when they create an account and check the
 owner and the discriminator (and the size) on every load, including loads of
 other programs' accounts. Background: `specs/account-discriminator-plan.md`.
 
+### 12.6 Program Errors
+
+A program stops a transaction by reverting with one 64-bit code. The code
+means nothing without the program: Token and EOA both use 1, 2, 3 for
+different things. The ABI names a program's codes on its errors root, so a
+reader sees `insufficient_funds` and a sentence instead of `7`.
+
+**Root shape**: `program-metadata.root-types.errors` names a packed struct.
+Its first field is the integer `code`. The next field is an enum keyed on
+`code` (Section 3.3.2) with one variant per code. Variants carry no payload,
+so `variant-type` is omitted.
+
+```yaml
+- name: TokenError
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: code
+        field-type:
+          primitive: u64
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: invalid_instruction
+              tag-value: 1
+              comment: Instruction tag is not a known token instruction.
+            - name: insufficient_funds
+              tag-value: 7
+              comment: Source balance is lower than the transfer amount.
+```
+
+**Rules**:
+- `name` is the code's constant in snake case without the program prefix.
+- `comment` is one sentence for a person reading an explorer page. It is
+  optional on any enum variant, and tools show it next to the name.
+- A code is listed once. Two variants may not share a code or a name.
+- A negative code is written as it is in the program, `tag-value: -101`. It
+  is stored as the 64-bit two's complement, which is the value the program
+  reverts with.
+- When `code` is narrower than 64 bits the listed value is cut to that width,
+  and sign-extended when `code` is a signed type, before it is compared with
+  the reverted code.
+- List only codes the program itself chooses. A system call's return value
+  that a program passes through unchanged (the VM's -7..-49) is named by
+  tools without the ABI.
+- A code that is added later is a new variant. A listed code never changes
+  meaning.
+
+**Lookup**: `reflect_error` (Rust `abi_reflect`, WASM, `reflectError` in the
+TypeScript SDK, `ReflectProgramError` in the Go port) maps a reverted code to
+`{ type_name, name, code, comment }`, or nothing when the code is not listed.
+An errors root that is only the `code` field lists nothing. The lookup must use
+the ABI of the program that reverted, which for a nested call is the callee
+and not the transaction's top-level program.
+
 ## 13. Best Practices
 
 ### 13.1 Design Guidelines

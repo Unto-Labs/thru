@@ -25,7 +25,7 @@ import {
 import { deriveProgramAddress } from '@thru/sdk';
 import { Pubkey } from '@thru/sdk';
 import { createThruClient } from '@thru/sdk/client';
-import { deriveMintAddress } from '../token';
+import { deriveMintAddress, deriveTokenAccountAddress } from '../token';
 
 /** Pre-Core Public-era addresses. The eight applications deployed after
  * genesis (UNTO-3561) return to theirs; every Core-managed program moved. */
@@ -166,7 +166,7 @@ describe('bootstrap-managed program addresses', () => {
     expect(BOOTSTRAP_PROGRAM_SEEDS.multisig).toBe('thru-program:43791523');
   });
 
-  it('derives the approved Alphanet UUSD mint with the wallet setup default', () => {
+  it('derives the approved UUSD mint with the wallet setup default', () => {
     const client = createThruClient({ baseUrl: 'https://rpc.test' });
     expect(createHash('sha256').update('thru:credits:app-wide-mint:v1').digest('hex'))
       .toBe(CREDITS_MINT_SEED_HEX);
@@ -178,5 +178,24 @@ describe('bootstrap-managed program addresses', () => {
         BOOTSTRAP_PROGRAM_ADDRESSES.token,
       ).address,
     ).toBe(CREDITS_MINT_ADDRESS);
+  });
+
+  it('places the consensus vaults where Init creates them: WTHRU token accounts, not consensus state', () => {
+    const client = createThruClient({ baseUrl: 'https://rpc.test' });
+    const consensus = BOOTSTRAP_PROGRAM_ADDRESSES.consensus_validator;
+    // Pinned values were computed independently (python hashlib).
+    for (const [name, address] of [
+      ['converted_vault', 'tau1YuXs3QDzkjPJXXHACa-5QetQacxoB2Sx1UYAz8yhrL'],
+      ['unclaimed_vault', 'taTQvE1X-dPasR88rBCQakbwleuiEUkxyjA1gwmKnGYbT1'],
+    ] as const) {
+      const seed = new Uint8Array(32);
+      seed.set(new TextEncoder().encode(name));
+      expect(deriveTokenAccountAddress(
+        client, consensus, BOOTSTRAP_STATE_ADDRESSES.wthru_mint, BOOTSTRAP_PROGRAM_ADDRESSES.token, seed,
+      ).address).toBe(address);
+      expect(BOOTSTRAP_STATE_ADDRESSES[name]).toBe(address);
+      // Not the retired PDA(consensus program, seed), which Init never creates.
+      expect(deriveProgramAddress({ programAddress: consensus, seed }).address).not.toBe(address);
+    }
   });
 });

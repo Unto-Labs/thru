@@ -59,14 +59,14 @@ a:hover{text-decoration:underline;text-underline-offset:3px;}
   </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;ready&quot;,&quot;options&quot;:[&quot;ready&quot;,&quot;loading&quot;,&quot;error&quot;,&quot;empty&quot;,&quot;edge&quot;,&quot;many&quot;],&quot;tsType&quot;:&quot;'ready' | 'loading' | 'error' | 'empty' | 'edge' | 'many'&quot;},&quot;scrollY&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:0,&quot;max&quot;:1200},&quot;network&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Alphanet&quot;,&quot;options&quot;:[&quot;Alphanet&quot;,&quot;Betanet&quot;],&quot;tsType&quot;:&quot;'Alphanet' | 'Betanet'&quot;},&quot;platform&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;ios&quot;,&quot;options&quot;:[&quot;ios&quot;,&quot;web&quot;],&quot;tsType&quot;:&quot;'ios' | 'web'&quot;},&quot;balance&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;$56.00&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;ready&quot;,&quot;options&quot;:[&quot;ready&quot;,&quot;loading&quot;,&quot;error&quot;,&quot;empty&quot;,&quot;edge&quot;,&quot;many&quot;],&quot;tsType&quot;:&quot;'ready' | 'loading' | 'error' | 'empty' | 'edge' | 'many'&quot;},&quot;scrollY&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:0,&quot;max&quot;:1200},&quot;network&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Betanet&quot;,&quot;options&quot;:[&quot;Betanet&quot;],&quot;tsType&quot;:&quot;'Betanet'&quot;},&quot;platform&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;ios&quot;,&quot;options&quot;:[&quot;ios&quot;,&quot;web&quot;],&quot;tsType&quot;:&quot;'ios' | 'web'&quot;},&quot;balance&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;$56.00&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
 class Component extends DCLogic {
   renderVals() {
     const p = this.props;
     const web = (p.platform ?? 'ios') === 'web';
     return {
       isIos: !web, isWeb: web,
-      network: p.network ?? 'Alphanet',
+      network: p.network ?? 'Betanet',
       balance: p.balance ?? '$56.00',
       state: p.state ?? 'ready',
       thirdActivity: ['error', 'empty'].includes(p.state ?? 'ready'),

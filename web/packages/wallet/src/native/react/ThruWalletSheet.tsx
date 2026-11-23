@@ -90,7 +90,6 @@ export interface ThruWalletSheetProps {
 export interface ThruWalletSheetHandle {
   /** Imperatively open to a specific snap index. */
   expand: (index?: number) => void;
-  /** Imperatively close the sheet. */
   close: () => void;
 }
 

@@ -22,36 +22,70 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Create program
       fields:
+      - name: program_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(program_account_idx)'
+        display-name: Program
+        user-display: true
+      - name: metadata_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(meta_account_idx)'
+        display-name: Program metadata
+        user-display: true
+      - name: authority_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Authority
+        user-display: true
       - name: meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: program_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: srcbuf_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: source_buffer
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(srcbuf_account_idx)'
+        display-name: Source buffer
+        user-display: true
       - name: srcbuf_offset
+        user-display: false
         field-type:
           primitive: u32
       - name: srcbuf_size
+        display-name: Program size (bytes)
         field-type:
           primitive: u32
       # SHA-256 of exactly srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size);
       # the manager rejects any other bytes.
       - name: srcbuf_sha256
+        user-display: false
         field-type:
           type-ref:
             name: Hash
             package: "thru.common.primitives"
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: seed_len
+        user-display: false
         field-type:
           primitive: u32
       - name: seed
+        user-display: false
         field-type:
           array:
             size:
@@ -60,11 +94,13 @@ types:
             element-type:
               primitive: u8
       - name: meta_state_proof
+        user-display: false
         field-type:
           type-ref:
             name: StateProof
             package: "thru.blockchain.state_proof"
       - name: program_state_proof
+        user-display: false
         field-type:
           type-ref:
             name: StateProof
@@ -73,36 +109,70 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Create ephemeral program
       fields:
+      - name: program_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(program_account_idx)'
+        display-name: Program
+        user-display: true
+      - name: metadata_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(meta_account_idx)'
+        display-name: Program metadata
+        user-display: true
+      - name: authority_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Authority
+        user-display: true
       - name: meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: program_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: srcbuf_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: source_buffer
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(srcbuf_account_idx)'
+        display-name: Source buffer
+        user-display: true
       - name: srcbuf_offset
+        user-display: false
         field-type:
           primitive: u32
       - name: srcbuf_size
+        display-name: Program size (bytes)
         field-type:
           primitive: u32
       # SHA-256 of exactly srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size);
       # the manager rejects any other bytes.
       - name: srcbuf_sha256
+        user-display: false
         field-type:
           type-ref:
             name: Hash
             package: "thru.common.primitives"
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: seed_len
+        user-display: false
         field-type:
           primitive: u32
       - name: seed
+        user-display: false
         field-type:
           array:
             size:
@@ -114,25 +184,50 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Upgrade program
       fields:
+      - name: program_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(program_account_idx)'
+        display-name: Program
+        user-display: true
+      - name: metadata_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(meta_account_idx)'
+        display-name: Program metadata
+        user-display: true
       - name: meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: program_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: srcbuf_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: source_buffer
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(srcbuf_account_idx)'
+        display-name: Source buffer
+        user-display: true
       - name: srcbuf_offset
+        user-display: false
         field-type:
           primitive: u32
       - name: srcbuf_size
+        display-name: Program size (bytes)
         field-type:
           primitive: u32
       # SHA-256 of exactly srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size);
       # the manager rejects any other bytes.
       - name: srcbuf_sha256
+        user-display: false
         field-type:
           type-ref:
             name: Hash
@@ -141,14 +236,36 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Pause or unpause program
       fields:
+      - name: action
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if is_paused == 1 { "Pause" } else if is_paused == 0 { "Unpause" } else { `Invalid (${is_paused})` }'
+        display-name: Action
+        user-display: true
+      - name: program_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(program_account_idx)'
+        display-name: Program
+        user-display: true
+      - name: metadata_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(meta_account_idx)'
+        display-name: Program metadata
+        user-display: true
       - name: meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: program_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: is_paused
+        user-display: false
         field-type:
           primitive: u8
 - name: HeaderOnlyArgs
@@ -156,24 +273,54 @@ types:
     struct:
       packed: true
       fields:
+      - name: program_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(program_account_idx)'
+        display-name: Program
+        user-display: true
+      - name: metadata_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(meta_account_idx)'
+        display-name: Program metadata
+        user-display: true
       - name: meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: program_account_idx
+        user-display: false
         field-type:
           primitive: u16
 - name: SetAuthorityArgs
   kind:
     struct:
       packed: true
+      display-name: Propose program authority
       fields:
+      - name: program_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(program_account_idx)'
+        display-name: Program
+        user-display: true
+      - name: metadata_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(meta_account_idx)'
+        display-name: Program metadata
+        user-display: true
       - name: meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: program_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: authority_candidate
+        display-name: Proposed authority
         field-type:
           type-ref:
             name: Pubkey
@@ -184,6 +331,7 @@ types:
       packed: true
       fields:
       - name: tag
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -245,6 +393,7 @@ types:
       packed: true
       fields:
       - name: account_type
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -266,23 +415,34 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Program metadata
       fields:
       - name: authority
+        display-name: Authority
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: authority_candidate
+        user-display: false
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: version
+        display-name: Version
         field-type:
           primitive: u64
       - name: state
+        user-display: false
         field-type:
           primitive: u8
+      - name: state_name
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if state == 0 { "Open" } else if state == 1 { "Paused" } else if state == 2 { "Finalized" } else { `Unknown (${state})` }'
+        display-name: State
+        user-display: true
 - name: ManagerError
   kind:
     struct:
@@ -291,3 +451,80 @@ types:
       - name: code
         field-type:
           primitive: u16
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: discriminant
+              tag-value: 2 # 0x0002
+              comment: Instruction is not a known program manager instruction.
+            - name: size
+              tag-value: 256 # 0x0100
+              comment: The account seed is longer than 32 bytes.
+            - name: size_instruction
+              tag-value: 257 # 0x0101
+              comment: Instruction data is too short or the wrong size for this instruction.
+            - name: value_instruction
+              tag-value: 513 # 0x0201
+              comment: The pause flag in the instruction is not 0 or 1.
+            - name: size_srcbuf_acc
+              tag-value: 259 # 0x0103
+              comment: The source range goes past the end of the source buffer account.
+            - name: value_srcbuf_acc
+              tag-value: 515 # 0x0203
+              comment: The source buffer contents do not match the hash in the instruction.
+            - name: index_srcbuf_acc
+              tag-value: 1027 # 0x0403
+              comment: The source buffer account index is outside the account list of the transaction.
+            - name: na_srcbuf_acc
+              tag-value: 1283 # 0x0503
+              comment: The source buffer account does not exist.
+            - name: state_srcbuf_acc
+              tag-value: 1795 # 0x0703
+              comment: The source buffer account is compressed or deleted.
+            - name: invalid_program_srcbuf_acc
+              tag-value: 2307 # 0x0903
+              comment: The source buffer does not hold a valid program image.
+            - name: size_meta_acc
+              tag-value: 260 # 0x0104
+              comment: The metadata account is not a program metadata account.
+            - name: authorization_meta_acc
+              tag-value: 772 # 0x0304
+              comment: The program authority did not authorize this transaction.
+            - name: index_meta_acc
+              tag-value: 1028 # 0x0404
+              comment: The metadata account index is outside the account list of the transaction.
+            - name: na_meta_acc
+              tag-value: 1284 # 0x0504
+              comment: The metadata account does not exist, or already exists when creating a program.
+            - name: relationship_meta_acc
+              tag-value: 1540 # 0x0604
+              comment: The metadata account is not owned by the program manager.
+            - name: state_meta_acc
+              tag-value: 1796 # 0x0704
+              comment: The program is finalized, or is not in the state this instruction requires.
+            - name: not_writable_meta_acc
+              tag-value: 2052 # 0x0804
+              comment: The metadata account is not writable in this transaction.
+            - name: index_program_acc
+              tag-value: 1029 # 0x0405
+              comment: The program account index is outside the account list of the transaction.
+            - name: na_program_acc
+              tag-value: 1285 # 0x0505
+              comment: The program account does not exist, or already exists when creating a program.
+            - name: relationship_program_acc
+              tag-value: 1541 # 0x0605
+              comment: The program account is not owned by the program manager, or is not the program of this metadata account.
+            - name: not_writable_program_acc
+              tag-value: 2053 # 0x0805
+              comment: The program account is not writable in this transaction.
+            - name: authorization_authority_acc
+              tag-value: 774 # 0x0306
+              comment: The authority account did not authorize this transaction.
+            - name: authorization_authority_candidate_acc
+              tag-value: 775 # 0x0307
+              comment: The proposed new authority did not authorize this transaction.

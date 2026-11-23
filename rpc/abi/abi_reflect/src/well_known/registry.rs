@@ -49,6 +49,24 @@ impl WellKnownRegistry {
         WellKnownResult::None
     }
 
+    /* The one-line form of an enriched value of `type_name`: its display
+     * kind and text. None when the type has no display form or the
+     * enrichment lacks the text. */
+    pub fn display_form(
+        &self,
+        type_name: &str,
+        enriched: &serde_json::Map<String, serde_json::Value>,
+    ) -> Option<(&'static str, String)> {
+        let (kind, key) = self.handlers.get(type_name)?.display_key()?;
+        let text = match enriched.get(key)? {
+            serde_json::Value::String(text) => text.clone(),
+            serde_json::Value::Bool(b) => b.to_string(),
+            serde_json::Value::Number(n) => n.to_string(),
+            _ => return None,
+        };
+        Some((kind, text))
+    }
+
     /* Get list of registered type names */
     pub fn registered_types(&self) -> Vec<&str> {
         self.handlers.keys().map(|s| s.as_str()).collect()
@@ -59,6 +77,8 @@ impl WellKnownRegistry {
         self.register(Arc::new(handlers::PubkeyHandler));
         self.register(Arc::new(handlers::SignatureHandler));
         self.register(Arc::new(handlers::HashHandler));
+        self.register(Arc::new(handlers::BoolHandler));
+        self.register(Arc::new(handlers::TextHandler));
 
         /* Time types */
         self.register(Arc::new(handlers::TimestampHandler));

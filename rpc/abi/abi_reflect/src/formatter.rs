@@ -1,30 +1,43 @@
+use crate::synthetic::{
+    evaluate_struct, SyntheticContext, SyntheticFailure, SyntheticOutcome, SyntheticValue,
+};
 use crate::types::ReflectedTypeKind;
 use crate::value::{PrimitiveValue, ReflectedValue, Value};
 use crate::well_known::{WellKnownContext, WellKnownRegistry, WellKnownResult};
-use abi_gen::abi::types::{IntegralType, PrimitiveType, ValueFormat};
+use abi_gen::abi::types::{IntegralType, PrimitiveType, StructDisplay, ValueFormat};
 use base64::engine::general_purpose::{STANDARD as BASE64_STANDARD, URL_SAFE_NO_PAD};
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value as JsonValue};
 
-/* Base64-URL alphabet for address/signature encoding (used by tests) */
-#[allow(dead_code)]
-const BASE64_URL_ALPHABET: &[u8; 64] =
-    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FormatOptions {
     #[serde(default, rename = "includeByteOffsets")]
     pub include_byte_offsets: bool,
-    #[serde(skip)]
+    /* Options parsed from JSON (the WASM / TS path) keep the default
+     * registry, so Pubkeys still get their `address`. */
+    #[serde(skip, default = "default_well_known_registry")]
     pub well_known_registry: Option<WellKnownRegistry>,
+    /* The transaction's account list, in order. Synthetic fields that read
+     * account indexes report "unavailable" without it. */
+    #[serde(
+        default,
+        rename = "accountAddresses",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub account_addresses: Option<Vec<String>>,
+}
+
+fn default_well_known_registry() -> Option<WellKnownRegistry> {
+    Some(WellKnownRegistry::with_defaults())
 }
 
 impl Default for FormatOptions {
     fn default() -> Self {
         Self {
             include_byte_offsets: false,
-            well_known_registry: Some(WellKnownRegistry::with_defaults()),
+            well_known_registry: default_well_known_registry(),
+            account_addresses: None,
         }
     }
 }
@@ -35,6 +48,7 @@ impl FormatOptions {
         Self {
             include_byte_offsets: false,
             well_known_registry: None,
+            account_addresses: None,
         }
     }
 }
@@ -53,6 +67,47 @@ pub struct FormattedReflection {
     pub value: JsonValue,
     #[serde(rename = "byteRange", skip_serializing_if = "Option::is_none")]
     pub byte_range: Option<ByteRange>,
+    /* Friendly cards: one per struct with a display name, in tree order */
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub display: Vec<DisplayCard>,
+}
+
+/* A friendly view of one struct: a heading and its visible fields */
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DisplayCard {
+    /* Field and variant names from the root to this struct */
+    pub path: Vec<String>,
+    pub type_name: String,
+    pub title: String,
+    pub rows: Vec<DisplayRow>,
+    /* True when a visible field has no value */
+    pub incomplete: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DisplayRow {
+    pub name: String,
+    pub label: String,
+    /* "wire" (decoded bytes) or "synthetic" (computed) */
+    pub source: String,
+    /* A well-known type's display kind (address, signature, hash, time, date,
+     * duration, decimal, money, color, bool, text), or for plain values
+     * integer, text, bool, none, or value (anything else). */
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<JsonValue>,
+    /* ok, unavailable, or error */
+    pub status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issue: Option<String>,
+    /* Synthetic rows only: the ABI expression and its declared return type,
+     * as written (`Pubkey`, `u64`, `optional<Text>`) */
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expression: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub return_type: Option<String>,
 }
 
 pub fn format_reflection(root: &ReflectedValue) -> FormattedReflection {
@@ -75,11 +130,15 @@ pub fn format_reflection_with_options(
         None
     };
 
+    let mut display = Vec::new();
+    collect_display_cards(root, None, &mut Vec::new(), options, &mut display);
+
     FormattedReflection {
         type_name,
         kind,
         value,
         byte_range,
+        display,
     }
 }
 
@@ -200,6 +259,15 @@ fn format_struct_with_options(
         );
     }
 
+    if let Some(display) = node
+        .type_info
+        .display
+        .as_ref()
+        .filter(|display| !display.synthetic.is_empty())
+    {
+        map = insert_synthetic_fields(map, fields, display, options);
+    }
+
     /* Apply well-known type enrichment via registry */
     if let Some(registry) = &options.well_known_registry {
         if let Some(name) = type_name {
@@ -214,6 +282,10 @@ fn format_struct_with_options(
                 WellKnownResult::EnrichFields(enrichment) => {
                     for (key, value) in enrichment {
                         map.insert(key, value);
+                    }
+                    /* One line for people: what kind of value, and its text. */
+                    if let Some((kind, text)) = registry.display_form(name, &map) {
+                        map.insert("display".into(), json!({ "kind": kind, "text": text }));
                     }
                     return JsonValue::Object(map);
                 }
@@ -240,6 +312,274 @@ fn format_struct_with_options(
     }
 
     JsonValue::Object(map)
+}
+
+fn synthetic_context(options: &FormatOptions) -> SyntheticContext<'_> {
+    SyntheticContext {
+        account_addresses: options.account_addresses.as_deref(),
+        registry: options.well_known_registry.as_ref(),
+    }
+}
+
+/* Put each synthetic value into the technical tree at its declared place.
+ * It carries no byte range, so byte views highlight nothing for it. */
+fn insert_synthetic_fields(
+    mut wire: Map<String, JsonValue>,
+    fields: &[(String, ReflectedValue)],
+    display: &StructDisplay,
+    options: &FormatOptions,
+) -> Map<String, JsonValue> {
+    let ctx = synthetic_context(options);
+    let outcomes = evaluate_struct(display, fields, &ctx);
+    let mut map = Map::new();
+    for position in 0..=fields.len() {
+        for (field, (name, outcome)) in display.synthetic.iter().zip(&outcomes) {
+            if field.position == position {
+                map.insert(name.clone(), synthetic_json(outcome, options));
+            }
+        }
+        if let Some((name, _)) = fields.get(position) {
+            if let Some(value) = wire.remove(name) {
+                map.insert(name.clone(), value);
+            }
+        }
+    }
+    /* Anything else the wire pass produced keeps its place at the end. */
+    for (key, value) in wire {
+        map.entry(key).or_insert(value);
+    }
+    map
+}
+
+/* A computed value formats like a wire value of its type, with no bytes
+ * behind it, so never with byte offsets. */
+fn synthetic_json(outcome: &SyntheticOutcome, options: &FormatOptions) -> JsonValue {
+    match outcome {
+        Ok(SyntheticValue::Value(node)) => format_node_with_options(node, None, 0, &plain(options)),
+        Ok(SyntheticValue::None) => JsonValue::Null,
+        Err(failure) => json!({ failure.status(): failure.message() }),
+    }
+}
+
+fn plain(options: &FormatOptions) -> FormatOptions {
+    FormatOptions {
+        include_byte_offsets: false,
+        ..options.clone()
+    }
+}
+
+/* The display form (kind, text) of a decoded or built value, if its type has
+ * one. Synthetic text templates use it to write a value the way people read it. */
+/* Asks the value's well-known handler (from the caller's registry, as
+ * formatting does) directly instead of formatting the value, so a template
+ * costs one handler call, not a subtree. */
+pub(crate) fn display_form_of(
+    node: &ReflectedValue,
+    registry: &WellKnownRegistry,
+) -> Option<(String, String)> {
+    let mut name = resolve_type_name(node)?;
+    let mut current = node;
+    while let Value::TypeRef { target_name, value } = current.get_value() {
+        name = target_name;
+        current = value;
+    }
+    let Value::Struct { fields } = current.get_value() else {
+        return None;
+    };
+    let ctx = WellKnownContext {
+        value: current,
+        type_name: name,
+        fields: Some(fields),
+    };
+    match registry.process(&ctx) {
+        WellKnownResult::EnrichFields(enrichment) => registry
+            .display_form(name, &enrichment)
+            .map(|(kind, text)| (kind.to_string(), text)),
+        _ => None,
+    }
+}
+
+fn display_of(map: &Map<String, JsonValue>) -> Option<(String, String)> {
+    let display = map.get("display")?.as_object()?;
+    Some((
+        display.get("kind")?.as_str()?.to_string(),
+        display.get("text")?.as_str()?.to_string(),
+    ))
+}
+
+/* Walk the tree and build one card per struct that has a display name. */
+fn collect_display_cards(
+    node: &ReflectedValue,
+    explicit_type_name: Option<&str>,
+    path: &mut Vec<String>,
+    options: &FormatOptions,
+    out: &mut Vec<DisplayCard>,
+) {
+    match node.get_value() {
+        Value::Struct { fields } => {
+            if let Some(display) = &node.type_info.display {
+                if let Some(title) = &display.display_name {
+                    let type_name = explicit_type_name
+                        .or_else(|| resolve_type_name(node))
+                        .unwrap_or_default();
+                    out.push(build_card(path, type_name, title, fields, display, options));
+                }
+            }
+            for (name, child) in fields {
+                path.push(name.clone());
+                collect_display_cards(child, None, path, options, out);
+                path.pop();
+            }
+        }
+        Value::Union { variants } => {
+            for (name, child) in variants {
+                path.push(name.clone());
+                collect_display_cards(child, None, path, options, out);
+                path.pop();
+            }
+        }
+        Value::Enum {
+            variant_name,
+            variant_value,
+            ..
+        }
+        | Value::SizeDiscriminatedUnion {
+            variant_name,
+            variant_value,
+        } => {
+            path.push(variant_name.clone());
+            collect_display_cards(variant_value, None, path, options, out);
+            path.pop();
+        }
+        Value::Array { elements } => {
+            for (index, child) in elements.iter().enumerate() {
+                if matches!(child.get_value(), Value::Primitive(_)) {
+                    continue;
+                }
+                path.push(index.to_string());
+                collect_display_cards(child, None, path, options, out);
+                path.pop();
+            }
+        }
+        Value::TypeRef { target_name, value } => {
+            collect_display_cards(value, Some(target_name), path, options, out);
+        }
+        Value::Primitive(_) => {}
+    }
+}
+
+fn build_card(
+    path: &[String],
+    type_name: &str,
+    title: &str,
+    fields: &[(String, ReflectedValue)],
+    display: &StructDisplay,
+    options: &FormatOptions,
+) -> DisplayCard {
+    let ctx = synthetic_context(options);
+    let outcomes = evaluate_struct(display, fields, &ctx);
+    let plain = plain(options);
+    let mut rows = Vec::new();
+    for position in 0..=fields.len() {
+        for (field, (_, outcome)) in display.synthetic.iter().zip(&outcomes) {
+            if field.position != position || field.user_display != Some(true) {
+                continue;
+            }
+            let label = field
+                .display_name
+                .clone()
+                .unwrap_or_else(|| field.name.clone());
+            let mut row = match outcome {
+                Ok(value) => {
+                    let (kind, value) = classify_value(synthetic_json(&Ok(value.clone()), &plain));
+                    DisplayRow {
+                        name: field.name.clone(),
+                        label,
+                        source: "synthetic".into(),
+                        kind,
+                        value: Some(value),
+                        status: "ok".into(),
+                        issue: None,
+                        expression: None,
+                        return_type: None,
+                    }
+                }
+                Err(failure) => failed_row(&field.name, label, failure),
+            };
+            row.expression = Some(field.expression.clone());
+            row.return_type = Some(field.return_type.to_string());
+            rows.push(row);
+        }
+        let Some((name, value)) = fields.get(position) else {
+            continue;
+        };
+        if !display.wire_field_visible(name) {
+            continue;
+        }
+        let label = display
+            .field_labels
+            .get(name)
+            .and_then(|label| label.display_name.clone())
+            .unwrap_or_else(|| name.clone());
+        let (kind, value) =
+            classify_value(format_field_with_options(name, value, fields, 0, &plain));
+        rows.push(DisplayRow {
+            name: name.clone(),
+            label,
+            source: "wire".into(),
+            kind,
+            value: Some(value),
+            status: "ok".into(),
+            issue: None,
+            expression: None,
+            return_type: None,
+        });
+    }
+    DisplayCard {
+        path: path.to_vec(),
+        type_name: type_name.to_string(),
+        title: title.to_string(),
+        incomplete: rows.iter().any(|row| row.status != "ok"),
+        rows,
+    }
+}
+
+fn failed_row(name: &str, label: String, failure: &SyntheticFailure) -> DisplayRow {
+    DisplayRow {
+        name: name.to_string(),
+        label,
+        source: "synthetic".into(),
+        kind: "none".into(),
+        value: None,
+        status: failure.status().into(),
+        issue: Some(failure.message().to_string()),
+        expression: None,
+        return_type: None,
+    }
+}
+
+/* Reduce a formatted value, wire or computed, to what a card row needs: a
+ * display kind and the text people read. Well-known types say both through
+ * their display form; plain values are classified by their JSON. */
+fn classify_value(value: JsonValue) -> (String, JsonValue) {
+    let (kind, value) = match value {
+        JsonValue::Number(n) => ("integer", JsonValue::String(n.to_string())),
+        JsonValue::String(s) => ("text", JsonValue::String(s)),
+        JsonValue::Bool(b) => ("bool", JsonValue::Bool(b)),
+        JsonValue::Null => ("none", JsonValue::Null),
+        JsonValue::Object(map) => {
+            if let Some((kind, text)) = display_of(&map) {
+                return (kind, JsonValue::String(text));
+            }
+            /* A struct with `format: text` carries its text, not a display form. */
+            if let Some(JsonValue::String(text)) = map.get("text") {
+                return ("text".into(), JsonValue::String(text.clone()));
+            }
+            ("value", JsonValue::Object(map))
+        }
+        other => ("value", other),
+    };
+    (kind.to_string(), value)
 }
 
 fn format_field_with_options(
@@ -724,220 +1064,5 @@ fn extract_char(value: &ReflectedValue) -> Option<u8> {
     match value.get_value() {
         Value::Primitive(PrimitiveValue::Char(v)) => Some(v.value),
         _ => None,
-    }
-}
-
-/* Legacy encoding function, retained for tests - use well_known::handlers::PubkeyHandler instead */
-#[allow(dead_code)]
-fn encode_thru_address(bytes: &[u8]) -> Option<String> {
-    if bytes.len() != 32 {
-        return None;
-    }
-
-    let mut output = String::with_capacity(46);
-    output.push('t');
-    output.push('a');
-
-    let mut checksum: u32 = 0;
-    let mut accumulator: u32 = 0;
-    let mut bits_collected: u32 = 0;
-
-    for i in 0..30 {
-        let byte = bytes[i] as u32;
-        checksum += byte;
-        accumulator = (accumulator << 8) | byte;
-        bits_collected += 8;
-        while bits_collected >= 6 {
-            let index = (accumulator >> (bits_collected - 6)) & 0x3f;
-            output.push(BASE64_URL_ALPHABET[index as usize] as char);
-            bits_collected -= 6;
-            accumulator &= mask_for_bits(bits_collected);
-        }
-    }
-
-    let second_last = bytes[30] as u32;
-    checksum += second_last;
-    accumulator = (accumulator << 8) | second_last;
-    bits_collected += 8;
-
-    let last = bytes[31] as u32;
-    checksum += last;
-    accumulator = (accumulator << 8) | last;
-    bits_collected += 8;
-
-    accumulator = (accumulator << 8) | (checksum & 0xff);
-    bits_collected += 8;
-
-    while bits_collected >= 6 {
-        let index = (accumulator >> (bits_collected - 6)) & 0x3f;
-        output.push(BASE64_URL_ALPHABET[index as usize] as char);
-        bits_collected -= 6;
-        accumulator &= mask_for_bits(bits_collected);
-    }
-
-    Some(output)
-}
-
-#[allow(dead_code)]
-fn mask_for_bits(bits: u32) -> u32 {
-    if bits == 0 {
-        0
-    } else {
-        (1 << bits) - 1
-    }
-}
-
-#[allow(dead_code)]
-fn try_extract_bytes_field(
-    fields: &[(String, ReflectedValue)],
-    expected_len: usize,
-) -> Option<Vec<u8>> {
-    if fields.len() != 1 {
-        return None;
-    }
-    let (name, value) = &fields[0];
-    if name != "bytes" {
-        return None;
-    }
-    if let Value::Array { elements } = value.get_value() {
-        if elements.len() == expected_len && elements.iter().all(is_u8_element) {
-            return Some(elements.iter().filter_map(extract_u8).collect());
-        }
-    }
-    None
-}
-
-/* Legacy encoding function, retained for tests - use well_known::handlers::SignatureHandler instead */
-#[allow(dead_code)]
-fn encode_thru_signature(bytes: &[u8]) -> Option<String> {
-    if bytes.len() != 64 {
-        return None;
-    }
-
-    let mut output = String::with_capacity(90);
-    output.push('t');
-    output.push('s');
-
-    let mut checksum: u32 = 0;
-    let mut accumulator: u32 = 0;
-    let mut bits_collected: u32 = 0;
-
-    for i in 0..63 {
-        let byte = bytes[i] as u32;
-        checksum += byte;
-        accumulator = (accumulator << 8) | byte;
-        bits_collected += 8;
-        while bits_collected >= 6 {
-            let index = (accumulator >> (bits_collected - 6)) & 0x3f;
-            output.push(BASE64_URL_ALPHABET[index as usize] as char);
-            bits_collected -= 6;
-            accumulator &= mask_for_bits(bits_collected);
-        }
-    }
-
-    let last_byte = bytes[63] as u32;
-    checksum += last_byte;
-    accumulator = (accumulator << 8) | last_byte;
-    bits_collected += 8;
-
-    accumulator = (accumulator << 16) | (checksum & 0xffff);
-    bits_collected += 16;
-
-    while bits_collected >= 6 {
-        let index = (accumulator >> (bits_collected - 6)) & 0x3f;
-        output.push(BASE64_URL_ALPHABET[index as usize] as char);
-        bits_collected -= 6;
-        accumulator &= mask_for_bits(bits_collected);
-    }
-
-    Some(output)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn hex_to_bytes(hex: &str) -> Vec<u8> {
-        let cleaned: String = hex.chars().filter(|c| !c.is_whitespace()).collect();
-        (0..cleaned.len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&cleaned[i..i + 2], 16).expect("valid hex"))
-            .collect()
-    }
-
-    #[test]
-    fn encode_thru_address_zeros() {
-        let bytes = [0u8; 32];
-        let address = encode_thru_address(&bytes).expect("should encode");
-        assert_eq!(address, "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
-        assert_eq!(address.len(), 46, "thru addresses are always 46 characters");
-    }
-
-    #[test]
-    fn encode_thru_address_mint_bytes() {
-        let bytes =
-            hex_to_bytes("906b582852c5940dfe2664bc77717eb62e05e9c5b5b5c8d59cd4756d5c3dd771");
-        let address = encode_thru_address(&bytes).expect("should encode");
-        assert_eq!(address, "takGtYKFLFlA3-JmS8d3F-ti4F6cW1tcjVnNR1bVw913Gu");
-    }
-
-    #[test]
-    fn encode_thru_address_owner_bytes() {
-        let bytes =
-            hex_to_bytes("ace7124bd312557a711a15c92d38a2d7e0d2fbf6ede3092df4a543d0a00122ae");
-        let address = encode_thru_address(&bytes).expect("should encode");
-        assert_eq!(address, "tarOcSS9MSVXpxGhXJLTii1-DS-_bt4wkt9KVD0KABIq6x");
-    }
-
-    #[test]
-    fn encode_thru_address_wrong_length_returns_none() {
-        let short = [0u8; 31];
-        assert!(encode_thru_address(&short).is_none());
-
-        let long = [0u8; 33];
-        assert!(encode_thru_address(&long).is_none());
-    }
-
-    #[test]
-    fn encode_thru_signature_zeros() {
-        let bytes = [0u8; 64];
-        let sig = encode_thru_signature(&bytes).expect("should encode");
-        assert_eq!(
-            sig,
-            "tsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-        );
-        assert_eq!(sig.len(), 90, "thru signatures are always 90 characters");
-    }
-
-    #[test]
-    fn encode_thru_signature_sequential() {
-        let mut bytes = [0u8; 64];
-        for i in 0..64 {
-            bytes[i] = i as u8;
-        }
-        let sig = encode_thru_signature(&bytes).expect("should encode");
-        assert_eq!(
-            sig,
-            "tsAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0-Pwfg"
-        );
-    }
-
-    #[test]
-    fn encode_thru_signature_all_ff() {
-        let bytes = [0xffu8; 64];
-        let sig = encode_thru_signature(&bytes).expect("should encode");
-        assert_eq!(
-            sig,
-            "ts_____________________________________________________________________________________z_A"
-        );
-    }
-
-    #[test]
-    fn encode_thru_signature_wrong_length_returns_none() {
-        let short = [0u8; 63];
-        assert!(encode_thru_signature(&short).is_none());
-
-        let long = [0u8; 65];
-        assert!(encode_thru_signature(&long).is_none());
     }
 }

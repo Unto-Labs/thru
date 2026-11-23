@@ -125,6 +125,9 @@ export interface PerpsWalletIntent {
   readWriteAddresses?: string[];
   readOnlyAddresses?: string[];
   review?: unknown;
+  /** The fee payer the instruction was built against; the wallet refuses a
+      signer that pays from another account (SIGNER_CHANGED). */
+  feePayerPublicKey?: string;
 }
 
 /** What a wallet signer needs of a wallet (@thru/wallet's IThruChain fits). */
@@ -144,7 +147,7 @@ export interface WalletSignerInput {
 /** A browser wallet: each transaction is an intent the wallet signs (and
     may ask the user to approve). */
 export function createWalletSigner(input: WalletSignerInput): PerpsSigner {
-  return walletSigner('wallet', input.walletAddress, input.wallet.getSigningContext.bind(input.wallet), input.wallet.signTransaction.bind(input.wallet), input);
+  return walletSigner('wallet', input.walletAddress, input.wallet.getSigningContext.bind(input.wallet), input.wallet.signTransaction.bind(input.wallet), { ...input, statesFeePayer: true });
 }
 
 /** What a session signer needs of a signing session (@thru/wallet's ThruSigningSession fits). */
@@ -172,7 +175,9 @@ function walletSigner(
   walletAddress: string,
   getSigningContext: PerpsWalletLike['getSigningContext'],
   signTransaction: PerpsWalletLike['signTransaction'],
-  input: { review?: WalletSignerInput['review']; appName?: string },
+  /* statesFeePayer: the signer pays from the context's fee payer, so the
+     intent can say so and the wallet can refuse any other signer. */
+  input: { review?: WalletSignerInput['review']; appName?: string; statesFeePayer?: boolean },
 ): PerpsSigner {
   const address = Pubkey.from(walletAddress).toThruFmt();
   return {
@@ -203,6 +208,7 @@ function walletSigner(
         readWriteAddresses: context.readWriteAddresses,
         readOnlyAddresses: context.readOnlyAddresses,
         review,
+        ...(input.statesFeePayer ? { feePayerPublicKey: signingContext.feePayerPublicKey } : {}),
       });
       return { raw: base64ToBytes(signed) };
     },

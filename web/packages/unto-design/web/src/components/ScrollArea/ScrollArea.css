@@ -13,7 +13,7 @@
   padding: var(--space-3) var(--space-4);
 }
 .uds-scrollarea__viewport p {
-  font-size: 13px;
+  font-size: var(--text-ui);
   color: var(--color-text-tertiary);
   margin: 0 0 var(--space-3);
 }

@@ -19,11 +19,14 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Multicall
       fields:
       - name: calls_count
+        display-name: Calls
         field-type:
           primitive: u16
       - name: calls
+        user-display: false
         field-type:
           array:
             jagged: true
@@ -43,3 +46,17 @@ types:
       - name: code
         field-type:
           primitive: u64
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: invalid_instruction_data_size
+              tag-value: 1
+              comment: Instruction data is too short or does not match the calls it lists.
+            - name: invoke_failed
+              tag-value: 2
+              comment: One of the calls failed.

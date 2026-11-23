@@ -93,7 +93,7 @@ export interface RpcEndpoints {
 
 /* Default RPC endpoints */
 export const DEFAULT_RPC_ENDPOINTS: RpcEndpoints = {
-  alphanet: "https://rpc.alphanet.thru.org",
+  betanet: "https://rpc.betanet.thru.org",
 };
 
 /* ABI metadata parsed from YAML */

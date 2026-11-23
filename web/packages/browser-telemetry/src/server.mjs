@@ -7,7 +7,7 @@ export const BROWSER_LAUNCH_LABELS = Object.freeze({
   mode: Object.freeze(['pwa', 'browser']),
   cache: Object.freeze(['warm', 'cold']),
   outcome: Object.freeze(['ok', 'signed_in', 'signed_out', 'value', 'unavailable', 'rows', 'empty', 'failed', 'abandoned', 'interrupted']),
-  network: Object.freeze(['none', 'alphanet', 'betanet', 'custom']),
+  network: Object.freeze(['none', 'betanet', 'custom']),
 });
 const targets = new Set(['api', 'rpc', 'external', 'blocks', 'transactions', 'lcp', 'cls', 'interaction_max']);
 const fields = new Set(['event', 'timestamp', 'target', 'status', 'durationMs', 'value', ...Object.keys(BROWSER_LAUNCH_LABELS)]);

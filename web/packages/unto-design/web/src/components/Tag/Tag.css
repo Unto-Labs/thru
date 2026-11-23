@@ -1,12 +1,12 @@
 .uds-tag {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: var(--text-label);
   letter-spacing: 0.02em;
   background: var(--color-surface-lower);
   color: var(--color-text-primary);
   padding: var(--space-1) var(--space-2);
   border: 1px solid transparent;
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
@@ -21,49 +21,49 @@
   background: var(--color-surface-lower-inverse);
   color: var(--color-text-primary-inverse);
 }
-.uds-tag--brick {
-  background: var(--brick-100);
-  color: var(--brick-400);
+.uds-tag--accent {
+  background: var(--accent-100);
+  color: var(--accent-500);
 }
-.uds-tag--sky {
-  background: var(--sky-100);
-  color: var(--sky-400);
+.uds-tag--info {
+  background: var(--info-100);
+  color: var(--info-400);
 }
-.uds-tag--grass {
-  background: var(--grass-100);
-  color: var(--grass-400);
+.uds-tag--success {
+  background: var(--success-100);
+  color: var(--success-400);
 }
-.uds-tag--yellow {
-  background: var(--yellow-100);
-  color: var(--yellow-400);
+.uds-tag--warning {
+  background: var(--warning-100);
+  color: var(--warning-400);
 }
 
 :where([data-theme="dark"], :root[data-theme="dark"]) .uds-tag--neutral {
-  background: color-mix(in srgb, var(--teal-500) 18%, transparent);
+  background: color-mix(in srgb, var(--neutral-500) 18%, transparent);
   color: var(--color-text-secondary);
-  border-color: color-mix(in srgb, var(--teal-400) 32%, transparent);
+  border-color: color-mix(in srgb, var(--neutral-400) 32%, transparent);
 }
 
-:where([data-theme="dark"], :root[data-theme="dark"]) .uds-tag--brick {
-  background: color-mix(in srgb, var(--brick-300) 20%, transparent);
-  color: var(--brick-100);
-  border-color: color-mix(in srgb, var(--brick-300) 42%, transparent);
+:where([data-theme="dark"], :root[data-theme="dark"]) .uds-tag--accent {
+  background: color-mix(in srgb, var(--accent-300) 20%, transparent);
+  color: var(--accent-100);
+  border-color: color-mix(in srgb, var(--accent-300) 42%, transparent);
 }
 
-:where([data-theme="dark"], :root[data-theme="dark"]) .uds-tag--sky {
-  background: color-mix(in srgb, var(--sky-300) 18%, transparent);
-  color: var(--sky-100);
-  border-color: color-mix(in srgb, var(--sky-300) 36%, transparent);
+:where([data-theme="dark"], :root[data-theme="dark"]) .uds-tag--info {
+  background: color-mix(in srgb, var(--info-300) 18%, transparent);
+  color: var(--info-100);
+  border-color: color-mix(in srgb, var(--info-300) 36%, transparent);
 }
 
-:where([data-theme="dark"], :root[data-theme="dark"]) .uds-tag--grass {
-  background: color-mix(in srgb, var(--grass-300) 22%, transparent);
-  color: var(--grass-100);
-  border-color: color-mix(in srgb, var(--grass-300) 42%, transparent);
+:where([data-theme="dark"], :root[data-theme="dark"]) .uds-tag--success {
+  background: color-mix(in srgb, var(--success-300) 22%, transparent);
+  color: var(--success-100);
+  border-color: color-mix(in srgb, var(--success-300) 42%, transparent);
 }
 
-:where([data-theme="dark"], :root[data-theme="dark"]) .uds-tag--yellow {
-  background: color-mix(in srgb, var(--yellow-300) 20%, transparent);
-  color: var(--yellow-100);
-  border-color: color-mix(in srgb, var(--yellow-300) 40%, transparent);
+:where([data-theme="dark"], :root[data-theme="dark"]) .uds-tag--warning {
+  background: color-mix(in srgb, var(--warning-300) 20%, transparent);
+  color: var(--warning-100);
+  border-color: color-mix(in srgb, var(--warning-300) 40%, transparent);
 }

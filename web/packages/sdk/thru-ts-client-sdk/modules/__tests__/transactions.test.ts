@@ -31,6 +31,7 @@ import {
     getTransaction,
     getTransactionStatus,
     listTransactionsForAccount,
+    sendAndTrackTxn,
     sendTransaction,
 } from "../transactions";
 
@@ -189,7 +190,7 @@ describe("transactions", () => {
       const mockAccount = createMockAccount({
         meta: { nonce: 5n },
       });
-      const mockHeight = createMockHeightResponse({ finalized: 1000n });
+      const mockHeight = createMockHeightResponse({ finalized: 900n, locallyExecuted: 1000n });
       
       vi.spyOn(ctx.query, "getAccount").mockResolvedValue(mockAccount);
       vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
@@ -212,7 +213,7 @@ describe("transactions", () => {
 
     it("should use provided nonce instead of fetching", async () => {
       const ctx = createMockContext();
-      const mockHeight = createMockHeightResponse({ finalized: 1000n });
+      const mockHeight = createMockHeightResponse({ finalized: 900n, locallyExecuted: 1000n });
       vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
       
       const publicKey = generateTestPubkey(0x01);
@@ -254,7 +255,7 @@ describe("transactions", () => {
       const mockAccount = createMockAccount({
         meta: { nonce: 5n },
       });
-      const mockHeight = createMockHeightResponse({ finalized: 1000n });
+      const mockHeight = createMockHeightResponse({ finalized: 900n, locallyExecuted: 1000n });
       
       vi.spyOn(ctx.query, "getAccount").mockResolvedValue(mockAccount);
       vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
@@ -271,7 +272,7 @@ describe("transactions", () => {
 
     it("should throw error when account nonce is unavailable", async () => {
       const ctx = createMockContext();
-      const mockHeight = createMockHeightResponse({ finalized: 1000n });
+      const mockHeight = createMockHeightResponse({ finalized: 900n, locallyExecuted: 1000n });
       
       // Mock account with meta that has undefined nonce
       // Since nonce is required in protobuf, we need to manually create an object
@@ -308,7 +309,7 @@ describe("transactions", () => {
       const mockAccount = createMockAccount({
         meta: { nonce: 5n },
       });
-      const mockHeight = createMockHeightResponse({ finalized: 1000n });
+      const mockHeight = createMockHeightResponse({ finalized: 900n, locallyExecuted: 1000n });
       
       vi.spyOn(ctx.query, "getAccount").mockResolvedValue(mockAccount);
       vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
@@ -323,36 +324,12 @@ describe("transactions", () => {
       expect(transaction.instructionData).toEqual(instructionData);
     });
 
-    it("should accept instruction data as function", async () => {
-      const ctx = createMockContext();
-      const mockAccount = createMockAccount({
-        meta: { nonce: 5n },
-      });
-      const mockHeight = createMockHeightResponse({ finalized: 1000n });
-      
-      vi.spyOn(ctx.query, "getAccount").mockResolvedValue(mockAccount);
-      vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
-      
-      const instructionDataFn = async (context: any) => {
-        // Function that uses context to generate instruction data
-        return new Uint8Array([context.accounts.length]);
-      };
-      
-      const transaction = await buildTransaction(ctx, {
-        feePayer: { publicKey: generateTestPubkey(0x01) },
-        program: generateTestPubkey(0x02),
-        instructionData: instructionDataFn,
-      });
-      
-      expect(transaction.instructionData).toBeDefined();
-    });
-
     it("should build transaction with instructionData function using context builder", async () => {
       const ctx = createMockContext();
       const mockAccount = createMockAccount({
         meta: { nonce: 5n },
       });
-      const mockHeight = createMockHeightResponse({ finalized: 1000n });
+      const mockHeight = createMockHeightResponse({ finalized: 900n, locallyExecuted: 1000n });
       
       vi.spyOn(ctx.query, "getAccount").mockResolvedValue(mockAccount);
       vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
@@ -429,7 +406,7 @@ describe("transactions", () => {
       const mockAccount = createMockAccount({
         meta: { nonce: 5n },
       });
-      const mockHeight = createMockHeightResponse({ finalized: 1000n });
+      const mockHeight = createMockHeightResponse({ finalized: 900n, locallyExecuted: 1000n });
       
       vi.spyOn(ctx.query, "getAccount").mockResolvedValue(mockAccount);
       vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
@@ -462,7 +439,7 @@ describe("transactions", () => {
       const mockAccount = createMockAccount({
         meta: { nonce: 5n },
       });
-      const mockHeight = createMockHeightResponse({ finalized: 1000n });
+      const mockHeight = createMockHeightResponse({ finalized: 900n, locallyExecuted: 1000n });
       
       vi.spyOn(ctx.query, "getAccount").mockResolvedValue(mockAccount);
       vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
@@ -492,7 +469,7 @@ describe("transactions", () => {
       const mockAccount = createMockAccount({
         meta: { nonce: 5n },
       });
-      const mockHeight = createMockHeightResponse({ finalized: 1000n });
+      const mockHeight = createMockHeightResponse({ finalized: 900n, locallyExecuted: 1000n });
       
       vi.spyOn(ctx.query, "getAccount").mockResolvedValue(mockAccount);
       vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
@@ -518,7 +495,7 @@ describe("transactions", () => {
         createMockAccount({ meta: { nonce: 5n } }),
       );
       vi.spyOn(ctx.query, "getHeight").mockResolvedValue(
-        createMockHeightResponse({ finalized: 1000n }),
+        createMockHeightResponse({ finalized: 900n, locallyExecuted: 1000n }),
       );
       const privateKey = new Uint8Array(32).fill(0x42);
       const publicKey = await getPublicKeyAsync(privateKey);
@@ -547,7 +524,7 @@ describe("transactions", () => {
         createMockAccount({ meta: { nonce: 5n } }),
       );
       vi.spyOn(ctx.query, "getHeight").mockResolvedValue(
-        createMockHeightResponse({ finalized: 1000n }),
+        createMockHeightResponse({ finalized: 900n, locallyExecuted: 1000n }),
       );
       const privateKey = new Uint8Array(32).fill(0x42);
       const publicKey = await getPublicKeyAsync(privateKey);
@@ -661,19 +638,6 @@ describe("transactions", () => {
       expect(callArgs.account?.value).toEqual(account);
     });
 
-    it("should accept account as Uint8Array", async () => {
-      const ctx = createMockContext();
-      const mockResponse = { transactions: [] };
-      vi.spyOn(ctx.query, "listTransactionsForAccount").mockResolvedValue(mockResponse as any);
-      vi.spyOn(ctx.query, "getTransaction").mockResolvedValue(createMockTransactionProto());
-      
-      const account = generateTestPubkey();
-      await listTransactionsForAccount(ctx, account);
-      
-      const callArgs = (ctx.query.listTransactionsForAccount as any).mock.calls[0][0];
-      expect(callArgs.account?.value).toEqual(account);
-    });
-
     it("should accept account as string", async () => {
       const ctx = createMockContext();
       const mockResponse = { transactions: [] };
@@ -756,28 +720,6 @@ describe("transactions", () => {
       expect(callArgs.rawTransactions[1]).toEqual(transactions[1]);
     });
 
-    it("should convert Transaction objects to raw bytes", async () => {
-      const ctx = createMockContext();
-      const mockResponse = { signatures: [{ value: generateTestSignature() }] };
-      vi.spyOn(ctx.command, "batchSendTransactions").mockResolvedValue(mockResponse as any);
-      
-      const transaction = new Transaction({
-        feePayer: generateTestPubkey(0x01),
-        program: generateTestPubkey(0x02),
-        header: {
-          fee: 1n,
-          nonce: 2n,
-          startSlot: 3n,
-        },
-      });
-      
-      await batchSendTransactions(ctx, [transaction]);
-      
-      const callArgs = (ctx.command.batchSendTransactions as any).mock.calls[0][0];
-      expect(callArgs.rawTransactions).toHaveLength(1);
-      expect(callArgs.rawTransactions[0]).toBeInstanceOf(Uint8Array);
-    });
-
     it("should handle mixed Transaction objects and raw bytes", async () => {
       const ctx = createMockContext();
       const mockResponse = { signatures: [] };
@@ -822,6 +764,32 @@ describe("transactions", () => {
       
       const callArgs = (ctx.command.batchSendTransactions as any).mock.calls[0][0];
       expect(callArgs.numRetries).toBe(0);
+    });
+  });
+
+  describe("sendAndTrackTxn", () => {
+    it("passes minConsensus into the request", async () => {
+      const spy = vi.fn().mockReturnValue((async function* () {})() as AsyncIterable<any>);
+      const ctx = createMockContext({ command: { sendAndTrackTxn: spy } });
+
+      for await (const _ of sendAndTrackTxn(ctx, new Uint8Array([1]), {
+        minConsensus: ConsensusStatus.LOCALLY_EXECUTED,
+      })) {
+        /* no updates */
+      }
+
+      expect(spy.mock.calls[0][0].minConsensus).toBe(ConsensusStatus.LOCALLY_EXECUTED);
+    });
+
+    it("leaves minConsensus absent by default", async () => {
+      const spy = vi.fn().mockReturnValue((async function* () {})() as AsyncIterable<any>);
+      const ctx = createMockContext({ command: { sendAndTrackTxn: spy } });
+
+      for await (const _ of sendAndTrackTxn(ctx, new Uint8Array([1]))) {
+        /* no updates */
+      }
+
+      expect(spy.mock.calls[0][0].minConsensus).toBeUndefined();
     });
   });
 

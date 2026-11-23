@@ -13,9 +13,9 @@
   border-top-color: var(--color-surface-lower-inverse);
 }
 
-.uds-spinner--brick {
-  border-color: var(--brick-200);
-  border-top-color: var(--brick-400);
+.uds-spinner--accent {
+  border-color: var(--accent-200);
+  border-top-color: var(--accent-400);
 }
 
 @keyframes uds-spin {

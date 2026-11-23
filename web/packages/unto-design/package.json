@@ -8,12 +8,11 @@
     "*.css"
   ],
   "exports": {
-    "./assets/thrusd.svg": "./assets/thrusd.svg",
+    "./assets/untousd.svg": "./assets/untousd.svg",
     "./tokens/css": "./tokens/src/all.css",
-    "./tokens/neutral.css": "./tokens/src/neutral.css",
+    "./tokens/palettes.css": "./tokens/src/palettes.css",
     "./tokens/tokens.css": "./tokens/src/tokens.css",
     "./tokens/typography.css": "./tokens/src/typography.css",
-    "./tokens/theme.css": "./tokens/src/theme.css",
     "./web": {
       "types": "./web/src/index.ts",
       "import": "./web/src/index.ts"
@@ -22,15 +21,12 @@
       "types": "./web/src/next-fonts.ts",
       "import": "./web/src/next-fonts.ts"
     },
-    "./web/styles.css": "./web/src/styles.css",
-    "./assets/brand/*": "./assets/brand/*"
+    "./web/styles.css": "./web/src/styles.css"
   },
   "files": [
     "tokens/src",
     "web/src",
-    "assets/thrusd.svg",
-    "assets/brand",
-    "fonts"
+    "assets/untousd.svg"
   ],
   "scripts": {
     "test": "vitest run --dir web/src",

@@ -60,6 +60,43 @@ pub fn reflect_event(abi_yaml: &str, buffer: Uint8Array) -> Result<JsValue, JsVa
     ))
 }
 
+/// Name a program's revert code using the ABI's errors root.
+///
+/// `code` is the unsigned 64-bit revert code as a decimal string. Returns a
+/// JSON object `{ typeName, name, code, comment? }`, or JSON `null` when the
+/// ABI does not list that code. Fails when the ABI declares no errors root.
+#[wasm_bindgen]
+pub fn reflect_error(abi_yaml: &str, code: &str) -> Result<JsValue, JsValue> {
+    let abi_file: AbiFile = serde_yml::from_str(abi_yaml)
+        .map_err(|err| js_error(format!("Invalid ABI YAML: {err}")))?;
+    reflect_error_in(&abi_file, code)
+}
+
+/// List every named revert code of the ABI's errors root, in ABI order, as a
+/// JSON array of `{ typeName, name, code, comment? }`.
+#[wasm_bindgen]
+pub fn error_variants(abi_yaml: &str) -> Result<JsValue, JsValue> {
+    let abi_file: AbiFile = serde_yml::from_str(abi_yaml)
+        .map_err(|err| js_error(format!("Invalid ABI YAML: {err}")))?;
+    let variants = abi_reflect::error_variants(&abi_file.types, abi_file.root_types())
+        .map_err(map_reflect_error)?;
+    Ok(js_string(
+        serde_json::to_string(&variants).map_err(map_serde_error)?,
+    ))
+}
+
+fn reflect_error_in(abi_file: &AbiFile, code: &str) -> Result<JsValue, JsValue> {
+    let code: u64 = code
+        .trim()
+        .parse()
+        .map_err(|_| js_error(format!("Invalid error code '{code}': expected a u64")))?;
+    let found = abi_reflect::reflect_error(&abi_file.types, abi_file.root_types(), code)
+        .map_err(map_reflect_error)?;
+    Ok(js_string(
+        serde_json::to_string(&found).map_err(map_serde_error)?,
+    ))
+}
+
 #[wasm_bindgen]
 pub fn build_layout_ir(abi_yaml: &str) -> Result<JsValue, JsValue> {
     let reflector = build_reflector(abi_yaml)?;
@@ -217,6 +254,31 @@ pub fn reflect_event_with_manifest(
     Ok(js_string(
         serde_json::to_string(&reflected).map_err(map_serde_error)?,
     ))
+}
+
+/// Name a program's revert code using a pre-resolved manifest. The errors
+/// root is read from the root package. See `reflect_error`.
+#[wasm_bindgen]
+pub fn reflect_error_with_manifest(
+    manifest_json: &str,
+    root_package: &str,
+    code: &str,
+) -> Result<JsValue, JsValue> {
+    let manifest: HashMap<String, String> = serde_json::from_str(manifest_json)
+        .map_err(|err| js_error(format!("Invalid manifest JSON: {err}")))?;
+    let root_yaml = manifest.get(root_package).ok_or_else(|| {
+        js_error(format!(
+            "Root package '{}' not found in manifest",
+            root_package
+        ))
+    })?;
+    let root_abi: AbiFile = serde_yml::from_str(root_yaml).map_err(|err| {
+        js_error(format!(
+            "Invalid ABI YAML for root package '{}': {}",
+            root_package, err
+        ))
+    })?;
+    reflect_error_in(&root_abi, code)
 }
 
 /// Build layout IR from a pre-resolved manifest.

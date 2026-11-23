@@ -14,7 +14,7 @@
   animation: uds-wsheet-in 0.3s var(--ease-standard) both;
 }
 .uds-wsheet__escalation-text {
-  font-size: 13px;
+  font-size: var(--text-ui);
   color: var(--color-text-secondary);
   text-align: center;
   text-wrap: pretty;
@@ -48,20 +48,20 @@
   min-width: 0;
 }
 .uds-wsheet__account-addr {
-  font-size: 13px;
+  font-size: var(--text-ui);
   color: var(--color-text-primary);
 }
 .uds-wsheet__account-sub {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: var(--text-label);
   color: var(--color-text-tertiary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .uds-wsheet__account-bal {
-  font-family: var(--font-mono);
-  font-size: 13px;
+  font-family: var(--font-sans);
+  font-size: var(--text-ui);
   color: var(--color-text-primary);
   flex: none;
   white-space: nowrap;
@@ -92,16 +92,16 @@
   white-space: nowrap;
 }
 .uds-wsheet__eyebrow {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  font-family: var(--font-sans);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-utility);
   text-transform: uppercase;
   color: var(--color-text-tertiary);
   flex: none;
 }
 .uds-wsheet__mono {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-caption);
   color: var(--color-text-primary);
 }
 .uds-wsheet__advanced {
@@ -119,7 +119,7 @@
   border: none;
   cursor: pointer;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--text-ui);
   color: var(--color-text-tertiary);
   transition: color var(--duration-fast) var(--ease-standard);
 }
@@ -160,7 +160,7 @@
   border-top: 1px solid var(--color-border-tertiary);
   padding: var(--space-2) var(--space-2) var(--space-2) 12px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-label);
   line-height: 1.55;
   color: var(--color-text-primary);
   max-height: 220px;
@@ -187,7 +187,7 @@
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
   background: var(--color-surface-primary);
-  font-size: 13px;
+  font-size: var(--text-ui);
 }
 .uds-wsheet__siglabel {
   color: var(--color-text-tertiary);
@@ -206,13 +206,13 @@
 
   /* Ghost CTAs are the quiet alternatives; they keep the small label. */
   .uds-wsheet__cta.uds-btn--ghost {
-    font-size: 13px;
+    font-size: var(--text-ui);
   }
 
   .uds-dep__crypto .uds-wsheet__cta {
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-weight: var(--fw-semibold);
-    font-size: 15px;
+    font-size: var(--text-body);
   }
 
   /* A ghost CTA ending the sheet over the network status (Frame.css): the
@@ -220,4 +220,9 @@
   .uds-frame--network:has(.uds-screen:not([hidden] *) > .uds-screen__body:last-child > .uds-wsheet__cta.uds-btn--ghost:last-child):not(:has(.uds-powered)) .uds-frame__network {
     margin-top: calc((15px - 48px) / 2);
   }
+}
+
+.uds-wsheet__advanced-trigger:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
 }

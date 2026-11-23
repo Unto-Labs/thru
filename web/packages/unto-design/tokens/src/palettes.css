@@ -1,0 +1,63 @@
+/* Alternative accents, for comparing in the gallery. Opt in with
+   `data-palette="v2"`, `"v3"` or `"v4"` on the element that carries `data-theme`
+   (or an ancestor); without it the v1 gold in tokens.css applies.
+
+   Every palette shares the untolabs.com greys, type and shapes from
+   tokens.css and swaps only the hue ramps. Load after tokens.css. */
+
+/* v2: teal. Success moves from emerald to a true green so it stays apart
+   from the accent. */
+[data-palette="v2"] {
+  /* White on 400: 5.5:1. 500 on 100: 6.6:1. */
+  --accent-100: #e0f2f0;
+  --accent-200: #99d5cc;
+  --accent-300: #4fb8a8;
+  --accent-400: #0f766e;
+  --accent-500: #115e59;
+
+  --success-100: #dcfce7;
+  --success-200: #86efac;
+  --success-300: #22c55e;
+  --success-400: #15803d;
+}
+
+/* v3: plum, a true green for success and amber for warning. */
+[data-palette="v3"] {
+  /* White on 400: 8.5:1. 500 on 100: 9.0:1. */
+  --accent-100: #f7ebf3;
+  --accent-200: #e5bfd8;
+  --accent-300: #d08bbb;
+  --accent-400: #7e2f66;
+  --accent-500: #6a2655;
+
+  --success-100: #dcfce7;
+  --success-200: #86efac;
+  --success-300: #22c55e;
+  --success-400: #15803d;
+
+  --warning-100: #fef3c7;
+  --warning-200: #fcd34d;
+  --warning-300: #f59e0b;
+  --warning-400: #b45309;
+}
+
+/* v4: sky blue. Info moves to teal so it stays apart from the accent, and
+   success is a true green. */
+[data-palette="v4"] {
+  /* White on 400: 5.9:1. 500 on 100: 6.6:1. */
+  --accent-100: #e0f2fe;
+  --accent-200: #7dd3fc;
+  --accent-300: #38bdf8;
+  --accent-400: #0369a1;
+  --accent-500: #075985;
+
+  --info-100: #e0f2f0;
+  --info-200: #99d5cc;
+  --info-300: #4fb8a8;
+  --info-400: #0f766e;
+
+  --success-100: #dcfce7;
+  --success-200: #86efac;
+  --success-300: #22c55e;
+  --success-400: #15803d;
+}

@@ -1,10 +1,10 @@
 .uds-popover {
   background: var(--color-surface-higher);
-  border: 1px solid var(--color-border-strong);
+  border: 1px solid var(--color-border-secondary);
   box-shadow: var(--shadow-md);
   padding: var(--space-4);
   width: 268px;
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
   transition:
     opacity var(--duration-fast) var(--ease-standard),
     transform var(--duration-fast) var(--ease-standard);
@@ -37,7 +37,7 @@
 .uds-popover__title {
   margin: 0 0 var(--space-1);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: var(--text-body);
   font-weight: var(--fw-semibold);
   color: var(--color-text-primary);
 }
@@ -45,7 +45,7 @@
 .uds-popover__desc {
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--text-caption);
   color: var(--color-text-tertiary);
 }
 

@@ -118,7 +118,7 @@ function Hex({ value, "aria-label": ariaLabel = "Copy data" }: TxTreeHexProps) {
   return (
     <span className="uds-txtree__hex" title={value}>
       {shortHex(value)}
-      <CopyButton value={value} icon aria-label={ariaLabel} />
+      <CopyButton value={value} variant="icon" aria-label={ariaLabel} />
     </span>
   );
 }
@@ -180,7 +180,7 @@ function Bytes({ hex, copyLabel = "Copy raw bytes" }: TxTreeBytesProps) {
   return (
     <div className="uds-txtree__bytes">
       <div className="uds-txtree__bytes-hex">{hex}</div>
-      <CopyButton value={hex} text label={copyLabel} />
+      <CopyButton value={hex} variant="text" label={copyLabel} />
     </div>
   );
 }

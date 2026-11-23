@@ -7,7 +7,7 @@
 .uds-stepper__dot {
   width: 6px;
   height: 6px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-box);
   background: var(--color-border-strong);
   transition:
     width var(--duration-med) var(--ease-standard),

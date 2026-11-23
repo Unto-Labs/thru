@@ -364,7 +364,6 @@ export interface MetaTableProps {
   /** `board` (default): the loading boards' ruled table. `detail`: a detail
       screen's label/value table with an optional copy button per row. */
   variant?: "board" | "detail";
-  /** Called with the row whose copy button was pressed. */
   onCopy?: (row: MetaTableRow) => void;
   /** The label of the row just copied: its button shows a check for now. */
   copied?: string | null;

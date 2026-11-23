@@ -98,26 +98,4 @@ mod tests {
         assert!(!fetcher.handles(&path_import));
         assert!(!fetcher.handles(&git_import));
     }
-
-    /* Integration test - requires network access */
-    #[test]
-    #[ignore] /* Run with: cargo test -- --ignored */
-    fn test_http_fetcher_real_request() {
-        let fetcher = HttpFetcher::new().unwrap();
-        let source = ImportSource::Http {
-            url: "https://httpbin.org/get".to_string(),
-        };
-        let ctx = FetchContext {
-            base_path: None,
-            parent_is_remote: false,
-            include_dirs: vec![],
-        };
-
-        let result = fetcher.fetch(&source, &ctx);
-        assert!(result.is_ok());
-
-        let fetch_result = result.unwrap();
-        assert!(fetch_result.is_remote);
-        assert!(fetch_result.content.contains("httpbin"));
-    }
 }

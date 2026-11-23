@@ -142,8 +142,12 @@ export const SlotSeqSchema: GenMessage<SlotSeq> = /*@__PURE__*/
   messageDesc(file_thru_common_v1_consensus, 3);
 
 /**
- * ConsensusStatus represents the minimum consensus level a resource has
- * achieved when returned by the service.
+ * ConsensusStatus is the level a resource has reached when the service
+ * returns it.
+ *
+ * The values form a chain: each level implies every lower one. The reported
+ * level is the highest level whose condition holds, and numeric comparisons
+ * (for example `consensus_status >= int(3)`) are valid.
  *
  * @generated from enum thru.common.v1.ConsensusStatus
  */
@@ -156,39 +160,44 @@ export enum ConsensusStatus {
   UNSPECIFIED = 0,
 
   /**
-   * CONSENSUS_STATUS_OBSERVED indicates the resource has been observed but
-   * not yet confirmed in a finalized block.
+   * CONSENSUS_STATUS_OBSERVED is never reported by thrud today. It is
+   * accepted as a minimum and is satisfied by anything thrud returns.
    *
    * @generated from enum value: CONSENSUS_STATUS_OBSERVED = 1;
    */
   OBSERVED = 1,
 
   /**
-   * CONSENSUS_STATUS_INCLUDED indicates the resource has been included in the
-   * ledger but may not be finalized.
+   * CONSENSUS_STATUS_INCLUDED indicates the resource was ordered by consensus
+   * and delivered to this node. An execution result may already be attached.
    *
    * @generated from enum value: CONSENSUS_STATUS_INCLUDED = 2;
    */
   INCLUDED = 2,
 
   /**
-   * CONSENSUS_STATUS_FINALIZED indicates the resource is finalized for a slot.
+   * CONSENSUS_STATUS_FINALIZED indicates the resource is included and its
+   * slot is finalized. No execution result has arrived yet on this
+   * connection.
    *
    * @generated from enum value: CONSENSUS_STATUS_FINALIZED = 3;
    */
   FINALIZED = 3,
 
   /**
-   * CONSENSUS_STATUS_LOCALLY_EXECUTED indicates the local node executed the
-   * resource but broader cluster finality may not have been achieved.
+   * CONSENSUS_STATUS_LOCALLY_EXECUTED indicates the resource is finalized and
+   * was executed by this node (for stored data: by the node that produced the
+   * data). It implies finalized.
    *
    * @generated from enum value: CONSENSUS_STATUS_LOCALLY_EXECUTED = 4;
    */
   LOCALLY_EXECUTED = 4,
 
   /**
-   * CONSENSUS_STATUS_CLUSTER_EXECUTED indicates the entire cluster has
-   * executed and agreed on the resource.
+   * CONSENSUS_STATUS_CLUSTER_EXECUTED is not reported yet (see UNTO-3677) and
+   * is rejected as a minimum. Future meaning: the post-state is attested by a
+   * later finalization certificate (finalization quorum, more than 1/5 of
+   * stake) and matched by this node.
    *
    * @generated from enum value: CONSENSUS_STATUS_CLUSTER_EXECUTED = 5;
    */

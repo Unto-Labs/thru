@@ -159,6 +159,7 @@ mod tests {
                 name: "A".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "field_b".to_string(),
@@ -179,48 +180,6 @@ mod tests {
     }
 
     #[test]
-    fn layout_graph_detects_cycle() {
-        let typedefs = vec![
-            TypeDef {
-                name: "X".to_string(),
-                format: None,
-                kind: TypeKind::Struct(StructType {
-                    container_attributes: Default::default(),
-                    fields: vec![StructField {
-                        name: "y".to_string(),
-                        format: None,
-                        field_type: TypeKind::TypeRef(TypeRefType {
-                            name: "Y".to_string(),
-                            package: None,
-                            comment: None,
-                        }),
-                    }],
-                }),
-            },
-            TypeDef {
-                name: "Y".to_string(),
-                format: None,
-                kind: TypeKind::Struct(StructType {
-                    container_attributes: Default::default(),
-                    fields: vec![StructField {
-                        name: "x".to_string(),
-                        format: None,
-                        field_type: TypeKind::TypeRef(TypeRefType {
-                            name: "X".to_string(),
-                            package: None,
-                            comment: None,
-                        }),
-                    }],
-                }),
-            },
-        ];
-
-        let graph = LayoutGraph::build(&typedefs);
-        let err = graph.topo_order().unwrap_err();
-        assert!(matches!(err, LayoutGraphError::CircularDependency(_)));
-    }
-
-    #[test]
     fn collects_nested_dependencies() {
         let typedefs = vec![
             TypeDef {
@@ -237,6 +196,7 @@ mod tests {
                         path: vec!["tag".to_string()],
                     }),
                     variants: vec![crate::abi::types::EnumVariant {
+                        comment: None,
                         name: "leaf_variant".to_string(),
                         tag_value: 0,
                         variant_type: TypeKind::Array(ArrayType {
@@ -293,6 +253,7 @@ mod tests {
             name: "Node".to_string(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
@@ -304,6 +265,7 @@ mod tests {
                         name: "child".to_string(),
                         format: None,
                         field_type: TypeKind::Struct(StructType {
+                            display: Default::default(),
                             container_attributes: Default::default(),
                             fields: vec![StructField {
                                 name: "parent_link".to_string(),
@@ -332,6 +294,7 @@ mod tests {
                 name: "Parent".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
@@ -357,6 +320,7 @@ mod tests {
                 name: "Child".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {

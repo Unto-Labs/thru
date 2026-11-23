@@ -7,6 +7,11 @@ use thru_base::{derive_manager_program_accounts, derive_uploader_program_account
 
 use crate::error::CliError;
 
+/// Commands that can sign with a Ledger key; the others refuse a Ledger key
+/// with an error naming these.
+pub const LEDGER_CAPABLE_COMMANDS: &str = "transfer, token transfer, account create, \
+account create-eoa, txn sign, txn execute, message sign, keys add-ledger, keys show --verify";
+
 /// Generate a keypair from a private key hex string
 pub fn keypair_from_hex(private_key_hex: &str) -> Result<KeyPair, CliError> {
     KeyPair::from_hex_private_key("cli", private_key_hex)

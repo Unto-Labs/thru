@@ -96,7 +96,7 @@ a:hover{text-decoration:underline;text-underline-offset:3px;}
           <div><span style="color:var(--m-fg);font-weight:600">Nothing needs the drag.</span> The Transaction details row is the non-drag path to full height — it announces "Transaction details, collapsed" and, when activated at half height, both expands the sheet and opens the section. Dragging is a shortcut to the same two states.</div>
           <div><span style="color:var(--m-fg);font-weight:600">Reduce motion:</span> open and close are a 200 ms fade, no slide; detent changes jump with a 120 ms opacity dip; no skeleton pulse.</div>
           <div><span style="color:var(--m-fg);font-weight:600">Contrast as in the Activity handoff:</span> secondary text fgMuted (7.6:1 light / 9.9:1 dark), failed in brick (4.9 / 7.0), FAILED solid, IconTile soft fills ≥ 3:1. The 40 % scrim only dims the feed; the sheet's own surface is unaffected.</div>
-          <div><span style="color:var(--m-fg);font-weight:600">Copy:</span> addresses 4…4 in mono, never uppercased; − is U+2212; "View on ThruScan" replaces "View in explorer" and opens scan.thru.org/tx/&lt;signature&gt;?network=alphanet.</div>
+          <div><span style="color:var(--m-fg);font-weight:600">Copy:</span> addresses 4…4 in mono, never uppercased; − is U+2212; "View on ThruScan" replaces "View in explorer" and opens scan.thru.org/tx/&lt;signature&gt;?network=betanet.</div>
         </div>
       </div>
     </section>
@@ -297,7 +297,7 @@ const COMPONENTS = [
   ['Decoded data', 'DataCard \u00b7 NEW PRIMITIVE', '1 px border \u00b7 44 header on bgMuted: name mono 13/500 + meta mono 11 fgMuted + chevron 16 \u00b7 body: key/value grid mono 12/18, key fgMuted, values wrap anywhere \u00b7 one card per instruction and event, each expands on its own', true],
   ['Raw instruction bytes', 'DataCard + Copy', 'collapsed by default \u00b7 header summary \u201c1 instruction \u00b7 164 bytes\u201d \u00b7 Copy as mono 11 caps in a 44 hit, separated by a hairline \u00b7 body mono 12/18, wraps \u00b7 the only place hex appears', true],
   ['Footer', 'SheetFooter \u00b7 NEW PRIMITIVE', 'pinned below the scrolling body \u00b7 hairline, 12 above, 16 insets \u00b7 safe area 34 on phones, 16 in the panel \u00b7 visible at every detent and scroll position', true],
-  ['View on ThruScan', 'Button \u00b7 outline md', 'h48 full width \u00b7 \u2197 16 \u00b7 opens scan.thru.org/tx/\u2039signature\u203a?network=alphanet in a new tab \u00b7 live even while loading or after a failed load', false],
+  ['View on ThruScan', 'Button \u00b7 outline md', 'h48 full width \u00b7 \u2197 16 \u00b7 opens scan.thru.org/tx/\u2039signature\u203a?network=betanet in a new tab \u00b7 live even while loading or after a failed load', false],
   ['Share', 'IconButton 44 (header)', 'Web Share with the ThruScan link; copies the link where Share is unavailable \u00b7 hidden in the inline-actions option only', false],
   ['Scrim', 'Scrim \u00b7 NEW VARIANT', '40 % at the half detent, 64 % at full, interpolated with the drag \u00b7 tap dismisses \u00b7 the kit\u2019s 64 % stays for Send and Deposit', true],
   ['Loading', 'Skeleton \u00b7 DetailSkeleton', 'tile 32 \u00b7 title 120\u00d714 \u00b7 amount 160\u00d730 \u00b7 status 96\u00d712 \u00b7 four rows 64\u00d79 / 128\u00d711 \u00b7 bgInset, 1.4 s pulse, none under reduce-motion', false],

@@ -1,5 +1,6 @@
 /* Well-known type handlers */
 
+mod bool_value;
 mod calendar_period;
 mod color;
 mod date;
@@ -18,9 +19,11 @@ mod month;
 mod pubkey;
 mod quaternion;
 mod signature;
+mod text;
 mod time_of_day;
 mod timestamp;
 
+pub use bool_value::BoolHandler;
 pub use calendar_period::CalendarPeriodHandler;
 pub use color::ColorHandler;
 pub use date::DateHandler;
@@ -36,9 +39,10 @@ pub use interval::IntervalHandler;
 pub use latlng::LatLngHandler;
 pub use money::MoneyHandler;
 pub use month::MonthHandler;
-pub use pubkey::PubkeyHandler;
+pub use pubkey::{decode_thru_address, encode_thru_address, PubkeyHandler};
 pub use quaternion::QuaternionHandler;
 pub use signature::SignatureHandler;
+pub use text::TextHandler;
 pub use time_of_day::TimeOfDayHandler;
 pub use timestamp::TimestampHandler;
 

@@ -1,3 +1,66 @@
-.tds-dob-input {
+/* Doubled class: drop the kit fieldset's box whatever the stylesheet order. */
+.tds-fieldset.tds-dob {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+/* Same type as the error under a kit Input. */
+.tds-dob > .tds-field__error {
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+
+.tds-dob__row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: var(--space-2);
+}
+
+/* The native select gets the 48px touch height and 16px no-zoom text of a size lg Input.
+   height, not min-height: iOS Safari ignores min-height on a native select. */
+.tds-dob__month .tds-field__control {
+  box-sizing: border-box;
+  width: 100%;
+  height: 48px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+}
+
+/* Match the Input's focus ring and dark surface so the three boxes in the row look alike. */
+.tds-dob__month .tds-field__control:focus {
+  border-color: var(--color-border-primary);
+  box-shadow: inset 0 0 0 1px var(--color-border-primary);
+}
+
+:where([data-theme="dark"], :root[data-theme="dark"])
+  .tds-dob__month
+  .tds-field__control {
+  background: var(--color-surface-primary);
+  border-color: var(--color-border-secondary);
+}
+
+.tds-dob__month .tds-field__control[aria-invalid="true"] {
+  border-color: var(--color-border-danger);
+  box-shadow: inset 0 0 0 1px var(--color-border-danger);
+}
+
+.tds-dob__month .tds-field__control:disabled {
+  background: var(--color-surface-disabled);
+  cursor: not-allowed;
+}
+
+.tds-dob__month .tds-field__control:has(option[value=""]:checked) {
+  color: var(--color-text-tertiary);
+}
+
+.tds-dob__month option {
+  color: var(--color-text-primary);
+}
+
+.tds-dob__digits {
   font-variant-numeric: tabular-nums;
 }

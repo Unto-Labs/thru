@@ -76,18 +76,18 @@ export function shortenWalletAddress(address: string, leading = 6, trailing = 4)
 
 export function AccountAvatar({ account, size }: { account: ConnectAccount; size: number }) {
   if (account.avatar) return <>{account.avatar}</>;
-  return <Disc size={size} color={account.color ?? "var(--sky-400)"} />;
+  return <Disc size={size} color={account.color ?? "var(--info-400)"} />;
 }
 
 export interface AccountMenuPopupProps {
   /** Every account; the one matching `currentAddress` heads the menu. */
   accounts: ConnectAccount[];
   currentAddress: string;
-  /** Wallet name in the manage button (default "Thru Wallet"). */
+  /** Wallet name in the manage button (default "Unto Wallet"). */
   walletName?: React.ReactNode;
   /** "menu" (default) inside a Base UI `Menu`; "sheet" as plain rows in a bottom sheet. */
   presentation?: "menu" | "sheet";
-  /** "Manage your Thru Wallet" target; `null` hides it. */
+  /** "Manage your Unto Wallet" target; `null` hides it. */
   manageHref?: string | null;
   /** "Manage accounts" target; `null` hides it (unless `onManageAccounts` is set). */
   manageAccountsHref?: string | null;
@@ -168,7 +168,7 @@ export const AccountMenuPopup = React.forwardRef<HTMLDivElement, AccountMenuPopu
     {
       accounts,
       currentAddress,
-      walletName = "Thru Wallet",
+      walletName = "Unto Wallet",
       presentation = "menu",
       manageHref = DEFAULT_MANAGE_HREF,
       manageAccountsHref = DEFAULT_MANAGE_ACCOUNTS_HREF,

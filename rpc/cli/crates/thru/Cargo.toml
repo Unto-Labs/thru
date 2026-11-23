@@ -13,6 +13,11 @@ categories = ["command-line-utilities", "cryptography::cryptocurrencies"]
 name = "thru"
 path = "src/main.rs"
 
+[features]
+default = []
+# Test-only Speculos emulator transport for Ledger keys (see thru-core).
+ledger-speculos = ["thru-core/ledger-speculos"]
+
 [dependencies]
 thru-core = { version = "0.1.0", path = "../thru-core" }
 anyhow = "1.0"

@@ -19,7 +19,7 @@ import {
 import { create } from "@bufbuild/protobuf";
 import { ChainClient } from "../src";
 
-const BASE_URL = process.env.GRPC_URL || "https://rpc.alphanet.thru.org";
+const BASE_URL = process.env.GRPC_URL || "https://rpc.betanet.thru.org";
 const TOKEN_PROGRAM = process.env.TOKEN_PROGRAM ?? TOKEN_PROGRAM_ADDRESS;
 
 // Byte 0 of every token program account is the account type (TokenProgramAccount

@@ -15,7 +15,9 @@ nondeterministic, so entries of those maps are sorted here; Go emits them sorted
 use abi_gen::abi::expr::ExprKind;
 use abi_gen::abi::file::{AbiFile, ImportResolver, RootTypes};
 use abi_gen::abi::resolved::{ResolvedType, ResolvedTypeKind, Size, TypeResolver};
-use abi_gen::abi::types::{FloatingPointType, IntegralType, PrimitiveType};
+use abi_gen::abi::types::{
+    FloatingPointType, IntegralType, PrimitiveType, StructDisplay, TypeDef, TypeKind,
+};
 use abi_reflect::parser::ParseError;
 use abi_reflect::types::{ReflectedType, ReflectedTypeKind};
 use abi_reflect::value::{ReflectedValue, Value};
@@ -693,6 +695,33 @@ fn collect_suites(root: &Path) -> Vec<Suite> {
     suites.into_values().collect()
 }
 
+/* The goldens pin wire decoding, which the Go SDK mirrors. Go skips display
+   info (headings, synthetic fields), so drop it before decoding: an ABI that
+   adds display info leaves its goldens unchanged. */
+fn strip_display(kind: &mut TypeKind) {
+    match kind {
+        TypeKind::Struct(s) => {
+            s.display = StructDisplay::default();
+            for f in &mut s.fields {
+                strip_display(&mut f.field_type);
+            }
+        }
+        TypeKind::Union(u) => u.variants.iter_mut().for_each(|v| strip_display(&mut v.variant_type)),
+        TypeKind::Enum(e) => e.variants.iter_mut().for_each(|v| strip_display(&mut v.variant_type)),
+        TypeKind::Array(a) => strip_display(&mut a.element_type),
+        TypeKind::SizeDiscriminatedUnion(u) => {
+            u.variants.iter_mut().for_each(|v| strip_display(&mut v.variant_type))
+        }
+        _ => {}
+    }
+}
+
+fn wire_only(td: &TypeDef) -> TypeDef {
+    let mut td = td.clone();
+    strip_display(&mut td.kind);
+    td
+}
+
 /* Manifest of package -> YAML for a file and its path imports. */
 fn manifest_for(path: &Path, out: &mut BTreeMap<String, (String, PathBuf)>) {
     let text = std::fs::read_to_string(path).unwrap();
@@ -714,8 +743,8 @@ fn reflector_from_manifest(
     let mut resolver = TypeResolver::new();
     for yaml in manifest.values() {
         let f: AbiFile = serde_yml::from_str(yaml).map_err(|e| e.to_string())?;
-        for td in f.types {
-            resolver.add_typedef(td);
+        for td in &f.types {
+            resolver.add_typedef(wire_only(td));
         }
     }
     resolver
@@ -760,7 +789,7 @@ fn run_suite(root: &Path, suite: &Suite, out: &Out, dir: &Path) -> usize {
         .collect();
     let mut resolver = TypeResolver::new();
     for td in loader.get_all_types() {
-        resolver.add_typedef(td.clone());
+        resolver.add_typedef(wire_only(td));
     }
     if let Err(e) = resolver.resolve_all() {
         header["construct"] = json!({ "resolve_err": canon(&format!("{e:?}")) });
@@ -770,7 +799,7 @@ fn run_suite(root: &Path, suite: &Suite, out: &Out, dir: &Path) -> usize {
     let raw_resolver = {
         let mut r = TypeResolver::new();
         for td in loader.get_all_types() {
-            r.add_typedef(td.clone());
+            r.add_typedef(wire_only(td));
         }
         r.resolve_all().unwrap();
         r

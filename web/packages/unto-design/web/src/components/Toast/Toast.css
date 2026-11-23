@@ -11,12 +11,12 @@
 }
 
 .uds-toast {
-  --toast-accent: var(--brick-400);
+  --toast-accent: var(--accent-300);
   display: flex;
   gap: var(--space-3);
   align-items: flex-start;
-  background: var(--steel-800);
-  color: var(--steel-200);
+  background: var(--neutral-800);
+  color: var(--neutral-200);
   border-left: 3px solid var(--toast-accent);
   padding: var(--space-3) var(--space-5) var(--space-3) var(--space-3);
   box-shadow: var(--shadow-lg);
@@ -25,6 +25,11 @@
   transition:
     transform var(--duration-med) var(--ease-standard),
     opacity var(--duration-med) var(--ease-standard);
+}
+/* The ink toast matches the dark page, so it steps up and takes an edge. */
+:where([data-theme="dark"], :root[data-theme="dark"]) .uds-toast {
+  background: var(--color-surface-lower);
+  box-shadow: var(--shadow-lg), inset 0 0 0 1px var(--color-border-secondary);
 }
 .uds-toast[data-starting-style],
 .uds-toast[data-ending-style] {
@@ -41,16 +46,16 @@
   }
 }
 
-.uds-toast--success { --toast-accent: var(--grass-300); }
-.uds-toast--error   { --toast-accent: var(--brick-400); }
-.uds-toast--info    { --toast-accent: var(--sky-300); }
-.uds-toast--warn    { --toast-accent: var(--yellow-400); }
+.uds-toast--success { --toast-accent: var(--success-300); }
+.uds-toast--danger   { --toast-accent: var(--danger-300); }
+.uds-toast--info    { --toast-accent: var(--info-300); }
+.uds-toast--warning  { --toast-accent: var(--warning-300); }
 
 .uds-toast__icon {
   flex: none;
   width: 18px;
   height: 18px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-box);
   display: grid;
   place-items: center;
   background: color-mix(in srgb, var(--toast-accent) 22%, transparent);
@@ -63,17 +68,17 @@
 }
 .uds-toast__title {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: 13px;
+  font-family: var(--font-sans);
+  font-size: var(--text-ui);
   line-height: 1.3;
   font-weight: var(--fw-semibold);
-  color: var(--teal-0);
+  color: var(--neutral-0);
 }
 .uds-toast__desc {
   margin: var(--space-1) 0 0 0;
-  font-size: 12px;
+  font-size: var(--text-caption);
   line-height: 1.3;
-  color: var(--steel-300);
+  color: var(--neutral-300);
   word-break: break-word;
 }
 
@@ -84,11 +89,11 @@
   background: none;
   border: none;
   padding: 0;
-  color: var(--steel-400);
+  color: var(--neutral-400);
   cursor: pointer;
   display: inline-flex;
 }
-.uds-toast__close:hover { color: var(--teal-0); }
+.uds-toast__close:hover { color: var(--neutral-0); }
 
 .uds-toast__bar {
   position: absolute;
@@ -112,4 +117,9 @@
   .uds-toast__bar {
     animation-name: uds-toastbar-fade;
   }
+}
+
+.uds-toast__close:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
 }

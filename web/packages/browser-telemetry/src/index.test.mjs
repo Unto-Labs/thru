@@ -246,7 +246,7 @@ test('upload deadline aborts after five seconds without retries and releases its
     assert.equal(signals[1].aborted, true);
   } finally { stop(); }
 });
-const balance = { event: 'launch', value: 1834, milestone: 'balance', mode: 'browser', cache: 'warm', outcome: 'value', network: 'alphanet' };
+const balance = { event: 'launch', value: 1834, milestone: 'balance', mode: 'browser', cache: 'warm', outcome: 'value', network: 'betanet' };
 async function sentEvents(b) {
   b.window.dispatchEvent(new Event('pagehide')); await new Promise(resolve => setImmediate(resolve));
   return b.sent.flatMap(batch => batch.events).filter(e => e.event !== 'web_vital');

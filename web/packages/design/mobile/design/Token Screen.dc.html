@@ -91,7 +91,7 @@ a:hover{text-decoration:underline;text-underline-offset:3px;}
   <sc-if value="{{ isPhone }}" hint-placeholder-val="{{ true }}"><div style="height:34px;flex:none"></div></sc-if>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;token&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;cool&quot;,&quot;options&quot;:[&quot;uusd&quot;,&quot;cool&quot;,&quot;zero&quot;,&quot;frozen&quot;,&quot;unsupported&quot;,&quot;eth&quot;,&quot;btc&quot;,&quot;notfound&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;explainerOpen&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;layout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;phone&quot;,&quot;options&quot;:[&quot;phone&quot;,&quot;column&quot;],&quot;tsType&quot;:&quot;'phone' | 'column'&quot;},&quot;network&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Alphanet&quot;,&quot;options&quot;:[&quot;Alphanet&quot;,&quot;Betanet&quot;],&quot;tsType&quot;:&quot;'Alphanet' | 'Betanet'&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;token&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;cool&quot;,&quot;options&quot;:[&quot;uusd&quot;,&quot;cool&quot;,&quot;zero&quot;,&quot;frozen&quot;,&quot;unsupported&quot;,&quot;eth&quot;,&quot;btc&quot;,&quot;notfound&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;explainerOpen&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;layout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;phone&quot;,&quot;options&quot;:[&quot;phone&quot;,&quot;column&quot;],&quot;tsType&quot;:&quot;'phone' | 'column'&quot;},&quot;network&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Betanet&quot;,&quot;options&quot;:[&quot;Betanet&quot;],&quot;tsType&quot;:&quot;'Betanet'&quot;}}">
 const FILL = 'k8mN4pQ7rT1vW9xZ3bC6eF0hJ5kL2nP8qR4tV7';
 const MINT = (a, b) => a + FILL.slice(0, 46 - a.length - b.length) + b;
 const TOKENS = {
@@ -115,7 +115,7 @@ class Component extends DCLogic {
     const glyph = t.ticker === 'Unknown token' ? '?' : t.ticker.slice(0, 2).toUpperCase();
     const explainerOpen = this.state.explainerOpen ?? !!p.explainerOpen;
     const disabled = !!t.sendReason;
-    const network = p.network ?? 'Alphanet';
+    const network = p.network ?? 'Betanet';
     return {
       isPhone: layout === 'phone', headPad: layout === 'phone' ? '20px 16px 0' : '32px 16px 0',
       navTitle: notFound ? 'Token' : t.ticker,

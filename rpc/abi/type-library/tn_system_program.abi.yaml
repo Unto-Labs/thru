@@ -28,24 +28,60 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Transfer THRU
       fields:
       - name: from_pubkey_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: from_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(from_pubkey_idx)'
+        display-name: Source account
+        user-display: true
       - name: to_pubkey_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: to_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(to_pubkey_idx)'
+        display-name: Destination account
+        user-display: true
       - name: amount
+        display-name: Amount (base units)
         field-type:
           primitive: u64
+      - name: amount_thru
+        display-name: Amount
+        user-display: true
+        type: synthetic
+        return-type: { type-ref: { name: Decimal } }
+        expression: 'toDecimal(amount, 9)'
+      - name: summary
+        display-name: Summary
+        user-display: true
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: '`Send ${amount_thru} THRU to ${to_account}`'
 - name: ResizeArgs
   kind:
     struct:
       packed: true
+      display-name: Resize account
       fields:
       - name: account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(account_idx)'
+        display-name: Account
+        user-display: true
       - name: new_size
         field-type:
           primitive: u64
@@ -53,10 +89,18 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Create account
       fields:
       - name: account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(account_idx)'
+        display-name: Account
+        user-display: true
       - name: seed_len
         field-type:
           primitive: u64
@@ -67,10 +111,18 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Create ephemeral account
       fields:
       - name: account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(account_idx)'
+        display-name: Account
+        user-display: true
       - name: seed_len
         field-type:
           primitive: u64
@@ -78,26 +130,50 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Delete account
       fields:
       - name: account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(account_idx)'
+        display-name: Account
+        user-display: true
 - name: CompressArgs
   kind:
     struct:
       packed: true
+      display-name: Compress account
       fields:
       - name: account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(account_idx)'
+        display-name: Account
+        user-display: true
 - name: DecompressArgs
   kind:
     struct:
       packed: true
+      display-name: Decompress account
       fields:
       - name: account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(account_idx)'
+        display-name: Account
+        user-display: true
       - name: data_len
         field-type:
           primitive: u64
@@ -105,16 +181,38 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Decompress account (v2)
       fields:
       - name: target_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: target_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(target_account_idx)'
+        display-name: Account
+        user-display: true
       - name: meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: meta_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(meta_account_idx)'
+        display-name: Metadata account
+        user-display: true
       - name: data_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: data_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(data_account_idx)'
+        display-name: Data account
+        user-display: true
       - name: data_offset
         field-type:
           primitive: u32
@@ -122,10 +220,18 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Set account flags
       fields:
       - name: account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(account_idx)'
+        display-name: Account
+        user-display: true
       - name: flags
         field-type:
           primitive: u8
@@ -199,3 +305,47 @@ types:
       - name: code
         field-type:
           primitive: u64
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: invalid_instruction_data_size
+              tag-value: 1
+              comment: Instruction data is too short or the wrong size for this instruction.
+            - name: invalid_discriminant
+              tag-value: 2
+              comment: Instruction is not a known system instruction.
+            - name: account_resize_failed
+              tag-value: 4
+              comment: The account could not be resized.
+            - name: account_create_failed
+              tag-value: 5
+              comment: The account could not be created.
+            - name: account_delete_failed
+              tag-value: 6
+              comment: The account could not be deleted.
+            - name: account_compress_failed
+              tag-value: 7
+              comment: The account could not be compressed.
+            - name: account_decompress_failed
+              tag-value: 8
+              comment: The account could not be decompressed.
+            - name: account_set_writable_failed
+              tag-value: 9
+              comment: The account could not be opened for writing.
+            - name: set_stack_sz_failed
+              tag-value: 10
+              comment: The program stack could not be resized.
+            - name: account_set_flags_failed
+              tag-value: 11
+              comment: The account flags could not be changed.
+            - name: seed_too_long
+              tag-value: 12
+              comment: The account seed is longer than 32 bytes.
+            - name: invalid_argument
+              tag-value: 13
+              comment: An argument in the instruction is not valid.

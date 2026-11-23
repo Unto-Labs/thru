@@ -23,57 +23,86 @@ types:
     kind:
       struct:
         packed: true
+        display-name: Create bond account
         comment: >-
           create_signer_eoa 0 requires signer_pubkey to be the fee payer and
           eoa_proof_size 0. create_signer_eoa 1 creates the signer EOA at
           signer_eoa_idx using signer_eoa_signature and eoa_proof.
         fields:
+          - name: bond_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(bond_account_idx)'
+            display-name: Bond account
+            user-display: true
+          - name: bond_token_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(bond_ta_idx)'
+            display-name: Bond token account
+            user-display: true
           - name: token_program_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: bond_account_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: bond_ta_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: mint_account_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: signer_eoa_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: create_signer_eoa
+            user-display: false
             field-type: { primitive: u8 }
           - name: reserved
+            user-display: false
             field-type: { primitive: u8 }
           - name: signer_pubkey
+            display-name: Block signer
             field-type:
               type-ref:
                 name: Pubkey
                 package: "thru.common.primitives"
           - name: bond_authority
+            display-name: Bond authority
             field-type:
               type-ref:
                 name: Pubkey
                 package: "thru.common.primitives"
           - name: signer_eoa_signature
+            user-display: false
             field-type:
               type-ref:
                 name: Signature
                 package: "thru.common.primitives"
           - name: bond_proof_size
+            user-display: false
             field-type: { primitive: u64 }
           - name: ta_proof_size
+            user-display: false
             field-type: { primitive: u64 }
           - name: eoa_proof_size
+            user-display: false
             field-type: { primitive: u64 }
           - name: bond_proof
+            user-display: false
             field-type:
               array:
                 size: { field-ref: { path: [bond_proof_size] } }
                 element-type: { primitive: u8 }
           - name: ta_proof
+            user-display: false
             field-type:
               array:
                 size: { field-ref: { path: [ta_proof_size] } }
                 element-type: { primitive: u8 }
           - name: eoa_proof
+            user-display: false
             field-type:
               array:
                 size: { field-ref: { path: [eoa_proof_size] } }
@@ -82,10 +111,19 @@ types:
     kind:
       struct:
         packed: true
+        display-name: Set bond authority
         fields:
+          - name: bond_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(bond_account_idx)'
+            display-name: Bond account
+            user-display: true
           - name: bond_account_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: new_bond_authority
+            display-name: New bond authority
             field-type:
               type-ref:
                 name: Pubkey
@@ -94,85 +132,214 @@ types:
     kind:
       struct:
         packed: true
+        display-name: Deposit to bond
         fields:
           - name: token_program_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: bond_account_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: bond_ta_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: source_ta_idx
+            user-display: false
             field-type: { primitive: u16 }
+          - name: bond_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(bond_account_idx)'
+            display-name: Bond account
+            user-display: true
+          - name: source_token_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(source_ta_idx)'
+            display-name: Source token account
+            user-display: true
+          - name: bond_token_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(bond_ta_idx)'
+            display-name: Bond token account
+            user-display: true
           - name: amount
+            display-name: Amount (base units)
             field-type: { primitive: u64 }
   - name: WithdrawalArgs
     kind:
       struct:
         packed: true
+        display-name: Withdraw from bond
         fields:
           - name: token_program_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: bond_account_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: bond_ta_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: dest_ta_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: attestor_table_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: from_active
+            user-display: false
             field-type: { primitive: u8 }
+          - name: bond_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(bond_account_idx)'
+            display-name: Bond account
+            user-display: true
+          - name: bond_token_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(bond_ta_idx)'
+            display-name: Bond token account
+            user-display: true
+          - name: dest_token_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(dest_ta_idx)'
+            display-name: Destination token account
+            user-display: true
+          - name: withdraw_from
+            type: synthetic
+            return-type: { type-ref: { name: Text } }
+            expression: 'if from_active == 0 { "Staged funds" } else { "Active bond" }'
+            display-name: Withdraw from
+            user-display: true
           - name: amount
+            display-name: Amount (base units)
             field-type: { primitive: u64 }
   - name: UpdateBondArgs
     kind:
       struct:
         packed: true
+        display-name: Update bond
         fields:
+          - name: bond_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(bond_account_idx)'
+            display-name: Bond account
+            user-display: true
           - name: bond_account_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: attestor_table_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: new_unlock_slot
+            display-name: New unlock slot
             field-type: { primitive: u64 }
           - name: new_active
+            display-name: New active bond (base units)
             field-type: { primitive: u64 }
   - name: DeleteAccountArgs
     kind:
       struct:
         packed: true
+        display-name: Delete bond account
         fields:
           - name: bond_account_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: dest_idx
+            user-display: false
             field-type: { primitive: u16 }
+          - name: bond_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(bond_account_idx)'
+            display-name: Bond account
+            user-display: true
+          - name: destination
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(dest_idx)'
+            display-name: Destination
+            user-display: true
   - name: SweepArgs
     kind:
       struct:
         packed: true
+        display-name: Sweep bond surplus
         fields:
           - name: token_program_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: bond_account_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: bond_ta_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: dest_ta_idx
+            user-display: false
             field-type: { primitive: u16 }
+          - name: bond_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(bond_account_idx)'
+            display-name: Bond account
+            user-display: true
+          - name: bond_token_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(bond_ta_idx)'
+            display-name: Bond token account
+            user-display: true
+          - name: dest_token_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(dest_ta_idx)'
+            display-name: Destination token account
+            user-display: true
   - name: PayOutBlockArgs
     kind:
       struct:
         packed: true
+        display-name: Pay out block
         fields:
           - name: token_program_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: bond_account_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: bond_ta_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: escrow_ta_idx
+            user-display: false
             field-type: { primitive: u16 }
+          - name: bond_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(bond_account_idx)'
+            display-name: Bond account
+            user-display: true
+          - name: bond_token_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(bond_ta_idx)'
+            display-name: Bond token account
+            user-display: true
+          - name: escrow_token_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(escrow_ta_idx)'
+            display-name: Escrow token account
+            user-display: true
           - name: amount
+            display-name: Amount requested (base units)
             field-type: { primitive: u64 }
   - name: BlockProducerInstruction
     kind:
@@ -180,6 +347,7 @@ types:
         packed: true
         fields:
           - name: tag
+            user-display: false
             field-type: { primitive: u32 }
           - name: payload
             field-type:
@@ -220,6 +388,7 @@ types:
         packed: true
         fields:
           - name: account_type
+            user-display: false
             field-type: { primitive: u8 }
           - name: payload
             field-type:
@@ -234,30 +403,38 @@ types:
     kind:
       struct:
         packed: true
+        display-name: Bond
         comment: Bond payload (the 128 bytes after the account_type byte).
         fields:
           - name: signer_pubkey
+            display-name: Block signer
             field-type:
               type-ref:
                 name: Pubkey
                 package: "thru.common.primitives"
           - name: bond_authority
+            display-name: Bond authority
             field-type:
               type-ref:
                 name: Pubkey
                 package: "thru.common.primitives"
           - name: wthru_token_account
+            display-name: Bond token account
             field-type:
               type-ref:
                 name: Pubkey
                 package: "thru.common.primitives"
           - name: active_bond
+            display-name: Active bond (base units)
             field-type: { primitive: u64 }
           - name: staged_amount
+            display-name: Staged (base units)
             field-type: { primitive: u64 }
           - name: unlock_slot
+            display-name: Unlock slot
             field-type: { primitive: u64 }
           - name: last_change_slot
+            display-name: Last change slot
             field-type: { primitive: u64 }
   - name: BlockProducerError
     kind:
@@ -276,3 +453,83 @@ types:
         fields:
           - name: code
             field-type: { primitive: u64 }
+          - name: error
+            field-type:
+              enum:
+                tag-ref: { field-ref: { path: [code] } }
+                variants:
+                  - name: invalid_instruction_data_size
+                    tag-value: 1
+                    comment: Instruction data is too short or the wrong size for this instruction.
+                  - name: invalid_discriminant
+                    tag-value: 2
+                    comment: Instruction is not a known block producer instruction.
+                  - name: invalid_account_idx
+                    tag-value: 3
+                    comment: An account index in the instruction is outside the account list of the transaction.
+                  - name: unauthorized
+                    tag-value: 4
+                    comment: The required signer did not authorize this transaction.
+                  - name: invalid_bond_account
+                    tag-value: 5
+                    comment: The account is not a bond account owned by the block producer program.
+                  - name: bond_ta_mismatch
+                    tag-value: 6
+                    comment: The token account is not the one recorded in the bond.
+                  - name: change_window
+                    tag-value: 7
+                    comment: The waiting period since the last change has not passed yet.
+                  - name: unlock_slot
+                    tag-value: 8
+                    comment: The funds are still locked until a later slot.
+                  - name: insufficient_staged
+                    tag-value: 9
+                    comment: The staged balance is lower than the amount requested.
+                  - name: insufficient_active
+                    tag-value: 10
+                    comment: The active bond is lower than the amount requested.
+                  - name: active_bond_nonzero
+                    tag-value: 11
+                    comment: The signer cannot be changed while the bond is active.
+                  - name: nonzero_funds
+                    tag-value: 12
+                    comment: The bond account still holds funds and cannot be deleted.
+                  - name: token_program_call_failed
+                    tag-value: 13
+                    comment: The call to the token program failed.
+                  - name: account_create_failed
+                    tag-value: 14
+                    comment: The bond account could not be created.
+                  - name: not_consensus_caller
+                    tag-value: 15
+                    comment: Only the consensus validator program can pay out a block.
+                  - name: bond_addr_mismatch
+                    tag-value: 16
+                    comment: The bond account is not at the address derived for this block producer.
+                  - name: invalid_amount
+                    tag-value: 17
+                    comment: The amount is zero.
+                  - name: overflow
+                    tag-value: 18
+                    comment: An amount would overflow.
+                  - name: nothing_to_sweep
+                    tag-value: 19
+                    comment: There are no funds to sweep.
+                  - name: account_resize_failed
+                    tag-value: 20
+                    comment: The bond account could not be resized.
+                  - name: not_implemented
+                    tag-value: 21
+                    comment: This instruction is not implemented.
+                  - name: wrong_mint
+                    tag-value: 22
+                    comment: The bond token account does not hold WTHRU.
+                  - name: signer_addr_mismatch
+                    tag-value: 23
+                    comment: The signer account does not match the signer key in the instruction.
+                  - name: invalid_token_program
+                    tag-value: 24
+                    comment: The token program account is not the official token program.
+                  - name: invalid_token_account
+                    tag-value: 25
+                    comment: The bond token account is not a token account.

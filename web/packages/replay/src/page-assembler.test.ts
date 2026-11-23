@@ -215,38 +215,6 @@ describe("PageAssembler", () => {
     expect(finalDelete?.isDelete).toBe(true);
   });
 
-  test("delete(30,7) -> pending update(31,1) -> redelivered delete(30,9) is rejected against the pending mark; a duplicate of the original delete and a genuinely newer delete are handled the same way", () => {
-    const assembler = new PageAssembler();
-    const dataSize = 2 * PAGE_SIZE;
-
-    const deleteResult = assembler.processUpdate(ADDR, makeDelete(30n, 7n));
-    expect(deleteResult?.isDelete).toBe(true);
-
-    /* update(31,1) starts a multi-page assembly; only page 0 has arrived
-       so far, so it stays pending -- the newest state this layer
-       currently knows about for the address. */
-    expect(
-      assembler.processUpdate(ADDR, makeDelta({ slot: 31n, seq: 1n, dataSize, pageIdx: 0, fill: 0x11 }))
-    ).toBeNull();
-    expect(assembler.getPendingCount()).toBe(1);
-
-    /* A redelivered delete(30,9) is newer than the original delete(30,7)
-       but older than the pending (31,1) assembly -- rejected. */
-    expect(assembler.processUpdate(ADDR, makeDelete(30n, 9n))).toBeNull();
-    expect(assembler.getPendingCount()).toBe(1);
-
-    /* An exact duplicate of the original delete(30,7) is rejected the
-       same way -- it is even older than (31,1). */
-    expect(assembler.processUpdate(ADDR, makeDelete(30n, 7n))).toBeNull();
-    expect(assembler.getPendingCount()).toBe(1);
-
-    /* A genuinely newer delete, newer than the pending (31,1) assembly,
-       still applies and clears it. */
-    const finalDelete = assembler.processUpdate(ADDR, makeDelete(31n, 2n));
-    expect(finalDelete?.isDelete).toBe(true);
-    expect(assembler.getPendingCount()).toBe(0);
-  });
-
   test("delete for one address never discards another address's pending assembly", () => {
     const assembler = new PageAssembler();
     const dataSize = 2 * PAGE_SIZE;

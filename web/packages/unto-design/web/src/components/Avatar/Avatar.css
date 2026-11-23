@@ -2,7 +2,7 @@
   width: 40px;
   height: 40px;
   background: var(--color-surface-lower);
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-pill);
   display: inline-grid;
   place-items: center;
   overflow: hidden;
@@ -17,7 +17,7 @@
 }
 
 .uds-avatar__fallback {
-  font-family: var(--font-mono);
-  font-size: 13px;
+  font-family: var(--font-sans);
+  font-size: var(--text-ui);
   color: var(--color-text-tertiary);
 }

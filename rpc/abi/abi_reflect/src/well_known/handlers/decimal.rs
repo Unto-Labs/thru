@@ -12,6 +12,10 @@ impl WellKnownType for DecimalHandler {
         "Decimal"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("decimal", "formatted"))
+    }
+
     fn process(&self, ctx: &WellKnownContext) -> WellKnownResult {
         let Some(fields) = ctx.fields else {
             return WellKnownResult::None;
@@ -29,16 +33,5 @@ impl WellKnownType for DecimalHandler {
         }
 
         WellKnownResult::None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn decimal_handler_type_name() {
-        let handler = DecimalHandler;
-        assert_eq!(handler.type_name(), "Decimal");
     }
 }

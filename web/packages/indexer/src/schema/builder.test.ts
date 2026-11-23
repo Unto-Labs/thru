@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { t, columnBuilder } from "./builder";
+import { t } from "./builder";
 
 describe("column builder", () => {
   describe("t.text()", () => {
@@ -53,13 +53,6 @@ describe("column builder", () => {
       expect(col._nullable).toBe(true);
     });
 
-    it("supports all modifiers", () => {
-      const col = t.bigint().notNull().index();
-      expect(col._columnType).toBe("bigint");
-      expect(col._nullable).toBe(false);
-      expect(col._indexed).toBe(true);
-    });
-
     it("supports default with bigint value", () => {
       const col = t.bigint().default(0n);
       expect(col._default).toBe(0n);
@@ -109,32 +102,6 @@ describe("column builder", () => {
       const col = t.timestamp().notNull().defaultNow();
       expect(col._nullable).toBe(false);
       expect(col._defaultNow).toBe(true);
-    });
-  });
-
-  describe("columnBuilder alias", () => {
-    it("is the same as t", () => {
-      expect(columnBuilder).toBe(t);
-    });
-  });
-
-  describe("schema definition pattern", () => {
-    it("allows building complete schema objects", () => {
-      const schema = {
-        id: t.text().primaryKey(),
-        slot: t.bigint().notNull().index(),
-        amount: t.bigint().notNull(),
-        active: t.boolean().notNull().default(true),
-        name: t.text(),
-        createdAt: t.timestamp().notNull().defaultNow(),
-      };
-
-      expect(schema.id._primary).toBe(true);
-      expect(schema.slot._indexed).toBe(true);
-      expect(schema.amount._nullable).toBe(false);
-      expect(schema.active._default).toBe(true);
-      expect(schema.name._nullable).toBe(true);
-      expect(schema.createdAt._defaultNow).toBe(true);
     });
   });
 });

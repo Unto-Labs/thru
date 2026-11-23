@@ -44,7 +44,7 @@ function submit(rpc: SimulatedRpc, options: PerpSubmitOptions = {}, signer = cre
     { programAddress: PROGRAM, tx: { label: 'test', instructionData: async () => new Uint8Array(), readWrite: [address(2)], readOnly: [address(3)] } },
     {
       checkChain: async () => {
-        if ((await rpcChainId(rpc.sdk)) !== 1) throw new Error('transaction blocked');
+        if ((await rpcChainId(rpc.sdk)) !== 2) throw new Error('transaction blocked');
       },
       archived: { signer: { kind: 'keypair', publicKey: PAYER, privateKey: new Uint8Array(32) } },
       ...options,
@@ -94,7 +94,7 @@ describe('submitPerpTransaction', () => {
   it('signs nothing on the wrong chain', async () => {
     const rpc = simulatedRpc();
     const chain = rpc.sdk.chain as { getChainId: () => Promise<number> };
-    chain.getChainId = async () => 2;
+    chain.getChainId = async () => 3;
     const { error } = await timed(submit(rpc));
     expect(String(error)).toContain('transaction blocked');
     expect(rpc.received).toHaveLength(0);

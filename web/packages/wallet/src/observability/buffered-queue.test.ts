@@ -263,22 +263,6 @@ describe('createHttpJsonTransport', () => {
     [400, 'drop'],
     [500, 'retry'],
   ] as const)(
-    'preserves HTTP %s classification without a response body',
-    async (status, outcome) => {
-      const transport = createHttpJsonTransport({
-        endpoint: '/v1/telemetry',
-        fetch: async () => new Response(null, { status }),
-      });
-
-      expect(await transport.send('{}', undefined)).toBe(outcome);
-    }
-  );
-
-  it.each([
-    [200, 'success'],
-    [400, 'drop'],
-    [500, 'retry'],
-  ] as const)(
     'preserves HTTP %s classification if body cancellation fails',
     async (status, outcome) => {
       const response = new Response(

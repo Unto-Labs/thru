@@ -1,21 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { flushSync } from "react-dom";
 import { cn } from "../../utils";
-import type { ColorScheme } from "../wallet/ThemeSwitch/ThemeSwitch";
-import { THEME_MASK_IMAGE } from "./theme-mask";
 import "./ThemeToggle.css";
 
 const THEME_RETOKENIZE_MS = 1180;
-
-type ThemeViewTransition = {
-  finished: Promise<void>;
-  skipTransition?: () => void;
-};
-type ViewTransitionDocument = Document & {
-  startViewTransition?: (update: () => void) => ThemeViewTransition;
-};
 
 const Sun = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
@@ -53,26 +42,25 @@ const Moon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+export type ColorScheme = "light" | "dark";
+
 export interface UseColorSchemeOptions {
   /** localStorage key holding the visitor's choice. App-scoped, so switching
    *  themes on one surface never rewrites another's stored preference. */
   storageKey: string;
   /** Scheme the server rendered, used until localStorage is read. */
   defaultScheme?: ColorScheme;
-  /** Animated mask revealing the new theme where View Transitions exist. */
-  maskImage?: string;
 }
 
 export interface ColorSchemeControls {
   theme: ColorScheme;
-  /** Toggle to the other scheme, animating out from the pointer position. */
-  toggle: (event: { clientX: number; clientY: number }) => void;
+  /** Toggle to the other scheme. */
+  toggle: () => void;
 }
 
 /**
  * useColorScheme owns the `data-theme` attribute on `<html>`, its localStorage
- * persistence, and the switch animation: a View Transition revealed through the
- * mask GIF where supported, the staggered `retokenize` re-paint otherwise, and
+ * persistence, and the switch animation: a staggered `retokenize` re-paint, or
  * an instant switch under `prefers-reduced-motion`.
  *
  * Exposed separately from `ThemeToggle` because surfaces also read the scheme
@@ -81,12 +69,9 @@ export interface ColorSchemeControls {
 export function useColorScheme({
   storageKey,
   defaultScheme = "dark",
-  maskImage = THEME_MASK_IMAGE,
 }: UseColorSchemeOptions): ColorSchemeControls {
   const [theme, setTheme] = React.useState<ColorScheme>(defaultScheme);
   const transitionTimerRef = React.useRef<number | null>(null);
-  const transitionIdRef = React.useRef(0);
-  const activeTransitionRef = React.useRef<ThemeViewTransition | null>(null);
 
   React.useEffect(() => {
     const stored = window.localStorage.getItem(storageKey);
@@ -118,54 +103,18 @@ export function useColorScheme({
     setTheme(nextTheme);
   };
 
-  const clearTransition = (root: HTMLElement) => {
-    delete root.dataset.themeTransition;
-    root.style.removeProperty("--theme-transition-mask-image");
-    root.style.removeProperty("--theme-transition-x");
-    root.style.removeProperty("--theme-transition-y");
-  };
-
-  const toggle = (event: { clientX: number; clientY: number }) => {
+  const toggle = () => {
     const nextTheme = theme === "dark" ? "light" : "dark";
     const root = document.documentElement;
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const viewTransitionDocument = document as ViewTransitionDocument;
 
     if (transitionTimerRef.current != null) {
       window.clearTimeout(transitionTimerRef.current);
       transitionTimerRef.current = null;
     }
 
-    if (reduceMotion) {
-      clearTransition(root);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      delete root.dataset.themeTransition;
       applyTheme(nextTheme);
-      return;
-    }
-
-    root.style.setProperty("--theme-transition-x", `${event.clientX}px`);
-    root.style.setProperty("--theme-transition-y", `${event.clientY}px`);
-
-    if (viewTransitionDocument.startViewTransition) {
-      activeTransitionRef.current?.skipTransition?.();
-      const transitionId = transitionIdRef.current + 1;
-      transitionIdRef.current = transitionId;
-      root.dataset.themeTransition = "gif-mask";
-      /* The unique URL restarts the GIF on every switch. */
-      root.style.setProperty(
-        "--theme-transition-mask-image",
-        `url("${maskImage}?transition=${transitionId}")`,
-      );
-
-      const transition = viewTransitionDocument.startViewTransition(() => {
-        flushSync(() => applyTheme(nextTheme));
-      });
-      activeTransitionRef.current = transition;
-
-      transition.finished.finally(() => {
-        if (transitionIdRef.current !== transitionId) return;
-        activeTransitionRef.current = null;
-        clearTransition(root);
-      });
       return;
     }
 
@@ -173,7 +122,7 @@ export function useColorScheme({
     applyTheme(nextTheme);
 
     transitionTimerRef.current = window.setTimeout(() => {
-      clearTransition(root);
+      delete root.dataset.themeTransition;
       transitionTimerRef.current = null;
     }, THEME_RETOKENIZE_MS);
   };
@@ -193,7 +142,7 @@ export interface ThemeToggleProps
  * ThemeToggle — the Sun/Moon dark-mode switcher. Presentational: pair it with
  * `useColorScheme`, which owns the scheme.
  *
- *   const { theme, toggle } = useColorScheme({ storageKey: "thru-scan-theme" });
+ *   const { theme, toggle } = useColorScheme({ storageKey: "unto-scan-theme" });
  *   <ThemeToggle theme={theme} onToggle={toggle} />
  */
 export function ThemeToggle({ theme, onToggle, className, ...props }: ThemeToggleProps) {

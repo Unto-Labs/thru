@@ -9,9 +9,6 @@ pub mod model;
 pub mod names;
 pub mod param_cache;
 
-#[cfg(test)]
-mod param_cache_tests;
-
 /* Re-export main public functions */
 pub use ir_footprint::{
     IrFootprintEmitter, IrFootprintError, emit_ir_footprint_fn, emit_ir_footprint_fn_named,

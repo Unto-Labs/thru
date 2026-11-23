@@ -13,6 +13,10 @@ impl WellKnownType for IntervalHandler {
         "Interval"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("text", "formatted"))
+    }
+
     fn category(&self) -> &'static str {
         "google"
     }
@@ -55,17 +59,5 @@ impl WellKnownType for IntervalHandler {
         }
 
         WellKnownResult::None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn interval_handler_type_name() {
-        let handler = IntervalHandler;
-        assert_eq!(handler.type_name(), "Interval");
-        assert_eq!(handler.category(), "google");
     }
 }

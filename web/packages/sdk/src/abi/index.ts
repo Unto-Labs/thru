@@ -6,6 +6,9 @@ export {
   reflectInstruction,
   reflectAccount,
   reflectEvent,
+  reflectError,
+  errorVariants,
+  reflectErrorWithManifest,
   formatReflection,
   /* Manifest-based functions for ABIs with imports */
   reflectWithManifest,
@@ -16,8 +19,23 @@ export {
   getManifestPackages,
   validateManifest,
 } from "./wasmBridge";
-export type { FormatOptions, Manifest, ManifestPackageInfo, WasmConfig } from "./wasmBridge";
-export type { FormattedReflection, FormattedValue, FormattedValueWithByteRange, ByteRange } from "./types";
+export type {
+  FormatOptions,
+  Manifest,
+  ManifestPackageInfo,
+  ReflectedError,
+  WasmConfig,
+} from "./wasmBridge";
+export type {
+  ByteRange,
+  DisplayCard,
+  DisplayForm,
+  DisplayKind,
+  DisplayRow,
+  FormattedReflection,
+  FormattedValue,
+  FormattedValueWithByteRange,
+} from "./types";
 export {
   MAX_NESTED_INSTRUCTION_DECODES,
   MAX_NESTED_INSTRUCTION_DEPTH,

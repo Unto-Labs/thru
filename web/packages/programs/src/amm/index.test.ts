@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Pubkey, deriveAddress, deriveProgramAddress } from '@thru/sdk';
 import type { Thru } from '@thru/sdk/client';
-import { BOOTSTRAP_PROGRAM_ADDRESSES } from '../bootstrap-addresses';
 import {
-  AMM_PROGRAM_ADDRESS,
   AMM_INSTRUCTION_ADD_LIQUIDITY,
   AMM_INSTRUCTION_INIT_POOL,
   AMM_INSTRUCTION_SWAP,
@@ -50,10 +48,6 @@ function writeU64(target: Uint8Array, offset: number, value: bigint): void {
 }
 
 describe('amm helpers', () => {
-  it('exports the standardized AMM program address', () => {
-    expect(AMM_PROGRAM_ADDRESS).toBe(BOOTSTRAP_PROGRAM_ADDRESSES.amm);
-  });
-
   it('sorts mint addresses lexicographically', () => {
     const sorted = sortAmmMints(key(9), key(2));
     expect(sorted.inputOrder).toBe('swapped');

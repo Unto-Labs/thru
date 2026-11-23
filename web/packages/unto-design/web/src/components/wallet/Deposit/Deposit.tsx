@@ -1,19 +1,7 @@
 import * as React from "react";
 import { cn } from "../../../utils";
-import { useCopy } from "../CopyButton/CopyButton";
+import { CopyButton } from "../CopyButton/CopyButton";
 import "./Deposit.css";
-
-const Copy = (p: React.SVGProps<SVGSVGElement>) => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden {...p}>
-    <rect x="5.5" y="5.5" width="8" height="8" rx="1.2" stroke="currentColor" strokeWidth="1.3" />
-    <path d="M3.5 10.5A1.5 1.5 0 0 1 2.5 9V3.7c0-.66.54-1.2 1.2-1.2H9a1.5 1.5 0 0 1 1.5 1.3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-  </svg>
-);
-const Check = (p: React.SVGProps<SVGSVGElement>) => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden {...p}>
-    <path d="M3 8.5l3.5 3.5L13 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
 
 function qrCells(seed: number): boolean[] {
   const cells: boolean[] = [];
@@ -65,7 +53,6 @@ export interface DepositProps {
  */
 export const Deposit = React.forwardRef<HTMLDivElement, DepositProps>(
   function Deposit({ address, label = "Deposit crypto", seed, className }, ref) {
-    const { copy, notifying: copied } = useCopy(800);
     return (
       <div ref={ref} className={cn("uds-deposit", className)}>
         <QrGlyph seed={seed} />
@@ -73,9 +60,7 @@ export const Deposit = React.forwardRef<HTMLDivElement, DepositProps>(
           <div className="uds-deposit__label">{label}</div>
           <div className="uds-deposit__addr">{address}</div>
         </div>
-        <button type="button" className="uds-deposit__copy" onClick={() => void copy(address)} aria-label="Copy address">
-          {copied ? <Check width={14} height={14} /> : <Copy width={14} height={14} />}
-        </button>
+        <CopyButton value={address} variant="icon" aria-label="Copy address" className="uds-deposit__copy" />
       </div>
     );
   },

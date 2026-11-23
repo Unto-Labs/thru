@@ -46,7 +46,7 @@ const FEATURE_GATE_ROLE_CONFIG: u8 = 2;
 
 // Keep resource settings local to this command until the transaction builder has
 // a shared feature-gate helper.
-const FEATURE_GATE_TX_FEE: u64 = 1;
+const FEATURE_GATE_TX_FEE: u64 = 0;
 const FEATURE_GATE_TX_EXPIRY_AFTER: u32 = 100;
 const FEATURE_GATE_TX_COMPUTE_UNITS: u32 = 100_000;
 // Every instruction except create-entry updates the global account in place and
@@ -725,20 +725,15 @@ async fn submit_feature_gate_instruction(
     let mut transaction = build_feature_gate_transaction(
         fee_payer_keypair.public_key,
         fee_payer_account.nonce,
-        block_height.finalized_height,
+        block_height.locally_executed_height,
         chain_info.chain_id,
         instruction,
         state_units,
     )?;
 
-    transaction
-        .sign(&fee_payer_keypair.private_key)
-        .map_err(|err| {
-            CliError::TransactionSubmission(format!(
-                "Failed to sign feature-gate transaction: {}",
-                err
-            ))
-        })?;
+    crate::signing::sign_transaction(&mut transaction, &fee_payer_keypair).map_err(|err| {
+        CliError::TransactionSubmission(format!("Failed to sign feature-gate transaction: {}", err))
+    })?;
 
     let timeout = Duration::from_secs(config.timeout_seconds);
     let details = client
@@ -2047,7 +2042,7 @@ tracking = "UNTO-1818"
             &instruction[6..8],
             &FEATURE_GATE_AUTHORITY_ACCOUNT_IDX.to_le_bytes()
         );
-        tx.sign(&keypair.private_key)
+        crate::signing::sign_transaction(&mut tx, &keypair)
             .expect("feature-gate write transaction layout signs");
     }
 

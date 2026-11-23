@@ -14,7 +14,7 @@ import {
   resolveImports,
 } from "../../dist/abi/index.js";
 
-const DEFAULT_BASE_URL = "https://rpc.alphanet.thru.org";
+const DEFAULT_BASE_URL = "https://rpc.betanet.thru.org";
 const PKG_ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)), "../..");
 const WORKSPACE_ROOT = resolve(PKG_ROOT, "../../../");
 
@@ -39,8 +39,8 @@ function usage(message) {
       "  node scripts/abi/resolve-imports.mjs --import-onchain <address> [options]",
       "",
       "Options:",
-      "  --base-url <url>       RPC endpoint (default: alphanet)",
-      "  --network <name>       network name for synthetic import (default: alphanet)",
+      "  --base-url <url>       RPC endpoint (default: betanet)",
+      "  --network <name>       network name for synthetic import (default: betanet)",
       "  --target <program|abi-meta|abi> on-chain import target (default: program)",
       "  --max-depth <n>        max resolution depth (default: 10)",
       "  --out <path>           write manifest JSON to file",
@@ -51,7 +51,7 @@ function usage(message) {
 function parseArgs(argv) {
   const opts = {
     baseUrl: DEFAULT_BASE_URL,
-    network: "alphanet",
+    network: "betanet",
     target: "program",
     maxDepth: 10,
     file: null,

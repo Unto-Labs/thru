@@ -1,11 +1,11 @@
 .uds-dep__rail-title {
-  font-size: 16px;
+  font-size: var(--text-lead);
   font-weight: var(--fw-semibold);
   letter-spacing: -0.2px;
   color: var(--color-text-primary);
 }
 .uds-dep__rail-sub {
-  font-size: 12px;
+  font-size: var(--text-caption);
   color: var(--color-text-tertiary);
   text-wrap: pretty;
   margin-top: 4px;
@@ -27,7 +27,7 @@
   padding: var(--space-3);
   background: var(--color-surface-primary);
   border: 1px solid transparent;
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
   cursor: pointer;
   text-align: left;
   color: var(--color-text-primary);
@@ -79,12 +79,12 @@
   gap: 3px;
 }
 .uds-dep__method-title {
-  font-size: 13px;
+  font-size: var(--text-ui);
   font-weight: var(--fw-semibold);
 }
 .uds-dep__method-sub {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: var(--text-label);
   color: var(--color-text-tertiary);
   white-space: nowrap;
   overflow: hidden;
@@ -99,7 +99,7 @@
 .uds-dep__item {
   background: var(--color-surface-primary);
   border: 1px solid transparent;
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
   transition: border-color var(--duration-fast) var(--ease-standard);
 }
 .uds-dep__item:has(> .uds-dep__method:hover) {
@@ -148,8 +148,8 @@
   justify-content: space-between;
   gap: var(--space-2);
   padding: 0 var(--space-1);
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: var(--text-label);
   color: var(--color-text-tertiary);
 }
 .uds-dep__lands-acct {
@@ -179,9 +179,9 @@
   position: relative;
 }
 .uds-dep__label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  font-family: var(--font-sans);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-utility);
   text-transform: uppercase;
   color: var(--color-text-tertiary);
 }
@@ -192,14 +192,14 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  min-height: 40px;
+  min-height: var(--control-lg);
   padding: var(--space-2) var(--space-3);
   background: var(--color-surface-higher);
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
   cursor: pointer;
-  font-family: var(--font-mono);
-  font-size: 13px;
+  font-family: var(--font-sans);
+  font-size: var(--text-ui);
   color: var(--color-text-primary);
   text-align: left;
   transition: border-color var(--duration-fast) var(--ease-standard);
@@ -213,8 +213,10 @@
   outline-offset: 2px;
 }
 .uds-dep__select[data-disabled] {
-  cursor: default;
-  opacity: 0.6;
+  background: var(--color-surface-disabled);
+  color: var(--color-text-disabled);
+  border-color: var(--color-border-disabled);
+  cursor: not-allowed;
 }
 .uds-dep__select-icon {
   display: inline-flex;
@@ -261,19 +263,36 @@
   max-height: var(--available-height);
   overflow: auto;
   background: var(--color-surface-higher);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-none);
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-box);
   box-shadow: var(--shadow-md);
   padding: var(--space-1) 0;
   outline: none;
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+.uds-dep__popup[data-starting-style],
+.uds-dep__popup[data-ending-style] {
+  opacity: 0;
+  transform: scale(0.97);
+}
+@media (prefers-reduced-motion: reduce) {
+  .uds-dep__popup {
+    transition: opacity var(--duration-fast) var(--ease-standard);
+  }
+  .uds-dep__popup[data-starting-style],
+  .uds-dep__popup[data-ending-style] {
+    transform: none;
+  }
 }
 .uds-dep__option {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 8px var(--space-3);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: var(--text-caption);
   color: var(--color-text-primary);
   cursor: default;
   user-select: none;
@@ -320,25 +339,13 @@
       var(--color-surface-higher) 6px 12px
     );
 }
-.uds-dep__qr-mark {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-}
-.uds-dep__qr-mark > svg {
-  display: block;
-  background: var(--color-surface-higher);
-  padding: 3px;
-  box-sizing: content-box;
-}
 
 .uds-dep__addr {
   padding: var(--space-3);
   background: var(--color-surface-higher);
   border: 1px solid var(--color-border-strong);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-caption);
   color: var(--color-text-primary);
   word-break: break-all;
   line-height: 1.5;
@@ -349,7 +356,7 @@
 }
 .uds-dep__copy-check {
   display: inline-flex;
-  color: var(--grass-400);
+  color: var(--color-text-success);
 }
 
 .uds-dep__back {
@@ -368,10 +375,6 @@
   flex-direction: column;
   gap: var(--space-3);
 }
-.uds-dep__step-head .uds-stepper__dot {
-  border-radius: var(--radius-none);
-}
-
 .uds-dep__receipt {
   display: flex;
   align-items: flex-start;
@@ -385,11 +388,11 @@
   min-width: 0;
 }
 .uds-dep__receipt-label {
-  font-size: 12px;
+  font-size: var(--text-caption);
   color: var(--color-text-tertiary);
 }
 .uds-dep__receipt-value {
-  font-size: 13px;
+  font-size: var(--text-ui);
   color: var(--color-text-primary);
   overflow-wrap: anywhere;
 }
@@ -402,8 +405,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: var(--text-label);
   color: var(--color-text-tertiary);
   padding: 0 2px;
 }
@@ -413,7 +416,7 @@
 }
 
 .uds-dep__terms {
-  font-size: 11px;
+  font-size: var(--text-label);
   line-height: 1.5;
   color: var(--color-text-tertiary);
   text-wrap: pretty;
@@ -437,8 +440,8 @@
   justify-content: space-between;
   padding: 6px 10px;
   border-bottom: 1px solid var(--color-border-tertiary);
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-family: var(--font-sans);
+  font-size: var(--text-label);
   color: var(--color-text-tertiary);
 }
 .uds-dep__cb-host {
@@ -471,7 +474,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  font-size: 12px;
+  font-size: var(--text-caption);
   color: var(--color-text-secondary);
   text-wrap: pretty;
 }
@@ -487,9 +490,9 @@
   align-self: auto;
 }
 .uds-dep__attribution {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.04em;
+  font-family: var(--font-sans);
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-utility);
   color: var(--color-text-tertiary);
 }
 
@@ -500,14 +503,13 @@
   gap: var(--space-2);
 }
 .uds-dep__note {
-  font-size: 11px;
+  font-size: var(--text-label);
   color: var(--color-text-tertiary);
 }
 
 .uds-dep__done-head .uds-screen__title {
-  font-family: var(--font-mono);
-  font-size: 22px;
-  letter-spacing: -0.4px;
+  font-size: 32px;
+  line-height: 1.1;
 }
 .uds-dep__rows {
   display: flex;
@@ -515,8 +517,8 @@
   gap: 6px;
   padding: var(--space-2) var(--space-3);
   background: var(--color-surface-primary);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: var(--text-caption);
 }
 .uds-dep__row {
   display: flex;
@@ -558,13 +560,13 @@
   position: absolute;
   left: 12px;
   bottom: 14px;
-  font-family: var(--font-mono);
-  font-size: 13px;
+  font-family: var(--font-sans);
+  font-size: var(--text-ui);
   color: var(--color-text-secondary);
   pointer-events: none;
 }
 .uds-dep__contact-error {
-  font-size: 12px;
+  font-size: var(--text-caption);
   color: var(--color-text-danger);
 }
 
@@ -584,7 +586,7 @@
   padding: var(--space-3);
   border: 1px solid var(--color-border-strong);
   background: var(--color-surface-higher);
-  font-size: 13px;
+  font-size: var(--text-ui);
   white-space: pre-wrap;
 }
 .uds-dep__agree {
@@ -642,7 +644,7 @@
   align-items: center;
   gap: var(--space-1);
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: var(--text-caption);
   line-height: 1.5;
 }
 @media (min-width: 641px) {
@@ -682,7 +684,7 @@
   font-family: var(--font-mono);
 }
 .uds-dep__list-sub {
-  font-size: 12px;
+  font-size: var(--text-caption);
   color: var(--color-text-secondary);
   overflow-wrap: anywhere;
 }
@@ -707,7 +709,7 @@
   }
   /* The outline button keeps the small label of the flow's other buttons. */
   .uds-dep__activity .uds-wsheet__cta {
-    font-size: 13px;
+    font-size: var(--text-ui);
   }
 }
 .uds-dep__sr-status {
@@ -732,17 +734,17 @@
 
 .uds-dep__activity-detail,
 .uds-dep__activity-amount {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
 }
 /* Wraps, so a long return reason shows in full. */
 .uds-dep__activity-detail {
-  font-size: 11px;
+  font-size: var(--text-label);
   color: var(--color-text-secondary);
   overflow-wrap: anywhere;
 }
 .uds-dep__activity-amount {
   flex: none;
-  font-size: 13px;
+  font-size: var(--text-ui);
   white-space: nowrap;
 }
 .uds-dep__activity-amount--failed {

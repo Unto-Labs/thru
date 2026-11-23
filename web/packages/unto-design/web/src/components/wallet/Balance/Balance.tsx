@@ -3,6 +3,7 @@ import { cn } from "../../../utils";
 import { TokenIcon } from "../TokenIcon/TokenIcon";
 import { ChainIcon } from "../ChainIcon/ChainIcon";
 import { chainMeta } from "../registry";
+import { Spinner } from "../../Spinner/Spinner";
 import "./Balance.css";
 
 const RefreshCw = (p: React.SVGProps<SVGSVGElement>) => (
@@ -63,7 +64,7 @@ export const Balance = React.forwardRef<HTMLDivElement, BalanceProps>(
             {amountFiat}
           </span>
           <span className="uds-balance__refresh">
-            {fetching ? <span className="uds-balance__spinner" /> : <RefreshCw width={13} height={13} />}
+            {fetching ? <Spinner tone="inherit" role={undefined} aria-label={undefined} aria-hidden style={{ width: 13, height: 13, borderWidth: 1.5 }} /> : <RefreshCw width={13} height={13} />}
           </span>
         </button>
       </div>

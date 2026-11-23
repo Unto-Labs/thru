@@ -1,0 +1,317 @@
+{
+  "_source": "Generated from ledger/app-thru/tests/application_client/thru_txn.py. The device app's Ragger tests (test_sign_txn.py: TRANSFERS, UNSUPPORTED, test_sign_txn_token_hint_approve) assert these verdicts and transfer fields on the real app; the hinted review is transcribed from its snapshots. The checked token transfer cases (token_transfer_checked, token_transfer_checked_hinted, token_checked_unprintable_ticker) are built from specs/ledger/app-thru-apdu.md §7.7 and Appendix B.7; the device app's tests assert the same fields. Wallet transaction program IDs are synchronized with WALLET_PROGRAM_BYTES in rpc/thru-base/src/bootstrap_addresses.rs.",
+  "signer_pubkey_hex": "1d65dd4d10f4f8a392d9e17c4d8cdea7c68e2a3eadc35997bbb6738e39cc0e6e",
+  "cases": [
+    {
+      "name": "eoa_transfer",
+      "body_hex": "0100010000001000400d030001000100e8030000000000000700000000000000e80300000000000096000000010000001d65dd4d10f4f8a392d9e17c4d8cdea7c68e2a3eadc35997bbb6738e39cc0e6e10e0298a6928c09bded091b6819a915c98fce06c3307d42690d009505a31ca48546fdb52f2026f707260cf7c9c8ffdacd4c3c05624487893f6426168b5a1eb6301000000002f68590000000000000200",
+      "clear": true,
+      "transfer_fields": [
+        [
+          "Action",
+          "Native transfer"
+        ],
+        [
+          "Source",
+          "taHWXdTRD0-KOS2eF8TYzep8aOKj6tw1mXu7ZzjjnMDm6A"
+        ],
+        [
+          "Recipient",
+          "taVG_bUvICb3ByYM98nI_9rNTDwFYkSHiT9kJhaLWh62N9"
+        ],
+        [
+          "Amount",
+          "1.5 THRU"
+        ]
+      ]
+    },
+    {
+      "name": "token_transfer",
+      "body_hex": "0100020001000d00400d030001000100e8030000000000000700000000000000e80300000000000096000000010000001d65dd4d10f4f8a392d9e17c4d8cdea7c68e2a3eadc35997bbb6738e39cc0e6e4ce28437b4c4d87446ceacfb1232e26dcea2782c2e5f2b390616f6f92abc659fa025dabf96ef23bc85e90eb9d9cf8cb6bf2077aeee958b216b0a11d294dade8eefd9cb11def476a1fead7cfacd0579a2ac1ebeab8974959ac3767d14bb96bcb1bd6b3d0c8e0ec4bd2c76289f3f25d184e81bb72adf164ee2e6d9eaf72f56e728020200030090d0030000000000",
+      "clear": true,
+      "transfer_fields": [
+        [
+          "Action",
+          "Token transfer"
+        ],
+        [
+          "Source",
+          "taoCXav5bvI7yF6Q652c-Mtr8gd67ulYshawoR0pTa3o5G"
+        ],
+        [
+          "Recipient",
+          "ta79nLEd70dqH-rXz6zQV5oqwevquJdJWaw3Z9FLuWvLGC"
+        ],
+        [
+          "Amount (base units)",
+          "250000"
+        ],
+        [
+          "Address type",
+          "Token accounts"
+        ],
+        [
+          "Token identity",
+          "Not provided by transaction"
+        ]
+      ]
+    },
+    {
+      "name": "wallet_transfer",
+      "body_hex": "0100020000005f00400d030001000100e8030000000000000700000000000000e80300000000000096000000010000001d65dd4d10f4f8a392d9e17c4d8cdea7c68e2a3eadc35997bbb6738e39cc0e6e3c049222f8c8833da4675088221bdb4f4d1757d55ee6467623db832da9f322062222222222222222222222222222222222222222222222222222222222222222546fdb52f2026f707260cf7c9c8ffdacd4c3c05624487893f6426168b5a1eb6301020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000d00000000000000020200030000f9029500000000",
+      "clear": true,
+      "transfer_fields": [
+        [
+          "Action",
+          "Wallet transfer"
+        ],
+        [
+          "Source",
+          "taIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiJA"
+        ],
+        [
+          "Recipient",
+          "taVG_bUvICb3ByYM98nI_9rNTDwFYkSHiT9kJhaLWh62N9"
+        ],
+        [
+          "Amount",
+          "2.5 THRU"
+        ],
+        [
+          "Authority index",
+          "0"
+        ]
+      ]
+    },
+    {
+      "name": "token_transfer_hinted",
+      "body_hex": "0100020000000d00400d030001000100e8030000000000000700000000000000e80300000000000096000000010000001d65dd4d10f4f8a392d9e17c4d8cdea7c68e2a3eadc35997bbb6738e39cc0e6e4ce28437b4c4d87446ceacfb1232e26dcea2782c2e5f2b390616f6f92abc659f1469debe9dfacd29cd2fd736b672d2b9c3178959d393f9fc21d2dd217cf9f4b1b1ccbc6a010085ee3e98b08940c20b9bc0708fa63061cdd0a4c46355e4feb8ab020200030090d0030000000000",
+      "clear": true,
+      "hint": {
+        "mint": "266ca05e1a300a2be3d69bf25c25f8632808e7b4299279535da4d0f877fd5d30",
+        "recipient_owner": "546fdb52f2026f707260cf7c9c8ffdacd4c3c05624487893f6426168b5a1eb63",
+        "recipient_seed": "0000000000000000000000000000000000000000000000000000000000000000",
+        "source_seed": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "fields": [
+        [
+          "Action",
+          "Token transfer"
+        ],
+        [
+          "Source",
+          "taHWXdTRD0-KOS2eF8TYzep8aOKj6tw1mXu7ZzjjnMDm6A"
+        ],
+        [
+          "Recipient",
+          "taVG_bUvICb3ByYM98nI_9rNTDwFYkSHiT9kJhaLWh62N9"
+        ],
+        [
+          "Amount (base units)",
+          "250000"
+        ],
+        [
+          "Token mint",
+          "taJmygXhowCivj1pvyXCX4YygI57QpknlTXaTQ-Hf9XTBN"
+        ],
+        [
+          "Address type",
+          "Token account owners"
+        ],
+        [
+          "Network",
+          "alphanet"
+        ],
+        [
+          "Fee payer",
+          "taHWXdTRD0-KOS2eF8TYzep8aOKj6tw1mXu7ZzjjnMDm6A"
+        ],
+        [
+          "Program",
+          "Token / taTOKEN7TE2HRGzqz7EjLibc6ieCwuXys5Bhb2-Sq8ZZ_1"
+        ],
+        [
+          "Fee",
+          "0.000001 THRU"
+        ],
+        [
+          "Nonce",
+          "7"
+        ],
+        [
+          "Valid slots",
+          "1000 to 1149"
+        ],
+        [
+          "Accounts",
+          "2 read-write, 0 read-only"
+        ],
+        [
+          "Instruction data",
+          "13 bytes"
+        ],
+        [
+          "Transaction hash",
+          "73a5496defbe2c392c04698f581056c1e42bf09da891fca9b9393425ce16dce0"
+        ]
+      ]
+    },
+    {
+      "name": "unknown_program",
+      "body_hex": "01000000000000001027000000000000e8030000000000000000000000000000640000000000000064000000010000001d65dd4d10f4f8a392d9e17c4d8cdea7c68e2a3eadc35997bbb6738e39cc0e6e5555555555555555555555555555555555555555555555555555555555555555",
+      "clear": false
+    },
+    {
+      "name": "empty_eoa",
+      "body_hex": "01000000000000001027000000000000e8030000000000000000000000000000640000000000000064000000010000001d65dd4d10f4f8a392d9e17c4d8cdea7c68e2a3eadc35997bbb6738e39cc0e6e10e0298a6928c09bded091b6819a915c98fce06c3307d42690d009505a31ca48",
+      "clear": false
+    },
+    {
+      "name": "eoa_trailing_data",
+      "body_hex": "0100010000001100400d030001000100e8030000000000000700000000000000e80300000000000096000000010000001d65dd4d10f4f8a392d9e17c4d8cdea7c68e2a3eadc35997bbb6738e39cc0e6e10e0298a6928c09bded091b6819a915c98fce06c3307d42690d009505a31ca48546fdb52f2026f707260cf7c9c8ffdacd4c3c05624487893f6426168b5a1eb6301000000002f6859000000000000020000",
+      "clear": false
+    },
+    {
+      "name": "token_trailing_data",
+      "body_hex": "0100020001000e00400d030001000100e8030000000000000700000000000000e80300000000000096000000010000001d65dd4d10f4f8a392d9e17c4d8cdea7c68e2a3eadc35997bbb6738e39cc0e6e4ce28437b4c4d87446ceacfb1232e26dcea2782c2e5f2b390616f6f92abc659fa025dabf96ef23bc85e90eb9d9cf8cb6bf2077aeee958b216b0a11d294dade8eefd9cb11def476a1fead7cfacd0579a2ac1ebeab8974959ac3767d14bb96bcb1bd6b3d0c8e0ec4bd2c76289f3f25d184e81bb72adf164ee2e6d9eaf72f56e728020200030090d003000000000000",
+      "clear": false
+    },
+    {
+      "name": "wallet_trailing_data",
+      "body_hex": "0100020000006000400d030001000100e8030000000000000700000000000000e80300000000000096000000010000001d65dd4d10f4f8a392d9e17c4d8cdea7c68e2a3eadc35997bbb6738e39cc0e6e3c049222f8c8833da4675088221bdb4f4d1757d55ee6467623db832da9f322062222222222222222222222222222222222222222222222222222222222222222546fdb52f2026f707260cf7c9c8ffdacd4c3c05624487893f6426168b5a1eb6301020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000d00000000000000020200030000f902950000000000",
+      "clear": false
+    },
+    {
+      "name": "eoa_other_source",
+      "body_hex": "0100010000001000400d030001000100e8030000000000000700000000000000e80300000000000096000000010000001d65dd4d10f4f8a392d9e17c4d8cdea7c68e2a3eadc35997bbb6738e39cc0e6e10e0298a6928c09bded091b6819a915c98fce06c3307d42690d009505a31ca48546fdb52f2026f707260cf7c9c8ffdacd4c3c05624487893f6426168b5a1eb6301000000010000000000000002000200",
+      "clear": false
+    },
+    {
+      "name": "token_readonly_recipient",
+      "body_hex": "0100020001000d00400d030001000100e8030000000000000700000000000000e80300000000000096000000010000001d65dd4d10f4f8a392d9e17c4d8cdea7c68e2a3eadc35997bbb6738e39cc0e6e4ce28437b4c4d87446ceacfb1232e26dcea2782c2e5f2b390616f6f92abc659fa025dabf96ef23bc85e90eb9d9cf8cb6bf2077aeee958b216b0a11d294dade8eefd9cb11def476a1fead7cfacd0579a2ac1ebeab8974959ac3767d14bb96bcb1bd6b3d0c8e0ec4bd2c76289f3f25d184e81bb72adf164ee2e6d9eaf72f56e72802020004000100000000000000",
+      "clear": false
+    },
+    {
+      "name": "wallet_without_validation",
+      "body_hex": "0100020000000d00400d030001000100e8030000000000000700000000000000e80300000000000096000000010000001d65dd4d10f4f8a392d9e17c4d8cdea7c68e2a3eadc35997bbb6738e39cc0e6e3c049222f8c8833da4675088221bdb4f4d1757d55ee6467623db832da9f322062222222222222222222222222222222222222222222222222222222222222222546fdb52f2026f707260cf7c9c8ffdacd4c3c05624487893f6426168b5a1eb6302020003000100000000000000",
+      "clear": false
+    },
+    {
+      "name": "token_transfer_checked",
+      "body_hex": "0100020001001900400d030001000100e8030000000000000700000000000000e80300000000000096000000010000001d65dd4d10f4f8a392d9e17c4d8cdea7c68e2a3eadc35997bbb6738e39cc0e6e4ce28437b4c4d87446ceacfb1232e26dcea2782c2e5f2b390616f6f92abc659fa025dabf96ef23bc85e90eb9d9cf8cb6bf2077aeee958b216b0a11d294dade8eefd9cb11def476a1fead7cfacd0579a2ac1ebeab8974959ac3767d14bb96bcb1bd6b3d0c8e0ec4bd2c76289f3f25d184e81bb72adf164ee2e6d9eaf72f56e7280802000300040090d003000000000006045553444300000000",
+      "clear": true,
+      "transfer_fields": [
+        [
+          "Action",
+          "Token transfer"
+        ],
+        [
+          "Source",
+          "taoCXav5bvI7yF6Q652c-Mtr8gd67ulYshawoR0pTa3o5G"
+        ],
+        [
+          "Recipient",
+          "ta79nLEd70dqH-rXz6zQV5oqwevquJdJWaw3Z9FLuWvLGC"
+        ],
+        [
+          "Amount",
+          "0.25"
+        ],
+        [
+          "Ticker",
+          "USDC"
+        ],
+        [
+          "Token mint",
+          "tavWs9DI4OxL0sdiifPyXRhOgbtyrfFk7i5tnq9y9W5yjt"
+        ],
+        [
+          "Address type",
+          "Token accounts"
+        ]
+      ]
+    },
+    {
+      "name": "token_transfer_checked_hinted",
+      "body_hex": "0100020001001900400d030001000100e8030000000000000700000000000000e80300000000000096000000010000001d65dd4d10f4f8a392d9e17c4d8cdea7c68e2a3eadc35997bbb6738e39cc0e6e4ce28437b4c4d87446ceacfb1232e26dcea2782c2e5f2b390616f6f92abc659f1469debe9dfacd29cd2fd736b672d2b9c3178959d393f9fc21d2dd217cf9f4b1b1ccbc6a010085ee3e98b08940c20b9bc0708fa63061cdd0a4c46355e4feb8ab266ca05e1a300a2be3d69bf25c25f8632808e7b4299279535da4d0f877fd5d300802000300040090d003000000000006045553444300000000",
+      "clear": true,
+      "hint": {
+        "mint": "266ca05e1a300a2be3d69bf25c25f8632808e7b4299279535da4d0f877fd5d30",
+        "recipient_owner": "546fdb52f2026f707260cf7c9c8ffdacd4c3c05624487893f6426168b5a1eb63",
+        "recipient_seed": "0000000000000000000000000000000000000000000000000000000000000000",
+        "source_seed": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "fields": [
+        [
+          "Action",
+          "Token transfer"
+        ],
+        [
+          "Source",
+          "taHWXdTRD0-KOS2eF8TYzep8aOKj6tw1mXu7ZzjjnMDm6A"
+        ],
+        [
+          "Recipient",
+          "taVG_bUvICb3ByYM98nI_9rNTDwFYkSHiT9kJhaLWh62N9"
+        ],
+        [
+          "Amount",
+          "0.25"
+        ],
+        [
+          "Ticker",
+          "USDC"
+        ],
+        [
+          "Token mint",
+          "taJmygXhowCivj1pvyXCX4YygI57QpknlTXaTQ-Hf9XTBN"
+        ],
+        [
+          "Address type",
+          "Token account owners"
+        ],
+        [
+          "Network",
+          "alphanet"
+        ],
+        [
+          "Fee payer",
+          "taHWXdTRD0-KOS2eF8TYzep8aOKj6tw1mXu7ZzjjnMDm6A"
+        ],
+        [
+          "Program",
+          "Token / taTOKEN7TE2HRGzqz7EjLibc6ieCwuXys5Bhb2-Sq8ZZ_1"
+        ],
+        [
+          "Fee",
+          "0.000001 THRU"
+        ],
+        [
+          "Nonce",
+          "7"
+        ],
+        [
+          "Valid slots",
+          "1000 to 1149"
+        ],
+        [
+          "Accounts",
+          "2 read-write, 1 read-only"
+        ],
+        [
+          "Instruction data",
+          "25 bytes"
+        ],
+        [
+          "Transaction hash",
+          "273830070590235f792edc93feee58728fb5cff19a1ec4cf1f9b79d87dee9570"
+        ]
+      ]
+    },
+    {
+      "name": "token_checked_unprintable_ticker",
+      "body_hex": "0100020001001900400d030001000100e8030000000000000700000000000000e80300000000000096000000010000001d65dd4d10f4f8a392d9e17c4d8cdea7c68e2a3eadc35997bbb6738e39cc0e6e4ce28437b4c4d87446ceacfb1232e26dcea2782c2e5f2b390616f6f92abc659fa025dabf96ef23bc85e90eb9d9cf8cb6bf2077aeee958b216b0a11d294dade8eefd9cb11def476a1fead7cfacd0579a2ac1ebeab8974959ac3767d14bb96bcb1bd6b3d0c8e0ec4bd2c76289f3f25d184e81bb72adf164ee2e6d9eaf72f56e7280802000300040090d0030000000000060455537f4300000000",
+      "clear": false
+    }
+  ]
+}

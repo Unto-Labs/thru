@@ -139,10 +139,9 @@ describe("proofs", () => {
         targetSlot: 2000n,
       });
       
-      // Verify generateStateProof was called
       expect(ctx.query.generateStateProof).toHaveBeenCalledTimes(1);
       const callArgs = (ctx.query.generateStateProof as any).mock.calls[0][0];
-      expect(callArgs.request).toBeDefined();
+      expect(callArgs.request?.targetSlot).toBe(2000n);
     });
 
     it("should allow undefined address", async () => {

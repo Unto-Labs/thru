@@ -3,7 +3,6 @@ import { cn } from "../../utils";
 import { Button } from "../Button/Button";
 import { Spinner } from "../Spinner/Spinner";
 import { Menu } from "../Menu/Menu";
-import { ThruDisc } from "../wallet/Brand/Brand";
 import {
   AccountAvatar,
   AccountMenuPopup,
@@ -25,7 +24,7 @@ const ChevronDown = (p: React.SVGProps<SVGSVGElement>) => (
 
 export type ConnectButtonState = "idle" | "loading" | "connected";
 export type ConnectButtonSize = "md" | "sm" | "xs";
-export type ConnectButtonVariant = "primary" | "outline" | "brick";
+export type ConnectButtonVariant = "primary" | "outline" | "accent";
 
 const ICON_PX: Record<ConnectButtonSize, number> = { md: 16, sm: 14, xs: 12 };
 
@@ -33,9 +32,9 @@ export interface ConnectButtonProps {
   /** Idle shows the sign-in button, loading spins it, connected shows the account chip. */
   state?: ConnectButtonState;
   size?: ConnectButtonSize;
-  /** Idle-button look. `brick` is the brand-filled variant. */
+  /** Idle-button look. `accent` is the accent-filled variant. */
   variant?: ConnectButtonVariant;
-  /** Idle label (default "Sign in with Thru"). */
+  /** Idle label (default "Sign in with Unto"). */
   label?: React.ReactNode;
   /** Loading label (default "Signing in…"). */
   loadingLabel?: React.ReactNode;
@@ -52,9 +51,9 @@ export interface ConnectButtonProps {
    * here win over the top-level props for their account.
    */
   accounts?: ConnectAccount[];
-  /** Wallet name in the manage button (default "Thru Wallet"). */
+  /** Wallet name in the manage button (default "Unto Wallet"). */
   walletName?: React.ReactNode;
-  /** "Manage your Thru Wallet" target; `null` hides it. */
+  /** "Manage your Unto Wallet" target; `null` hides it. */
   manageHref?: string | null;
   /** "Manage accounts" target; `null` hides it. */
   manageAccountsHref?: string | null;
@@ -112,7 +111,7 @@ export const ConnectButton = React.forwardRef<HTMLElement, ConnectButtonProps>(
       showBalance = true,
       avatar,
       accounts,
-      walletName = "Thru Wallet",
+      walletName = "Unto Wallet",
       manageHref = DEFAULT_MANAGE_HREF,
       manageAccountsHref = DEFAULT_MANAGE_ACCOUNTS_HREF,
       explorerHref,
@@ -152,7 +151,7 @@ export const ConnectButton = React.forwardRef<HTMLElement, ConnectButtonProps>(
       return (
         <Button
           ref={ref}
-          variant={variant === "brick" ? "secondary" : variant}
+          variant={variant}
           size={size}
           className={cn(
             "uds-connect",
@@ -163,12 +162,8 @@ export const ConnectButton = React.forwardRef<HTMLElement, ConnectButtonProps>(
           onClick={loading ? undefined : onClick}
           aria-busy={loading || undefined}
         >
-          {loading ? (
-            <Spinner tone="inherit" style={{ width: iconPx, height: iconPx }} />
-          ) : (
-            <ThruDisc size={iconPx} />
-          )}
-          <span>{loading ? (loadingLabel ?? "Signing in…") : (label ?? "Sign in with Thru")}</span>
+          {loading && <Spinner tone="inherit" style={{ width: iconPx, height: iconPx }} />}
+          <span>{loading ? (loadingLabel ?? "Signing in…") : (label ?? "Sign in with Unto")}</span>
         </Button>
       );
     }

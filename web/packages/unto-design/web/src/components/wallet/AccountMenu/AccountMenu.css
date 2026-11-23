@@ -9,7 +9,7 @@
   color: var(--color-text-primary);
 }
 .uds-connect-menu .uds-menu-item {
-  font-size: 0.8125rem;
+  font-size: var(--text-ui);
 }
 /* Base UI marks hovered anchors as highlighted; a host stylesheet's `a`
    rules must not add an underline or recolor the row. */
@@ -32,7 +32,7 @@
 }
 .uds-connect-menu__name {
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--text-ui);
   color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -43,7 +43,7 @@
   align-items: center;
   gap: var(--space-2);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-label);
   color: var(--color-text-secondary);
   white-space: nowrap;
 }
@@ -68,8 +68,8 @@
   outline-offset: 2px;
 }
 .uds-connect-menu__bal {
-  font-family: var(--font-mono);
-  font-size: 13px;
+  font-family: var(--font-sans);
+  font-size: var(--text-ui);
   color: var(--color-text-primary);
   flex: none;
 }
@@ -84,10 +84,10 @@
   gap: var(--space-2);
   font-family: var(--font-sans);
   font-weight: var(--fw-semibold);
-  font-size: 12px;
+  font-size: var(--text-caption);
   line-height: 1;
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
   padding: var(--space-2) var(--space-3);
   color: var(--color-text-primary);
   background: transparent;
@@ -125,7 +125,7 @@
   gap: 1px;
 }
 .uds-connect-menu__account-name {
-  font-size: 13px;
+  font-size: var(--text-ui);
   font-weight: var(--fw-medium);
   white-space: nowrap;
   overflow: hidden;
@@ -133,14 +133,14 @@
 }
 .uds-connect-menu__account-addr {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-label);
   color: inherit;
   opacity: 0.7;
   white-space: nowrap;
 }
 .uds-connect-menu__account-bal {
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: var(--text-caption);
   flex: none;
 }
 
@@ -178,7 +178,7 @@
   min-width: 0;
 }
 .uds-connect-menu__toggle-hint {
-  font-size: 11px;
+  font-size: var(--text-label);
   color: var(--color-text-tertiary);
 }
 .uds-connect-menu__toggle[data-highlighted] .uds-connect-menu__toggle-hint {
@@ -190,7 +190,7 @@
   position: relative;
   width: 28px;
   height: 16px;
-  border-radius: 999px;
+  border-radius: var(--radius-box);
   background: var(--color-border-strong);
   transition: background 120ms ease;
 }
@@ -200,7 +200,7 @@
   left: 2px;
   width: 12px;
   height: 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-box);
   background: var(--color-surface-higher);
   transition: transform 120ms ease;
 }

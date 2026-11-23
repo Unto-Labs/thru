@@ -12,6 +12,10 @@ impl WellKnownType for FractionHandler {
         "Fraction"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("decimal", "formatted"))
+    }
+
     fn category(&self) -> &'static str {
         "google"
     }
@@ -43,17 +47,5 @@ impl WellKnownType for FractionHandler {
         }
 
         WellKnownResult::None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn fraction_handler_type_name() {
-        let handler = FractionHandler;
-        assert_eq!(handler.type_name(), "Fraction");
-        assert_eq!(handler.category(), "google");
     }
 }

@@ -253,6 +253,7 @@ mod tests {
             kind: Some("struct".to_string()),
             value,
             byte_range: None,
+            display: Vec::new(),
         }
     }
 

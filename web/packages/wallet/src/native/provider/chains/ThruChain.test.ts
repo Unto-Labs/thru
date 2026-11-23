@@ -83,6 +83,35 @@ describe("NativeThruChain signing-session fallback", () => {
     );
   });
 
+  it("forwards the fee payer the app built against", async () => {
+    const sendMessage = vi.fn(async () => ({
+      result: { signedTransaction: "signed" },
+    }));
+    const chain = new NativeThruChain(
+      { sendMessage, getNetworkGeneration: () => 0 } as never,
+      {
+        isConnected: () => true,
+        getSelectedAccount: () => ({ address: "thru_test_address" }),
+        requestShow: vi.fn(async () => Symbol("surface")),
+        requestHide: vi.fn(),
+      } as never,
+      "thru-mobile://token-dummy",
+    );
+
+    await chain.signTransaction({
+      programAddress: "thru_program",
+      instructionData: "AQID",
+      feePayerPublicKey: "thru_fee_payer",
+    });
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION,
+        payload: expect.objectContaining({ feePayerPublicKey: "thru_fee_payer" }),
+      }),
+    );
+  });
+
   it("uses the selected account session without UI and opens UI only for stale-key fallback", async () => {
     const signingSessions = new SigningSessionDescriptorStore(
       new MemoryStorage(),
@@ -151,6 +180,67 @@ describe("NativeThruChain signing-session fallback", () => {
       expect.any(Symbol),
     );
     await expect(chain.getSigningSession("session-active")).resolves.toBeNull();
+  });
+  it("auto-selects an active session only when the stated fee payer is its key", async () => {
+    const signingSessions = new SigningSessionDescriptorStore(
+      new MemoryStorage(),
+      "sessions",
+    );
+    await signingSessions.save({
+      id: "session-active",
+      walletAddress: "wallet-a",
+      publicKey: "session-public-key",
+      authIdx: 2,
+      expiresAt: Math.floor(Date.now() / 1000) + 600,
+      createdAt: Math.floor(Date.now() / 1000),
+    });
+    const requestShow = vi.fn(async () => Symbol("surface"));
+    const requestHide = vi.fn();
+    const sendMessage = vi.fn(async () => ({
+      result: { signedTransaction: "signed" },
+    }));
+    const chain = new NativeThruChain(
+      { sendMessage, getNetworkGeneration: () => 0 } as never,
+      {
+        isConnected: () => true,
+        getSelectedAccount: () => ({ address: "wallet-a" }),
+        requestShow,
+        requestHide,
+      } as never,
+      "thru-mobile://app",
+      signingSessions,
+    );
+
+    await chain.signTransaction({
+      programAddress: "program",
+      instructionData: "AQID",
+      feePayerPublicKey: "managed-fee-payer",
+    });
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        payload: expect.not.objectContaining({
+          signingSessionId: expect.anything(),
+        }),
+      }),
+    );
+    expect(requestShow).toHaveBeenCalledOnce();
+
+    await chain.signTransaction({
+      programAddress: "program",
+      instructionData: "AQID",
+      feePayerPublicKey: "session-public-key",
+    });
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          signingSessionId: "session-active",
+        }),
+      }),
+    );
+    expect(requestShow).toHaveBeenCalledOnce();
+    await expect(
+      chain.getSigningSession("session-active"),
+    ).resolves.not.toBeNull();
   });
   it("rejects a revoked session fallback while disconnected instead of signing with a passkey", async () => {
     const sendMessage = vi.fn().mockRejectedValue(

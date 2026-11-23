@@ -31,52 +31,110 @@ types:
 - name: AmmInitPoolInstruction
   kind:
     struct:
+      display-name: Create pool
       packed: true
       fields:
       - name: payer_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: pool_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: pool
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(pool_account_idx)'
+        display-name: Pool
+        user-display: true
       - name: lp_mint_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: lp_mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(lp_mint_account_idx)'
+        display-name: LP mint
+        user-display: true
       - name: vault_one_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: vault_one
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(vault_one_account_idx)'
+        display-name: Token one vault
+        user-display: true
       - name: vault_two_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: vault_two
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(vault_two_account_idx)'
+        display-name: Token two vault
+        user-display: true
       - name: mint_one_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint_one
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_one_account_idx)'
+        display-name: Token one mint
+        user-display: true
       - name: mint_two_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint_two
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_two_account_idx)'
+        display-name: Token two mint
+        user-display: true
       - name: token_program_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: swap_fee_bps
+        user-display: false
         field-type:
           primitive: u16
+      - name: swap_fee
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: '`${toDecimal(swap_fee_bps, 2)}%`'
+        display-name: Swap fee
+        user-display: true
       - name: lp_mint_seed
+        user-display: false
         field-type:
           type-ref:
             name: Seed32
       - name: pool_proof_size
+        user-display: false
         field-type:
           primitive: u64
       - name: lp_mint_proof_size
+        user-display: false
         field-type:
           primitive: u64
       - name: vault_one_proof_size
+        user-display: false
         field-type:
           primitive: u64
       - name: vault_two_proof_size
+        user-display: false
         field-type:
           primitive: u64
       - name: pool_proof
+        user-display: false
         field-type:
           array:
             size:
@@ -85,6 +143,7 @@ types:
             element-type:
               primitive: u8
       - name: lp_mint_proof
+        user-display: false
         field-type:
           array:
             size:
@@ -93,6 +152,7 @@ types:
             element-type:
               primitive: u8
       - name: vault_one_proof
+        user-display: false
         field-type:
           array:
             size:
@@ -101,6 +161,7 @@ types:
             element-type:
               primitive: u8
       - name: vault_two_proof
+        user-display: false
         field-type:
           array:
             size:
@@ -111,130 +172,324 @@ types:
 - name: AmmAddLiquidityInstruction
   kind:
     struct:
+      display-name: Add liquidity
       packed: true
       fields:
       - name: pool_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: pool
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(pool_account_idx)'
+        display-name: Pool
+        user-display: true
       - name: depositor_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: depositor
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(depositor_account_idx)'
+        display-name: Depositor
+        user-display: true
       - name: depositor_token_one_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: depositor_token_one_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(depositor_token_one_account_idx)'
+        display-name: Token one account
+        user-display: true
       - name: depositor_token_two_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: depositor_token_two_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(depositor_token_two_account_idx)'
+        display-name: Token two account
+        user-display: true
       - name: depositor_lp_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: depositor_lp_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(depositor_lp_account_idx)'
+        display-name: LP token account
+        user-display: true
       - name: vault_one_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: vault_one
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(vault_one_account_idx)'
+        display-name: Token one vault
+        user-display: true
       - name: vault_two_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: vault_two
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(vault_two_account_idx)'
+        display-name: Token two vault
+        user-display: true
       - name: lp_mint_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: lp_mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(lp_mint_account_idx)'
+        display-name: LP mint
+        user-display: true
       - name: token_program_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: max_amount_mint_one
+        display-name: Max token one in (base units)
         field-type:
           primitive: u64
       - name: max_amount_mint_two
+        display-name: Max token two in (base units)
         field-type:
           primitive: u64
       # Inclusive minimum LP output; zero explicitly disables this bound.
       - name: min_lp_out
+        user-display: false
         field-type:
           primitive: u64
+      - name: min_lp_out_or_none
+        type: synthetic
+        return-type: { optional: { primitive: u64 } }
+        expression: 'if min_lp_out == 0 { none } else { min_lp_out }'
+        display-name: Min LP tokens out (base units)
+        user-display: true
 - name: AmmWithdrawLiquidityInstruction
   kind:
     struct:
+      display-name: Withdraw liquidity
       packed: true
       fields:
       - name: pool_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: pool
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(pool_account_idx)'
+        display-name: Pool
+        user-display: true
       - name: withdrawer_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: withdrawer
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(withdrawer_account_idx)'
+        display-name: Withdrawer
+        user-display: true
       - name: withdrawer_token_one_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: withdrawer_token_one_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(withdrawer_token_one_account_idx)'
+        display-name: Token one account
+        user-display: true
       - name: withdrawer_token_two_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: withdrawer_token_two_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(withdrawer_token_two_account_idx)'
+        display-name: Token two account
+        user-display: true
       - name: withdrawer_lp_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: withdrawer_lp_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(withdrawer_lp_account_idx)'
+        display-name: LP token account
+        user-display: true
       - name: vault_one_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: vault_one
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(vault_one_account_idx)'
+        display-name: Token one vault
+        user-display: true
       - name: vault_two_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: vault_two
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(vault_two_account_idx)'
+        display-name: Token two vault
+        user-display: true
       - name: lp_mint_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: lp_mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(lp_mint_account_idx)'
+        display-name: LP mint
+        user-display: true
       - name: token_program_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: lp_amount
+        display-name: LP tokens in (base units)
         field-type:
           primitive: u64
       # Inclusive minimum token-one output; zero explicitly disables this bound.
       - name: min_amount_one_out
+        user-display: false
         field-type:
           primitive: u64
+      - name: min_amount_one_out_or_none
+        type: synthetic
+        return-type: { optional: { primitive: u64 } }
+        expression: 'if min_amount_one_out == 0 { none } else { min_amount_one_out }'
+        display-name: Min token one out (base units)
+        user-display: true
       # Inclusive minimum token-two output; zero explicitly disables this bound.
       - name: min_amount_two_out
+        user-display: false
         field-type:
           primitive: u64
+      - name: min_amount_two_out_or_none
+        type: synthetic
+        return-type: { optional: { primitive: u64 } }
+        expression: 'if min_amount_two_out == 0 { none } else { min_amount_two_out }'
+        display-name: Min token two out (base units)
+        user-display: true
 - name: AmmSwapInstruction
   kind:
     struct:
+      display-name: Swap tokens
       packed: true
       fields:
       - name: pool_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: pool
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(pool_account_idx)'
+        display-name: Pool
+        user-display: true
       - name: user_transfer_authority_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: authority
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(user_transfer_authority_idx)'
+        display-name: Authority
+        user-display: true
       - name: user_input_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: input_token_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(user_input_account_idx)'
+        display-name: Input token account
+        user-display: true
       - name: user_output_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: output_token_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(user_output_account_idx)'
+        display-name: Output token account
+        user-display: true
       - name: vault_input_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: input_vault
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(vault_input_account_idx)'
+        display-name: Input vault
+        user-display: true
       - name: vault_output_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: output_vault
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(vault_output_account_idx)'
+        display-name: Output vault
+        user-display: true
       - name: lp_mint_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: token_program_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: amount_in
+        display-name: Amount in (base units)
         field-type:
           primitive: u64
       # Inclusive minimum swap output; zero explicitly disables this bound.
       - name: min_amount_out
+        user-display: false
         field-type:
           primitive: u64
+      - name: min_amount_out_or_none
+        type: synthetic
+        return-type: { optional: { primitive: u64 } }
+        expression: 'if min_amount_out == 0 { none } else { min_amount_out }'
+        display-name: Min amount out (base units)
+        user-display: true
 - name: AmmInstruction
   kind:
     struct:
       packed: true
       fields:
       - name: discriminant
+        user-display: false
         field-type:
           primitive: u32
       - name: payload
@@ -269,43 +524,65 @@ types:
 - name: AmmPoolMetadata
   kind:
     struct:
+      display-name: Pool
       packed: true
       fields:
       - name: is_initialized
+        user-display: false
         field-type:
           primitive: u8
+      - name: initialized
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if is_initialized != 0 { "Yes" } else { "No" }'
+        display-name: Initialized
+        user-display: true
       - name: locked_lp_supply
+        display-name: Locked LP supply (base units)
         field-type:
           primitive: u64
       - name: swap_fee_bps
+        user-display: false
         field-type:
           primitive: u16
+      - name: swap_fee
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: '`${toDecimal(swap_fee_bps, 2)}%`'
+        display-name: Swap fee
+        user-display: true
       - name: swap_pool_authority
+        display-name: Pool authority
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: mint_one
+        display-name: Token one mint
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: mint_two
+        display-name: Token two mint
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: vault_one
+        display-name: Token one vault
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: vault_two
+        display-name: Token two vault
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: lp_mint
+        display-name: LP mint
         field-type:
           type-ref:
             name: Pubkey
@@ -319,6 +596,7 @@ types:
       packed: true
       fields:
       - name: account_type
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -344,146 +622,263 @@ types:
       - name: code
         field-type:
           primitive: u64
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: invalid_instruction_data_size
+              tag-value: 1
+              comment: Instruction data is too short or the wrong size for this instruction.
+            - name: invalid_instruction
+              tag-value: 2
+              comment: Instruction is not a known AMM instruction.
+            - name: account_already_initialized
+              tag-value: 3
+              comment: The pool account already holds data.
+            - name: account_not_initialized
+              tag-value: 4
+              comment: The pool or one of its token accounts is missing or is not a valid account of the expected kind.
+            - name: invalid_account_idx
+              tag-value: 5
+              comment: An account index in the instruction is outside the account list of the transaction.
+            - name: invalid_mint_ordering
+              tag-value: 6
+              comment: The two mints are not in sorted order, or a token account holds a different mint than the pool.
+            - name: unauthorized_operation
+              tag-value: 7
+              comment: The required signer did not authorize this, or an account has the wrong owner.
+            - name: pool_create_failed
+              tag-value: 8
+              comment: The pool account could not be created.
+            - name: lp_mint_create_failed
+              tag-value: 9
+              comment: The LP mint account could not be created.
+            - name: vault_one_create_failed
+              tag-value: 10
+              comment: The first token vault account could not be created.
+            - name: vault_two_create_failed
+              tag-value: 11
+              comment: The second token vault account could not be created.
+            - name: account_resize_failed
+              tag-value: 12
+              comment: The pool account could not be resized, or it is too small to be a pool.
+            - name: account_set_writable_failed
+              tag-value: 13
+              comment: The pool account could not be opened for writing.
+            - name: lp_mint_init_failed
+              tag-value: 14
+              comment: The token program could not set up the LP mint.
+            - name: vault_one_init_failed
+              tag-value: 15
+              comment: The token program could not set up the first token vault.
+            - name: vault_two_init_failed
+              tag-value: 16
+              comment: The token program could not set up the second token vault.
+            - name: liquidity_bounds
+              tag-value: 17
+              comment: An amount or fee is zero, too large, or outside what the pool allows.
+            - name: vault_mismatch
+              tag-value: 18
+              comment: A vault account is not the vault recorded in the pool.
+            - name: lp_mint_mismatch
+              tag-value: 19
+              comment: The LP mint or LP token account does not match the pool.
+            - name: slippage_exceeded
+              tag-value: 20
+              comment: The amount received would be below the minimum set in the transaction.
+            - name: invalid_token_program
+              tag-value: 21
+              comment: The token program account is not the official token program.
 - name: PoolInitEventData
   kind:
     struct:
+      display-name: Pool created
       packed: true
       fields:
       - name: pool
+        display-name: Pool
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: mint_one
+        display-name: Token one mint
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: mint_two
+        display-name: Token two mint
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: lp_mint
+        display-name: LP mint
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: vault_one
+        display-name: Token one vault
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: vault_two
+        display-name: Token two vault
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: swap_fee_bps
+        user-display: false
         field-type:
           primitive: u16
+      - name: swap_fee
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: '`${toDecimal(swap_fee_bps, 2)}%`'
+        display-name: Swap fee
+        user-display: true
 - name: MintEventData
   kind:
     struct:
+      display-name: Liquidity added
       packed: true
       fields:
       - name: pool
+        display-name: Pool
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: sender
+        display-name: Depositor
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: amount_one
+        display-name: Token one deposited (base units)
         field-type:
           primitive: u64
       - name: amount_two
+        display-name: Token two deposited (base units)
         field-type:
           primitive: u64
       - name: lp_minted
+        display-name: LP tokens minted (base units)
         field-type:
           primitive: u64
       - name: lp_total_supply
+        display-name: LP supply after (base units)
         field-type:
           primitive: u64
 - name: BurnEventData
   kind:
     struct:
+      display-name: Liquidity withdrawn
       packed: true
       fields:
       - name: pool
+        display-name: Pool
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: sender
+        display-name: Withdrawer
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: to
+        user-display: false
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: amount_one
+        display-name: Token one withdrawn (base units)
         field-type:
           primitive: u64
       - name: amount_two
+        display-name: Token two withdrawn (base units)
         field-type:
           primitive: u64
       - name: lp_burned
+        display-name: LP tokens burned (base units)
         field-type:
           primitive: u64
       - name: lp_total_supply
+        display-name: LP supply after (base units)
         field-type:
           primitive: u64
 - name: SwapEventData
   kind:
     struct:
+      display-name: Tokens swapped
       packed: true
       fields:
       - name: pool
+        display-name: Pool
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: sender
+        display-name: Authority
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: to
+        display-name: Output token account
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: amount_in
+        display-name: Amount in (base units)
         field-type:
           primitive: u64
       - name: amount_out
+        display-name: Amount out (base units)
         field-type:
           primitive: u64
       - name: swap_direction
+        user-display: false
         field-type:
           primitive: u8
+      - name: direction
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if swap_direction == 0 { "Token one to token two" } else { if swap_direction == 1 { "Token two to token one" } else { `Unknown (${swap_direction})` } }'
+        display-name: Direction
+        user-display: true
 - name: SyncEventData
   kind:
     struct:
+      display-name: Pool reserves synced
       packed: true
       fields:
       - name: pool
+        display-name: Pool
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: reserve_one
+        display-name: Token one reserve (base units)
         field-type:
           primitive: u64
       - name: reserve_two
+        display-name: Token two reserve (base units)
         field-type:
           primitive: u64
 - name: AmmEvent
@@ -492,6 +887,7 @@ types:
       packed: true
       fields:
       - name: event_type
+        user-display: false
         field-type:
           primitive: u8
       - name: payload

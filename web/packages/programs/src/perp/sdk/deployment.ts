@@ -180,7 +180,6 @@ export function assertDeployment(value: unknown, source = 'deployment record'): 
 /** RPC endpoints of the public networks.  A network's deployment record is
     registered (registerPerpsDeployment) or loaded from a URL / object. */
 export const PERPS_NETWORK_RPC_URLS: Readonly<Record<string, string>> = Object.freeze({
-  alphanet: 'https://rpc.alphanet.thru.org',
   betanet: 'https://rpc.betanet.thru.org',
 });
 

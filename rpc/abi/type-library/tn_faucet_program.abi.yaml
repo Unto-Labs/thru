@@ -23,40 +23,127 @@ types:
     kind:
       struct:
         packed: true
+        display-name: Deposit to faucet
         fields:
           - name: faucet_account_idx
+            user-display: false
             field-type: { primitive: u16 }
+          - name: faucet_vault
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(faucet_account_idx)'
+            display-name: Faucet vault
+            user-display: true
           - name: depositor_account_idx
+            user-display: false
             field-type: { primitive: u16 }
+          - name: depositor
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(depositor_account_idx)'
+            display-name: Depositor
+            user-display: true
           - name: eoa_program_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: amount
+            display-name: Amount (base units)
             field-type: { primitive: u64 }
+          - name: amount_thru
+            display-name: Amount
+            user-display: true
+            type: synthetic
+            return-type: { type-ref: { name: Decimal } }
+            expression: 'toDecimal(amount, 9)'
+          - name: summary
+            display-name: Summary
+            user-display: true
+            type: synthetic
+            return-type: { type-ref: { name: Text } }
+            expression: '`Deposit ${amount_thru} THRU to ${faucet_vault}`'
   - name: WithdrawArgs
     kind:
       struct:
         packed: true
+        display-name: Withdraw from faucet
         fields:
           - name: faucet_account_idx
+            user-display: false
             field-type: { primitive: u16 }
+          - name: faucet_vault
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(faucet_account_idx)'
+            display-name: Faucet vault
+            user-display: true
           - name: recipient_account_idx
+            user-display: false
             field-type: { primitive: u16 }
+          - name: recipient
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(recipient_account_idx)'
+            display-name: Recipient
+            user-display: true
           - name: amount
+            display-name: Amount (base units)
             field-type: { primitive: u64 }
+          - name: amount_thru
+            display-name: Amount
+            user-display: true
+            type: synthetic
+            return-type: { type-ref: { name: Decimal } }
+            expression: 'toDecimal(amount, 9)'
+          - name: summary
+            display-name: Summary
+            user-display: true
+            type: synthetic
+            return-type: { type-ref: { name: Text } }
+            expression: '`Withdraw ${amount_thru} THRU to ${recipient}`'
   - name: InitializeArgs
     kind:
       struct:
         packed: true
+        display-name: Create faucet
         fields:
           - name: faucet_account_idx
+            user-display: false
             field-type: { primitive: u16 }
+          - name: faucet_vault
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(faucet_account_idx)'
+            display-name: Faucet vault
+            user-display: true
           - name: eoa_program_idx
+            user-display: false
             field-type: { primitive: u16 }
+          - name: funded_by
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(0)'
+            display-name: Funded by
+            user-display: true
           - name: amount
+            display-name: Amount (base units)
             field-type: { primitive: u64 }
+          - name: amount_thru
+            display-name: Amount
+            user-display: true
+            type: synthetic
+            return-type: { type-ref: { name: Decimal } }
+            expression: 'toDecimal(amount, 9)'
+          - name: summary
+            display-name: Summary
+            user-display: true
+            type: synthetic
+            return-type: { type-ref: { name: Text } }
+            expression: '`Fund faucet ${faucet_vault} with ${amount_thru} THRU`'
           - name: proof_size
+            user-display: false
             field-type: { primitive: u64 }
           - name: proof
+            user-display: false
             field-type:
               array:
                 size: { field-ref: { path: [proof_size] } }
@@ -67,6 +154,7 @@ types:
         packed: true
         fields:
           - name: tag
+            user-display: false
             field-type: { primitive: u32 }
           - name: payload
             field-type:
@@ -90,3 +178,17 @@ types:
         fields:
           - name: code
             field-type: { primitive: u64 }
+          - name: error
+            field-type:
+              enum:
+                tag-ref: { field-ref: { path: [code] } }
+                variants:
+                  - name: invalid_input
+                    tag-value: 1
+                    comment: An account index, account or amount in the instruction is not valid.
+                  - name: transfer_failed
+                    tag-value: 2
+                    comment: The transfer could not be completed.
+                  - name: create_failed
+                    tag-value: 3
+                    comment: The faucet account could not be created.

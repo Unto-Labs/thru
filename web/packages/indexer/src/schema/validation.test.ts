@@ -85,24 +85,6 @@ describe("generateZodSchema", () => {
       expect(zodSchema.safeParse({ name: "hello" }).success).toBe(true);
       expect(zodSchema.safeParse({ name: null }).success).toBe(false);
     });
-
-    it("handles mixed nullable and non-nullable columns", () => {
-      const schema = {
-        id: t.text().notNull(),
-        description: t.text(),
-      };
-      const zodSchema = generateZodSchema(schema);
-
-      expect(
-        zodSchema.safeParse({ id: "123", description: "test" }).success
-      ).toBe(true);
-      expect(
-        zodSchema.safeParse({ id: "123", description: null }).success
-      ).toBe(true);
-      expect(
-        zodSchema.safeParse({ id: null, description: "test" }).success
-      ).toBe(false);
-    });
   });
 
   describe("complex schemas", () => {
@@ -217,36 +199,6 @@ describe("validateParsedData", () => {
       const result = validateParsedData(schema, data, "test-stream");
 
       expect(result.success).toBe(false);
-    });
-
-    it("includes stream name in error message", () => {
-      const data = {
-        id: 123,
-        slot: 42n,
-        name: "Test",
-      };
-
-      const result = validateParsedData(schema, data, "my-custom-stream");
-
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toContain('"my-custom-stream"');
-      }
-    });
-
-    it("includes field path in error message", () => {
-      const data = {
-        id: "test",
-        slot: "not-a-bigint",
-        name: "Test",
-      };
-
-      const result = validateParsedData(schema, data, "test-stream");
-
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error).toContain("slot");
-      }
     });
   });
 

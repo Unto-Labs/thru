@@ -1,5 +1,6 @@
 use crate::file::{AbiFile, ImportSource};
 use crate::resolver::ImportResolver;
+use abi_types::synthetic::BUILT_VALUE_TYPES;
 use abi_types::{TypeDef, TypeKind};
 use std::path::{Path, PathBuf};
 
@@ -166,6 +167,29 @@ pub fn normalize_type_refs(
     Ok(())
 }
 
+/// A synthetic field's return type normalizes like a wire field's type, except
+/// that a bare built-in value type (Pubkey, Decimal, ...) may be left
+/// undefined: reflection builds those without a definition.
+fn normalize_return_type(
+    kind: &mut TypeKind,
+    resolver: &ImportResolver,
+    allow_external: bool,
+) -> anyhow::Result<()> {
+    if let TypeKind::TypeRef(reference) = kind {
+        if reference.package.is_none()
+            && BUILT_VALUE_TYPES.contains(&reference.name.as_str())
+            && resolver
+                .resolve_type_reference(&reference.name, None)
+                .ok()
+                .flatten()
+                .is_none()
+        {
+            return Ok(());
+        }
+    }
+    normalize_type_kind(kind, resolver, allow_external)
+}
+
 fn normalize_type_kind(
     kind: &mut TypeKind,
     resolver: &ImportResolver,
@@ -198,6 +222,9 @@ fn normalize_type_kind(
         TypeKind::Struct(value) => {
             for field in &mut value.fields {
                 normalize_type_kind(&mut field.field_type, resolver, allow_external)?;
+            }
+            for field in &mut value.display.synthetic {
+                normalize_return_type(field.return_type.inner_mut(), resolver, allow_external)?;
             }
         }
         TypeKind::Union(value) => {

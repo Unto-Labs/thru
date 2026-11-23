@@ -29,20 +29,38 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Create wTHRU mint
       fields:
       - name: token_program_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: mint_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_account_idx)'
+        display-name: Mint
+        user-display: true
       - name: vault_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: vault
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(vault_account_idx)'
+        display-name: Vault
+        user-display: true
       - name: decimals
+        display-name: Decimals
         field-type:
           primitive: u8
       - name: mint_seed
+        user-display: false
         field-type:
           array:
             size:
@@ -51,15 +69,18 @@ types:
             element-type:
               primitive: u8
       - name: mint_proof_size
+        user-display: false
         field-type:
           primitive: u64
       - name: vault_proof_size
+        user-display: false
         field-type:
           primitive: u64
 - name: DepositArgs
   kind:
     struct:
       packed: true
+      display-name: Wrap THRU
       comment: >-
         Mints the vault's native balance delta (current balance minus the
         recorded last_balance) to dest_token_account_idx.  The delta does not
@@ -68,49 +89,122 @@ types:
         program; otherwise the next caller can claim the delta.
       fields:
       - name: token_program_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: vault_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: vault
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(vault_account_idx)'
+        display-name: Vault
+        user-display: true
       - name: mint_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_account_idx)'
+        display-name: Mint
+        user-display: true
       - name: dest_token_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: dest_token_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(dest_token_account_idx)'
+        display-name: Destination token account
+        user-display: true
 - name: WithdrawArgs
   kind:
     struct:
       packed: true
+      display-name: Unwrap THRU
       fields:
       - name: token_program_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: vault_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: vault
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(vault_account_idx)'
+        display-name: Vault
+        user-display: true
       - name: mint_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_account_idx)'
+        display-name: Mint
+        user-display: true
       - name: wthru_token_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: wthru_token_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(wthru_token_account_idx)'
+        display-name: Token account
+        user-display: true
       - name: owner_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: owner
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(owner_account_idx)'
+        display-name: Owner
+        user-display: true
       - name: recipient_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: recipient
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(recipient_account_idx)'
+        display-name: Recipient
+        user-display: true
       - name: amount
+        display-name: Amount (base units)
         field-type:
           primitive: u64
+      - name: amount_thru
+        display-name: Amount
+        user-display: true
+        type: synthetic
+        return-type: { type-ref: { name: Decimal } }
+        expression: 'toDecimal(amount, 9)'
+      - name: summary
+        display-name: Summary
+        user-display: true
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: '`Unwrap ${amount_thru} THRU to ${recipient}`'
 - name: WthruInstruction
   kind:
     struct:
       packed: true
       fields:
       - name: tag
+        user-display: false
         field-type:
           primitive: u32
       - name: payload
@@ -141,14 +235,29 @@ types:
   kind:
     struct:
       packed: true
+      display-name: wTHRU vault
       fields:
       - name: mint_address
+        display-name: Mint
         field-type:
           type-ref:
             name: Pubkey
       - name: last_balance
+        display-name: Recorded balance (base units)
         field-type:
           primitive: u64
+      - name: last_balance_thru
+        display-name: Recorded balance
+        user-display: true
+        type: synthetic
+        return-type: { type-ref: { name: Decimal } }
+        expression: 'toDecimal(last_balance, 9)'
+      - name: summary
+        display-name: Summary
+        user-display: true
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: '`${last_balance_thru} THRU recorded`'
 # Account root: byte 0 is the account discriminator (account_type), one value
 # per (account kind, layout). Values are never reused; a new layout or a new
 # kind takes the next unused value.
@@ -158,6 +267,7 @@ types:
       packed: true
       fields:
       - name: account_type
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -182,3 +292,47 @@ types:
       - name: code
         field-type:
           primitive: u64
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: invalid_instruction_data_size
+              tag-value: 1
+              comment: Instruction data is too short or the wrong size for this instruction.
+            - name: invalid_discriminant
+              tag-value: 2
+              comment: Instruction is not a known WTHRU instruction.
+            - name: unauthorized_operation
+              tag-value: 3
+              comment: The account owner did not authorize this transaction.
+            - name: insufficient_funds
+              tag-value: 4
+              comment: The vault holds less than the amount to withdraw.
+            - name: invalid_account_idx
+              tag-value: 5
+              comment: An account index in the instruction is outside the account list of the transaction.
+            - name: vault_not_initialized
+              tag-value: 6
+              comment: The WTHRU vault has not been set up.
+            - name: invalid_vault_balance
+              tag-value: 7
+              comment: The vault balance is lower than the last recorded balance.
+            - name: token_program_call_failed
+              tag-value: 8
+              comment: The call to the token program failed.
+            - name: invalid_proof
+              tag-value: 9
+              comment: The state proof size in the instruction is not valid.
+            - name: invalid_token_program
+              tag-value: 10
+              comment: The token program account does not own the WTHRU mint.
+            - name: mint_not_found
+              tag-value: 11
+              comment: The WTHRU mint account does not exist.
+            - name: vault_already_initialized
+              tag-value: 12
+              comment: The WTHRU vault has already been set up.

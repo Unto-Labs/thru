@@ -4,8 +4,9 @@ abi:
   abi-version: 1
   package-version: 1.1.0
   description: >-
-    Consensus validator program. It owns the attestor table, stakes attestor
-    tokens into the converted vault, verifies BLS-aggregated block
+    Consensus validator program. It owns the attestor table, stakes WTHRU
+    into the converted vault for attestor power at the table's
+    stake_units_per_weight rate, verifies BLS-aggregated block
     certificates, and pays attestor rewards from the WTHRU unclaimed vault.
   imports:
     # thru_primitives
@@ -44,48 +45,103 @@ types:
     kind:
       struct:
         packed: true
+        display-name: Initialize attestor table
         fields:
+          - name: attestor_table
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(attestor_table_idx)'
+            display-name: Attestor table
+            user-display: true
+          - name: wthru_mint
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(wthru_mint_idx)'
+            display-name: WTHRU mint
+            user-display: true
+          - name: converted_vault
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(converted_vault_idx)'
+            display-name: Converted vault
+            user-display: true
+          - name: unclaimed_vault
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(unclaimed_vault_idx)'
+            display-name: Unclaimed vault
+            user-display: true
           - name: token_program_idx
-            field-type: { primitive: u16 }
-          - name: attestor_mint_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: converted_vault_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: unclaimed_vault_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: attestor_table_idx
+            user-display: false
             field-type: { primitive: u64 }
-          - name: admin_idx
-            field-type: { primitive: u16 }
           - name: wthru_mint_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: initial_entry_count
+            display-name: Initial server count
             field-type: { primitive: u64 }
           - name: max_validators
+            display-name: Max validators
             field-type: { primitive: u64 }
           - name: delta1
+            display-name: Delta 1
             field-type: { primitive: u64 }
           - name: delta2
+            display-name: Delta 2
             field-type: { primitive: u64 }
           - name: converted_vault_proof_size
+            user-display: false
             field-type: { primitive: u64 }
           - name: unclaimed_vault_proof_size
+            user-display: false
             field-type: { primitive: u64 }
           - name: table_proof_size
+            user-display: false
             field-type: { primitive: u64 }
           - name: max_pending_blocks
+            display-name: Max pending blocks
+            field-type: { primitive: u64 }
+          - name: stake_units_per_weight
+            display-name: Stake units per weight
+            field-type: { primitive: u64 }
+          - name: min_stake
+            display-name: Min stake
+            field-type: { primitive: u64 }
+          - name: max_decay_bps
+            display-name: Max decay (bps)
+            field-type: { primitive: u64 }
+          - name: idle_gap_decay_bps
+            display-name: Idle gap decay (bps)
+            field-type: { primitive: u64 }
+          - name: max_idle_gap_decay_bps
+            display-name: Max idle gap decay (bps)
+            field-type: { primitive: u64 }
+          - name: attestor_decay_fraction_bps
+            display-name: Attestor decay fraction (bps)
             field-type: { primitive: u64 }
           - name: converted_vault_proof
+            user-display: false
             field-type:
               array:
                 size: { field-ref: { path: [converted_vault_proof_size] } }
                 element-type: { primitive: u8 }
           - name: unclaimed_vault_proof
+            user-display: false
             field-type:
               array:
                 size: { field-ref: { path: [unclaimed_vault_proof_size] } }
                 element-type: { primitive: u8 }
           - name: table_proof
+            user-display: false
             field-type:
               array:
                 size: { field-ref: { path: [table_proof_size] } }
@@ -94,76 +150,184 @@ types:
     kind:
       struct:
         packed: true
+        display-name: Activate attestor
         fields:
+          - name: attestor_identity
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(identity_idx)'
+            display-name: Attestor identity
+            user-display: true
+          - name: source_token_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(source_token_account_idx)'
+            display-name: Source token account
+            user-display: true
+          - name: converted_vault
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(converted_vault_idx)'
+            display-name: Converted vault
+            user-display: true
           - name: attestor_table_idx
+            user-display: false
             field-type: { primitive: u64 }
           - name: token_program_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: source_token_account_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: converted_vault_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: identity_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: bls_pk
+            user-display: false
             field-type: { type-ref: { name: BlsPubkey } }
           - name: bls_pop
+            user-display: false
             field-type: { type-ref: { name: BlsSignature } }
           - name: claim_authority
+            display-name: Claim authority
             field-type:
               type-ref:
                 name: Pubkey
                 package: "thru.common.primitives"
           - name: token_amount
+            display-name: Amount (base units)
             field-type: { primitive: u64 }
   - name: DeactivateArgs
     kind:
       struct:
         packed: true
+        display-name: Deactivate attestor
         fields:
           - name: attestor_table_idx
+            user-display: false
             field-type: { primitive: u64 }
           - name: token_program_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: unclaimed_vault_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: dest_token_account_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: identity_idx
+            user-display: false
             field-type: { primitive: u16 }
+          - name: attestor_identity
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(identity_idx)'
+            display-name: Attestor identity
+            user-display: true
+          - name: unclaimed_vault
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(unclaimed_vault_idx)'
+            display-name: Unclaimed vault
+            user-display: true
+          - name: dest_token_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(dest_token_account_idx)'
+            display-name: Destination token account
+            user-display: true
   - name: ConvertTokensArgs
     kind:
       struct:
         packed: true
+        display-name: Convert attestor tokens
         fields:
+          - name: attestor_identity
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(identity_idx)'
+            display-name: Attestor identity
+            user-display: true
+          - name: source_token_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(source_token_account_idx)'
+            display-name: Source token account
+            user-display: true
+          - name: converted_vault
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(converted_vault_idx)'
+            display-name: Converted vault
+            user-display: true
           - name: attestor_table_idx
+            user-display: false
             field-type: { primitive: u64 }
           - name: token_program_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: source_token_account_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: converted_vault_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: identity_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: token_amount
+            display-name: Amount (base units)
             field-type: { primitive: u64 }
   - name: ClaimArgs
     kind:
       struct:
         packed: true
+        display-name: Claim attestor rewards
         fields:
+          - name: attestor
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'subject_attestor'
+            display-name: Attestor
+            user-display: true
+          - name: claim_authority
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(claim_authority_idx)'
+            display-name: Claim authority
+            user-display: true
+          - name: unclaimed_vault
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(unclaimed_vault_idx)'
+            display-name: Unclaimed vault
+            user-display: true
+          - name: dest_token_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(dest_token_account_idx)'
+            display-name: Destination token account
+            user-display: true
           - name: attestor_table_idx
+            user-display: false
             field-type: { primitive: u64 }
           - name: token_program_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: unclaimed_vault_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: dest_token_account_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: claim_authority_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: subject_attestor
+            user-display: false
             field-type:
               type-ref:
                 name: Pubkey
@@ -172,17 +336,34 @@ types:
     kind:
       struct:
         packed: true
+        display-name: Set claim authority
         fields:
+          - name: attestor
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'subject_attestor'
+            display-name: Attestor
+            user-display: true
+          - name: current_claim_authority
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(current_claim_auth_idx)'
+            display-name: Current claim authority
+            user-display: true
           - name: attestor_table_idx
+            user-display: false
             field-type: { primitive: u64 }
           - name: current_claim_auth_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: subject_attestor
+            user-display: false
             field-type:
               type-ref:
                 name: Pubkey
                 package: "thru.common.primitives"
           - name: new_claim_authority
+            display-name: New claim authority
             field-type:
               type-ref:
                 name: Pubkey
@@ -254,6 +435,7 @@ types:
     kind:
       struct:
         packed: true
+        display-name: Post block certificate
         comment: >-
           The instruction is followed by the certificate signer bitset,
           (max_validators + 63) / 64 little-endian u64 words, where
@@ -261,27 +443,187 @@ types:
           instruction data. The bitset is therefore not described here.
         fields:
           - name: attestor_table_idx
+            user-display: false
             field-type: { primitive: u64 }
           - name: bond_account_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: bond_ta_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: escrow_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: bp_program_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: token_program_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: block_commitment
+            user-display: false
             field-type: { type-ref: { name: BlockCommitment } }
           - name: certificate
+            user-display: false
             field-type: { type-ref: { name: Certificate } }
+          - name: slot
+            type: synthetic
+            return-type: { primitive: u64 }
+            expression: 'certificate.payload.slot'
+            display-name: Slot
+            user-display: true
+  - name: InitValidatorManagerArgs
+    kind:
+      struct:
+        packed: true
+        comment: >-
+          Sets the first validator manager while none is set (genesis may
+          already have set one). The program's application authority (the
+          authority in its managed metadata at program_meta_idx) must
+          authorize it; it may be a multisig, which runs this through
+          propose, approve and execute. The manager may not be zero, this
+          program or the Multisig program.
+        fields:
+          - name: attestor_table_idx
+            field-type: { primitive: u64 }
+          - name: program_meta_idx
+            field-type: { primitive: u16 }
+          - name: validator_manager
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+  - name: SetValidatorManagerArgs
+    kind:
+      struct:
+        packed: true
+        comment: >-
+          Hands the validator manager role to another key (not zero, this
+          program or the Multisig program). The current manager authorizes
+          it.
+        fields:
+          - name: attestor_table_idx
+            field-type: { primitive: u64 }
+          - name: validator_manager
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+  - name: SetSelfServiceArgs
+    kind:
+      struct:
+        packed: true
+        comment: >-
+          Enables (nonzero) or disables (zero) self-service Activate,
+          ConvertTokens and Deactivate. The manager authorizes it. Claim,
+          SetClaimAuthority and PostCertificate are never gated.
+        fields:
+          - name: attestor_table_idx
+            field-type: { primitive: u64 }
+          - name: enabled
+            field-type: { primitive: u8 }
+  - name: ManagerActivateArgs
+    kind:
+      struct:
+        packed: true
+        comment: >-
+          Seats identity with weight and no payment. The manager authorizes
+          it; the identity does not sign. Proof of possession, the one
+          Activate per block allowance and the base's spacing and turnover
+          limits still apply. Invoked by another program (a multisig
+          manager), it runs the same way and emits the same event.
+        fields:
+          - name: attestor_table_idx
+            field-type: { primitive: u64 }
+          - name: identity
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+          - name: bls_pk
+            field-type: { type-ref: { name: BlsPubkey } }
+          - name: bls_pop
+            field-type: { type-ref: { name: BlsSignature } }
+          - name: claim_authority
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+          - name: weight
+            field-type: { primitive: u64 }
+  - name: ManagerDeactivateArgs
+    kind:
+      struct:
+        packed: true
+        comment: >-
+          Removes identity's seat. The manager authorizes it. The seat's
+          unclaimed rewards are forfeited (they stay in the unclaimed vault),
+          and its converted stake stays in the converted vault. Invoked by
+          another program, it runs the same way and emits the same event.
+        fields:
+          - name: attestor_table_idx
+            field-type: { primitive: u64 }
+          - name: identity
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+  - name: SetParamsArgs
+    kind:
+      struct:
+        packed: true
+        comment: >-
+          Replaces the attestor table's staking parameters, under the rules
+          Init applies (nonzero stake_units_per_weight; min_stake a nonzero
+          multiple of it; max_decay_bps <= 10000; idle_gap_decay_bps <=
+          max_idle_gap_decay_bps <= max_decay_bps; attestor_decay_fraction_bps
+          <= 10000). The manager authorizes it. Effects from the next
+          instruction: Activate and ConvertTokens price new stake at the new
+          rate and increment (existing seats keep their weight); the next
+          decay emission charges the payment already pending under the new
+          rate, fraction and caps.
+        fields:
+          - name: attestor_table_idx
+            field-type: { primitive: u64 }
+          - name: stake_units_per_weight
+            field-type: { primitive: u64 }
+          - name: min_stake
+            field-type: { primitive: u64 }
+          - name: max_decay_bps
+            field-type: { primitive: u64 }
+          - name: idle_gap_decay_bps
+            field-type: { primitive: u64 }
+          - name: max_idle_gap_decay_bps
+            field-type: { primitive: u64 }
+          - name: attestor_decay_fraction_bps
+            field-type: { primitive: u64 }
+  - name: ManagerSetWeightArgs
+    kind:
+      struct:
+        packed: true
+        comment: >-
+          Sets a seated identity's weight to weight (absolute, so it
+          replaces weight bought with ConvertTokens). The base only adds
+          weight, so weight must be above the seat's weight after this
+          update's decay. No tokens move. The manager authorizes it; invoked
+          by another program, it runs the same way and emits the same event.
+        fields:
+          - name: attestor_table_idx
+            field-type: { primitive: u64 }
+          - name: identity
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+          - name: weight
+            field-type: { primitive: u64 }
   - name: ConsensusValidatorInstruction
     kind:
       struct:
         packed: true
         fields:
           - name: tag
+            user-display: false
             field-type: { primitive: u32 }
           - name: payload
             field-type:
@@ -310,6 +652,27 @@ types:
                   - name: post_certificate
                     tag-value: 6
                     variant-type: { type-ref: { name: PostCertificateArgs } }
+                  - name: init_validator_manager
+                    tag-value: 8
+                    variant-type: { type-ref: { name: InitValidatorManagerArgs } }
+                  - name: set_validator_manager
+                    tag-value: 9
+                    variant-type: { type-ref: { name: SetValidatorManagerArgs } }
+                  - name: set_self_service
+                    tag-value: 10
+                    variant-type: { type-ref: { name: SetSelfServiceArgs } }
+                  - name: manager_activate
+                    tag-value: 11
+                    variant-type: { type-ref: { name: ManagerActivateArgs } }
+                  - name: manager_deactivate
+                    tag-value: 12
+                    variant-type: { type-ref: { name: ManagerDeactivateArgs } }
+                  - name: set_params
+                    tag-value: 13
+                    variant-type: { type-ref: { name: SetParamsArgs } }
+                  - name: manager_set_weight
+                    tag-value: 14
+                    variant-type: { type-ref: { name: ManagerSetWeightArgs } }
   # Account root: byte 0 is the account discriminator (account_type), one
   # value per (account kind, layout). Values are never reused; a new layout
   # or a new kind takes the next unused value.
@@ -319,6 +682,7 @@ types:
         packed: true
         fields:
           - name: account_type
+            user-display: false
             field-type: { primitive: u8 }
           - name: payload
             field-type:
@@ -333,73 +697,643 @@ types:
     kind:
       struct:
         packed: true
+        display-name: Attestor table
         comment: >-
-          Attestor table payload: the 232-byte header after the account_type
-          byte (the header is 233 bytes with it), then body. base_sm_off,
-          metadata_off and pending_map_off are offsets from the start of the
-          account (byte 0 is account_type). The body holds the consensus base
-          state machine at base_sm_off (aligned up from 233, so 240), the
-          per-seat metadata array (server_count entries of claim_authority
-          and unclaimed_tokens) at metadata_off, and the deferred-payout map
-          (pending_cap entries of block_hash, weight_slot, credit_basis and a
-          (server_count + 63) / 64 word bitset) at pending_map_off.
+          Attestor table payload: the 281 bytes of header fields after the
+          account_type byte (282 with it), then header_reserved, then body. The
+          header (account_type, the fields and header_reserved) is exactly one
+          4096-byte page. header_reserved is reserved for future header fields
+          and is always zero; a new field takes its bytes from the front of it,
+          so the body and the base state machine at base_sm_off 4096 never
+          move. wthru_mint is the
+          mint of both vaults (stake and rewards) and the mint PostCertificate
+          derives bond token accounts from. stake_units_per_weight is the WTHRU
+          base units one unit of attestor power costs. min_stake is the stake
+          increment in WTHRU base units: every Activate and ConvertTokens
+          amount must be a whole, nonzero multiple of it (it is itself a whole
+          multiple of stake_units_per_weight, set by Init or genesis).
+          pending_decay is the attestor payment (WTHRU base units, saturating)
+          of the slots since the last decay emission that are still in the
+          stored 512-slot block history; pending_idle_slots (saturating)
+          counts the older slots of an idle gap, whose payments are unknown
+          (a 513-slot gap is 1, a 600-slot gap 88). An emission removes
+          idle_gap_decay_bps of the committee weight per idle slot (at most
+          max_idle_gap_decay_bps in all) plus the payment converted to power
+          at stake_units_per_weight and scaled by attestor_decay_fraction_bps
+          (pending * attestor_decay_fraction_bps / (stake_units_per_weight *
+          10000), rounded down once; 10000 charges the whole power, 0 none),
+          at most max_decay_bps of the committee weight in all, dropping the
+          excess, and clears both. idle_gap_decay_bps <=
+          max_idle_gap_decay_bps <= max_decay_bps, and
+          attestor_decay_fraction_bps <= 10000.
+          base_sm_off, metadata_off and pending_map_off are offsets from the
+          start of the account (byte 0 is account_type). The body holds the
+          consensus base state machine at base_sm_off (4096, right after the
+          header page), the per-seat metadata
+          array (server_count entries of claim_authority and unclaimed_tokens)
+          at metadata_off, and the deferred-payout map (pending_cap entries of
+          block_hash, weight_slot, credit_basis and a (server_count + 63) / 64
+          word bitset) at pending_map_off.
+          validator_manager (zero for none) grants and removes seats without
+          tokens and sets the parameters; it comes from genesis or the
+          program's application authority (InitValidatorManager).
+          self_service_disabled turns off Activate, ConvertTokens and
+          Deactivate.
         fields:
           - name: token_program_id
+            user-display: false
             field-type:
               type-ref:
                 name: Pubkey
                 package: "thru.common.primitives"
-          - name: attestor_mint
+          - name: wthru_mint
+            display-name: WTHRU mint
             field-type:
               type-ref:
                 name: Pubkey
                 package: "thru.common.primitives"
           - name: converted_vault
+            display-name: Converted vault
             field-type:
               type-ref:
                 name: Pubkey
                 package: "thru.common.primitives"
           - name: unclaimed_vault
+            display-name: Unclaimed vault
             field-type:
               type-ref:
                 name: Pubkey
                 package: "thru.common.primitives"
-          - name: admin
+          - name: validator_manager
+            display-name: Validator manager
             field-type:
               type-ref:
                 name: Pubkey
                 package: "thru.common.primitives"
           - name: server_count
+            display-name: Server count
             field-type: { primitive: u64 }
           - name: base_sm_off
+            user-display: false
             field-type: { primitive: u64 }
           - name: metadata_off
+            user-display: false
             field-type: { primitive: u64 }
           - name: pending_decay
+            user-display: false
             field-type: { primitive: u64 }
           - name: last_decay_calc_slot
-            field-type: { primitive: u64 }
-          - name: last_decay_emit_slot
+            user-display: false
             field-type: { primitive: u64 }
           - name: last_processed_slot
+            display-name: Last processed slot
             field-type: { primitive: u64 }
           - name: pending_map_off
+            user-display: false
             field-type: { primitive: u64 }
           - name: pending_cap
+            user-display: false
             field-type: { primitive: u64 }
+          - name: stake_units_per_weight
+            display-name: Stake units per weight
+            field-type: { primitive: u64 }
+          - name: min_stake
+            display-name: Min stake
+            field-type: { primitive: u64 }
+          - name: max_decay_bps
+            display-name: Max decay (bps)
+            field-type: { primitive: u64 }
+          - name: idle_gap_decay_bps
+            display-name: Idle gap decay (bps)
+            field-type: { primitive: u64 }
+          - name: max_idle_gap_decay_bps
+            display-name: Max idle gap decay (bps)
+            field-type: { primitive: u64 }
+          - name: attestor_decay_fraction_bps
+            display-name: Attestor decay fraction (bps)
+            field-type: { primitive: u64 }
+          - name: pending_idle_slots
+            display-name: Pending idle slots
+            field-type: { primitive: u64 }
+          - name: self_service_disabled
+            display-name: Self-service disabled
+            field-type: { primitive: u8 }
+          - name: header_reserved
+            user-display: false
+            field-type:
+              array:
+                comment: >-
+                  Reserved for future attestor table header fields; always zero.
+                  New fields take their bytes from the front, so the header stays
+                  one 4096-byte page and the base state machine stays at
+                  base_sm_off 4096.
+                size: { literal: { u64: 3814 } }
+                element-type: { primitive: u8 }
           - name: body
+            user-display: false
             field-type:
               array:
                 size:
                   sub:
                     left: { field-ref: { path: ["__buffer_size"] } }
-                    right: { literal: { u64: 232 } }
+                    right: { literal: { u64: 4095 } }
                 element-type: { primitive: u8 }
   - name: ConsensusValidatorError
     kind:
       struct:
         packed: true
-        comment: Error codes are the TN_CONSENSUS_VALIDATOR_ERR_* values (0x01-0x84) in tn_consensus_validator_program.h; 0x84 is an invalid attestor table.
+        comment: Error codes are the TN_CONSENSUS_VALIDATOR_ERR_* values (0x01-0xBA) in tn_consensus_validator_program.h; 0x84 is an invalid attestor table.
         fields:
           - name: code
             field-type: { primitive: u64 }
+          - name: error
+            field-type:
+              enum:
+                tag-ref: { field-ref: { path: [code] } }
+                variants:
+                  - name: discriminant_truncated
+                    tag-value: 1 # 0x0001
+                    comment: Instruction data is too short to hold an instruction tag.
+                  - name: init_table_create_rejected
+                    tag-value: 2 # 0x0002
+                    comment: The attestor table account could not be created.
+                  - name: init_table_writable_rejected
+                    tag-value: 3 # 0x0003
+                    comment: The attestor table account could not be opened for writing.
+                  - name: token_init_invoke_rejected
+                    tag-value: 4 # 0x0004
+                    comment: The call to the token program to set up a vault could not be made.
+                  - name: vault_transfer_invoke_rejected
+                    tag-value: 5 # 0x0005
+                    comment: The call to the token program to move vault tokens could not be made.
+                  - name: already_active
+                    tag-value: 6 # 0x0006
+                    comment: This validator identity is already active.
+                  - name: not_active
+                    tag-value: 7 # 0x0007
+                    comment: This validator identity is not active.
+                  - name: unauthorized
+                    tag-value: 8 # 0x0008
+                    comment: The required signer did not authorize this transaction.
+                  - name: cert_vote_value_unsupported
+                    tag-value: 9 # 0x0009
+                    comment: The certificate carries a vote type that is not supported.
+                  - name: insufficient_signatures
+                    tag-value: 10 # 0x000a
+                    comment: The certificate is not signed by enough validator weight.
+                  - name: out_of_memory
+                    tag-value: 11 # 0x000b
+                    comment: The total of unclaimed rewards would overflow.
+                  - name: window_violation
+                    tag-value: 13 # 0x000d
+                    comment: The certificate refers to a slot outside the range the validator set keeps.
+                  - name: insufficient_weight
+                    tag-value: 15 # 0x000f
+                    comment: The stake is too low to take a validator seat.
+                  - name: payout_invoke_rejected
+                    tag-value: 17 # 0x0011
+                    comment: The block producer payout call failed.
+                  - name: token_init_program_rejected
+                    tag-value: 18 # 0x0012
+                    comment: The token program rejected the vault setup.
+                  - name: vault_transfer_program_rejected
+                    tag-value: 19 # 0x0013
+                    comment: The token program rejected the vault transfer.
+                  - name: unclaimed_transfer_invoke_rejected
+                    tag-value: 20 # 0x0014
+                    comment: The call to the token program to move unclaimed rewards could not be made.
+                  - name: unclaimed_transfer_program_rejected
+                    tag-value: 21 # 0x0015
+                    comment: The token program rejected the transfer of unclaimed rewards.
+                  - name: base_buffer_full
+                    tag-value: 22 # 0x0016
+                    comment: The validator set has no room for more pending changes.
+                  - name: base_activate_no_free_seat
+                    tag-value: 23 # 0x0017
+                    comment: There is no free validator seat.
+                  - name: base_activate_ring_full
+                    tag-value: 24 # 0x0018
+                    comment: The queue of validator weight changes is full.
+                  - name: base_bad_weight
+                    tag-value: 25 # 0x0019
+                    comment: The validator weight is not valid, for example zero when activating.
+                  - name: base_order_violation
+                    tag-value: 26 # 0x001a
+                    comment: The change is for a slot that is too old.
+                  - name: base_activate_dup_decay
+                    tag-value: 27 # 0x001b
+                    comment: This validator seat already has an activation in the current window.
+                  - name: base_weight_dup_decay
+                    tag-value: 28 # 0x001c
+                    comment: This validator seat already has a weight decrease in the current window.
+                  - name: base_weight_dup_update
+                    tag-value: 29 # 0x001d
+                    comment: This validator seat already has a weight change in the current window.
+                  - name: base_id_dup_update
+                    tag-value: 30 # 0x001e
+                    comment: This validator seat already has a key change in the current window.
+                  - name: base_update_kind_unsupported
+                    tag-value: 31 # 0x001f
+                    comment: The kind of validator change is not supported.
+                  - name: base_weight_sid_out_of_range
+                    tag-value: 32 # 0x0020
+                    comment: The validator seat in the weight change is out of range.
+                  - name: base_id_sid_out_of_range
+                    tag-value: 33 # 0x0021
+                    comment: The validator seat in the key change is out of range.
+                  - name: base_activate_no_eviction_target
+                    tag-value: 34 # 0x0022
+                    comment: The validator set is full and no validator can be replaced.
+                  - name: base_activate_pk_map_full
+                    tag-value: 35 # 0x0023
+                    comment: The validator key index is full.
+                  - name: base_pending_eviction
+                    tag-value: 36 # 0x0024
+                    comment: This validator is being removed from the set.
+                  - name: base_activate_bls_pubkey_invalid
+                    tag-value: 37 # 0x0025
+                    comment: The BLS key of the validator to activate is not valid.
+                  - name: base_id_bls_pubkey_invalid
+                    tag-value: 38 # 0x0026
+                    comment: The new BLS key of the validator is not valid.
+                  - name: base_result_unrecognized
+                    tag-value: 39 # 0x0027
+                    comment: The validator set rejected the change for a reason this program does not name.
+                  - name: base_activate_dup_bls_key
+                    tag-value: 106 # 0x006a
+                    comment: This BLS key was set by an earlier key change of another validator that is still inside the retained update window.
+                  - name: discriminant_unsupported
+                    tag-value: 40 # 0x0028
+                    comment: Instruction is not a known consensus validator instruction.
+                  - name: finalize_slot_rejected
+                    tag-value: 41 # 0x0029
+                    comment: The validator set could not finalize the slot.
+                  - name: init_args_truncated
+                    tag-value: 42 # 0x002a
+                    comment: Instruction data is too short for the setup instruction.
+                  - name: init_proof_size_mismatch
+                    tag-value: 43 # 0x002b
+                    comment: The state proof sizes in the setup instruction do not match the instruction data.
+                  - name: init_table_resize_rejected
+                    tag-value: 45 # 0x002d
+                    comment: The attestor table account could not be resized.
+                  - name: init_base_new_null
+                    tag-value: 46 # 0x002e
+                    comment: The validator set could not be created with these settings.
+                  - name: activate_args_truncated
+                    tag-value: 47 # 0x002f
+                    comment: Instruction data is too short for the activate instruction.
+                  - name: activate_amount_zero
+                    tag-value: 48 # 0x0030
+                    comment: The amount to stake is zero.
+                  - name: convert_args_truncated
+                    tag-value: 49 # 0x0031
+                    comment: Instruction data is too short for the convert instruction.
+                  - name: convert_amount_zero
+                    tag-value: 50 # 0x0032
+                    comment: The amount to convert is zero.
+                  - name: deactivate_args_truncated
+                    tag-value: 51 # 0x0033
+                    comment: Instruction data is too short for the deactivate instruction.
+                  - name: claim_args_truncated
+                    tag-value: 52 # 0x0034
+                    comment: Instruction data is too short for the claim instruction.
+                  - name: set_claim_auth_args_truncated
+                    tag-value: 53 # 0x0035
+                    comment: Instruction data is too short for the set claim authority instruction.
+                  - name: post_cert_args_truncated
+                    tag-value: 54 # 0x0036
+                    comment: Instruction data is too short for the post certificate instruction.
+                  - name: post_cert_size_mismatch
+                    tag-value: 55 # 0x0037
+                    comment: The certificate size does not match the instruction data.
+                  - name: post_cert_total_weight_unavailable
+                    tag-value: 56 # 0x0038
+                    comment: The total validator weight for the slot of the certificate is not available.
+                  - name: post_cert_signer_weight_unavailable
+                    tag-value: 57 # 0x0039
+                    comment: The weight of a certificate signer for that slot is not available.
+                  - name: post_cert_pubkey_aggregate_rejected
+                    tag-value: 58 # 0x003a
+                    comment: The keys of the certificate signers could not be combined.
+                  - name: post_cert_pubkey_mismatch
+                    tag-value: 59 # 0x003b
+                    comment: The combined key of the signers does not match the key in the certificate.
+                  - name: post_cert_signature_rejected
+                    tag-value: 60 # 0x003c
+                    comment: The certificate signature did not verify.
+                  - name: init_delta1_zero
+                    tag-value: 62 # 0x003e
+                    comment: The first timing parameter in the setup instruction is zero.
+                  - name: init_delta_order_violation
+                    tag-value: 63 # 0x003f
+                    comment: The timing parameters in the setup instruction are not in the required order.
+                  - name: init_delta_footprint_too_large
+                    tag-value: 64 # 0x0040
+                    comment: The timing parameters in the setup instruction need more storage than allowed.
+                  - name: post_cert_commitment_mismatch
+                    tag-value: 65 # 0x0041
+                    comment: The block details do not match the block hash in the certificate.
+                  - name: post_cert_bond_account_mismatch
+                    tag-value: 66 # 0x0042
+                    comment: The bond account is not the bond account of the block producer.
+                  - name: post_cert_bond_ta_mismatch
+                    tag-value: 67 # 0x0043
+                    comment: The bond token account is not the one recorded in the bond.
+                  - name: post_cert_program_mismatch
+                    tag-value: 68 # 0x0044
+                    comment: A program account in the post certificate instruction is not the expected program.
+                  - name: post_cert_weight_slot_mismatch
+                    tag-value: 69 # 0x0045
+                    comment: The weight slot in the certificate does not match the block.
+                  - name: post_cert_accounts_truncated
+                    tag-value: 70 # 0x0046
+                    comment: The post certificate instruction lists too few accounts.
+                  - name: post_cert_account_idx_invalid
+                    tag-value: 71 # 0x0047
+                    comment: An account index in the post certificate instruction is outside the account list of the transaction.
+                  - name: post_cert_escrow_mismatch
+                    tag-value: 72 # 0x0048
+                    comment: The rewards escrow account is not the unclaimed rewards vault.
+                  - name: init_max_validators_out_of_range
+                    tag-value: 73 # 0x0049
+                    comment: The maximum number of validators in the setup instruction is out of range.
+                  - name: init_max_validators_below_server_count
+                    tag-value: 74 # 0x004a
+                    comment: The maximum number of validators is lower than the number of validator seats.
+                  - name: base_weight_sid_evicted
+                    tag-value: 75 # 0x004b
+                    comment: The validator in the weight change is being removed from the set.
+                  - name: base_weight_sid_vacant
+                    tag-value: 76 # 0x004c
+                    comment: The validator seat in the weight change is empty.
+                  - name: base_id_sid_evicted
+                    tag-value: 77 # 0x004d
+                    comment: The validator in the key change is being removed from the set.
+                  - name: base_id_sid_vacant
+                    tag-value: 78 # 0x004e
+                    comment: The validator seat in the key change is empty.
+                  - name: init_token_program_mismatch
+                    tag-value: 79 # 0x004f
+                    comment: The token program account in the setup instruction is not the official token program.
+                  - name: activate_token_program_mismatch
+                    tag-value: 80 # 0x0050
+                    comment: The token program account in the activate instruction is not the official token program.
+                  - name: convert_token_program_mismatch
+                    tag-value: 81 # 0x0051
+                    comment: The token program account in the convert instruction is not the official token program.
+                  - name: deactivate_token_program_mismatch
+                    tag-value: 82 # 0x0052
+                    comment: The token program account in the deactivate instruction is not the official token program.
+                  - name: claim_token_program_mismatch
+                    tag-value: 83 # 0x0053
+                    comment: The token program account in the claim instruction is not the official token program.
+                  - name: activate_pop_rejected
+                    tag-value: 84 # 0x0054
+                    comment: The proof that the validator holds its BLS key did not verify.
+                  - name: activate_stack_grow_rejected
+                    tag-value: 85 # 0x0055
+                    comment: The program could not get the extra memory it needs to check the BLS key.
+                  - name: base_bls_key_already_held
+                    tag-value: 86 # 0x0056
+                    comment: This BLS key is already held by an active validator.
+                  - name: activate_identity_idx_invalid
+                    tag-value: 87 # 0x0057
+                    comment: The validator identity account index is outside the account list of the transaction.
+                  - name: activate_table_idx_invalid
+                    tag-value: 88 # 0x0058
+                    comment: The attestor table account index is outside the account list of the transaction.
+                  - name: activate_token_program_idx_invalid
+                    tag-value: 89 # 0x0059
+                    comment: The token program account index is outside the account list of the transaction.
+                  - name: activate_source_idx_invalid
+                    tag-value: 90 # 0x005a
+                    comment: The source token account index is outside the account list of the transaction.
+                  - name: activate_vault_idx_invalid
+                    tag-value: 91 # 0x005b
+                    comment: The vault account index is outside the account list of the transaction.
+                  - name: base_bls_key_pending
+                    tag-value: 92 # 0x005c
+                    comment: This BLS key is already waiting to be activated.
+                  - name: invalid_vault
+                    tag-value: 93 # 0x005d
+                    comment: The vault account is not the vault this program expects.
+                  - name: vault_account_idx_invalid
+                    tag-value: 94 # 0x005e
+                    comment: The vault account index is outside the account list of the transaction.
+                  - name: pending_full
+                    tag-value: 95 # 0x005f
+                    comment: Too many blocks are waiting for their rewards to be paid.
+                  - name: internal
+                    tag-value: 96 # 0x0060
+                    comment: The program found its own records in an unexpected state.
+                  - name: init_converted_proof_off_overflow
+                    tag-value: 97 # 0x0061
+                    comment: The state proof sizes in the setup instruction overflow at the converted vault proof.
+                  - name: init_unclaimed_proof_off_overflow
+                    tag-value: 98 # 0x0062
+                    comment: The state proof sizes in the setup instruction overflow at the unclaimed vault proof.
+                  - name: init_table_proof_off_overflow
+                    tag-value: 99 # 0x0063
+                    comment: The state proof sizes in the setup instruction overflow at the attestor table proof.
+                  - name: init_pending_cap_zero
+                    tag-value: 100 # 0x0064
+                    comment: The maximum number of pending blocks in the setup instruction is zero.
+                  - name: init_base_footprint_overflow
+                    tag-value: 101 # 0x0065
+                    comment: The validator set would need more storage than can be addressed.
+                  - name: init_metadata_footprint_overflow
+                    tag-value: 102 # 0x0066
+                    comment: The attestor table would need more storage than can be addressed.
+                  - name: init_pending_map_footprint_overflow
+                    tag-value: 103 # 0x0067
+                    comment: The pending block list would need more storage than can be addressed.
+                  - name: post_cert_block_hash_zero
+                    tag-value: 104 # 0x0068
+                    comment: The block hash in the certificate is all zeros.
+                  - name: post_cert_signer_pubkey_unavailable
+                    tag-value: 105 # 0x0069
+                    comment: The key of a certificate signer is not available.
+                  - name: init_unclaimed_vault_mismatch
+                    tag-value: 107 # 0x006b
+                    comment: The unclaimed vault account in the setup instruction is not the expected vault.
+                  - name: init_table_idx_invalid
+                    tag-value: 108 # 0x006c
+                    comment: The attestor table account index is outside the account list of the transaction.
+                  - name: init_converted_vault_mismatch
+                    tag-value: 109 # 0x006d
+                    comment: The converted (staking) vault account in the setup instruction is not the expected vault.
+                  - name: init_wthru_mint_idx_invalid
+                    tag-value: 111 # 0x006f
+                    comment: The WTHRU mint account index is outside the account list of the transaction.
+                  - name: init_table_mismatch
+                    tag-value: 112 # 0x0070
+                    comment: The attestor table account in the setup instruction is not at the expected address.
+                  - name: activate_block_limit
+                    tag-value: 131 # 0x0083
+                    comment: This validator seat already changed its key in this block.
+                  - name: invalid_attestor_table
+                    tag-value: 132 # 0x0084
+                    comment: The attestor table account index is out of range, or the account is not the attestor table of this program.
+                  - name: init_turnover_exceeds_block_history
+                    tag-value: 133 # 0x0085
+                    comment: The timing parameters in the setup instruction cover more blocks than the chain keeps in history.
+                  - name: activate_below_min_stake
+                    tag-value: 134 # 0x0086
+                    comment: The stake amount in the activation is below the attestor table's minimum stake (its stake increment).
+                  - name: activate_amount_not_stake_increment
+                    tag-value: 135 # 0x0087
+                    comment: The stake amount in the activation is not a whole multiple of the attestor table's stake increment (min_stake).
+                  - name: convert_below_min_stake
+                    tag-value: 136 # 0x0088
+                    comment: The amount to convert is below the attestor table's minimum stake (its stake increment).
+                  - name: convert_amount_not_stake_increment
+                    tag-value: 137 # 0x0089
+                    comment: The amount to convert is not a whole multiple of the attestor table's stake increment (min_stake).
+                  - name: init_wthru_mint_not_token_owned
+                    tag-value: 138 # 0x008a
+                    comment: The WTHRU mint account in the setup instruction is not owned by the token program.
+                  - name: init_wthru_mint_not_mint
+                    tag-value: 139 # 0x008b
+                    comment: The WTHRU mint account in the setup instruction is not a token mint.
+                  - name: init_wthru_mint_decimals_mismatch
+                    tag-value: 140 # 0x008c
+                    comment: The WTHRU mint in the setup instruction does not use 9 decimals.
+                  - name: init_stake_units_per_weight_invalid
+                    tag-value: 141 # 0x008d
+                    comment: The stake units per weight in the setup instruction is zero.
+                  - name: init_max_decay_bps_invalid
+                    tag-value: 142 # 0x008e
+                    comment: The maximum decay in the setup instruction is above 10000 basis points.
+                  - name: stake_units_per_weight_zero
+                    tag-value: 143 # 0x008f
+                    comment: The attestor table's stake units per weight is zero.
+                  - name: init_idle_gap_decay_bps_invalid
+                    tag-value: 144 # 0x0090
+                    comment: The idle gap decay in the setup instruction is above the maximum idle gap decay.
+                  - name: stake_source_idx_invalid
+                    tag-value: 145 # 0x0091
+                    comment: The source token account index is outside the account list of the transaction.
+                  - name: stake_source_is_vault
+                    tag-value: 146 # 0x0092
+                    comment: The source token account is one of the attestor table's vaults.
+                  - name: stake_source_not_token_account
+                    tag-value: 147 # 0x0093
+                    comment: The source account is not a token account of the token program.
+                  - name: stake_source_mint_mismatch
+                    tag-value: 148 # 0x0094
+                    comment: The source token account does not hold the attestor table's WTHRU mint.
+                  - name: stake_source_program_owned
+                    tag-value: 149 # 0x0095
+                    comment: The source token account is owned by the consensus validator program.
+                  - name: init_min_stake_invalid
+                    tag-value: 150 # 0x0096
+                    comment: The stake increment (min_stake) in the setup instruction is zero or not a whole multiple of the stake units per weight.
+                  - name: init_max_idle_gap_decay_bps_invalid
+                    tag-value: 151 # 0x0097
+                    comment: The maximum idle gap decay in the setup instruction is above the maximum decay.
+                  - name: init_attestor_decay_fraction_bps_invalid
+                    tag-value: 152 # 0x0098
+                    comment: The attestor decay fraction in the setup instruction is above 10000 basis points.
+                  - name: activate_self_service_disabled
+                    tag-value: 153 # 0x0099
+                    comment: Activate while the validator manager has self-service disabled.
+                  - name: convert_self_service_disabled
+                    tag-value: 154 # 0x009a
+                    comment: ConvertTokens while the validator manager has self-service disabled.
+                  - name: deactivate_self_service_disabled
+                    tag-value: 155 # 0x009b
+                    comment: Deactivate while the validator manager has self-service disabled.
+                  - name: init_manager_args_truncated
+                    tag-value: 156 # 0x009c
+                    comment: Instruction data is too short for the init validator manager instruction.
+                  - name: init_manager_invalid
+                    tag-value: 157 # 0x009d
+                    comment: The new validator manager is zero, this program or the Multisig program.
+                  - name: init_manager_program_meta_invalid
+                    tag-value: 158 # 0x009e
+                    comment: The program metadata account index is out of range or the account is not managed program metadata.
+                  - name: init_manager_program_meta_mismatch
+                    tag-value: 159 # 0x009f
+                    comment: The program metadata account does not describe this program.
+                  - name: init_manager_not_application_authority
+                    tag-value: 160 # 0x00a0
+                    comment: The program's application authority did not authorize the instruction, or it is zero.
+                  - name: init_manager_already_set
+                    tag-value: 161 # 0x00a1
+                    comment: The attestor table already has a validator manager.
+                  - name: set_manager_args_truncated
+                    tag-value: 162 # 0x00a2
+                    comment: Instruction data is too short for the set validator manager instruction.
+                  - name: set_manager_not_validator_manager
+                    tag-value: 163 # 0x00a3
+                    comment: The validator manager did not authorize the instruction, or none is set.
+                  - name: set_manager_invalid
+                    tag-value: 164 # 0x00a4
+                    comment: The new validator manager is zero, this program or the Multisig program.
+                  - name: set_self_service_args_truncated
+                    tag-value: 165 # 0x00a5
+                    comment: Instruction data is too short for the set self-service instruction.
+                  - name: set_self_service_not_validator_manager
+                    tag-value: 166 # 0x00a6
+                    comment: The validator manager did not authorize the instruction, or none is set.
+                  - name: manager_activate_args_truncated
+                    tag-value: 167 # 0x00a7
+                    comment: Instruction data is too short for the manager activate instruction.
+                  - name: manager_activate_weight_zero
+                    tag-value: 168 # 0x00a8
+                    comment: The weight in the manager activate instruction is zero.
+                  - name: manager_activate_not_validator_manager
+                    tag-value: 169 # 0x00a9
+                    comment: The validator manager did not authorize the instruction, or none is set.
+                  - name: manager_deactivate_args_truncated
+                    tag-value: 170 # 0x00aa
+                    comment: Instruction data is too short for the manager deactivate instruction.
+                  - name: manager_deactivate_not_validator_manager
+                    tag-value: 171 # 0x00ab
+                    comment: The validator manager did not authorize the instruction, or none is set.
+                  - name: manager_deactivate_not_active
+                    tag-value: 172 # 0x00ac
+                    comment: The identity in the manager deactivate instruction holds no seat.
+                  - name: set_params_args_truncated
+                    tag-value: 173 # 0x00ad
+                    comment: Instruction data is too short for the set params instruction.
+                  - name: set_params_not_validator_manager
+                    tag-value: 174 # 0x00ae
+                    comment: The validator manager did not authorize the instruction, or none is set.
+                  - name: set_params_stake_units_per_weight_invalid
+                    tag-value: 175 # 0x00af
+                    comment: The stake units per weight in the set params instruction is zero.
+                  - name: set_params_min_stake_invalid
+                    tag-value: 176 # 0x00b0
+                    comment: The stake increment (min_stake) in the set params instruction is zero or not a whole multiple of the stake units per weight.
+                  - name: set_params_max_decay_bps_invalid
+                    tag-value: 177 # 0x00b1
+                    comment: The maximum decay in the set params instruction is above 10000 basis points.
+                  - name: set_params_max_idle_gap_decay_bps_invalid
+                    tag-value: 178 # 0x00b2
+                    comment: The maximum idle gap decay in the set params instruction is above the maximum decay.
+                  - name: set_params_idle_gap_decay_bps_invalid
+                    tag-value: 179 # 0x00b3
+                    comment: The idle gap decay in the set params instruction is above the maximum idle gap decay.
+                  - name: set_params_attestor_decay_fraction_bps_invalid
+                    tag-value: 180 # 0x00b4
+                    comment: The attestor decay fraction in the set params instruction is above 10000 basis points.
+                  - name: manager_set_weight_args_truncated
+                    tag-value: 181 # 0x00b5
+                    comment: Instruction data is too short for the manager set weight instruction.
+                  - name: manager_set_weight_not_validator_manager
+                    tag-value: 182 # 0x00b6
+                    comment: The validator manager did not authorize the instruction, or none is set.
+                  - name: manager_set_weight_zero
+                    tag-value: 183 # 0x00b7
+                    comment: The weight in the manager set weight instruction is zero; ManagerDeactivate removes a seat.
+                  - name: manager_set_weight_not_active
+                    tag-value: 184 # 0x00b8
+                    comment: The identity in the manager set weight instruction holds no seat.
+                  - name: manager_set_weight_not_increase
+                    tag-value: 185 # 0x00b9
+                    comment: The weight is not above the seat's weight after this update's decay; the base only adds weight.
+                  - name: nested_instruction_too_large
+                    tag-value: 186 # 0x00ba
+                    comment: A manager instruction invoked by another program is larger than the largest manager instruction.

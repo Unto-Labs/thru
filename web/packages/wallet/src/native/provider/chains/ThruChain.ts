@@ -16,6 +16,7 @@ import type { WebViewBridge } from "../WebViewBridge";
 import {
   SigningSessionDescriptorStore,
   isSigningSessionUnavailable,
+  sessionPaysStatedFeePayer,
   resolveSessionExpirySeconds,
 } from "../../../signing-sessions";
 
@@ -102,8 +103,16 @@ export class NativeThruChain implements IThruChain {
         ? await this.signingSessions.get(signingSessionId)
         : null;
     if (!signingSessionId && this.signingSessions && walletAddress) {
-      session = await this.signingSessions.getActive(walletAddress);
-      signingSessionId = session?.id;
+      const active = await this.signingSessions.getActive(walletAddress);
+      /* The session's key pays the fee. An app that states another fee
+         payer built against that account, so it goes to the wallet. */
+      if (
+        active &&
+        sessionPaysStatedFeePayer(active, transaction.feePayerPublicKey)
+      ) {
+        session = active;
+        signingSessionId = active.id;
+      }
     }
     if (!signingSessionId && !this.provider.isConnected()) {
       throw new Error("Wallet not connected");
@@ -320,6 +329,7 @@ export class NativeThruChain implements IThruChain {
         readWriteAddresses: transaction.readWriteAddresses,
         readOnlyAddresses: transaction.readOnlyAddresses,
         review: transaction.review,
+        feePayerPublicKey: transaction.feePayerPublicKey,
         signingSessionId,
       },
       origin: this.origin,

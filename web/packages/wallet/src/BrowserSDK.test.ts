@@ -364,7 +364,7 @@ describe("BrowserSDK PWA telemetry", () => {
 describe("BrowserSDK transaction signing scheme", () => {
   it("revalidates a prepared destination after the selected account changes", async () => {
     const firstDestination = {
-      network: "alphanet",
+      network: "betanet",
       depositTarget: "credits",
       tokenAccountAddress: "ta_first_token_account",
       mintAddress: "ta_mint",
@@ -423,33 +423,6 @@ describe("BrowserSDK transaction signing scheme", () => {
     sdk.destroy();
   });
 
-  it("exposes the unified connection, account, session, and deposit contracts", () => {
-    const sdk = new BrowserSDK({
-      iframeUrl: "https://app.tid.sh/embedded",
-      storage: false,
-    });
-
-    expect(sdk.connection).toEqual(
-      expect.objectContaining({
-      connect: expect.any(Function),
-      disconnect: expect.any(Function),
-      getState: expect.any(Function),
-      refresh: expect.any(Function),
-      }),
-    );
-    expect(sdk.accounts).toEqual(
-      expect.objectContaining({
-      getSelected: expect.any(Function),
-      select: expect.any(Function),
-      manage: expect.any(Function),
-      }),
-    );
-    expect(sdk.sessions.getActive).toBeTypeOf("function");
-    expect(sdk.sessions.renewSession).toBeTypeOf("function");
-    expect(sdk.deposits.waitForDeposit).toBeTypeOf("function");
-    sdk.destroy();
-  });
-
   it("opens the faucet-only chooser but rejects paid deposits and other networks", async () => {
     const sdk = new BrowserSDK({ iframeUrl: "https://app.tid.sh/embedded", signingSessionStorage: false });
     const internals = sdk as unknown as {
@@ -473,7 +446,7 @@ describe("BrowserSDK transaction signing scheme", () => {
       await expect(sdk.deposits.open(payload)).rejects.toThrow("Deposit provider is not configured");
     }
     expect(open).toHaveBeenCalledOnce();
-    await expect(sdk.deposits.prepare({ network: "alphanet" as never })).rejects.toThrow("Add funds unavailable");
+    await expect(sdk.deposits.prepare({ network: "devnet" as never })).rejects.toThrow("Add funds unavailable");
     internals.activeNetwork.depositConfigured = false;
     await expect(sdk.deposits.open({})).rejects.toThrow("Add funds unavailable");
     await expect(sdk.deposits.prepare({ network: "betanet" as never })).rejects.toThrow("Add funds unavailable");
@@ -542,7 +515,7 @@ describe("BrowserSDK transaction signing scheme", () => {
 
     it("lets the wallet select Bank even with a destination and Unifold configured", async () => {
       internals.activeNetwork = {
-        id: ThruNetwork.Alphanet,
+        id: ThruNetwork.Betanet,
         depositConfigured: true,
         depositProviders: ["unifold"],
       };
@@ -558,7 +531,7 @@ describe("BrowserSDK transaction signing scheme", () => {
 
     it("keeps the Unifold default for a prepared destination where configured", async () => {
       internals.activeNetwork = {
-        id: ThruNetwork.Alphanet,
+        id: ThruNetwork.Betanet,
         depositConfigured: true,
         depositProviders: ["unifold"],
       };

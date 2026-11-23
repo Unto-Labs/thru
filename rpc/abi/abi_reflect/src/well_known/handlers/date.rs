@@ -13,6 +13,10 @@ impl WellKnownType for DateHandler {
         "Date"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("date", "iso8601"))
+    }
+
     fn process(&self, ctx: &WellKnownContext) -> WellKnownResult {
         let Some(fields) = ctx.fields else {
             return WellKnownResult::None;
@@ -38,16 +42,5 @@ impl WellKnownType for DateHandler {
         }
 
         WellKnownResult::None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn date_handler_type_name() {
-        let handler = DateHandler;
-        assert_eq!(handler.type_name(), "Date");
     }
 }

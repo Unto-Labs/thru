@@ -3,7 +3,13 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
-use crate::keys::KeyStorage;
+use crate::{hd::HdPath, keys::KeyStorage};
+
+/// Parse a Thru derivation path `m/44'/8478'/<account>'/<change>'`
+fn parse_hd_path(s: &str) -> Result<HdPath, String> {
+    s.parse()
+        .map_err(|error: crate::error::CliError| error.to_string())
+}
 
 /// Parse and validate chunk size (1024-31000 bytes)
 fn parse_chunk_size(s: &str) -> Result<usize, String> {
@@ -127,6 +133,10 @@ pub enum Commands {
         /// submitting (for inclusion in an externally-produced block).
         #[arg(long = "build-only")]
         build_only: bool,
+
+        /// Transaction fee in base units; default 0
+        #[arg(long = "fee", default_value_t = 0)]
+        fee: u64,
     },
 
     /// Uploader account commands for arbitrary file payloads
@@ -148,6 +158,13 @@ pub enum Commands {
     Keys {
         #[command(subcommand)]
         subcommand: KeysCommands,
+    },
+
+    /// Off-chain message signing (local or Ledger keys)
+    #[command(name = "message")]
+    Message {
+        #[command(subcommand)]
+        subcommand: MessageCommands,
     },
 
     /// Account management commands
@@ -1074,13 +1091,37 @@ impl clap::builder::TypedValueParser for RejectPositionalSeed {
     }
 }
 
+/// Off-chain message subcommands
+#[derive(Subcommand)]
+pub enum MessageCommands {
+    /// Sign a message in the tn_msg_sign_v1__ domain and print the ts...
+    /// signature (on a Ledger the message is reviewed on the device)
+    Sign {
+        /// Signing key: a key name (local or Ledger) or a ledger:// URI
+        #[arg(long, default_value = "default")]
+        key: String,
+
+        /// The message (UTF-8 text, or hex with --hex)
+        #[arg(conflicts_with = "file", required_unless_present = "file")]
+        message: Option<String>,
+
+        /// Read the message from a file (raw bytes, or hex text with --hex)
+        #[arg(long)]
+        file: Option<PathBuf>,
+
+        /// Interpret the message (argument or file contents) as hex
+        #[arg(long)]
+        hex: bool,
+    },
+}
+
 /// Key management subcommands
 #[derive(Subcommand)]
 pub enum KeysCommands {
     /// List registered key references and public addresses
     List,
 
-    /// Register a private-key file or import a seed from file/stdin
+    /// Register a private-key file, or import a seed or recovery phrase from file/stdin
     Add {
         /// Replace a registration and clean up its unreferenced CLI-managed seed file
         #[arg(long)]
@@ -1093,15 +1134,31 @@ pub enum KeysCommands {
         #[arg(hide = true, num_args = 1.., value_parser = RejectPositionalSeed)]
         legacy_seed: Vec<bool>,
 
-        /// Read a 32-byte hex seed from this owner-only file
+        /// Read a 32-byte hex seed (or, with --mnemonic, a recovery phrase)
+        /// from this owner-only file
         #[arg(long, conflicts_with = "stdin")]
         file: Option<PathBuf>,
 
-        /// Read a 32-byte hex seed from standard input, never a command-line argument
+        /// Read a 32-byte hex seed (or, with --mnemonic, a recovery phrase)
+        /// from standard input, never a command-line argument
         #[arg(long, conflicts_with = "file")]
         stdin: bool,
 
+        /// The input is an English BIP-39 recovery phrase (empty BIP-39
+        /// passphrase); store the key derived from it, never the phrase
+        #[arg(long)]
+        mnemonic: bool,
+
+        /// With --mnemonic: account index N in m/44'/8478'/N'/0' (default 0)
+        #[arg(long, requires = "mnemonic", conflicts_with = "path")]
+        account: Option<u32>,
+
+        /// With --mnemonic: explicit derivation path m/44'/8478'/<account>'/<change>'
+        #[arg(long, requires = "mnemonic", value_parser = parse_hd_path)]
+        path: Option<HdPath>,
+
         /// Secret storage backend; file input with file storage is registered in place
+        /// (a key derived from a recovery phrase is always stored as a new secret)
         #[arg(long, value_enum, default_value = "file")]
         store: KeyStorage,
     },
@@ -1112,7 +1169,8 @@ pub enum KeysCommands {
         name: String,
     },
 
-    /// Generate a key directly into a dedicated file or macOS Keychain
+    /// Generate a key (optionally from a new recovery phrase) directly into a
+    /// dedicated file or macOS Keychain
     Generate {
         /// Replace a registration and clean up its unreferenced CLI-managed seed file
         #[arg(long)]
@@ -1121,9 +1179,53 @@ pub enum KeysCommands {
         /// Config alias for the new key
         name: String,
 
+        /// Create a 24-word BIP-39 recovery phrase (empty BIP-39 passphrase),
+        /// store the key derived from it, and print the phrase once (it is not stored)
+        #[arg(long)]
+        mnemonic: bool,
+
+        /// With --mnemonic: account index N in m/44'/8478'/N'/0' (default 0)
+        #[arg(long, requires = "mnemonic", conflicts_with = "path")]
+        account: Option<u32>,
+
+        /// With --mnemonic: explicit derivation path m/44'/8478'/<account>'/<change>'
+        #[arg(long, requires = "mnemonic", value_parser = parse_hd_path)]
+        path: Option<HdPath>,
+
         /// Secret storage backend
         #[arg(long, value_enum, default_value = "file")]
         store: KeyStorage,
+    },
+
+    /// Add a Ledger key: confirm its address on the device, then store
+    /// ledger://44'/8478'/<account>'/0' and the address in the configuration
+    #[command(name = "add-ledger")]
+    AddLedger {
+        /// Overwrite existing key
+        #[arg(long)]
+        overwrite: bool,
+
+        /// Key name (case-insensitive)
+        name: String,
+
+        /// Ledger account index N in m/44'/8478'/N'/0'
+        #[arg(long, default_value_t = 0)]
+        account: u32,
+
+        /// Skip the on-device address confirmation
+        #[arg(long = "no-verify")]
+        no_verify: bool,
+    },
+
+    /// Show a key's type and address (never the private key)
+    Show {
+        /// Key name
+        name: String,
+
+        /// For a Ledger key, display the address on the device and wait for
+        /// the user to confirm it
+        #[arg(long)]
+        verify: bool,
     },
 
     /// Unregister a key and clean up its unreferenced CLI-managed seed file
@@ -1364,6 +1466,26 @@ pub enum AccountCommands {
     Create {
         /// Signing key reference (file path, keychain:<id>, or alias; defaults to 'default')
         key_name: Option<String>,
+    },
+
+    /// Create an EOA whose own key signs an EOA-create authorization (on a
+    /// Ledger: reviewed and approved on the device) while another key pays
+    /// the fee
+    #[command(name = "create-eoa")]
+    CreateEoa {
+        /// Key for the new account: a key name (local or Ledger) or a
+        /// ledger://44'/8478'/<account>'/0' URI
+        #[arg(conflicts_with = "ledger")]
+        account: Option<String>,
+
+        /// Same as the positional key, but require it to be a Ledger key
+        #[arg(long, value_name = "KEY")]
+        ledger: Option<String>,
+
+        /// Fee payer key name or ledger:// URI (defaults to 'default'); must
+        /// already exist on chain
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
     },
 
     /// Get account information (alias to getaccountinfo)
@@ -2313,12 +2435,10 @@ pub enum WthruCommands {
     },
 
     /// Deposit native THRU and receive WTHRU tokens
-    // The native transfer into the vault and the deposit instruction are sent
-    // as two separate transactions. WTHRU is minted from the vault's balance
-    // delta, which does not identify a depositor, so a concurrent caller can
-    // claim the transferred amount in between. Use this only against a vault
-    // that is not shared with untrusted depositors; otherwise batch the
-    // transfer and the deposit into one transaction via the multicall program.
+    // Sends one transaction through the multicall program: a native transfer
+    // into the WTHRU vault, then the deposit that mints WTHRU to the
+    // destination. Both land or neither does. (A plain comment on purpose:
+    // the CODEOWNER asked to keep this note out of `--help`.)
     Deposit {
         /// Destination WTHRU token account address
         dest_token_account: String,
@@ -2339,6 +2459,8 @@ pub enum WthruCommands {
         token_program: Option<String>,
 
         /// Skip the native transfer (only run the deposit instruction)
+        // Settles whatever native THRU is already pending in the vault, from any
+        // sender, and mints it to the destination; the amount must match it.
         #[arg(long = "skip-transfer")]
         skip_transfer: bool,
     },
@@ -2586,11 +2708,14 @@ pub enum BondCommands {
 pub enum ValidatorCommands {
     /// Activate a validator in the validator program
     Activate {
-        /// Source token account holding stake tokens
+        /// Source WTHRU token account holding the stake
         #[arg(long = "source-token-account")]
         source_token_account: String,
 
-        /// Amount of tokens to stake
+        /// WTHRU base units to stake (1 WTHRU = 10^9). A whole, nonzero
+        /// multiple of the table's stake increment, min_stake (1 WTHRU by
+        /// default; see `validator table`); buys
+        /// token_amount / stake_units_per_weight power
         #[arg(long = "token-amount")]
         token_amount: u64,
 
@@ -2634,7 +2759,8 @@ pub enum ValidatorCommands {
         #[arg(long = "token-program")]
         token_program: Option<String>,
 
-        /// Override converted vault address
+        /// Assert the converted vault: it must equal the vault the attestor
+        /// table header records, which is always the one sent
         #[arg(long = "converted-vault")]
         converted_vault: Option<String>,
     },
@@ -2661,7 +2787,8 @@ pub enum ValidatorCommands {
         #[arg(long = "token-program")]
         token_program: Option<String>,
 
-        /// Override unclaimed vault address
+        /// Assert the unclaimed vault: it must equal the vault the attestor
+        /// table header records, which is always the one sent
         #[arg(long = "unclaimed-vault")]
         unclaimed_vault: Option<String>,
     },
@@ -2669,11 +2796,13 @@ pub enum ValidatorCommands {
     /// Convert additional tokens into stake weight
     #[command(name = "convert-tokens")]
     ConvertTokens {
-        /// Source token account holding additional stake tokens
+        /// Source WTHRU token account holding the additional stake
         #[arg(long = "source-token-account")]
         source_token_account: String,
 
-        /// Amount of tokens to convert
+        /// WTHRU base units to add (1 WTHRU = 10^9). A whole, nonzero
+        /// multiple of the table's stake increment, min_stake (1 WTHRU by
+        /// default; see `validator table`)
         #[arg(long = "token-amount")]
         token_amount: u64,
 
@@ -2693,7 +2822,8 @@ pub enum ValidatorCommands {
         #[arg(long = "token-program")]
         token_program: Option<String>,
 
-        /// Override converted vault address
+        /// Assert the converted vault: it must equal the vault the attestor
+        /// table header records, which is always the one sent
         #[arg(long = "converted-vault")]
         converted_vault: Option<String>,
     },
@@ -2724,7 +2854,8 @@ pub enum ValidatorCommands {
         #[arg(long = "token-program")]
         token_program: Option<String>,
 
-        /// Override unclaimed vault address
+        /// Assert the unclaimed vault: it must equal the vault the attestor
+        /// table header records, which is always the one sent
         #[arg(long = "unclaimed-vault")]
         unclaimed_vault: Option<String>,
     },
@@ -2778,6 +2909,22 @@ pub enum ValidatorCommands {
         bls_key: String,
     },
 
+    /// Print the BLS public key and the proof of possession (PoP) bound to an
+    /// identity, for a manager to seat it with `validator manager activate
+    /// --bls-pubkey <hex> --bls-pop <hex>`. Works offline and prints no
+    /// private key material. The public key here is the 96-byte uncompressed
+    /// form `--bls-pubkey` accepts, not the raw seat form `bls-pubkey` prints
+    #[command(name = "bls-pop")]
+    BlsPop {
+        /// Validator identity the PoP is bound to (address or key name)
+        #[arg(long = "identity")]
+        identity: String,
+
+        /// Path to the node's bls.json (JSON byte array; first 32 bytes are the BLS scalar)
+        #[arg(long = "bls-key")]
+        bls_key: String,
+    },
+
     /// Show this operator's validator status and turnover-window verdict
     Status {
         /// Validator identity pubkey or key name (defaults to the configured 'default' key)
@@ -2787,6 +2934,210 @@ pub enum ValidatorCommands {
         /// Override attestor table account address
         #[arg(long = "attestor-table")]
         attestor_table: Option<String>,
+    },
+
+    /// Validator manager instructions. The manager grants and removes seats
+    /// without tokens, sets the staking parameters and turns self-service
+    /// off and on. Each is signed by the manager (--fee-payer), or proposed
+    /// from a multisig manager with --via-multisig (the consensus-manager
+    /// multisig, e.g. `--via-multisig consensus-manager`)
+    Manager {
+        #[command(subcommand)]
+        command: ValidatorManagerCommands,
+    },
+}
+
+/// The attestor table a validator manager command acts on
+#[derive(clap::Args, Debug, Clone, Default)]
+pub struct ValidatorManagerTarget {
+    /// Fee payer key reference (file path, keychain:<id>, or alias; defaults
+    /// to 'default'): the manager, or with --via-multisig the proposing member
+    #[arg(long = "fee-payer")]
+    pub fee_payer: Option<String>,
+
+    /// Override consensus validator program address
+    #[arg(long = "program")]
+    pub program: Option<String>,
+
+    /// Override attestor table account address
+    #[arg(long = "attestor-table")]
+    pub attestor_table: Option<String>,
+}
+
+/// Self-service Activate, ConvertTokens and Deactivate
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+pub enum SelfServiceState {
+    On,
+    Off,
+}
+
+/// Validator manager subcommands
+#[derive(Subcommand)]
+pub enum ValidatorManagerCommands {
+    /// Install the first validator manager (InitValidatorManager). Only while
+    /// none is set; the program's application authority signs or, with
+    /// --via-multisig, is the multisig
+    Init {
+        /// The new validator manager (address or key name; a multisig
+        /// address makes every manager instruction a multisig proposal)
+        manager: String,
+
+        /// Override the consensus validator program's metadata account
+        #[arg(long = "program-meta")]
+        program_meta: Option<String>,
+
+        #[command(flatten)]
+        target: ValidatorManagerTarget,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
+    },
+
+    /// Hand the validator manager role to another key (SetValidatorManager)
+    Set {
+        /// The new validator manager (address or key name)
+        manager: String,
+
+        #[command(flatten)]
+        target: ValidatorManagerTarget,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
+    },
+
+    /// Turn self-service Activate, ConvertTokens and Deactivate on or off
+    /// (SetSelfService)
+    #[command(name = "self-service")]
+    SelfService {
+        /// on or off
+        #[arg(value_enum)]
+        state: SelfServiceState,
+
+        #[command(flatten)]
+        target: ValidatorManagerTarget,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
+    },
+
+    /// Seat a validator with weight and no tokens (ManagerActivate). With
+    /// --via-multisig it takes effect when the multisig executes the request
+    Activate {
+        /// Validator identity (address or key name); it does not sign
+        #[arg(long = "identity")]
+        identity: String,
+
+        /// Attestor power to grant (nonzero)
+        #[arg(long = "weight")]
+        weight: u64,
+
+        /// Validator BLS public key as 96-byte uncompressed hex
+        #[arg(long = "bls-pubkey", requires = "bls_pop", conflicts_with_all = ["bls_seed", "bls_key"])]
+        bls_pubkey: Option<String>,
+
+        /// Proof of possession bound to --identity, as 192-byte uncompressed hex
+        #[arg(long = "bls-pop", requires = "bls_pubkey")]
+        bls_pop: Option<String>,
+
+        /// Deterministic test seed used to derive a valid BLS key pair
+        #[arg(
+            long = "bls-seed",
+            conflicts_with = "bls_key",
+            required_unless_present_any = ["bls_key", "bls_pubkey"]
+        )]
+        bls_seed: Option<u64>,
+
+        /// Path to the validator's bls.json
+        #[arg(long = "bls-key")]
+        bls_key: Option<String>,
+
+        /// Claim authority (address or key name; defaults to --identity)
+        #[arg(long = "claim-authority")]
+        claim_authority: Option<String>,
+
+        #[command(flatten)]
+        target: ValidatorManagerTarget,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
+    },
+
+    /// Remove a validator's seat (ManagerDeactivate). Nothing is paid out:
+    /// the seat's unclaimed rewards stay in the unclaimed vault, so the
+    /// validator should claim first. With --via-multisig it takes effect
+    /// when the multisig executes the request
+    Deactivate {
+        /// Validator identity (address or key name)
+        #[arg(long = "identity")]
+        identity: String,
+
+        #[command(flatten)]
+        target: ValidatorManagerTarget,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
+    },
+
+    /// Raise a seated validator's weight (ManagerSetWeight, absolute). It
+    /// only increases: the new weight must be above the seat's current
+    /// post-decay weight, because the base adds an unsigned weight delta and
+    /// a zero delta deactivates. To lower a weight, run `validator manager
+    /// deactivate`, then `validator manager activate` at the new weight once
+    /// the removal settles; the seat has no weight in between and its
+    /// unclaimed rewards stay in the pool. With --via-multisig it takes
+    /// effect when the multisig executes the request
+    #[command(name = "set-weight")]
+    SetWeight {
+        /// Validator identity (address or key name)
+        #[arg(long = "identity")]
+        identity: String,
+
+        /// The new weight, above the seat's current post-decay weight
+        #[arg(long = "weight")]
+        weight: u64,
+
+        #[command(flatten)]
+        target: ValidatorManagerTarget,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
+    },
+
+    /// Replace all six staking parameters (SetParams), under Init's rules
+    #[command(name = "set-params")]
+    SetParams {
+        /// WTHRU base units per unit of attestor power (nonzero)
+        #[arg(long = "stake-units-per-weight")]
+        stake_units_per_weight: u64,
+
+        /// Stake increment in WTHRU base units (a nonzero multiple of
+        /// --stake-units-per-weight)
+        #[arg(long = "min-stake")]
+        min_stake: u64,
+
+        /// Maximum decay per emission, bps of total weight (at most 10000)
+        #[arg(long = "max-decay-bps")]
+        max_decay_bps: u64,
+
+        /// Decay per idle slot, bps of total weight (at most
+        /// --max-idle-gap-decay-bps)
+        #[arg(long = "idle-gap-decay-bps")]
+        idle_gap_decay_bps: u64,
+
+        /// Cap on the idle-slot decay per emission (at most --max-decay-bps)
+        #[arg(long = "max-idle-gap-decay-bps")]
+        max_idle_gap_decay_bps: u64,
+
+        /// Share of the attestor payment's power each emission charges, bps
+        /// (at most 10000)
+        #[arg(long = "attestor-decay-fraction-bps")]
+        attestor_decay_fraction_bps: u64,
+
+        #[command(flatten)]
+        target: ValidatorManagerTarget,
+
+        #[command(flatten)]
+        via: ViaMultisigArgs,
     },
 }
 
@@ -3035,6 +3386,20 @@ mod tests {
                     }
                     _ => panic!("unexpected command"),
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn transfer_fee_defaults_to_zero_and_accepts_an_explicit_value() {
+        for (flag, expected) in [(None, 0), (Some(["--fee", "1"]), 1)] {
+            let mut args = vec!["thru", "transfer", "src", "dst", "5"];
+            args.extend(flag.into_iter().flatten());
+            let cli = Cli::try_parse_from(args).expect("transfer should parse");
+
+            match cli.command {
+                Commands::Transfer { fee, .. } => assert_eq!(fee, expected),
+                _ => panic!("unexpected command"),
             }
         }
     }
@@ -4322,6 +4687,93 @@ mod tests {
     fn validator_bls_pubkey_requires_bls_key() {
         let result = Cli::try_parse_from(["thru", "validator", "bls-pubkey"]);
         assert!(result.is_err(), "bls-pubkey without --bls-key must fail");
+    }
+
+    #[test]
+    fn parses_validator_bls_pop_command() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "validator",
+            "bls-pop",
+            "--identity",
+            "alice",
+            "--bls-key",
+            "/tmp/bls.json",
+        ])
+        .expect("validator bls-pop should parse");
+
+        match cli.command {
+            Commands::Validator {
+                subcommand: ValidatorCommands::BlsPop { identity, bls_key },
+            } => {
+                assert_eq!(identity, "alice");
+                assert_eq!(bls_key, "/tmp/bls.json");
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn validator_bls_pop_requires_identity_and_bls_key() {
+        assert!(
+            Cli::try_parse_from(["thru", "validator", "bls-pop", "--bls-key", "/tmp/bls.json"])
+                .is_err()
+        );
+        assert!(
+            Cli::try_parse_from(["thru", "validator", "bls-pop", "--identity", "alice"]).is_err()
+        );
+    }
+
+    #[test]
+    fn validator_manager_commands_take_a_multisig() {
+        let cli = Cli::try_parse_from([
+            "thru", "validator", "manager", "set-weight", "--identity", "alice", "--weight", "300",
+            "--via-multisig", "consensus-manager", "--fee-payer", "member1",
+        ])
+        .expect("set-weight should parse");
+        match cli.command {
+            Commands::Validator {
+                subcommand:
+                    ValidatorCommands::Manager {
+                        command: ValidatorManagerCommands::SetWeight { identity, weight, target, via },
+                    },
+            } => {
+                assert_eq!(identity, "alice");
+                assert_eq!(weight, 300);
+                assert_eq!(target.fee_payer.as_deref(), Some("member1"));
+                assert_eq!(via.via_multisig.as_deref(), Some("consensus-manager"));
+            }
+            _ => panic!("unexpected command"),
+        }
+
+        let cli = Cli::try_parse_from(["thru", "validator", "manager", "self-service", "off"])
+            .expect("self-service should parse");
+        assert!(matches!(
+            cli.command,
+            Commands::Validator {
+                subcommand: ValidatorCommands::Manager {
+                    command: ValidatorManagerCommands::SelfService { state: SelfServiceState::Off, .. },
+                },
+            }
+        ));
+
+        let cli = Cli::try_parse_from(["thru", "validator", "manager", "init", "consensus-manager", "--via-multisig", "cv-app-authority"])
+            .expect("init should parse");
+        assert!(matches!(
+            cli.command,
+            Commands::Validator {
+                subcommand: ValidatorCommands::Manager { command: ValidatorManagerCommands::Init { .. } },
+            }
+        ));
+
+        assert!(
+            Cli::try_parse_from(["thru", "validator", "manager", "apply"]).is_err(),
+            "there is no apply step: a multisig request runs the instruction"
+        );
+        assert!(
+            Cli::try_parse_from(["thru", "validator", "manager", "activate", "--identity", "alice", "--weight", "5"]).is_err(),
+            "manager activate needs a BLS key"
+        );
     }
 
     #[test]

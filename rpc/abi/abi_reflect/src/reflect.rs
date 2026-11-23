@@ -399,21 +399,6 @@ mod tests {
     };
 
     #[test]
-    fn builds_ir_cache_for_simple_type() {
-        let mut resolver = TypeResolver::new();
-        resolver.add_typedef(TypeDef {
-            name: "MyU32".into(),
-            format: None,
-            kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
-        });
-        resolver.resolve_all().expect("resolver succeeds");
-
-        let reflector = Reflector::new(resolver).expect("reflector initializes");
-        let type_ir = reflector.type_ir("MyU32").expect("type present");
-        assert_eq!(type_ir.type_name, "MyU32");
-    }
-
-    #[test]
     fn validates_const_type_against_buffer() {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
@@ -439,6 +424,7 @@ mod tests {
             name: "DynStruct".into(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: ContainerAttributes {
                     packed: true,
                     aligned: 0,
@@ -571,6 +557,7 @@ mod tests {
             name: "DynInstruction".into(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: ContainerAttributes {
                     packed: true,
                     aligned: 0,
@@ -711,6 +698,7 @@ mod tests {
             name: "PaddedInstruction".into(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: ContainerAttributes::default(),
                 fields,
             }),

@@ -3,7 +3,7 @@ import { styledPart } from "../../lib/styled";
 import "./Tabs.css";
 
 /**
- * Tabs — switch panels with an animated brick indicator. Styled parts.
+ * Tabs — switch panels with an animated accent indicator. Styled parts.
  *
  *   <Tabs.Root defaultValue="overview">
  *     <Tabs.List>

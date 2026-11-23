@@ -10,13 +10,20 @@ export type StreamTransactionUpdate =
           signature: Uint8Array;
           slot?: bigint;
           executionResult?: ReturnType<typeof Transaction.executionResultFromProto>;
+          /** Consensus level of this publication; 0 when the server does not report it. */
+          consensusStatus: ConsensusStatus;
       }
     | {
           kind: "full";
           transaction: Transaction;
+          /** Consensus level of this publication; 0 when the server does not report it. */
+          consensusStatus: ConsensusStatus;
       };
 
-export function toStreamTransactionUpdate(proto: ProtoTransaction): StreamTransactionUpdate {
+export function toStreamTransactionUpdate(
+    proto: ProtoTransaction,
+    consensusStatus: ConsensusStatus = ConsensusStatus.UNSPECIFIED,
+): StreamTransactionUpdate {
     const signatureBytes = proto.signature?.value ? new Uint8Array(proto.signature.value) : new Uint8Array();
     const executionResult = proto.executionResult
         ? Transaction.executionResultFromProto(proto.executionResult)
@@ -28,12 +35,14 @@ export function toStreamTransactionUpdate(proto: ProtoTransaction): StreamTransa
             signature: signatureBytes,
             slot: proto.slot,
             executionResult,
+            consensusStatus,
         };
     }
 
     return {
         kind: "full",
         transaction: Transaction.fromProto(proto),
+        consensusStatus,
     };
 }
 

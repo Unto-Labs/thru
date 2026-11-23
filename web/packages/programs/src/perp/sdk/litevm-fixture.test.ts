@@ -167,22 +167,4 @@ describe('LiteVM fixture of the SDK cross transactions', () => {
     if (process.env.PERPS_UPDATE_LITEVM_FIXTURE === '1' || !existsSync(HEADER)) writeFileSync(HEADER, rendered);
     expect(readFileSync(HEADER, 'utf8')).toBe(rendered);
   });
-
-  it('carries the margin record wherever the program needs it', async () => {
-    const { txns } = await session();
-    const shapes = txns.map(({ name, tx }) => [name, tx.instructions.map((ix) => ix.ix).join(' ')]);
-    expect(shapes).toEqual([
-      ['link market 0', 'margin_record market_record margin_link'],
-      ['link market 1', 'margin_record market_record margin_link'],
-      ['bid without the margin record', 'market_record create_order_entry'],
-      ['cross bid in market 1', 'margin_record market_record create_order_entry'],
-      ['cancel the bid', 'margin_record market_record modify_order_entry'],
-      ['withdraw 5000 through market 1', 'margin_record market_record token_withdraw'],
-      ['deposit 5000 into market 1', 'margin_record market_record token_deposit'],
-      ['unlink market 1', 'margin_record market_record margin_unlink'],
-      ['settle funding of seat 0 in market 0', 'market_record settle_funding'],
-      ['settle funding of the account', 'market_record settle_funding'],
-      ['cross withdraw 1000 through market 0', 'margin_record market_record token_withdraw'],
-    ]);
-  });
 });

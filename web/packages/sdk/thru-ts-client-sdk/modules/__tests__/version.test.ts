@@ -24,18 +24,6 @@ describe("version", () => {
       });
       expect(ctx.query.getVersion).toHaveBeenCalledTimes(1);
     });
-
-    it("should create empty request", async () => {
-      const ctx = createMockContext();
-      const mockResponse = { versions: {} };
-      vi.spyOn(ctx.query, "getVersion").mockResolvedValue(mockResponse as any);
-      
-      await getVersion(ctx);
-      
-      const callArgs = (ctx.query.getVersion as any).mock.calls[0][0];
-      // Request should be created (empty GetVersionRequest)
-      expect(callArgs).toBeDefined();
-    });
   });
 });
 

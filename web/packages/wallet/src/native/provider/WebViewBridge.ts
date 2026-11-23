@@ -5,6 +5,7 @@ import {
   type TelemetryAppContext,
 } from '../../observability';
 import {
+  EMBEDDED_PROVIDER_EVENTS,
   ErrorCode,
   IFRAME_READY_EVENT,
   POST_MESSAGE_EVENT_TYPE,
@@ -23,6 +24,7 @@ import {
   type PostMessageEvent,
   type PostMessageRequest,
   type PostMessageResponse,
+  type RequestKeepAliveEventPayload,
 } from '../../protocol';
 import {
   getErrorCode as getSharedErrorCode,
@@ -129,6 +131,9 @@ export interface WebViewMessageEventLike {
 }
 
 const READY_TIMEOUT_MS = 10_000;
+/* How long a request may go without a sign of life from the wallet: its
+   `request_keepalive` events (sent while it shows a sheet for the request)
+   restart the timer. */
 const SLOW_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 const FAST_REQUEST_TIMEOUT_MS = 30 * 1000;
 
@@ -236,6 +241,8 @@ export class WebViewBridge {
     string,
     (response: PostMessageResponse) => void
   >();
+  /* Restarts a pending request's timeout; called on a keep-alive. */
+  private requestTimers = new Map<string, () => void>();
 
   public onEvent?: (eventType: string, payload: unknown) => void;
 
@@ -607,8 +614,9 @@ export class WebViewBridge {
       : FAST_REQUEST_TIMEOUT_MS;
 
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
+      const expire = () => {
         this.messageHandlers.delete(request.id);
+        this.requestTimers.delete(request.id);
         this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_REQUEST_TIMEOUT, {
           severity: 'error',
           requestId: request.id,
@@ -621,11 +629,17 @@ export class WebViewBridge {
           ...safeRequestFields,
         });
         reject(new Error('Request timeout - wallet did not respond'));
-      }, timeoutMs);
+      };
+      let timer = setTimeout(expire, timeoutMs);
+      this.requestTimers.set(request.id, () => {
+        clearTimeout(timer);
+        timer = setTimeout(expire, timeoutMs);
+      });
 
       this.messageHandlers.set(request.id, (response) => {
         clearTimeout(timer);
         this.messageHandlers.delete(request.id);
+        this.requestTimers.delete(request.id);
         if (response.success) {
           this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_REQUEST_COMPLETED, {
             severity: 'info',
@@ -684,6 +698,7 @@ export class WebViewBridge {
       } catch (error) {
         clearTimeout(timer);
         this.messageHandlers.delete(request.id);
+        this.requestTimers.delete(request.id);
         this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_REQUEST_FAILED, {
           severity: 'error',
           requestId: request.id,
@@ -768,6 +783,15 @@ export class WebViewBridge {
 
     if (msg.type === POST_MESSAGE_EVENT_TYPE) {
       const evt = msg as unknown as PostMessageEvent;
+      /* The user is still on the wallet's sheet for this request: restart
+         its timeout. Bridge housekeeping, not an app event. */
+      if (evt.event === EMBEDDED_PROVIDER_EVENTS.REQUEST_KEEPALIVE) {
+        const requestId = (
+          evt.data as RequestKeepAliveEventPayload | undefined
+        )?.requestId;
+        if (typeof requestId === 'string') this.requestTimers.get(requestId)?.();
+        return;
+      }
       this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_EVENT_RECEIVED, {
         severity: 'debug',
         operation: evt.event,

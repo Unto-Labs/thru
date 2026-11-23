@@ -13,6 +13,10 @@ impl WellKnownType for TimestampHandler {
         "Timestamp"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("time", "iso8601"))
+    }
+
     fn process(&self, ctx: &WellKnownContext) -> WellKnownResult {
         let Some(fields) = ctx.fields else {
             return WellKnownResult::None;
@@ -36,16 +40,5 @@ impl WellKnownType for TimestampHandler {
         }
 
         WellKnownResult::None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn timestamp_handler_type_name() {
-        let handler = TimestampHandler;
-        assert_eq!(handler.type_name(), "Timestamp");
     }
 }

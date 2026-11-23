@@ -34,6 +34,14 @@ export interface ThruTransactionIntent {
   readWriteAddresses?: string[];
   readOnlyAddresses?: string[];
   review?: ThruTransactionReviewPayload;
+  /**
+   * The fee payer the instruction was built against: `feePayerPublicKey`
+   * from the signing context (or a signing session's key). Account indices in
+   * the instruction count from it (account 0). The wallet signs only with the
+   * signer that pays from this account and refuses with `SIGNER_CHANGED`
+   * otherwise, so a signer switch can never move account 0.
+   */
+  feePayerPublicKey?: string;
   /** @internal Used by ThruSigningSession handles. */
   signingSessionId?: string;
 }

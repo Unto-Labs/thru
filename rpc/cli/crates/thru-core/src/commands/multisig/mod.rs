@@ -32,7 +32,7 @@ use thru_base::tn_tools::{KeyPair, Pubkey};
 use thru_base::txn_lib::{TnPubkey, Transaction};
 use thru_client::{Client, ClientBuilder, TransactionDetails};
 
-const TX_FEE: u64 = 1;
+const TX_FEE: u64 = 0;
 const TX_TIMEOUT_SECS: u64 = 30;
 
 pub async fn handle_multisig_command(
@@ -309,7 +309,7 @@ impl<'a> Ctx<'a> {
         Ok(TxParams {
             fee: TX_FEE,
             nonce: acct.nonce,
-            start_slot: height.finalized_height,
+            start_slot: height.locally_executed_height,
             chain_id: chain.chain_id,
         })
     }

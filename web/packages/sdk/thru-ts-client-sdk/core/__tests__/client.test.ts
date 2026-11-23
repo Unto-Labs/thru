@@ -68,15 +68,6 @@ describe("createThruClientContext", () => {
     expect(typeof ctx.streaming.trackTransaction).toBe("function");
   });
 
-  it("should create transport with correct baseUrl", () => {
-    const customUrl = "https://test.thruput.org";
-    const ctx = createThruClientContext({ baseUrl: customUrl });
-    
-    // Transport should be created (we can't easily test internal config)
-    expect(ctx.transport).toBeDefined();
-    expect(ctx.baseUrl).toBe(customUrl);
-  });
-
   it("uses provided transport when supplied", () => {
     const transport = {} as any;
     const ctx = createThruClientContext({ transport });

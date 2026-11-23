@@ -307,9 +307,31 @@ async fn setup_transaction_context(
     fee_payer_keypair: Arc<LoadedKey>,
     token_program_bytes: [u8; 32],
 ) -> Result<TransactionContext, CliError> {
-    // Get current nonce and block height
+    let chain = fee_payer_chain_state(&client, &fee_payer_keypair.address_string).await?;
+    Ok(TransactionContext {
+        fee_payer_keypair,
+        token_program_bytes,
+        client,
+        nonce: chain.nonce,
+        start_slot: chain.start_slot,
+        chain_id: chain.chain_id,
+        timeout_seconds: config.timeout_seconds,
+    })
+}
+
+/// The fee payer's nonce and the chain's start slot and chain id.
+struct ChainState {
+    nonce: u64,
+    start_slot: u64,
+    chain_id: u16,
+}
+
+async fn fee_payer_chain_state(
+    client: &Client,
+    fee_payer: &Pubkey,
+) -> Result<ChainState, CliError> {
     let account_info = client
-        .get_account_info(&fee_payer_keypair.address_string, None, None)
+        .get_account_info(fee_payer, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get account info: {}", e))
@@ -320,7 +342,7 @@ async fn setup_transaction_context(
     } else {
         return Err(CliError::AccountNotFound(format!(
             "Fee payer account {} not found",
-            fee_payer_keypair.address_string
+            fee_payer
         )));
     };
 
@@ -333,14 +355,10 @@ async fn setup_transaction_context(
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
 
-    Ok(TransactionContext {
-        fee_payer_keypair,
-        token_program_bytes,
-        client,
+    Ok(ChainState {
         nonce,
-        start_slot: block_height.finalized_height,
+        start_slot: block_height.locally_executed_height,
         chain_id: chain_info.chain_id,
-        timeout_seconds: config.timeout_seconds,
     })
 }
 
@@ -352,17 +370,27 @@ async fn execute_transaction(
 ) -> Result<TransactionDetails, CliError> {
     // Set chain ID and sign transaction
     transaction = transaction.with_chain_id(context.chain_id);
-    transaction
-        .sign(&context.fee_payer_keypair.private_key)
+    crate::signing::sign_transaction(&mut transaction, &context.fee_payer_keypair)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;
 
-    // Submit transaction
-    let transaction_bytes = transaction.to_wire();
-    let timeout = Duration::from_secs(context.timeout_seconds);
+    submit_transaction(
+        &context.client,
+        &transaction.to_wire(),
+        context.timeout_seconds,
+        json_format,
+    )
+    .await
+}
 
-    let transaction_details = context
-        .client
-        .execute_transaction(&transaction_bytes, timeout)
+/// Submit a signed transaction and check its result.
+async fn submit_transaction(
+    client: &Client,
+    wire: &[u8],
+    timeout_seconds: u64,
+    json_format: bool,
+) -> Result<TransactionDetails, CliError> {
+    let transaction_details = client
+        .execute_transaction(wire, Duration::from_secs(timeout_seconds))
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to execute transaction: {}", e))
@@ -819,7 +847,7 @@ async fn initialize_mint(
         state_proof_bytes,
         TOKEN_PROGRAM_FEE,
         nonce,
-        block_height.finalized_height,
+        block_height.locally_executed_height,
     )
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?;
 
@@ -829,8 +857,7 @@ async fn initialize_mint(
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
     transaction = transaction.with_chain_id(chain_info.chain_id);
-    transaction
-        .sign(&fee_payer_keypair.private_key)
+    crate::signing::sign_transaction(&mut transaction, &fee_payer_keypair)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;
 
     // Submit transaction
@@ -1006,7 +1033,7 @@ async fn initialize_account(
         state_proof_bytes,
         TOKEN_PROGRAM_FEE,
         nonce,
-        block_height.finalized_height,
+        block_height.locally_executed_height,
     )
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?;
 
@@ -1016,8 +1043,7 @@ async fn initialize_account(
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
     transaction = transaction.with_chain_id(chain_info.chain_id);
-    transaction
-        .sign(&fee_payer_keypair.private_key)
+    crate::signing::sign_transaction(&mut transaction, &fee_payer_keypair)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;
 
     // Submit transaction
@@ -1272,8 +1298,9 @@ async fn transfer(
     let from_pubkey = validate_address_or_hex(from)?;
     let to_pubkey = validate_address_or_hex(to)?;
 
-    // Resolve local transaction inputs before making RPC requests.
-    let fee_payer_keypair = config.keys.load_fee_payer(fee_payer)?;
+    // Resolve the signer before making RPC requests; for a Ledger key this
+    // connects to the device.
+    let signer = crate::signing::resolve_signer(config, fee_payer.unwrap_or("default"))?;
 
     // The source token account's owner is the token program that manages it
     let client = create_rpc_client(config)?;
@@ -1305,17 +1332,16 @@ async fn transfer(
         Some(inputs)
     };
 
-    // Setup transaction context
-    let context = setup_transaction_context(config, client, fee_payer_keypair, token_program_bytes)
+    let chain = fee_payer_chain_state(&client, &signer.address)
         .await
         .map_err(|e| handle_account_not_found_error(e, "token_transfer", json_format))?;
 
     // Build transaction using TransactionBuilder
     // For transfers, the fee payer acts as the authority (source account owner)
-    let transaction = match &checked {
+    let mut transaction = match &checked {
         Some(inputs) => TransactionBuilder::build_token_transfer_checked(
-            context.fee_payer_keypair.public_key,
-            context.token_program_bytes,
+            signer.public_key,
+            token_program_bytes,
             from_pubkey,
             to_pubkey,
             inputs.mint,
@@ -1323,25 +1349,39 @@ async fn transfer(
             inputs.decimals,
             &inputs.ticker,
             TOKEN_PROGRAM_FEE,
-            context.nonce,
-            context.start_slot,
+            chain.nonce,
+            chain.start_slot,
         ),
         None => TransactionBuilder::build_token_transfer(
-            context.fee_payer_keypair.public_key,
-            context.token_program_bytes,
+            signer.public_key,
+            token_program_bytes,
             from_pubkey,
             to_pubkey,
-            context.fee_payer_keypair.public_key, // Use fee payer as authority
+            signer.public_key, // Use fee payer as authority
             amount,
             TOKEN_PROGRAM_FEE,
-            context.nonce,
-            context.start_slot,
+            chain.nonce,
+            chain.start_slot,
         ),
     }
-    .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?;
+    .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?
+    .with_chain_id(chain.chain_id);
 
-    // Execute transaction
-    let transaction_details = execute_transaction(transaction, &context, json_format).await?;
+    // A Ledger shows the mint and the account owners when it gets a hint.
+    let token_hint = if signer.is_ledger() {
+        ledger_token_hint(&client, &transaction, &to_pubkey, json_format).await
+    } else {
+        None
+    };
+    let wire = crate::signing::sign_transaction_for_with_token_hint(
+        &mut transaction,
+        &signer,
+        token_hint.as_ref(),
+        |e| CliError::Crypto(format!("Failed to sign transaction: {e}")),
+    )?;
+
+    let transaction_details =
+        submit_transaction(&client, &wire, config.timeout_seconds, json_format).await?;
 
     if json_format {
         let mut token_transfer = serde_json::json!({
@@ -1360,6 +1400,7 @@ async fn transfer(
             token_transfer["ticker"] = serde_json::json!(inputs.ticker_text());
         }
         let response = serde_json::json!({ "token_transfer": token_transfer });
+        let response = signer.add_ledger_preview(response, "token_transfer");
         crate::output::print_output(response, true);
     } else {
         println!("Transfer completed successfully!");
@@ -1368,6 +1409,66 @@ async fn transfer(
     }
 
     Ok(())
+}
+
+/// The token hint for a Ledger-signed transfer (APDU spec §7.2.1): the mint
+/// and owner of the destination token account, read from chain, with the
+/// default account seeds.  `None` when the account cannot be read or the hint
+/// does not prove both accounts (for example a non-default seed); the Ledger
+/// then shows the token accounts, which is still a correct review.
+async fn ledger_token_hint(
+    client: &Client,
+    transaction: &thru_base::txn_lib::Transaction,
+    destination: &[u8; 32],
+    json_format: bool,
+) -> Option<thru_ledger::TokenHint> {
+    let note = |why: &str| {
+        if !json_format {
+            eprintln!("Note: the Ledger will show the token accounts, not their owners ({why}).");
+        }
+    };
+    let account = match client
+        .get_account_info(
+            &Pubkey::from_bytes(destination),
+            None,
+            Some(VersionContext::Current),
+        )
+        .await
+    {
+        Ok(Some(account)) => account,
+        _ => {
+            note("the destination token account could not be read");
+            return None;
+        }
+    };
+    let data = base64::Engine::decode(
+        &base64::engine::general_purpose::STANDARD,
+        account.data.unwrap_or_default(),
+    )
+    .unwrap_or_default();
+    match destination_token_hint(&transaction.to_wire_for_signing(), &data) {
+        Ok(hint) => Some(hint),
+        Err(why) => {
+            note(why);
+            None
+        }
+    }
+}
+
+/// The hint for `body` built from the destination token account's data: its
+/// mint and owner, default seeds.  Accepted only if it proves both accounts.
+fn destination_token_hint(
+    body: &[u8],
+    destination_data: &[u8],
+) -> Result<thru_ledger::TokenHint, &'static str> {
+    let decoded = decode_token_account_blob(destination_data)
+        .ok()
+        .filter(|t| !t.is_closed)
+        .ok_or("the destination is not an open token account")?;
+    let hint = thru_ledger::TokenHint::new(decoded.mint, decoded.owner);
+    thru_ledger::verify_token_hint(body, &hint)
+        .map(|_| hint)
+        .map_err(|_| "the token accounts are not the default accounts of their owners")
 }
 
 /// Mint new tokens to an account
@@ -1545,7 +1646,7 @@ async fn burn(
         amount,
         TOKEN_PROGRAM_FEE,
         nonce,
-        block_height.finalized_height,
+        block_height.locally_executed_height,
     )
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?;
 
@@ -1555,8 +1656,7 @@ async fn burn(
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
     transaction = transaction.with_chain_id(chain_info.chain_id);
-    transaction
-        .sign(&fee_payer_keypair.private_key)
+    crate::signing::sign_transaction(&mut transaction, &fee_payer_keypair)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;
 
     // Submit transaction
@@ -1666,7 +1766,7 @@ async fn close_account(
         authority_pubkey,
         TOKEN_PROGRAM_FEE,
         nonce,
-        block_height.finalized_height,
+        block_height.locally_executed_height,
     )
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?;
 
@@ -1676,8 +1776,7 @@ async fn close_account(
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
     transaction = transaction.with_chain_id(chain_info.chain_id);
-    transaction
-        .sign(&fee_payer_keypair.private_key)
+    crate::signing::sign_transaction(&mut transaction, &fee_payer_keypair)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;
 
     // Submit transaction
@@ -1785,7 +1884,7 @@ async fn freeze_account(
         authority_pubkey,
         TOKEN_PROGRAM_FEE,
         nonce,
-        block_height.finalized_height,
+        block_height.locally_executed_height,
     )
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?;
 
@@ -1795,8 +1894,7 @@ async fn freeze_account(
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
     transaction = transaction.with_chain_id(chain_info.chain_id);
-    transaction
-        .sign(&fee_payer_keypair.private_key)
+    crate::signing::sign_transaction(&mut transaction, &fee_payer_keypair)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;
 
     // Submit transaction
@@ -1904,7 +2002,7 @@ async fn thaw_account(
         authority_pubkey,
         TOKEN_PROGRAM_FEE,
         nonce,
-        block_height.finalized_height,
+        block_height.locally_executed_height,
     )
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?;
 
@@ -1914,8 +2012,7 @@ async fn thaw_account(
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
     transaction = transaction.with_chain_id(chain_info.chain_id);
-    transaction
-        .sign(&fee_payer_keypair.private_key)
+    crate::signing::sign_transaction(&mut transaction, &fee_payer_keypair)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;
 
     // Submit transaction
@@ -2647,6 +2744,94 @@ mod tests {
         buf.push(if is_frozen { 1 } else { 0 });
         assert_eq!(buf.len(), TOKEN_ACCOUNT_WIRE_LEN);
         buf
+    }
+
+    /// A token transfer between the default token accounts of `MINT`, from
+    /// `fee_payer` to `recipient`.
+    fn default_accounts_transfer(fee_payer: [u8; 32], recipient: [u8; 32]) -> Vec<u8> {
+        const MINT: [u8; 32] = [0x33; 32];
+        let seed = [0u8; 32];
+        TransactionBuilder::build_token_transfer(
+            fee_payer,
+            thru_base::bootstrap_addresses::TOKEN_PROGRAM_BYTES,
+            thru_ledger::token_account_address(&fee_payer, &MINT, &seed),
+            thru_ledger::token_account_address(&recipient, &MINT, &seed),
+            fee_payer,
+            25,
+            0,
+            1,
+            100,
+        )
+        .unwrap()
+        .with_chain_id(1)
+        .to_wire_for_signing()
+    }
+
+    #[test]
+    fn destination_token_hint_proves_default_accounts_only() {
+        let (fee_payer, recipient) = ([0x11; 32], [0x22; 32]);
+        let body = default_accounts_transfer(fee_payer, recipient);
+        let open = build_token_account_blob([0x33; 32], recipient, 0, false);
+        assert_eq!(
+            destination_token_hint(&body, &open),
+            Ok(thru_ledger::TokenHint::new([0x33; 32], recipient))
+        );
+        // Another owner or mint does not derive the signed accounts.
+        let other_owner = build_token_account_blob([0x33; 32], fee_payer, 0, false);
+        assert!(destination_token_hint(&body, &other_owner).is_err());
+        let other_mint = build_token_account_blob([0x44; 32], recipient, 0, false);
+        assert!(destination_token_hint(&body, &other_mint).is_err());
+        // A source owned by someone else than the fee payer.
+        let foreign = default_accounts_transfer([0x55; 32], recipient);
+        let mut foreign = foreign;
+        foreign[48..80].copy_from_slice(&fee_payer);
+        assert!(destination_token_hint(&foreign, &open).is_err());
+        // Closed or unreadable accounts.
+        let closed = build_token_account_blob([0u8; 32], [0u8; 32], 0, false);
+        assert!(destination_token_hint(&body, &closed).is_err());
+        assert!(destination_token_hint(&body, &[]).is_err());
+    }
+
+    /* The Ledger app reviews both transfers this command sends in clear: the
+     * plain Transfer, and the TransferChecked built here, whose mint, decimals
+     * and ticker it shows. The destination's token hint verifies for both. */
+    #[test]
+    fn ledger_clear_signs_both_token_transfers() {
+        const MINT: [u8; 32] = [0x33; 32];
+        let (fee_payer, recipient) = ([0x11; 32], [0x22; 32]);
+        let seed = [0u8; 32];
+        let plain = default_accounts_transfer(fee_payer, recipient);
+        let token_account = build_token_account_blob(MINT, recipient, 0, false);
+        let t = thru_ledger::decode_clear_transfer(&plain).unwrap();
+        assert_eq!(t.checked, None);
+        assert!(destination_token_hint(&plain, &token_account).is_ok());
+
+        let checked = TransactionBuilder::build_token_transfer_checked(
+            fee_payer,
+            thru_base::bootstrap_addresses::TOKEN_PROGRAM_BYTES,
+            thru_ledger::token_account_address(&fee_payer, &MINT, &seed),
+            thru_ledger::token_account_address(&recipient, &MINT, &seed),
+            MINT,
+            25,
+            6,
+            b"USDC",
+            0,
+            1,
+            100,
+        )
+        .unwrap()
+        .with_chain_id(1)
+        .to_wire_for_signing();
+        let t = thru_ledger::decode_clear_transfer(&checked).unwrap();
+        let c = t.checked.unwrap();
+        assert_eq!(
+            (t.amount, c.mint, c.decimals, c.ticker()),
+            (25, MINT, 6, "USDC")
+        );
+        assert!(destination_token_hint(&checked, &token_account).is_ok());
+        // A hint for another mint does not prove this transfer.
+        let other_mint = build_token_account_blob([0x44; 32], recipient, 0, false);
+        assert!(destination_token_hint(&checked, &other_mint).is_err());
     }
 
     #[test]

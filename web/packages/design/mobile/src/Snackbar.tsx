@@ -25,7 +25,6 @@ const TONES: Record<SnackbarTone, { onDark: string; onLight: string; glyph: stri
   },
 };
 
-/** How long a snackbar stays up by default. */
 export const SNACKBAR_DURATION_MS = 4200;
 
 export function Snackbar({

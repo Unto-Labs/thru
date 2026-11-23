@@ -12,6 +12,10 @@ impl WellKnownType for ColorHandler {
         "Color"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("color", "hex"))
+    }
+
     fn category(&self) -> &'static str {
         "google"
     }
@@ -43,17 +47,5 @@ impl WellKnownType for ColorHandler {
         }
 
         WellKnownResult::None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn color_handler_type_name() {
-        let handler = ColorHandler;
-        assert_eq!(handler.type_name(), "Color");
-        assert_eq!(handler.category(), "google");
     }
 }

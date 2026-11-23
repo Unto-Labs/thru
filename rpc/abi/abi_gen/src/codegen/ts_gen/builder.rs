@@ -1781,6 +1781,12 @@ fn emit_fam_struct_builder(
             .unwrap();
         }
         writeln!(out, "        const elementCount = {};", count_expr).unwrap();
+        write_count_limit(
+            &mut out,
+            &info.size_field.field_type.kind,
+            class_name,
+            &info.field.name,
+        );
         writeln!(out, "        this.{} = bytes;", storage_ident).unwrap();
         writeln!(out, "        this.{} = elementCount;", count_ident).unwrap();
         if info.size_field_index < first_fam_index {
@@ -1796,7 +1802,14 @@ fn emit_fam_struct_builder(
         writeln!(out, "  }}\n").unwrap();
     }
 
+    let length_syncs: Vec<_> = fam_infos
+        .iter()
+        .filter(|info| info.size_field_index < first_fam_index)
+        .cloned()
+        .collect();
+    write_length_sync(&mut out, &length_syncs);
     writeln!(out, "  build(): Uint8Array {{").unwrap();
+    writeln!(out, "    this.__tnSyncLengths();").unwrap();
     writeln!(out, "    const params = this.__tnComputeParams();").unwrap();
     writeln!(
         out,
@@ -1815,6 +1828,7 @@ fn emit_fam_struct_builder(
         "  buildInto(target: Uint8Array, offset = 0): Uint8Array {{"
     )
     .unwrap();
+    writeln!(out, "    this.__tnSyncLengths();").unwrap();
     writeln!(out, "    const params = this.__tnComputeParams();").unwrap();
     writeln!(
         out,
@@ -2155,6 +2169,12 @@ fn emit_fam_tail_typeref_struct_builder(
                     .unwrap();
                 }
                 writeln!(out, "        const elementCount = {};", count_expr).unwrap();
+                write_count_limit(
+                    &mut out,
+                    &info.size_field.field_type.kind,
+                    class_name,
+                    &info.field.name,
+                );
                 writeln!(out, "        this.{} = bytes;", storage_ident).unwrap();
                 writeln!(out, "        this.{} = elementCount;", count_ident).unwrap();
                 if info.size_field_index < plan.first_dynamic_index {
@@ -2224,7 +2244,19 @@ fn emit_fam_tail_typeref_struct_builder(
         }
     }
 
+    let length_syncs: Vec<_> = plan
+        .dynamic_fields
+        .iter()
+        .filter_map(|field| match field {
+            HybridDynamicField::Fam(info) if info.size_field_index < plan.first_dynamic_index => {
+                Some(info.clone())
+            }
+            _ => None,
+        })
+        .collect();
+    write_length_sync(&mut out, &length_syncs);
     writeln!(out, "  build(): Uint8Array {{").unwrap();
+    writeln!(out, "    this.__tnSyncLengths();").unwrap();
     writeln!(out, "    const params = this.__tnComputeParams();").unwrap();
     writeln!(
         out,
@@ -2243,6 +2275,7 @@ fn emit_fam_tail_typeref_struct_builder(
         "  buildInto(target: Uint8Array, offset = 0): Uint8Array {{"
     )
     .unwrap();
+    writeln!(out, "    this.__tnSyncLengths();").unwrap();
     writeln!(out, "    const params = this.__tnComputeParams();").unwrap();
     writeln!(
         out,
@@ -4137,4 +4170,57 @@ fn build_prefix_param_expression(
         }
         _ => None,
     }
+}
+
+/// Rejects an array whose element count does not fit its length field, so a
+/// narrow length (a `u16` holding 65,536) never wraps while the payload is
+/// still written. Wider fields than 32 bits cannot overflow a JS count.
+fn write_count_limit(
+    out: &mut String,
+    size_kind: &ResolvedTypeKind,
+    class_name: &str,
+    field: &str,
+) {
+    let ResolvedTypeKind::Primitive {
+        prim_type: PrimitiveType::Integral(integral),
+    } = size_kind
+    else {
+        return;
+    };
+    let max: u64 = match integral {
+        IntegralType::U8 => u8::MAX.into(),
+        IntegralType::U16 => u16::MAX.into(),
+        IntegralType::U32 => u32::MAX.into(),
+        IntegralType::I8 => i8::MAX as u64,
+        IntegralType::I16 => i16::MAX as u64,
+        IntegralType::I32 => i32::MAX as u64,
+        IntegralType::Char => u8::MAX.into(),
+        IntegralType::U64 | IntegralType::I64 => return,
+    };
+    writeln!(
+        out,
+        "        if (elementCount > {max}) throw new Error(\"{class_name}Builder: {field} has more than {max} elements\");"
+    )
+    .unwrap();
+}
+
+/// Emits `__tnSyncLengths`, which `build()` calls first: each length field
+/// that precedes its byte array is rewritten from the payload actually held,
+/// so a later `set_<len>()` cannot make the header disagree with the bytes.
+fn write_length_sync(out: &mut String, infos: &[FamFieldInfo]) {
+    writeln!(out, "  private __tnSyncLengths(): void {{").unwrap();
+    for info in infos {
+        let ResolvedTypeKind::Primitive { prim_type } = &info.size_field.field_type.kind else {
+            continue;
+        };
+        let count_ident = fam_count_ident(&escape_ts_keyword(&info.field.name));
+        let size_field_name = escape_ts_keyword(&info.size_field.name);
+        let count_arg = primitive_setter_value_expr(prim_type, &format!("this.{count_ident}"));
+        writeln!(
+            out,
+            "    if (this.{count_ident} !== null) this.set_{size_field_name}({count_arg});"
+        )
+        .unwrap();
+    }
+    writeln!(out, "  }}\n").unwrap();
 }

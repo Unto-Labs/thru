@@ -25,7 +25,7 @@ const Native = requireOptionalNativeModule(
  * Idempotent; safe to call on every WebView mount.
  */
 export async function enableWebAuthnSupport(viewTag?: number | null): Promise<boolean> {
-  if (Platform.OS !== 'android') return false; /* iOS / web: no-op. */
+  if (Platform.OS !== 'android') return false;
   if (!Native) return false; /* Module not linked (Expo Go fallback). */
   try {
     return await Native.enableWebAuthnSupport(viewTag);

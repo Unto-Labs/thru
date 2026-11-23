@@ -122,7 +122,10 @@ function useAnimatedResize(
 
     const onTransitionEnd = (event: TransitionEvent) => {
       if (event.target !== frame || event.propertyName !== "height" || !pinned) return;
-      unpin();
+      /* The content can change size with no DOM change while the frame eases
+         (a panel opening, an image loading): this eases on to that size, where
+         releasing the pin would jump to it. */
+      onContentChange();
     };
 
     const mutations = new MutationObserver(onContentChange);
@@ -157,13 +160,16 @@ export interface FrameProps {
   onBack?: () => void;
   /** Accessible name for the back button (default "Back"). */
   backLabel?: string;
+  /** Keep the back button's place in the bar while there is none, so content
+   *  below does not move when a busy screen takes its back button away. */
+  holdBack?: boolean;
   /** Play the island open / close motion on the frame itself. Leave unset
    *  when the frame sits inside a `WalletOverlay`, which animates the popup. */
   animate?: FrameAnimate;
   /** Ease the frame to its new size when the content changes — for a frame
    *  that stays mounted while screens swap inside it. */
   animateResize?: boolean;
-  /** Active network, e.g. "Alphanet": a status line under the screens. */
+  /** Active network, e.g. "Betanet": a status line under the screens. */
   network?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
@@ -181,6 +187,7 @@ export const Frame = React.forwardRef<HTMLDivElement, FrameProps>(
       onClose,
       onBack,
       backLabel = "Back",
+      holdBack = false,
       animate = false,
       animateResize = false,
       network,
@@ -218,7 +225,7 @@ export const Frame = React.forwardRef<HTMLDivElement, FrameProps>(
           className={cn(
             "tds-frame__bar",
             !site && "tds-frame__bar--plain",
-            !site && !onBack && "tds-frame__bar--float",
+            !site && !onBack && !holdBack && "tds-frame__bar--float",
           )}
         >
           {onBack ? (
@@ -248,6 +255,17 @@ export const Frame = React.forwardRef<HTMLDivElement, FrameProps>(
               )}
               {site.tag && <span className="tds-frame__chip">{site.tag}</span>}
             </span>
+          ) : holdBack ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="tds-frame__back"
+              style={{ visibility: "hidden" }}
+              disabled
+              aria-hidden
+            >
+              <ChevronLeft width={16} height={16} />
+            </Button>
           ) : null}
           <button type="button" className="tds-frame__close" aria-label="Close" onClick={onClose}>
             <X width={14} height={14} />

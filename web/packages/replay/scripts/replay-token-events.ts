@@ -11,7 +11,7 @@ import { Filter, FilterParamValue, PageRequest } from "@thru/sdk/proto";
 import { ListEventsRequest, StreamEventsRequest } from "@thru/sdk/proto";
 import { ChainClient } from "../src";
 
-const BASE_URL = process.env.GRPC_URL ?? "https://rpc.alphanet.thru.org";
+const BASE_URL = process.env.GRPC_URL ?? "https://rpc.betanet.thru.org";
 const TOKEN_PROGRAM = process.env.TOKEN_PROGRAM ?? TOKEN_PROGRAM_ADDRESS;
 
 async function main(): Promise<void> {

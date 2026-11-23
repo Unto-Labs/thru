@@ -24,12 +24,13 @@ pnpm --filter unto-design-gallery dev   # http://localhost:5181
 ```
 
 - **Colors**: ramps and semantic tokens in `tokens/src/tokens.css`; the
-  dark-theme overrides in `tokens/src/neutral.css`.
+  alternative accents in `tokens/src/palettes.css`.
 - **Type**: the named scale (`.type-heading-*`, `.type-body-*`, …) in
   `tokens/src/typography.css`.
-- **Fonts**: local variable fonts in `fonts/`, loaded by
-  `web/src/next-fonts.ts` into `--font-inter-tight` / `--font-jetbrains-mono`.
-- **Space, radius, motion**: the `--space-*`, `--radius-*`, `--duration-*`
+- **Fonts**: JetBrains Mono, loaded by `web/src/next-fonts.ts` into
+  `--font-jetbrains-mono`.
+- **Space, radius, motion**: the `--space-*`, `--radius-box` (every
+  rectangle; 0, so square) and `--radius-pill` (true circles only), `--duration-*`
   and `--ease-*` tokens in `tokens/src/tokens.css`.
 - **Components**: `web/src/components/<Name>/<Name>.css`. Every value should
   read a `var(--token)`, so token edits restyle every component.
@@ -38,17 +39,16 @@ Merging to `main-thru` deploys the gallery.
 
 ## Fonts
 
-Next.js apps import `interTight` and `jetbrainsMono` from
-`@unto/design/web/next-fonts`. This subpath loads the Inter Tight and
-JetBrains Mono variable fonts from `fonts/`, with normal and italic styles,
-and sets `--font-inter-tight` and `--font-jetbrains-mono` through each
-export's `variable` class.
+Next.js apps import `jetbrainsMono` from `@unto/design/web/next-fonts` and
+put its `variable` class on `<html>`. The subpath loads JetBrains Mono through
+`next/font/google` and sets `--font-jetbrains-mono`. As on untolabs.com, one
+monospace face carries everything: UI text, headings and data.
 
 ## Principles
 
 - **Behavior from Base UI, look from the tokens, styling in plain CSS.** No
   Tailwind in this package: components are styled with CSS that reads
-  `var(--…)` token values. `tokens/theme.css` is an optional Tailwind v4 bridge.
+  `var(--…)` token values.
 - **Independent of `@thru/design`.** Change anything; nothing outside this
   package and its gallery imports it.
 
@@ -98,24 +98,7 @@ The web wallet iframe design, as composable parts (see the gallery's
   with the account menu (manage, switch, add, explorer, sign out).
 - `DepositButton` — the host's funding entry point ("Add funds" / "Adding
   funds…", optional trailing balance; `ghost` is the inline text-link form)
-  that calls `thru.deposit()`.
-- `Dove` — the animated mark that replaces a spinner after a 2 s wait;
-  `ThruDisc`, `ThruWordmark`, `PoweredBy` brand marks.
-
-## Brand assets (`assets/brand/`)
-
-Files from the Thru Brand Guidelines (July 2025, v1.0), imported as
-`@unto/design/assets/brand/<path>`. Names follow the guideline's color
-labels. `brick` is `brick-400`. The guideline's `stone-*` ramp is close to
-the `teal-*` tokens but not identical (stone-600 `#436465` vs teal-600
-`#456063`).
-
-- `avatars/` — the four approved social avatars (guidelines §2.8): the dove
-  logomark on a disc. `avatar-brick` (800 px), `avatar-stone-0-brick`,
-  `avatar-stone-600`, `avatar-stone-0-stone-600` (320 px). Use them only at
-  small sizes, such as social profile icons. They are not for posters or
-  banners.
-- `logotype-outline.svg` — the outline logotype (§2.6): a brick wordmark with a
-  stone-0 keyline. It is a secondary mark for large, expressive placements,
-  such as banners, event posters and slide titles. It never replaces the
-  primary logotype.
+  that calls `unto.deposit()`.
+- `UntoWordmark`, `PoweredBy` — the Unto Labs wordmark (square + "UNTO
+  LABS", as on untolabs.com) and the footer credit.
+  The system carries no dove marks.

@@ -8,7 +8,10 @@ KILL_LOCK_HOLDERS="${APT_KILL_LOCK_HOLDERS:-1}"
 COMMAND_TIMEOUT_SECONDS="${APT_COMMAND_TIMEOUT_SECONDS:-180}"
 COMMAND_KILL_GRACE_SECONDS="${APT_COMMAND_KILL_GRACE_SECONDS:-10}"
 MIRROR_FALLBACK="${APT_MIRROR_FALLBACK:-1}"
-FALLBACK_MIRROR="${APT_FALLBACK_MIRROR:-http://archive.ubuntu.com/ubuntu}"
+# Ordered, space-separated: each failed attempt moves the amd64 sources one
+# entry further down. Canonical's archive first, then kernel.org's
+# Fastly-backed mirror, so one operator's outage cannot take out every entry.
+FALLBACK_MIRRORS="${APT_FALLBACK_MIRRORS:-http://archive.ubuntu.com/ubuntu http://mirrors.edge.kernel.org/ubuntu}"
 PORTS_FALLBACK_MIRROR="${APT_FALLBACK_PORTS_MIRROR:-http://ports.ubuntu.com/ubuntu-ports}"
 SOURCES_LIST="${APT_SOURCES_LIST:-/etc/apt/sources.list}"
 SOURCES_PARTS_DIR="${APT_SOURCES_PARTS_DIR:-/etc/apt/sources.list.d}"
@@ -188,8 +191,12 @@ wait_for_or_kill_lock_holders() {
 #   us-east-1.ec2.archive.ubuntu.com   GARM x86, matches archive family
 #   azure.archive.ubuntu.com           GitHub-hosted, matches archive family
 #   us-east-1.ec2.ports.ubuntu.com     GARM arm64, matches ports family
-#   archive.ubuntu.com                 the fallback, deliberately no match
+#   archive.ubuntu.com                 first fallback, deliberately no match
 #   security.ubuntu.com                deliberately no match
+#
+# Later fallback steps also match the FALLBACK_MIRRORS entries themselves
+# (see use_fallback_apt_mirror), which is how the second retry moves off
+# archive.ubuntu.com.
 #
 # Before this the pattern was `[a-z0-9-]+\.ec2\.archive\.ubuntu\.com`, which
 # matched only GARM x86.  On the other two classes the fallback reported "no
@@ -197,7 +204,7 @@ wait_for_or_kill_lock_holders() {
 # same sick mirror.
 archive_mirror_pattern='https?://[a-z0-9.-]+\.archive\.ubuntu\.com(/ubuntu)?'
 ports_mirror_pattern='https?://[a-z0-9.-]+\.ports\.ubuntu\.com(/ubuntu-ports)?'
-mirror_fallback_applied=0
+fallback_step=0
 
 # Emits every apt source file that actually exists, covering both the legacy
 # one-line format (/etc/apt/sources.list, *.list) and the deb822 format
@@ -242,58 +249,70 @@ apt_mirrorlist_files() {
   done < <(apt_source_files)
 }
 
-# Repoints the configured apt sources from the EC2 regional mirror at
-# FALLBACK_MIRROR.  The EC2 mirror is region-local and much faster when it is
-# healthy, so this only runs after an attempt has already failed.  It is a
-# no-op when no EC2 mirror is configured and when it has already run.
+# Escapes a URL for use as a literal inside an ERE.  `|`, `&` and `\` are
+# refused before this is called, so only the ERE metacharacters remain.
+ere_literal() {
+  # shellcheck disable=SC2016 # $ is a literal character here
+  printf '%s' "$1" | sed 's/[]$()*+.?^{}|[]/\\&/g'
+}
+
+# Moves the configured apt sources one step down FALLBACK_MIRRORS.  The first
+# call repoints the regional mirror (EC2 or Azure) at the first entry; each
+# later call repoints whichever entry is in use at the next one.  The regional
+# mirror is region-local and much faster when it is healthy, so this only runs
+# after an attempt has already failed.  Ports sources have a single fallback,
+# applied on the first call.  Once every entry has been used it is a no-op, so
+# the remaining attempts stay on the last mirror.
 use_fallback_apt_mirror() {
-  [ "$mirror_fallback_applied" -eq 0 ] || return 0
-  mirror_fallback_applied=1
+  local -a mirrors
+  read -r -a mirrors <<< "$FALLBACK_MIRRORS"
+  [ "$fallback_step" -lt "${#mirrors[@]}" ] || return 0
+  local step="$fallback_step"
+  fallback_step=$((fallback_step + 1))
 
   if [ "$MIRROR_FALLBACK" != "1" ]; then
     echo "apt mirror fallback is disabled (APT_MIRROR_FALLBACK=${MIRROR_FALLBACK})" >&2
+    fallback_step="${#mirrors[@]}"
     return 0
   fi
 
-  case "$FALLBACK_MIRROR" in
-    http://*|https://*) ;;
-    *)
-      echo "refusing to use APT_FALLBACK_MIRROR='${FALLBACK_MIRROR}': not an http(s) URL" >&2
-      return 0
-      ;;
-  esac
+  local mirror
+  for mirror in "${mirrors[@]}" "$PORTS_FALLBACK_MIRROR"; do
+    case "$mirror" in
+      http://*|https://*) ;;
+      *)
+        echo "refusing to use apt fallback mirror '${mirror}': not an http(s) URL" >&2
+        fallback_step="${#mirrors[@]}"
+        return 0
+        ;;
+    esac
+    case "$mirror" in
+      *[\|\&\\]*)
+        echo "refusing to use apt fallback mirror '${mirror}': unsafe in a sed replacement" >&2
+        fallback_step="${#mirrors[@]}"
+        return 0
+        ;;
+    esac
+  done
 
-  case "$FALLBACK_MIRROR" in
-    *[\|\&\\]*)
-      echo "refusing to use APT_FALLBACK_MIRROR='${FALLBACK_MIRROR}': unsafe in a sed replacement" >&2
-      return 0
-      ;;
-  esac
-
-  case "$PORTS_FALLBACK_MIRROR" in
-    http://*|https://*) ;;
-    *)
-      echo "refusing to use APT_FALLBACK_PORTS_MIRROR='${PORTS_FALLBACK_MIRROR}': not an http(s) URL" >&2
-      return 0
-      ;;
-  esac
-
-  case "$PORTS_FALLBACK_MIRROR" in
-    *[\|\&\\]*)
-      echo "refusing to use APT_FALLBACK_PORTS_MIRROR='${PORTS_FALLBACK_MIRROR}': unsafe in a sed replacement" >&2
-      return 0
-      ;;
-  esac
+  # Every source that is not already on this step's mirror moves to it: the
+  # regional mirror, or any other entry of the list.
+  local replacement="${mirrors[$step]}" archive_pattern="$archive_mirror_pattern" i
+  for i in "${!mirrors[@]}"; do
+    [ "$i" -ne "$step" ] || continue
+    archive_pattern="${archive_pattern}|$(ere_literal "${mirrors[$i]}")"
+  done
 
   # Rewrite each family with its own fallback, over the source files and over
   # any mirrorlist they reference.
-  local target rewritten=0 family pattern replacement
+  local target rewritten=0 family pattern
   while IFS= read -r target; do
     for family in archive ports; do
       if [ "$family" = archive ]; then
-        pattern="$archive_mirror_pattern"
-        replacement="$FALLBACK_MIRROR"
+        pattern="$archive_pattern"
+        replacement="${mirrors[$step]}"
       else
+        [ "$step" -eq 0 ] || continue
         pattern="$ports_mirror_pattern"
         replacement="$PORTS_FALLBACK_MIRROR"
       fi
@@ -303,7 +322,7 @@ use_fallback_apt_mirror() {
       echo "rewriting ${family} apt mirror in ${target} (backup: ${target}.bak)" >&2
       grep -En "$pattern" "$target" | sed 's/^/  before: /' >&2 || true
 
-      if ! sudo sed -E -i.bak "s|${pattern}|${replacement}|g" "$target"; then
+      if ! sudo sed -E -i.bak "s#${pattern}#${replacement}#g" "$target"; then
         echo "failed to rewrite ${target}; leaving it unchanged" >&2
         continue
       fi
@@ -318,7 +337,7 @@ use_fallback_apt_mirror() {
     return 0
   fi
 
-  echo "apt mirror fallback applied to ${rewritten} file/family pair(s); archive -> ${FALLBACK_MIRROR}, ports -> ${PORTS_FALLBACK_MIRROR}" >&2
+  echo "apt mirror fallback step $((step + 1))/${#mirrors[@]} applied to ${rewritten} file/family pair(s); archive -> ${mirrors[$step]}${PORTS_FALLBACK_MIRROR:+, ports -> ${PORTS_FALLBACK_MIRROR}}" >&2
 }
 
 # Fast path: nothing to do.
@@ -326,7 +345,7 @@ use_fallback_apt_mirror() {
 # Every caller of this script asks for packages the runner image already
 # ships, so the common case is `apt-get update` fetching ~19 MB of indexes to
 # conclude "0 upgraded, 0 newly installed". That cost is not small: it is
-# 3m20s per job on the self-hosted runners, in zig-x86-test and grpc-test
+# 3m20s per job on the self-hosted runners, in grpc-test and its peers
 # alike, and when the EC2 regional mirror stalls it is the hang that has
 # ejected PRs from the merge queue outright.
 #
@@ -378,9 +397,9 @@ for attempt in 1 2 3 4 5; do
     exit 1
   fi
 
-  # The attempt failed.  If it was the region-local EC2 mirror stalling, more
-  # retries against the same mirror cannot help, so switch mirrors before the
-  # next one.
+  # The attempt failed.  If it was a mirror stalling, more retries against the
+  # same mirror cannot help, so move to the next FALLBACK_MIRRORS entry before
+  # the next attempt.
   use_fallback_apt_mirror
 
   sleep $((attempt * 10))

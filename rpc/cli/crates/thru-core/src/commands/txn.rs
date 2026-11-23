@@ -9,6 +9,7 @@ use crate::output;
 use crate::utils::format_vm_error;
 use base64::Engine;
 use base64::engine::general_purpose;
+use std::io::{self, Write};
 use std::time::Duration;
 use thru_base::rpc_types::ProofType;
 use thru_base::tn_tools::Pubkey;
@@ -135,7 +136,7 @@ async fn sign_transaction(
         .map_err(|e| CliError::Validation(format!("Invalid hex instruction data: {}", e)))?;
 
     // Build and sign transaction
-    let transaction = build_and_sign_transaction(
+    let (transaction_bytes, fee_payer_signer) = build_and_sign_transaction(
         config,
         program,
         &instruction_bytes,
@@ -150,8 +151,7 @@ async fn sign_transaction(
     )
     .await?;
 
-    // Convert to wire format and encode as base64
-    let transaction_bytes = transaction.to_wire();
+    // The exact signed bytes, encoded as base64
     let base64_transaction = general_purpose::STANDARD.encode(&transaction_bytes);
 
     if json_format {
@@ -162,11 +162,27 @@ async fn sign_transaction(
                 "size_bytes": transaction_bytes.len()
             }
         });
+        let response = fee_payer_signer.add_ledger_preview(response, "transaction_sign");
         output::print_output(response, true);
     } else {
         println!("{}", base64_transaction);
     }
 
+    Ok(())
+}
+
+fn write_nonce_retry_notice(
+    output: &mut impl Write,
+    signer: &crate::signing::ResolvedSigner,
+    attempt: u32,
+    max_attempts: u32,
+) -> io::Result<()> {
+    if signer.is_ledger() {
+        writeln!(
+            output,
+            "Nonce too low; rebuilding the transaction. Review the new transaction hash and approve on your Ledger (attempt {attempt}/{max_attempts})."
+        )?;
+    }
     Ok(())
 }
 
@@ -201,13 +217,24 @@ async fn execute_transaction(
     /* Retry loop: on nonce-too-low errors the RPC may return a stale nonce;
     rebuild and re-sign with a fresh nonce fetch on each attempt. */
     let mut transaction_details_opt = None;
+    let mut last_signer = None;
     for attempt in 0..MAX_NONCE_RETRIES {
         if attempt > 0 {
+            write_nonce_retry_notice(
+                &mut io::stderr(),
+                last_signer.as_ref().expect("previous attempt has a signer"),
+                attempt + 1,
+                MAX_NONCE_RETRIES,
+            )
+            .expect("failed to write Ledger retry notice");
+            /* Close the previous attempt's Ledger connection before the next
+            one opens: hidapi opens devices exclusively on macOS. */
+            drop(last_signer.take());
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
 
         /* Build and sign transaction (fetches fresh nonce each attempt) */
-        let transaction = build_and_sign_transaction(
+        let (transaction_bytes, fee_payer_signer) = build_and_sign_transaction(
             config,
             program,
             &instruction_bytes,
@@ -222,7 +249,6 @@ async fn execute_transaction(
         )
         .await?;
 
-        let transaction_bytes = transaction.to_wire();
         let details = client
             .execute_transaction(&transaction_bytes, timeout_duration)
             .await
@@ -232,6 +258,7 @@ async fn execute_transaction(
 
         let is_nonce_err = details.execution_result as i32 == TN_ERR_NONCE_TOO_LOW;
         transaction_details_opt = Some(details);
+        last_signer = Some(fee_payer_signer);
         if !is_nonce_err {
             break;
         }
@@ -358,6 +385,10 @@ async fn execute_transaction(
             "events": events_json
             }
         });
+        let response = match &last_signer {
+            Some(signer) => signer.add_ledger_preview(response, "transaction_execute"),
+            None => response,
+        };
         output::print_output(response, true);
     } else {
         output::print_success(&format!("Transaction executed successfully"));
@@ -457,10 +488,11 @@ pub(super) async fn build_and_sign_transaction(
     expiry_after: u32,
     readwrite_accounts: &[String],
     readonly_accounts: &[String],
-) -> Result<Transaction, CliError> {
+) -> Result<(Vec<u8>, crate::signing::ResolvedSigner), CliError> {
     // Resolve fee payer account
+    // A local key or a Ledger key (key name or `ledger://` URI).
     let fee_payer_key = fee_payer.unwrap_or("default");
-    let fee_payer_keypair = config.keys.load_key(fee_payer_key)?;
+    let fee_payer_signer = crate::signing::resolve_signer(config, fee_payer_key)?;
 
     // Resolve program public key
     let program_pubkey = resolve_program_public_key(config, program)?;
@@ -470,7 +502,7 @@ pub(super) async fn build_and_sign_transaction(
 
     // Get current nonce from fee payer account
     let account_info = client
-        .get_account_info(&fee_payer_keypair.address_string, None, None)
+        .get_account_info(&fee_payer_signer.address, None, None)
         .await
         .map_err(|e| CliError::NonceManagement(format!("Failed to get account info: {}", e)))?;
 
@@ -479,7 +511,7 @@ pub(super) async fn build_and_sign_transaction(
     } else {
         return Err(CliError::AccountNotFound(format!(
             "Fee payer account {} not found",
-            fee_payer_keypair.address_string.as_str()
+            fee_payer_signer.address.as_str()
         )));
     };
 
@@ -509,15 +541,14 @@ pub(super) async fn build_and_sign_transaction(
     let r_accounts = validate_and_process_accounts(r_accounts?)?;
 
     // Build transaction
-    let mut transaction =
-        Transaction::new(fee_payer_keypair.public_key, program_pubkey, fee, nonce)
-            .with_instructions(instruction_data.to_vec())
-            .with_compute_units(compute_units)
-            .with_state_units(state_units)
-            .with_memory_units(memory_units)
-            .with_expiry_after(expiry_after)
-            .with_start_slot(block_height.finalized_height)
-            .with_chain_id(chain_info.chain_id);
+    let mut transaction = Transaction::new(fee_payer_signer.public_key, program_pubkey, fee, nonce)
+        .with_instructions(instruction_data.to_vec())
+        .with_compute_units(compute_units)
+        .with_state_units(state_units)
+        .with_memory_units(memory_units)
+        .with_expiry_after(expiry_after)
+        .with_start_slot(block_height.locally_executed_height)
+        .with_chain_id(chain_info.chain_id);
 
     // Add account lists if provided
     if !rw_accounts.is_empty() {
@@ -527,12 +558,12 @@ pub(super) async fn build_and_sign_transaction(
         transaction = transaction.with_r_accounts(r_accounts);
     }
 
-    // Sign the transaction
-    transaction
-        .sign(&fee_payer_keypair.private_key)
-        .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;
+    // Sign the transaction; submit exactly the signed bytes.
+    let wire = crate::signing::sign_transaction_for(&mut transaction, &fee_payer_signer, |e| {
+        CliError::Crypto(format!("Failed to sign transaction: {e}"))
+    })?;
 
-    Ok(transaction)
+    Ok((wire, fee_payer_signer))
 }
 
 /// Resolve program metadata, a public address, or an explicit key source.
@@ -1080,6 +1111,29 @@ mod tests {
         config.rpc_base_url = "http://localhost:8080".to_string();
         config.keys = keys;
         (guard, config)
+    }
+
+    #[test]
+    fn nonce_retry_notice_is_shown_only_for_ledger_signers() {
+        let (_guard, config) = create_test_config();
+        let local = crate::signing::resolve_signer(&config, "default").unwrap();
+        let path = thru_ledger::DerivationPath::new(0).unwrap();
+        let device = std::sync::Arc::new(thru_ledger::mock::SoftDevice::abandon());
+        let ledger = crate::signing::connect_ledger_with(device, path, None).unwrap();
+        let ledger = crate::signing::ResolvedSigner::from_ledger("ledger", path, ledger);
+
+        let mut output = Vec::new();
+        write_nonce_retry_notice(&mut output, &local, 2, 3).unwrap();
+        assert!(output.is_empty());
+
+        for attempt in 2..=3 {
+            output.clear();
+            write_nonce_retry_notice(&mut output, &ledger, attempt, 3).unwrap();
+            let notice = std::str::from_utf8(&output).unwrap();
+            assert!(notice.contains("Nonce too low"));
+            assert!(notice.contains("Review the new transaction hash"));
+            assert!(notice.contains(&format!("attempt {attempt}/3")));
+        }
     }
 
     #[test]

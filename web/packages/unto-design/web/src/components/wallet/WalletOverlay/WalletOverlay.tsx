@@ -40,7 +40,7 @@ export function WalletOverlay({
   closeOnScrim = true,
   closeOnEscape = true,
   container,
-  "aria-label": ariaLabel = "Thru Wallet",
+  "aria-label": ariaLabel = "Unto Wallet",
   className,
   children,
 }: WalletOverlayProps) {

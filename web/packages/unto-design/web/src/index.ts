@@ -34,13 +34,12 @@ export {
 export type { TextProps, TextVariant, TextComponentProps } from "./components/Text/Text";
 
 export { Dialog } from "./components/Dialog/Dialog";
-export { Drawer } from "@base-ui/react/drawer";
 export { AlertDialog } from "./components/AlertDialog/AlertDialog";
 export { Popover } from "./components/Popover/Popover";
 export { Tooltip } from "./components/Tooltip/Tooltip";
 export { PreviewCard } from "./components/PreviewCard/PreviewCard";
 export { Toast } from "./components/Toast/Toast";
-export type { ToastKind } from "./components/Toast/Toast";
+export type { ToastTone } from "./components/Toast/Toast";
 
 export { Combobox } from "./components/Combobox/Combobox";
 export { Autocomplete } from "./components/Autocomplete/Autocomplete";
@@ -78,6 +77,7 @@ export { ThemeToggle, useColorScheme } from "./components/ThemeToggle/ThemeToggl
 export type {
   ThemeToggleProps,
   UseColorSchemeOptions,
+  ColorScheme,
   ColorSchemeControls,
 } from "./components/ThemeToggle/ThemeToggle";
 export { ScrollArea } from "./components/ScrollArea/ScrollArea";
@@ -138,8 +138,6 @@ export { Spacer } from "./components/wallet/Spacer/Spacer";
 export type { SpacerProps } from "./components/wallet/Spacer/Spacer";
 export { ShowAfter } from "./components/wallet/ShowAfter/ShowAfter";
 export type { ShowAfterProps } from "./components/wallet/ShowAfter/ShowAfter";
-export { ThemeSwitch } from "./components/wallet/ThemeSwitch/ThemeSwitch";
-export type { ThemeSwitchProps, ColorScheme } from "./components/wallet/ThemeSwitch/ThemeSwitch";
 export { Balance } from "./components/wallet/Balance/Balance";
 export type { BalanceProps } from "./components/wallet/Balance/Balance";
 export { ChainsPath } from "./components/wallet/ChainsPath/ChainsPath";
@@ -175,10 +173,8 @@ export { Steps } from "./components/wallet/Steps/Steps";
 export type { StepsProps, StepItem, StepStatus } from "./components/wallet/Steps/Steps";
 export { Checklist } from "./components/wallet/Checklist/Checklist";
 export type { ChecklistProps } from "./components/wallet/Checklist/Checklist";
-export { ThruDisc, ThruWordmark, PoweredBy } from "./components/wallet/Brand/Brand";
-export type { ThruDiscProps, ThruWordmarkProps, PoweredByProps } from "./components/wallet/Brand/Brand";
-export { Dove } from "./components/wallet/Dove/Dove";
-export type { DoveProps } from "./components/wallet/Dove/Dove";
+export { UntoWordmark, PoweredBy } from "./components/wallet/Brand/Brand";
+export type { UntoWordmarkProps, PoweredByProps } from "./components/wallet/Brand/Brand";
 export { ErrorBox } from "./components/wallet/ErrorBox/ErrorBox";
 export type { ErrorBoxProps } from "./components/wallet/ErrorBox/ErrorBox";
 export {
@@ -200,7 +196,6 @@ export type {
 } from "./components/wallet/TxTree/TxTree";
 export {
   WalletSheet,
-  WALLET_SHEET_SLOW_MS,
   WALLET_SHEET_ESCALATE_MS,
 } from "./components/wallet/WalletSheet/WalletSheet";
 export { useWaitStages, WaitHero } from "./components/wallet/WalletSheet/wait";
@@ -258,8 +253,8 @@ export type {
 export { WalletOverlay } from "./components/wallet/WalletOverlay/WalletOverlay";
 export type { WalletOverlayProps } from "./components/wallet/WalletOverlay/WalletOverlay";
 
-export { ThruUsdLogo, type ThruUsdLogoProps } from "./ThruUsdLogo";
-export { isThruUsdSymbol } from "../../tokens/src/thrusd";
+export { UntoUsdLogo, type UntoUsdLogoProps } from "./UntoUsdLogo";
+export { isUntoUsdSymbol } from "../../tokens/src/untousd";
 
 export type { WalletSheetDepositKycProps } from "./components/wallet/WalletSheet/DepositKyc";
 export type {

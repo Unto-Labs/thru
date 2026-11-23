@@ -58,13 +58,22 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Root registrar
       fields:
+      - name: root_name_text
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'text(root_name, root_name_length)'
+        display-name: Root name
+        user-display: true
       - name: authority
+        display-name: Authority
         field-type:
           type-ref:
             name: Pubkey
       - name: root_name
         format: text
+        user-display: false
         field-type:
           array:
             size:
@@ -73,26 +82,38 @@ types:
             element-type:
               primitive: u8
       - name: root_name_length
+        user-display: false
         field-type:
           primitive: u32
       - name: total_subdomains
+        display-name: Subdomains registered
         field-type:
           primitive: u64
 - name: Domain
   kind:
     struct:
       packed: true
+      display-name: Domain
       fields:
+      - name: domain_name
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'text(name, name_length)'
+        display-name: Name
+        user-display: true
       - name: parent
+        display-name: Parent
         field-type:
           type-ref:
             name: Pubkey
       - name: owner
+        display-name: Owner
         field-type:
           type-ref:
             name: Pubkey
       - name: name
         format: text
+        user-display: false
         field-type:
           array:
             size:
@@ -101,15 +122,19 @@ types:
             element-type:
               primitive: u8
       - name: name_length
+        user-display: false
         field-type:
           primitive: u32
       - name: registration_time
+        display-name: Registered at (block time, ns)
         field-type:
           primitive: u64
       - name: record_count
+        display-name: Records
         field-type:
           primitive: u32
       - name: records
+        user-display: false
         field-type:
           array:
             size:
@@ -127,6 +152,7 @@ types:
       packed: true
       fields:
       - name: account_type
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -152,15 +178,37 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Create root registrar
       fields:
       - name: registrar_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: registrar
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(registrar_account_idx)'
+        display-name: Root registrar
+        user-display: true
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: authority
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Authority
+        user-display: true
+      - name: root_name_text
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'text(root_name, root_name_length)'
+        display-name: Root name
+        user-display: true
       - name: root_name
         format: text
+        user-display: false
         field-type:
           array:
             size:
@@ -169,27 +217,64 @@ types:
             element-type:
               primitive: u8
       - name: root_name_length
+        user-display: false
         field-type:
           primitive: u32
 - name: RegisterSubdomainArgs
   kind:
     struct:
       packed: true
+      display-name: Register subdomain
       fields:
+      - name: domain_name
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'text(name, name_length)'
+        display-name: Name
+        user-display: true
       - name: domain_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: domain
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(domain_account_idx)'
+        display-name: Domain
+        user-display: true
       - name: parent_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: parent
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(parent_account_idx)'
+        display-name: Parent
+        user-display: true
       - name: owner_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: owner
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(owner_account_idx)'
+        display-name: Owner
+        user-display: true
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: authority
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Parent authority
+        user-display: true
       - name: name
         format: text
+        user-display: false
         field-type:
           array:
             size:
@@ -198,24 +283,54 @@ types:
             element-type:
               primitive: u8
       - name: name_length
+        user-display: false
         field-type:
           primitive: u32
 - name: AppendRecordArgs
   kind:
     struct:
       packed: true
+      display-name: Add domain record
       fields:
       - name: domain_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: domain
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(domain_account_idx)'
+        display-name: Domain
+        user-display: true
       - name: owner_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: owner
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(owner_account_idx)'
+        display-name: Owner
+        user-display: true
+      - name: key_text
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'text(key, key_length)'
+        display-name: Key
+        user-display: true
+      - name: value_text
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'text(value, value_length)'
+        display-name: Value
+        user-display: true
       - name: key_length
+        user-display: false
         field-type:
           primitive: u32
       - name: key
         format: text
+        user-display: false
         field-type:
           array:
             size:
@@ -224,10 +339,12 @@ types:
             element-type:
               primitive: u8
       - name: value_length
+        user-display: false
         field-type:
           primitive: u32
       - name: value
         format: text
+        user-display: false
         field-type:
           array:
             size:
@@ -239,18 +356,41 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Delete domain record
       fields:
       - name: domain_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: domain
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(domain_account_idx)'
+        display-name: Domain
+        user-display: true
       - name: owner_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: owner
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(owner_account_idx)'
+        display-name: Owner
+        user-display: true
+      - name: key_text
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'text(key, key_length)'
+        display-name: Key
+        user-display: true
       - name: key_length
+        user-display: false
         field-type:
           primitive: u32
       - name: key
         format: text
+        user-display: false
         field-type:
           array:
             size:
@@ -262,19 +402,35 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Unregister domain
       fields:
       - name: domain_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: domain
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(domain_account_idx)'
+        display-name: Domain
+        user-display: true
       - name: owner_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: owner
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(owner_account_idx)'
+        display-name: Owner
+        user-display: true
 - name: NameServiceInstruction
   kind:
     struct:
       packed: true
       fields:
       - name: tag
+        user-display: false
         field-type:
           primitive: u32
       - name: payload
@@ -319,3 +475,44 @@ types:
       - name: code
         field-type:
           primitive: u64
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: invalid_instruction
+              tag-value: 1
+              comment: Instruction data is too short, the wrong size, or not a known name service instruction.
+            - name: invalid_account
+              tag-value: 2
+              comment: An account index is outside the account list of the transaction, or the account is not the expected name service account.
+            - name: unauthorized
+              tag-value: 3
+              comment: The owner or authority of the domain did not authorize this transaction.
+            - name: domain_not_found
+              tag-value: 4
+              comment: The domain does not exist.
+            - name: invalid_domain_name
+              tag-value: 5
+              comment: The domain name is too short, too long, or contains characters that are not allowed.
+            - name: invalid_record_data
+              tag-value: 6
+              comment: The record key or value is empty or too long.
+            - name: max_supply_reached
+              tag-value: 7
+              comment: No more subdomains can be registered under this registrar.
+            - name: invalid_parent
+              tag-value: 8
+              comment: The parent account is not a registrar or a domain.
+            - name: duplicate_key
+              tag-value: 9
+              comment: The domain already has a record with this key.
+            - name: record_not_found
+              tag-value: 10
+              comment: The domain has no record with this key.
+            - name: max_records_reached
+              tag-value: 11
+              comment: The domain already has the maximum number of records.

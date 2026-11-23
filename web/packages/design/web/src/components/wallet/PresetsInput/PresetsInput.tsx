@@ -22,7 +22,6 @@ export interface PresetOption {
 
 export interface PresetsInputProps {
   presets: PresetOption[];
-  /** Controlled value. */
   value?: string;
   /** Uncontrolled initial value; defaults to the first preset. */
   defaultValue?: string;

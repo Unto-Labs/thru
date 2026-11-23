@@ -53,7 +53,7 @@ test('trusted JSON origin list accepts all explicit hosts and rejects wildcard, 
   assert.deepEqual(readBrowserTelemetryOrigins({ APPS_BROWSER_TELEMETRY_ORIGIN: primary }), [primary]);
 });
 test('launch events need value and every launch label; other events may not carry them', () => {
-  const launch = { event: 'launch', timestamp: Date.now(), value: 1200, milestone: 'balance', mode: 'pwa', cache: 'warm', outcome: 'value', network: 'alphanet' };
+  const launch = { event: 'launch', timestamp: Date.now(), value: 1200, milestone: 'balance', mode: 'pwa', cache: 'warm', outcome: 'value', network: 'betanet' };
   assert.deepEqual(parseBrowserBatch(batch([launch])), [launch]);
   const { value, ...noValue } = launch;
   const rejected = [noValue, { ...launch, value: 300001 }, { ...launch, milestone: 'checkout' }, { ...launch, outcome: 'secret' },

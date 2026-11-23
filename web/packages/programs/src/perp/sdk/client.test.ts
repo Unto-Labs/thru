@@ -454,6 +454,8 @@ describe('PerpsClient.send', () => {
     await perps.send(built, createWalletSigner({ wallet, walletAddress: OWNER }));
     expect(intents).toHaveLength(1);
     expect(intents[0]).toMatchObject({ walletAddress: OWNER, programAddress: deployment.perpProgram, stateUnits: built.transaction.stateUnits });
+    /* It states the fee payer it built against, so the wallet refuses another signer. */
+    expect(intents[0]!.feePayerPublicKey).toBe(feePayer);
     expect(intents[0]!.readOnlyAddresses).toContain(deployment.perpProgram);
     expect(intents[0]!.readWriteAddresses).toContain(OWNER);
     expect(typeof intents[0]!.instructionData).toBe('string');

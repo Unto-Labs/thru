@@ -78,7 +78,6 @@ export interface ConnectButtonProps {
   onDisconnect?: () => void;
   /** Label of the sign-out item (default "Sign out"). */
   disconnectLabel?: React.ReactNode;
-  /** Which edge of the chip the menu aligns to. */
   menuAlign?: "left" | "right";
   defaultMenuOpen?: boolean;
   /**
@@ -87,7 +86,6 @@ export interface ConnectButtonProps {
    * static page (a gallery example).
    */
   menuModal?: boolean;
-  /** Controlled menu state. */
   menuOpen?: boolean;
   onMenuOpenChange?: (open: boolean) => void;
   /** Extra `Menu.Item`s inserted before the sign-out separator. */

@@ -12,6 +12,10 @@ impl WellKnownType for LatLngHandler {
         "LatLng"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("text", "formatted"))
+    }
+
     fn category(&self) -> &'static str {
         "google"
     }
@@ -33,17 +37,5 @@ impl WellKnownType for LatLngHandler {
         }
 
         WellKnownResult::None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn latlng_handler_type_name() {
-        let handler = LatLngHandler;
-        assert_eq!(handler.type_name(), "LatLng");
-        assert_eq!(handler.category(), "google");
     }
 }

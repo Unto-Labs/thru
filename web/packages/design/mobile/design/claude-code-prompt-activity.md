@@ -71,7 +71,7 @@ Home's existing card shows the **three newest** `ActivityItem`s with the same Ac
 
 Route `/activity/:signature`. NavBar 52 with back + "Details". Then:
 - **DetailHero** (new primitive): IconTile 48 (glyph 24) · title 20/600 · amount 34/700 (omitted for account events) · status line 14/500 with a 16 pt glyph: **Completed** (forest, check) · **Pending** (saffron, clock) · **Failed** (brick, ✕) — followed by the reason in plain words, 14 `fgMuted`. Map program errors to sentences: `InsufficientFunds` → "Not enough $ in your account when it ran. Nothing left your account."; pending → "Waiting for the network to confirm. Usually under a minute."; unknown → "The network rejected it." Keep the raw code for the technical rows.
-- **MetaTable** rows (h52, label mono 11 caps 96 wide, value mono 13 right, hairlines): Date & time ("Oct 2, 2026 · 2:14:05 PM"), From, To (own address → "You"), Network ("thru-alphanet"), Signature (shortened). Addresses and the signature get a copy affordance (`IconCopy` 16 in a 44 pt hit, copies the full string). Sessions add **Expires**; passkeys add **Device**. Account events use the same layout without amount rows.
+- **MetaTable** rows (h52, label mono 11 caps 96 wide, value mono 13 right, hairlines): Date & time ("Oct 2, 2026 · 2:14:05 PM"), From, To (own address → "You"), Network ("thru-betanet"), Signature (shortened). Addresses and the signature get a copy affordance (`IconCopy` 16 in a 44 pt hit, copies the full string). Sessions add **Expires**; passkeys add **Device**. Account events use the same layout without amount rows.
 - Actions: `Button` outline md × 2, paired 50/50, gutter 12 — **View in explorer** (↗) and **Share** (native share sheet / Web Share, copy fallback).
 - **Technical details** — see §6.
 

@@ -2435,7 +2435,7 @@ fn selected_network(config: &Config) -> Result<&'static str, CliError> {
     let rpc = Url::parse(&config.rpc_base_url).map_err(|_| {
         failure(
             "UNSUPPORTED_NETWORK",
-            "Select the canonical Alphanet or Betanet RPC profile before funding",
+            "Select the canonical Betanet RPC profile before funding",
             None,
         )
     })?;
@@ -2449,16 +2449,15 @@ fn selected_network(config: &Config) -> Result<&'static str, CliError> {
     {
         return Err(failure(
             "UNSUPPORTED_NETWORK",
-            "Custom/local RPC funding is not inferred. Select the canonical Alphanet or Betanet network profile",
+            "Custom/local RPC funding is not inferred. Select the canonical Betanet network profile",
             None,
         ));
     }
     match rpc.host_str() {
-        Some("rpc.alphanet.thru.org") => Ok("alphanet"),
         Some("rpc.betanet.thru.org") => Ok("betanet"),
         _ => Err(failure(
             "UNSUPPORTED_NETWORK",
-            "Funding supports only canonical Alphanet/Betanet RPCs; no request was sent",
+            "Funding supports only the canonical Betanet RPC; no request was sent",
             None,
         )),
     }

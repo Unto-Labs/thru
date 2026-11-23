@@ -6,7 +6,7 @@
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: rgba(21, 30, 30, 0.18);
+  background: rgba(8, 8, 8, 0.18);
   animation: uds-island-fade-in var(--duration-med) var(--ease-standard) both;
 }
 .uds-woverlay__scrim[data-ending-style] {
@@ -76,7 +76,7 @@
 
 @media (max-width: 640px) {
   .uds-woverlay__scrim {
-    background: rgba(24, 27, 27, 0.64);
+    background: rgba(8, 8, 8, 0.56);
   }
 
   .uds-woverlay {

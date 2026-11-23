@@ -1,145 +1,56 @@
-/* Plain CSS custom properties, no Tailwind. */
+/* Plain CSS custom properties, no Tailwind.
+
+   Modeled on untolabs.com: neutral greys from white to #080808, square
+   edges, one monospace face (JetBrains Mono) for everything, uppercase
+   spaced labels, ink buttons. One brownish-gold accent. */
 
 :root {
-  --steel-0:   #f7f8f8;
-  --steel-100: #eaeef0;
-  --steel-200: #cdd5db;
-  --steel-300: #a4b3bc;
-  --steel-400: #7e93a0;
-  --steel-500: #5b6f7b;
-  --steel-600: #43515b;
-  --steel-700: #2b353b;
-  --steel-800: #151b1e;
+  /* Neutral: untolabs.com greys, near-white (0) to near-black (800). */
+  --neutral-0:   #fafafa;
+  --neutral-100: #f3f3f3;
+  --neutral-200: #e5e5e5;
+  --neutral-300: #d4d4d4;
+  --neutral-400: #a3a3a3;
+  --neutral-500: #666666;
+  --neutral-600: #525252;
+  --neutral-700: #262626;
+  --neutral-800: #080808;
 
-  --teal-0:   #f9fbfb;
-  --teal-100: #eaf2f2;
-  --teal-200: #d1e1e1;
-  --teal-300: #a9c3c5;
-  --teal-400: #81a7a7;
-  --teal-500: #5e8787;
-  --teal-600: #456063;
-  --teal-700: #2d3e3e;
-  --teal-800: #151e1e;
+  /* Accent: brownish gold. 400 carries white text (4.3:1, just under AA
+     for small text); 300 is the dark-theme fill under dark text. */
+  --accent-100: #f6efe0;
+  --accent-200: #e6d3a8;
+  --accent-300: #d4b06a;
+  --accent-400: #9a7432;
+  /* Gold text on accent-100 (tags): 4.9:1. */
+  --accent-500: #84622a;
 
-  /* Brick — primary brand */
-  --brick-100: #fbdadc;
-  --brick-200: #f6acb0;
-  --brick-300: #ed787e;
-  --brick-400: #d33c43;
+  /* Status. */
+  /* Success: emerald, kept clear of the gold. */
+  --success-100: #d1fae5;
+  --success-200: #6ee7b7;
+  --success-300: #10b981;
+  --success-400: #047857;
 
-  --sky-100: #cfeffc;
-  --sky-200: #8cd4f2;
-  --sky-300: #28a3d7;
-  --sky-400: #0279b1;
+  /* Warning: yellow, kept apart from the gold accent. */
+  --warning-100: #fef9c3;
+  --warning-200: #fde68a;
+  --warning-300: #eab308;
+  --warning-400: #a16207;
 
-  --grass-100: #c2ebe8;
-  --grass-200: #75d1cc;
-  --grass-300: #239f97;
-  --grass-400: #0a766f;
+  --info-100: #e0eef5;
+  --info-200: #a8cfe2;
+  --info-300: #3d8db5;
+  --info-400: #1f6a8f;
 
-  --yellow-100: #fdefdd;
-  --yellow-200: #fde0ba;
-  --yellow-300: #fbc784;
-  --yellow-400: #ffad42;
-
-  --tan-100: #f6ebe5;
-  --tan-200: #ebd5c7;
-  --tan-300: #ddb8a0;
-  --tan-400: #c98f69;
-
-  /* sand is an alias of tan in thru-web (identical values) */
-  --sand-100: #f6ebe5;
-  --sand-200: #ebd5c7;
-  --sand-300: #ddb8a0;
-  --sand-400: #c98f69;
-
-  --golden: #ffffbd;
-
-  /* Signal reds — error / destructive, distinct from brand brick */
-  --red-bright: #ff4750;
-  --red-hot:    #ff3d3d;
-
-  --color-text-primary:            var(--steel-800);
-  --color-text-secondary:          var(--teal-600);
-  --color-text-tertiary:           var(--steel-400);
-  --color-text-brand:              var(--brick-400);
-  --color-text-disabled:           var(--steel-300);
-  --color-text-primary-inverse:    var(--teal-0);
-  --color-text-secondary-inverse:  var(--teal-200);
-  --color-text-tertiary-inverse:   var(--teal-400);
-  --color-text-disabled-inverse:   var(--steel-600);
-
-  --color-border-primary:    var(--teal-800);
-  --color-border-secondary:  var(--teal-400);
-  --color-border-tertiary:   var(--teal-200);
-  /* The standard form-control outline. */
-  --color-border-strong:     var(--teal-300);
-  --color-border-brand:      var(--brick-400);
-  --color-border-disabled:   var(--steel-300);
-
-  --color-text-danger:    var(--red-hot);
-  --color-border-danger:  var(--red-bright);
-  --color-surface-danger: var(--red-bright);
-
-  --color-surface-higher:           var(--teal-0);
-  --color-surface-primary:          var(--teal-100);
-  --color-surface-card:             #ffffff;
-  --color-surface-lower:            var(--teal-200);
-  --color-surface-disabled:         var(--steel-100);
-  --color-surface-higher-inverse:   var(--teal-600);
-  --color-surface-primary-inverse:  var(--teal-700);
-  --color-surface-lower-inverse:    var(--steel-800);
-  --color-surface-brick:            var(--brick-400);
-  --color-surface-sky:              var(--sky-400);
-  --color-surface-grass:            var(--grass-400);
-  --color-surface-yellow:           var(--yellow-400);
-  --color-surface-tan:              var(--tan-400);
-  --color-surface-sand:             var(--sand-400);
-  --color-golden:                   var(--golden);
-
-  /* Semantic aliases for Tailwind utilities. The @theme bridge points
-     utilities at these aliases so semantic classes (bg-surface-higher,
-     text-text-primary, border-border-tertiary, etc.) stay theme-aware. */
-  --tn-color-text-primary:            var(--color-text-primary);
-  --tn-color-text-secondary:          var(--color-text-secondary);
-  --tn-color-text-tertiary:           var(--color-text-tertiary);
-  --tn-color-text-brand:              var(--color-text-brand);
-  --tn-color-text-disabled:           var(--color-text-disabled);
-  --tn-color-text-primary-inverse:    var(--color-text-primary-inverse);
-  --tn-color-text-secondary-inverse:  var(--color-text-secondary-inverse);
-  --tn-color-text-tertiary-inverse:   var(--color-text-tertiary-inverse);
-  --tn-color-text-disabled-inverse:   var(--color-text-disabled-inverse);
-
-  --tn-color-border-primary:   var(--color-border-primary);
-  --tn-color-border-secondary: var(--color-border-secondary);
-  --tn-color-border-tertiary:  var(--color-border-tertiary);
-  --tn-color-border-strong:    var(--color-border-strong);
-  --tn-color-border-brand:     var(--color-border-brand);
-  --tn-color-border-disabled:  var(--color-border-disabled);
-
-  --tn-color-text-danger:    var(--color-text-danger);
-  --tn-color-border-danger:  var(--color-border-danger);
-  --tn-color-surface-danger: var(--color-surface-danger);
-
-  --tn-color-surface-higher:          var(--color-surface-higher);
-  --tn-color-surface-primary:         var(--color-surface-primary);
-  --tn-color-surface-card:            var(--color-surface-card);
-  --tn-color-surface-lower:           var(--color-surface-lower);
-  --tn-color-surface-disabled:        var(--color-surface-disabled);
-  --tn-color-surface-higher-inverse:  var(--color-surface-higher-inverse);
-  --tn-color-surface-primary-inverse: var(--color-surface-primary-inverse);
-  --tn-color-surface-lower-inverse:   var(--color-surface-lower-inverse);
-  --tn-color-surface-brick:           var(--color-surface-brick);
-  --tn-color-surface-sky:             var(--color-surface-sky);
-  --tn-color-surface-grass:           var(--color-surface-grass);
-  --tn-color-surface-yellow:          var(--color-surface-yellow);
-  --tn-color-surface-tan:             var(--color-surface-tan);
-  --tn-color-surface-sand:            var(--color-surface-sand);
-  --tn-color-golden:                  var(--color-golden);
+  --danger-100: #fbe4df;
+  --danger-200: #f4aa9c;
+  --danger-300: #e5533d;
+  --danger-400: #c8361f;
 
   /* Set by next/font (or @font-face) in the host app; fall back to system. */
-  --font-sans: var(--font-inter-tight, "Inter Tight", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif);
-  --font-mono: var(--font-jetbrains-mono, "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace);
+  --font-sans: var(--font-jetbrains-mono, "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace);
+  --font-mono: var(--font-sans);
 
   --space-1: 4px;
   --space-2: 8px;
@@ -152,128 +63,128 @@
   --space-9: 80px;
   --space-10: 120px;
 
-  --radius-none: 0;
-  --radius-xs:   2px;
-  --radius-sm:   4px;
-  --radius-md:   8px;
+  /* One corner for every rectangle: square. `pill` is only for shapes that
+     are circles by convention (radio, avatar, status dot, spinner, chain
+     disc). A skin rounds the whole system by setting --radius-box. */
+  --radius-box:  0;
+
+  /* Control heights. Every button, field, select, toggle and tab is exactly
+     one of these, border included, so controls of one size line up. */
+  --control-xs: 24px;
+  --control-sm: 32px;
+  --control-md: 36px;
+  --control-lg: 48px;
   --radius-pill: 999px;
 
-  --fw-regular:   400;
+  /* Component text sizes. Titles above 16px stay per component for now. */
+  --text-micro:   10px; /* dense mono data only: hex dumps, long addresses */
+  --text-label:   11px; /* uppercase labels, tags, small chips */
+  --text-caption: 12px;
+  --text-ui:      13px; /* controls: buttons, fields, menus */
+  --text-body:    14px;
+  --text-lead:    16px;
+  --text-title:   20px; /* dialog, sheet and wallet screen titles */
+
   --fw-medium:    500;
   --fw-semibold:  600;
-  --fw-bold:      700;
-  --fw-extrabold: 800;
 
-  --lh-tight: 1.0;
-  --lh-snug:  1.1;
-  --lh-body:  1.4;
-  --lh-loose: 1.6;
-
-  --tracking-display: -0.5px;
-  --tracking-tight:   -0.25px;
-  --tracking-normal:  0;
-  --tracking-utility: 0.02em;
+  --tracking-display: 0;
+  --tracking-utility: 0.1em;
 
   --duration-fast: 120ms;
   --duration-med:  200ms;
   --duration-slow: 320ms;
   --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-out:      cubic-bezier(0, 0, 0.2, 1);
-
-  /* Elevation: overlays only. */
-  --shadow-sm: 0 1px 2px rgba(21, 30, 30, 0.08);
-  --shadow-md: 0 4px 12px rgba(21, 30, 30, 0.12);
-  --shadow-lg: 0 12px 32px rgba(21, 30, 30, 0.18);
 }
 
 :root[data-theme="dark"],
 [data-theme="light"] [data-theme="dark"] {
   color-scheme: dark;
 
-  --color-text-primary:            var(--teal-0);
-  --color-text-secondary:          var(--teal-100);
-  --color-text-tertiary:           var(--teal-300);
-  --color-text-brand:              var(--brick-200);
-  --color-text-disabled:           var(--steel-500);
-  --color-text-primary-inverse:    var(--steel-800);
-  --color-text-secondary-inverse:  var(--teal-700);
-  --color-text-tertiary-inverse:   var(--teal-600);
-  --color-text-disabled-inverse:   var(--steel-300);
+  --color-text-primary:            #f3f3f3;
+  --color-text-secondary:          #a3a3a3;
+  --color-text-tertiary:           #8a8a8a;
+  --color-text-brand:              var(--accent-200);
+  --color-text-disabled:           #525252;
+  --color-text-success:            var(--success-200);
+  --color-text-warning:            var(--warning-200);
+  --color-text-primary-inverse:    var(--neutral-800);
+  --color-text-secondary-inverse:  var(--neutral-600);
+  --color-text-tertiary-inverse:   var(--neutral-500);
 
-  --color-border-primary:    var(--teal-100);
-  --color-border-secondary:  var(--teal-500);
-  --color-border-tertiary:   color-mix(in srgb, var(--teal-500) 44%, var(--teal-800));
-  --color-border-strong:     var(--teal-500);
-  --color-border-brand:      var(--brick-200);
-  --color-border-disabled:   var(--steel-600);
+  --color-border-primary:    #f3f3f3;
+  --color-border-secondary:  #333333;
+  --color-border-tertiary:   #262626;
+  --color-border-strong:     #6b6b6b;
+  --color-border-brand:      var(--accent-300);
+  --color-border-disabled:   #262626;
 
-  --color-text-danger:    #ff8a8f;
-  --color-border-danger:  #ff6f76;
-  --color-surface-danger: #ff4750;
+  --color-text-danger:    var(--danger-200);
+  --color-border-danger:  var(--danger-300);
 
-  --color-surface-higher:           color-mix(in srgb, var(--teal-800) 88%, #000000);
-  --color-surface-primary:          var(--teal-800);
-  --color-surface-card:             color-mix(in srgb, var(--teal-700) 76%, var(--teal-800));
-  --color-surface-lower:            color-mix(in srgb, var(--teal-600) 36%, var(--teal-800));
-  --color-surface-disabled:         color-mix(in srgb, var(--steel-700) 70%, var(--teal-800));
-  --color-surface-higher-inverse:   var(--teal-0);
-  --color-surface-primary-inverse:  var(--teal-100);
-  --color-surface-lower-inverse:    var(--teal-200);
-  --color-surface-brick:            var(--brick-300);
-  --color-surface-sky:              var(--sky-300);
-  --color-surface-grass:            var(--grass-300);
-  --color-surface-yellow:           var(--yellow-300);
-  --color-surface-tan:              var(--tan-300);
-  --color-surface-sand:             var(--sand-300);
-  --color-golden:                   #f7f6a8;
+  /* Same order as light: page and cards share one surface, panels (primary)
+     and wells (lower) step away from it. */
+  --color-surface-higher:           #080808;
+  --color-surface-primary:          #111111;
+  --color-surface-card:             #080808;
+  --color-surface-lower:            #1a1a1a;
+  --color-surface-disabled:         #111111;
+  --color-surface-higher-inverse:   var(--neutral-200);
+  --color-surface-lower-inverse:    #ffffff;
+  --color-surface-accent:           var(--accent-300);
+  --color-surface-success:          var(--success-300);
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.72);
-  --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.82);
-  --shadow-lg: 0 22px 56px rgba(0, 0, 0, 0.9);
+  --color-scrim: rgba(0, 0, 0, 0.6);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 8px 24px -4px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 28px 56px -12px rgba(0, 0, 0, 0.75);
 }
 
+/* Light semantics. `:root` is the default; the other two selectors restore
+   light inside a dark scope. Kept after the dark block so a light scope
+   nested in dark wins at equal specificity. */
+:root,
 :root[data-theme="light"],
 [data-theme="dark"] [data-theme="light"] {
   color-scheme: light;
 
-  --color-text-primary:            var(--steel-800);
-  --color-text-secondary:          var(--teal-600);
-  --color-text-tertiary:           var(--steel-400);
-  --color-text-brand:              var(--brick-400);
-  --color-text-disabled:           var(--steel-300);
-  --color-text-primary-inverse:    var(--teal-0);
-  --color-text-secondary-inverse:  var(--teal-200);
-  --color-text-tertiary-inverse:   var(--teal-400);
-  --color-text-disabled-inverse:   var(--steel-600);
+  --color-text-primary:            var(--neutral-800);
+  --color-text-secondary:          var(--neutral-600);
+  --color-text-tertiary:           var(--neutral-500);
+  --color-text-brand:              var(--accent-400);
+  --color-text-disabled:           var(--neutral-400);
+  --color-text-success:            var(--success-400);
+  --color-text-warning:            var(--warning-400);
+  --color-text-danger:             var(--danger-400);
+  --color-text-primary-inverse:    #ffffff;
+  --color-text-secondary-inverse:  var(--neutral-200);
+  --color-text-tertiary-inverse:   var(--neutral-400);
 
-  --color-border-primary:    var(--teal-800);
-  --color-border-secondary:  var(--teal-400);
-  --color-border-tertiary:   var(--teal-200);
-  --color-border-strong:     var(--teal-300);
-  --color-border-brand:      var(--brick-400);
-  --color-border-disabled:   var(--steel-300);
+  --color-border-primary:    var(--neutral-800);
+  --color-border-secondary:  var(--neutral-300);
+  --color-border-tertiary:   var(--neutral-200);
+  /* Form-control outlines and the off switch track: 3:1 on page and panel. */
+  --color-border-strong:     #858585;
+  /* Focus rings and focused field borders. */
+  --color-border-brand:      var(--accent-400);
+  --color-border-disabled:   var(--neutral-200);
+  --color-border-danger:     var(--danger-300);
 
-  --color-text-danger:    var(--red-hot);
-  --color-border-danger:  var(--red-bright);
-  --color-surface-danger: var(--red-bright);
-
-  --color-surface-higher:           var(--teal-0);
-  --color-surface-primary:          var(--teal-100);
+  --color-surface-higher:           #ffffff;
+  --color-surface-primary:          var(--neutral-0);
   --color-surface-card:             #ffffff;
-  --color-surface-lower:            var(--teal-200);
-  --color-surface-disabled:         var(--steel-100);
-  --color-surface-higher-inverse:   var(--teal-600);
-  --color-surface-primary-inverse:  var(--teal-700);
-  --color-surface-lower-inverse:    var(--steel-800);
-  --color-surface-brick:            var(--brick-400);
-  --color-surface-sky:              var(--sky-400);
-  --color-surface-grass:            var(--grass-400);
-  --color-surface-yellow:           var(--yellow-400);
-  --color-surface-tan:              var(--tan-400);
-  --color-surface-sand:             var(--sand-400);
-  --color-golden:                   var(--golden);
+  --color-surface-lower:            var(--neutral-100);
+  --color-surface-disabled:         var(--neutral-100);
+  --color-surface-higher-inverse:   var(--neutral-700);
+  --color-surface-lower-inverse:    var(--neutral-800);
+  --color-surface-accent:           var(--accent-400);
+  --color-surface-success:          var(--success-400);
 
-  --shadow-sm: 0 1px 2px rgba(21, 30, 30, 0.08);
-  --shadow-md: 0 4px 12px rgba(21, 30, 30, 0.12);
-  --shadow-lg: 0 12px 32px rgba(21, 30, 30, 0.18);
+  /* Elevation: overlays and the elevated Card. Low and wide. */
+  --color-scrim: rgba(8, 8, 8, 0.4);
+  --shadow-sm: 0 1px 2px rgba(8, 8, 8, 0.06);
+  --shadow-md: 0 6px 20px -4px rgba(8, 8, 8, 0.12);
+  --shadow-lg: 0 24px 48px -12px rgba(8, 8, 8, 0.22);
 }

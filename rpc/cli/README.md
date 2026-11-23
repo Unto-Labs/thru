@@ -56,7 +56,23 @@ thru keys add carol --file ./private/carol.key --store keychain
 
 # Import from a pipe without putting the seed in argv.
 secret-provider | thru keys add imported --stdin --store keychain
+
+# Restore a key from a BIP-39 recovery phrase (stdin or an owner-only file).
+# At a terminal, --stdin prompts for the phrase with echo off.
+thru keys add restored --mnemonic --stdin --account 1
+
+# Generate a 24-word recovery phrase, store the derived key, print the phrase once.
+thru keys generate dave --mnemonic
 ```
+
+Recovery-phrase keys follow `specs/hd-derivation/thru-hd-derivation.md`: BIP-39
+(English, empty passphrase) and SLIP-0010 Ed25519 on the fully hardened path
+`m/44'/8478'/<account>'/<change>'`, the same derivation as the TypeScript SDK.
+`--account N` selects `m/44'/8478'/N'/0'` (the default is account 0);
+`--path` takes a full path. Only the derived key is stored, in a file or
+Keychain like any other key; the phrase is never stored, and `generate
+--mnemonic` prints it only once (`keys.mnemonic` with `--json`). Phrases are
+never accepted as command-line arguments.
 
 Key files the CLI writes use the version-1 JSON key file format:
 
@@ -379,6 +395,9 @@ verification and install.
 
 ### Publish order
 
+0. **`thru-ledger` (0.1.0)** (`rpc/thru-ledger`), after `thru-base`: `thru-core`
+   depends on it for Ledger key sources.
+
 1. **`thru-core` (0.1.0)**
    ```
    cd crates/thru-core && cargo publish
@@ -452,3 +471,59 @@ Use an existing UUSD token account. THRU uses `faucet withdraw thru <account> <r
 `THRU_DEVELOPERS_API_KEY` supplies a raw API key from your secret environment, overriding login for THRU and UUSD funding. Each account shares 5 requests per rolling minute across all callers. Funding is never retried automatically; check balance/history after uncertain results.
 
 [Authentication configuration](https://thru.org/docs/cli-reference/global-flags-and-config#developers-authentication) · [Faucet reference](https://thru.org/docs/cli-reference/faucet-commands)
+
+## Ledger keys
+
+Keys can live on a Ledger running the Thru app (`rpc/thru-ledger`,
+`specs/ledger/app-thru-apdu.md`). A Ledger key is registered like any other
+key reference: its `source` is `{type: ledger, path: "44'/8478'/<account>'/0'"}`
+and its `public_key` is the address the device reported. Signer arguments also
+accept the path directly as `ledger://44'/8478'/<account>'/0'`.
+
+```bash
+thru keys add-ledger hw --account 0          # confirm the address on the device, then store it
+thru keys show hw [--verify]                 # address/path; --verify re-displays it on the device
+thru account create-eoa --ledger hw --fee-payer default   # SIGN_EOA_AUTH on the device + creation tx
+thru transfer hw <dst> 100                   # transactions with a Ledger fee payer sign on the device
+thru token transfer <from> <to> 25 --fee-payer hw   # the Ledger shows the mint and the owners
+thru txn execute <program> <hex> --fee-payer "ledger://44'/8478'/1'/0'"
+thru message sign --key hw "hello"           # prints the ts... signature (works for local keys too)
+```
+
+Ledger signing is supported by `transfer`, `token transfer`, `account create`,
+`account create-eoa`, `txn sign`, `txn execute` and `message sign`; other
+commands refuse a Ledger fee payer with a clear error.
+
+`token transfer` reads the destination token account and sends the Thru app
+its mint and owner (the token hint, APDU spec §7.2.1). If both token accounts
+are the default accounts of their owners, the device shows the source and
+recipient wallets and the token mint instead of the token accounts; otherwise
+the CLI prints a note and the device shows the token accounts. The amount is in
+the token's base units either way.
+
+When the new account and fee payer are different paths on the same Ledger,
+`account create-eoa` uses one connection and asks for both approvals in order.
+
+Before the device asks for approval, the CLI prints (on stderr) the review the
+device will show: for a native, token or wallet transfer the action, source,
+recipient and amount first, then network, fee payer, program, fee, nonce,
+valid slots, account counts, instruction data size and the full **transaction
+hash** (64 lowercase hex characters), or the message text / message hash.
+Transfers like these need no blind signing; other transactions do. Compare them
+with the device screens and reject on the device if anything differs. With
+`--json`, the same preview is in the command output as `ledger_preview`.
+
+If `txn execute` receives a nonce-too-low response, it rebuilds and re-signs
+the transaction. For a Ledger fee payer, it announces the retry and attempt
+number before the next review; compare the new transaction hash on the device.
+
+Transport: USB HID (Linux needs Ledger's udev rules). The Speculos emulator
+transport (`THRU_LEDGER_SPECULOS=127.0.0.1:9999`) is compiled in only with the
+test-only `ledger-speculos` feature (`cargo build --release -p thru --features
+ledger-speculos`); release builds refuse to run when the variable is set, and
+feature builds print an "EMULATOR, NOT A HARDWARE DEVICE" warning on every
+connection. Errors name the fix (unlock the device, open the Thru app, enable
+blind signing); in `--json` mode they are reported as
+`{"error": {"type": "ledger", "code": ..., "status_word": ..., "reason": ...}}`,
+where `reason` is the corpus reason class (for example `rw_unsorted`) of a
+rejected transaction.

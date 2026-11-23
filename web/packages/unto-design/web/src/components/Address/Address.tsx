@@ -85,7 +85,7 @@ export function Address({
       title={showTitle && truncated ? value : undefined}
     >
       {linked}
-      {copy && <CopyButton value={value} icon />}
+      {copy && <CopyButton value={value} variant="icon" />}
     </span>
   );
 }

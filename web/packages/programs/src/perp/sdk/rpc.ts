@@ -26,7 +26,7 @@ export function errorMessage(error: unknown): string {
   return message.split('\n')[0] ?? message;
 }
 
-/** The Alphanet query service refuses an account whose first page was not
+/** The query service refuses an account whose first page was not
     rewritten by the transaction that last bumped its sequence number
     ("account data validation failed ... seq mismatch", surfaced as a gRPC
     `unavailable`). It heals as soon as the next order post rewrites the

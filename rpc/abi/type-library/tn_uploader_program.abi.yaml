@@ -20,28 +20,54 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Create upload buffer
       fields:
+      - name: buffer_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(buffer_account_idx)'
+        display-name: Buffer
+        user-display: true
+      - name: metadata_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(meta_account_idx)'
+        display-name: Buffer metadata
+        user-display: true
+      - name: authority_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Authority
+        user-display: true
       - name: buffer_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: buffer_account_sz
+        display-name: Buffer size (bytes)
         field-type:
           primitive: u32
       - name: expected_account_hash
+        user-display: false
         field-type:
           type-ref:
             name: Hash
             package: "thru.common.primitives"
       - name: seed_len
+        user-display: false
         field-type:
           primitive: u32
       - name: seed
+        user-display: false
         field-type:
           array:
             size:
@@ -54,20 +80,38 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Write buffer
       fields:
+      - name: buffer_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(buffer_account_idx)'
+        display-name: Buffer
+        user-display: true
+      - name: metadata_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(meta_account_idx)'
+        display-name: Buffer metadata
+        user-display: true
       - name: buffer_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: data_len
+        display-name: Size (bytes)
         field-type:
           primitive: u32
       - name: data_offset
+        display-name: Offset (bytes)
         field-type:
           primitive: u32
       - name: data
+        user-display: false
         field-type:
           array:
             size:
@@ -80,11 +124,26 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Destroy upload buffer
       fields:
+      - name: buffer_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(buffer_account_idx)'
+        display-name: Buffer
+        user-display: true
+      - name: metadata_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(meta_account_idx)'
+        display-name: Buffer metadata
+        user-display: true
       - name: buffer_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
 
@@ -92,14 +151,30 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Finalize upload buffer
       fields:
+      - name: buffer_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(buffer_account_idx)'
+        display-name: Buffer
+        user-display: true
+      - name: metadata_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(meta_account_idx)'
+        display-name: Buffer metadata
+        user-display: true
       - name: buffer_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: expected_account_hash
+        user-display: false
         field-type:
           type-ref:
             name: Hash
@@ -111,6 +186,7 @@ types:
       packed: true
       fields:
       - name: tag
+        user-display: false
         field-type:
           primitive: u32
       - name: payload
@@ -151,6 +227,7 @@ types:
       packed: true
       fields:
       - name: account_type
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -173,20 +250,30 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Upload buffer
       fields:
       - name: authority
+        display-name: Authority
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: expected_account_hash
+        user-display: false
         field-type:
           type-ref:
             name: Hash
             package: "thru.common.primitives"
       - name: state
+        user-display: false
         field-type:
           primitive: u8
+      - name: state_name
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if state == 1 { "Open" } else if state == 2 { "Finalized" } else { `Unknown (${state})` }'
+        display-name: State
+        user-display: true
 
 - name: UploaderError
   kind:
@@ -196,3 +283,47 @@ types:
       - name: code
         field-type:
           primitive: u64
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: not_authorized
+              tag-value: 1
+              comment: The upload authority did not authorize this transaction.
+            - name: invalid_args
+              tag-value: 2
+              comment: The instruction arguments are not valid.
+            - name: meta_account_missing
+              tag-value: 3
+              comment: The upload metadata account does not exist.
+            - name: buffer_account_missing
+              tag-value: 4
+              comment: The upload buffer account does not exist.
+            - name: account_not_open
+              tag-value: 5
+              comment: The upload is no longer open, so it cannot be written or finalized.
+            - name: hash_mismatch
+              tag-value: 6
+              comment: The uploaded data does not match the hash given when the upload was created.
+            - name: write_overflow
+              tag-value: 7
+              comment: The write offset plus the write length overflows.
+            - name: write_out_of_bounds
+              tag-value: 8
+              comment: The write would go past the end of the upload buffer.
+            - name: invalid_account_index
+              tag-value: 9
+              comment: An account index in the instruction is outside the account list of the transaction.
+            - name: invalid_meta_size
+              tag-value: 10
+              comment: The metadata account is not an upload metadata account.
+            - name: account_relationship
+              tag-value: 11
+              comment: The metadata or buffer account is not owned by the uploader program, or the buffer does not belong to this metadata account.
+            - name: invalid_instruction
+              tag-value: 12
+              comment: Instruction data is too short, has an oversized seed, or is not a known uploader instruction.

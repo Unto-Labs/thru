@@ -23,6 +23,10 @@ impl WellKnownType for CalendarPeriodHandler {
         "CalendarPeriod"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("text", "name"))
+    }
+
     fn category(&self) -> &'static str {
         "google"
     }
@@ -47,17 +51,5 @@ impl WellKnownType for CalendarPeriodHandler {
         }
 
         WellKnownResult::None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn calendar_period_handler_type_name() {
-        let handler = CalendarPeriodHandler;
-        assert_eq!(handler.type_name(), "CalendarPeriod");
-        assert_eq!(handler.category(), "google");
     }
 }

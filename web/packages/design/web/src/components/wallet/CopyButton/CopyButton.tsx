@@ -115,7 +115,6 @@ export interface CopyButtonProps {
   variant?: ButtonProps["variant"];
   size?: ButtonProps["size"];
   className?: string;
-  /** Called once the value is on the clipboard. */
   onCopied?: () => void;
 }
 

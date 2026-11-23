@@ -21,14 +21,14 @@ const X = (p: React.SVGProps<SVGSVGElement>) => (
 );
 
 export interface FrameSite {
-  /** Site label, e.g. "app.thru.org". */
+  /** Site label, e.g. "app.unto.org". */
   label: string;
   /** Full origin shown on hover when the label is its host. */
   labelTitle?: string;
   /** Keep the entire requester host visible, including long subdomains. */
   wrapLabel?: boolean;
   /** Site identity mark shown before the label (a `Disc`, an `<img>`, …).
-   *  Defaults to the brick Thru circle. */
+   *  Defaults to a plain accent dot. */
   icon?: React.ReactNode;
   verified?: boolean;
   /** Optional chip text, e.g. "mainnet". */
@@ -163,7 +163,7 @@ export interface FrameProps {
   /** Ease the frame to its new size when the content changes — for a frame
    *  that stays mounted while screens swap inside it. */
   animateResize?: boolean;
-  /** Active network, e.g. "Alphanet": a status line under the screens. */
+  /** Active network, e.g. "Betanet": a status line under the screens. */
   network?: React.ReactNode;
   children: React.ReactNode;
   className?: string;

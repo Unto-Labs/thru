@@ -43,7 +43,6 @@ function subscribe(listener: () => void) {
   };
 }
 
-/** Whether the OS asks for reduced motion right now. */
 export function isReduceMotionEnabled(): boolean {
   return reduceMotion;
 }

@@ -6,8 +6,11 @@
   font-family: var(--font-sans);
   font-weight: var(--fw-semibold);
   line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-utility);
+  box-sizing: border-box;
   border: 1px solid transparent;
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
   cursor: pointer;
   transition:
     background-color var(--duration-fast) var(--ease-standard),
@@ -23,23 +26,34 @@
   outline: 2px solid var(--color-border-brand);
   outline-offset: 2px;
 }
-.uds-btn:disabled {
-  opacity: 0.45;
+.uds-btn:disabled,
+.uds-btn[data-disabled] {
+  background: var(--color-surface-disabled);
+  color: var(--color-text-disabled);
+  border-color: transparent;
   cursor: not-allowed;
   transform: none;
+}
+.uds-btn--outline:disabled,
+.uds-btn--outline[data-disabled] {
+  background: transparent;
+  border-color: var(--color-border-disabled);
+}
+.uds-btn--ghost:disabled,
+.uds-btn--ghost[data-disabled] {
+  background: transparent;
 }
 
 /* `lg` is the 48px touch size for embedded and mobile surfaces. */
 .uds-btn--lg {
-  box-sizing: border-box;
-  min-height: 48px;
+  height: var(--control-lg);
   width: 100%;
   padding: 0 var(--space-4);
-  font-size: 14px;
+  font-size: var(--text-body);
 }
-.uds-btn--md { padding: var(--space-2) var(--space-4); font-size: 13px; }
-.uds-btn--sm { padding: var(--space-2) var(--space-3); font-size: 12px; }
-.uds-btn--xs { padding: var(--space-1) var(--space-2);  font-size: 11px; }
+.uds-btn--md { height: var(--control-md); padding: 0 var(--space-4); font-size: var(--text-ui); }
+.uds-btn--sm { height: var(--control-sm); padding: 0 var(--space-3); font-size: var(--text-caption); }
+.uds-btn--xs { height: var(--control-xs); padding: 0 var(--space-2); font-size: var(--text-label); }
 
 .uds-btn--primary {
   background: var(--color-surface-lower-inverse);
@@ -50,12 +64,12 @@
   background: var(--color-surface-higher-inverse);
 }
 
-.uds-btn--secondary {
-  background: var(--color-surface-brick);
+.uds-btn--accent {
+  background: var(--color-surface-accent);
   color: var(--color-text-primary-inverse);
 }
-.uds-btn--secondary:hover:not(:disabled),
-.uds-btn--secondary:focus-visible {
+.uds-btn--accent:hover:not(:disabled),
+.uds-btn--accent:focus-visible {
   opacity: 0.9;
 }
 

@@ -613,6 +613,24 @@
   flex-direction: column;
   gap: var(--space-3);
 }
+.tds-dep__kyc-country-note {
+  margin-top: var(--space-1);
+}
+/* height, not min-height: iOS Safari ignores min-height on a native select. */
+.tds-dep__kyc-id-type .tds-field__control {
+  box-sizing: border-box;
+  height: 48px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+}
+.tds-dep__kyc-id-type .tds-field__control[aria-invalid="true"] {
+  border-color: var(--color-border-danger);
+}
+/* The error style of the form's other fields (Input.css). */
+.tds-dep__kyc-id-type .tds-field__error {
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
 .tds-dep__kyc-address {
   display: flex;
   flex-direction: column;
@@ -637,19 +655,35 @@
   flex-direction: column;
   gap: var(--space-3);
 }
-.tds-dep__kyc-note {
+.tds-dep__documents {
   display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  color: var(--color-text-secondary);
-  font-size: 12px;
-  line-height: 1.5;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+/* Taller than the Needed tag, so the row keeps its height when a check replaces the tag. */
+.tds-dep__document-row {
+  min-height: 28px;
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: var(--fw-semibold);
+}
+.tds-dep__document-row > svg {
+  flex: none;
+}
+.tds-dep__document-name {
+  flex: 1;
+  overflow-wrap: anywhere;
 }
 @media (min-width: 641px) {
   .tds-dep__kyc-contact {
     grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
   }
-  .tds-dep__kyc-identity {
+  /* The dialog is narrower than a phone's sheet: a number with a country code fits beside the
+     email there and not here. */
+  .tds-dep__kyc-contact--international {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -701,11 +735,15 @@
     margin-right: calc(-1 * var(--space-3));
     padding-right: var(--space-3);
   }
-  /* A 44px target for each transfer method's tab. */
   .tds-dep__bank-tab {
     min-height: 44px;
   }
-  /* The outline button keeps the small label of the flow's other buttons. */
+  /* A 44px target for the 30px small buttons, without moving their rows. */
+  .tds-dep__agreement-label .tds-btn,
+  .tds-dep__pending-foot .tds-btn {
+    min-height: 44px;
+    margin-block: calc((30px - 44px) / 2);
+  }
   .tds-dep__activity .tds-wsheet__cta {
     font-size: 13px;
   }
@@ -719,7 +757,6 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
-/* One transfer method's panel: its rows, then how long it takes. */
 .tds-tabs__panel.tds-dep__bank-panel {
   display: flex;
   flex-direction: column;
@@ -735,7 +772,6 @@
 .tds-dep__activity-amount {
   font-family: var(--font-mono);
 }
-/* Wraps, so a long return reason shows in full. */
 .tds-dep__activity-detail {
   font-size: 11px;
   color: var(--color-text-secondary);

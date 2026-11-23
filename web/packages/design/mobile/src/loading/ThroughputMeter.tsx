@@ -350,7 +350,7 @@ export interface MeterChannel {
 }
 
 export interface ChannelStatusProps {
-  /** One plain sentence: "Connecting to alphanet". */
+  /** One plain sentence: "Connecting to betanet". */
   phase: string;
   /** Endpoint host. Truncated in the middle so both ends stay readable. */
   caption?: string;

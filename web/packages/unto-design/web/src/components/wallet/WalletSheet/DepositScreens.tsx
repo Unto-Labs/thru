@@ -14,10 +14,9 @@ import { shortenWalletAddress } from "../AccountMenu/AccountMenu";
 import { Screen } from "../Screen/Screen";
 import { Steps, type StepItem } from "../Steps/Steps";
 import { Disc } from "../Disc/Disc";
-import { ThruDisc } from "../Brand/Brand";
 import { useCopy } from "../CopyButton/CopyButton";
 import { chainMeta } from "../registry";
-import { useWaitStages, WaitHero, WALLET_SHEET_SLOW_MS } from "./wait";
+import { WaitHero } from "./wait";
 import "./DepositScreens.css";
 
 const PlusCircle = (p: React.SVGProps<SVGSVGElement>) => (
@@ -249,7 +248,7 @@ export interface DepositQrProps {
 }
 
 /**
- * DepositQr — a real QR, error-correction H so the Thru disc can sit over the
+ * DepositQr — a real QR, error-correction H so a logo can sit over the
  * centre.
  */
 export function DepositQr({ value, size = 148, className }: DepositQrProps) {
@@ -284,9 +283,6 @@ export function DepositQr({ value, size = 148, className }: DepositQrProps) {
           )}
         </svg>
       )}
-      <span className="uds-dep__qr-mark">
-        <ThruDisc size={26} />
-      </span>
     </span>
   );
 }
@@ -445,7 +441,7 @@ function DepositMethodRow({ art, title, description, tag, onSelect, open, onColl
 
 function DepositScreen({
   title = "Add funds",
-  description = "Choose how to fund your Thru Wallet. Whatever you send, it arrives as $.",
+  description = "Choose how to fund your Unto Wallet. Whatever you send, it arrives as $.",
   methods = ["crypto", "card"],
   cryptoTitle = "Deposit crypto",
   cryptoDescription = "Any chain, any token · from a wallet or exchange",
@@ -1465,7 +1461,6 @@ export interface WalletSheetDepositPendingProps {
   title?: React.ReactNode;
   description?: React.ReactNode;
   steps?: StepItem[];
-  slowAfterMs?: number;
   note?: React.ReactNode;
   onClose?: () => void;
   closeLabel?: React.ReactNode;
@@ -1477,12 +1472,10 @@ function DepositPending({
   title,
   description,
   steps,
-  slowAfterMs = WALLET_SHEET_SLOW_MS,
   note = "Safe to close. We’ll notify you when it lands.",
   onClose,
   closeLabel = "Close",
 }: WalletSheetDepositPendingProps) {
-  const { slow } = useWaitStages(method, slowAfterMs, 0, false);
   return (
     <Screen>
       {step && (
@@ -1491,7 +1484,6 @@ function DepositPending({
         </div>
       )}
       <WaitHero
-        slow={slow}
         title={
           title ??
           (method === "card"

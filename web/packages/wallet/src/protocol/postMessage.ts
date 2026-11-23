@@ -70,7 +70,28 @@ export const EMBEDDED_PROVIDER_EVENTS = {
   DEPOSIT_PENDING: "deposit:pending",
   DEPOSIT_COMPLETED: "deposit:completed",
   DEPOSIT_CANCELLED: "deposit:cancelled",
+  /**
+   * The wallet still shows a sheet for request `requestId`: the user is
+   * working on it (a passkey prompt, a Ledger review, account settings).
+   * Sent every `REQUEST_KEEPALIVE_INTERVAL_MS` while the sheet is open. The
+   * host restarts that request's timeout and does not pass the event on to
+   * the app. It is an event rather than a message carrying the request `id`
+   * because a host takes any message with a pending request's `id` as that
+   * request's response.
+   */
+  REQUEST_KEEPALIVE: "request_keepalive",
 } as const;
+
+export interface RequestKeepAliveEventPayload {
+  requestId: string;
+}
+
+/**
+ * How often the wallet sends `request_keepalive` for a request whose sheet
+ * is open. Well inside the host's 5-minute timeout, so a throttled
+ * background timer (at most once a minute) still keeps the request alive.
+ */
+export const REQUEST_KEEPALIVE_INTERVAL_MS = 60 * 1000;
 
 export interface UiHideEventPayload {
   exitMs?: number;
@@ -310,7 +331,7 @@ export interface AccountMenuPayload {
   anchor: AccountMenuAnchor;
   /** Which edge of the anchor the menu aligns to (default right). */
   align?: "left" | "right";
-  /** Network label shown in the menu header, e.g. "alphanet". */
+  /** Network label shown in the menu header, e.g. "betanet". */
   network?: string;
   /** Explorer page of the current account. */
   explorerUrl?: string;
@@ -532,6 +553,9 @@ export const ErrorCode = {
   ALREADY_CONNECTED: "ALREADY_CONNECTED",
   ACCOUNT_NOT_FOUND: "ACCOUNT_NOT_FOUND",
   ACCOUNT_CHANGED: "ACCOUNT_CHANGED",
+  /** The signer that would sign does not pay from the request's
+      `feePayerPublicKey`: rebuild against a fresh signing context. */
+  SIGNER_CHANGED: "SIGNER_CHANGED",
   INVALID_TRANSACTION: "INVALID_TRANSACTION",
   TRANSACTION_FAILED: "TRANSACTION_FAILED",
   INSUFFICIENT_FUNDS: "INSUFFICIENT_FUNDS",
@@ -572,11 +596,27 @@ export function sanitizePasskeyName(name?: string): string | undefined {
 
 export type { AppMetadata, ConnectResult };
 
+/**
+ * A message for the wallet to sign.
+ *
+ * The wallet signs with the hardware-wallet account the user chose for
+ * message signing, whichever account the app is connected to. A passkey
+ * wallet's address is derived and has no signing key, so the connected
+ * account itself never signs.
+ */
 export interface SignMessagePayload {
   message: string | number[];
+  /** Ignored: it does not choose the signing key. */
   accountIndex?: number;
 }
 
+/**
+ * `publicKey` is the address of the hardware-wallet account that signed. It
+ * is not the connected account's address, and the signer is not necessarily
+ * an authority of the connected wallet. An app that takes the signature as
+ * proof of control of the connected wallet must check on chain that
+ * `publicKey` is one of that wallet's authorities.
+ */
 export interface SignMessageResult {
   signature: number[];
   publicKey: string;
@@ -602,6 +642,14 @@ export interface SignTransactionPayload {
   readWriteAddresses?: string[];
   readOnlyAddresses?: string[];
   review?: TransactionReviewPayload;
+  /**
+   * The fee payer the instruction was built against: `feePayerPublicKey`
+   * from the signing context (or a signing session's key). Account indices in
+   * the instruction count from it (account 0). The wallet signs only with the
+   * signer that pays from this account and refuses with `SIGNER_CHANGED`
+   * otherwise, so a signer switch can never move account 0.
+   */
+  feePayerPublicKey?: string;
   signingSessionId?: string;
 }
 
@@ -657,7 +705,6 @@ export interface RevokeSigningSessionResult {
 }
 
 export enum ThruNetwork {
-  Alphanet = "alphanet",
   Betanet = "betanet",
   Devnet = "devnet",
 }
@@ -888,7 +935,6 @@ export interface DepositRequestPayload {
   customer?: CoinbaseDepositCustomerInput;
 }
 
-/** Coinbase-compatible contact details. */
 export interface CoinbaseOnrampContact {
   email: string;
   /** E.164 phone number, for example "+12055555555". */

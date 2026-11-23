@@ -55,7 +55,7 @@ export function Timestamp({
       <span className="uds-timestamp__row">
         <Ui4 className={cn("uds-timestamp__abs", textClassName)}>{abs}</Ui4>
         {action}
-        {copy && <CopyButton value={toCopy} icon />}
+        {copy && <CopyButton value={toCopy} variant="icon" />}
       </span>
       {relative && <Ui5 className="uds-timestamp__rel">{relative}</Ui5>}
     </span>

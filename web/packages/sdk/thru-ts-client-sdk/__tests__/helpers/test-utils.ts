@@ -51,6 +51,10 @@ export function createMockContext(overrides: Partial<ThruClientContext> = {}): T
       streamSlotMetrics: vi.fn(),
       ...overrides.streaming,
     } as any,
+    debug: {
+      debugReExecute: vi.fn(),
+      ...overrides.debug,
+    } as any,
     callOptions: overrides.callOptions,
     transactionSigningScheme:
       overrides.transactionSigningScheme ?? TransactionSigningScheme.Rfc8032,

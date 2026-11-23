@@ -1298,8 +1298,79 @@ const __tn_ir_CompressionError = {
   root: { op: "const", value: 8n }
 } as const;
 
+export class CompressionError_error_invalid_instruction_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CompressionError_error_invalid_instruction_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("CompressionError_error_invalid_instruction_Inner.__tnCreateView requires a Uint8Array");
+    return new CompressionError_error_invalid_instruction_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class CompressionError_error_invalid_instruction_data_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CompressionError_error_invalid_instruction_data_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("CompressionError_error_invalid_instruction_data_size_Inner.__tnCreateView requires a Uint8Array");
+    return new CompressionError_error_invalid_instruction_data_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class CompressionError_error_Inner {
+  private view: DataView;
+  private __tnFieldContext: Record<string, number | bigint> | null = null;
+  private constructor(private buffer: Uint8Array, private descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    this.__tnFieldContext = fieldContext ?? null;
+  }
+
+  static __tnCreate(payload: Uint8Array, descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>): CompressionError_error_Inner {
+    return new CompressionError_error_Inner(new Uint8Array(payload), descriptor, fieldContext);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CompressionError_error_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["code"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 1)) descriptor = { name: "invalid_instruction", tag: 1, payloadSize: 0 };
+      if (__tnTagEquals(tag, 2)) descriptor = { name: "invalid_instruction_data_size", tag: 2, payloadSize: 0 };
+    }
+    return new CompressionError_error_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
+  bytes(): Uint8Array {
+    return new Uint8Array(this.buffer);
+  }
+
+  variant(): __TnVariantDescriptor | null {
+    return this.descriptor;
+  }
+
+  asInvalidInstruction(): CompressionError_error_invalid_instruction_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1)) return null;
+    return CompressionError_error_invalid_instruction_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidInstructionDataSize(): CompressionError_error_invalid_instruction_data_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2)) return null;
+    return CompressionError_error_invalid_instruction_data_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+}
+
 export class CompressionError {
   private view: DataView;
+  private static readonly __tnFieldOffset_error = 8;
 
   private constructor(private buffer: Uint8Array) {
     this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
@@ -1319,6 +1390,23 @@ export class CompressionError {
     return CompressionError.from_array(buffer);
   }
 
+  static readonly errorVariantDescriptors = Object.freeze([
+    {
+      name: "invalid_instruction",
+      tag: 1,
+      payloadSize: 0,
+      payloadType: "CompressionError::error::invalid_instruction",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_instruction_data_size",
+      tag: 2,
+      payloadSize: 0,
+      payloadType: "CompressionError::error::invalid_instruction_data_size",
+      createPayloadBuilder: () => null,
+    },
+  ] as const);
+
   get_code(): bigint {
     const offset = 0;
     return this.view.getBigUint64(offset, true); /* little-endian */
@@ -1335,6 +1423,22 @@ export class CompressionError {
 
   set code(value: bigint) {
     this.set_code(value);
+  }
+
+  errorVariant(): typeof CompressionError.errorVariantDescriptors[number] | null {
+    const tag: number | bigint | null = this.get_code();
+    return CompressionError.errorVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
+  }
+
+  error(): CompressionError_error_Inner {
+    const descriptor = this.errorVariant();
+    if (!descriptor) throw new Error("CompressionError: unknown error variant");
+    const offset = CompressionError.__tnFieldOffset_error;
+    const remaining = this.buffer.length - offset;
+    const payloadLength = descriptor.payloadSize ?? remaining;
+    if (payloadLength < 0 || offset + payloadLength > this.buffer.length) throw new Error("CompressionError: payload exceeds buffer bounds");
+    const slice = this.buffer.subarray(offset, offset + payloadLength);
+    return CompressionError_error_Inner.__tnCreate(slice, descriptor, undefined);
   }
 
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
@@ -1368,17 +1472,24 @@ export class CompressionError {
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
     if (buffer.length < 8) return { ok: false, code: "tn.buffer_too_small", consumed: 8 };
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed: 8 };
   }
 
-  static new(code: bigint): CompressionError {
-    const buffer = new Uint8Array(8);
-    const view = new DataView(buffer.buffer);
-
-    let offset = 0;
-    view.setBigUint64(0, code, true); /* code (little-endian) */
-
-    return new CompressionError(buffer);
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 8 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 1n: t3 = 0; break;
+  case 2n: t3 = 0; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array): CompressionError | null {
@@ -1396,35 +1507,45 @@ export class CompressionError {
 }
 
 export class CompressionErrorBuilder {
-  private buffer: Uint8Array;
-  private view: DataView;
+  private tag: number | null = null;
+  private payload: Uint8Array | null = null;
 
-  constructor() {
-    this.buffer = new Uint8Array(8);
-    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  constructor() {}
+
+  select_invalid_instruction(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_instruction expects 0 bytes");
+    this.tag = 1;
+    this.payload = new Uint8Array(bytes);
+    return this;
   }
 
-  set_code(value: bigint): this {
-    const cast = __tnToBigInt(value);
-    this.view.setBigUint64(0, cast, true);
+  select_invalid_instruction_data_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_instruction_data_size expects 0 bytes");
+    this.tag = 2;
+    this.payload = new Uint8Array(bytes);
     return this;
   }
 
   build(): Uint8Array {
-    const buffer = this.buffer.slice();
+    if (this.tag === null || !this.payload) throw new Error("CompressionError builder missing variant");
+    const buffer = new Uint8Array(1 + this.payload.length);
+    buffer[0] = this.tag;
+    buffer.set(this.payload, 1);
     __tnBuilderValidateOrThrow("CompressionError", CompressionError.validate(buffer));
     return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
-    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
-    __tnBuilderValidateOrThrow("CompressionError", CompressionError.validate(this.buffer));
-    target.set(this.buffer, offset);
+    const bytes = this.build();
+    if (target.length - offset < bytes.length) throw new Error("target buffer too small");
+    target.set(bytes, offset);
     return target;
   }
 
   finish(): CompressionError {
-    const view = CompressionError.from_array(this.buffer.slice());
+    const view = CompressionError.from_array(this.build());
     if (!view) throw new Error("failed to build CompressionError");
     return view;
   }

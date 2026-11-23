@@ -120,8 +120,8 @@ export function simulatedRpc(options: SimulatedRpcOptions = {}): SimulatedRpc {
       },
       address,
     );
-  const getBlockHeight = () => unary('blocks.getBlockHeight', () => ({ finalized: 100n }));
-  const getChainId = () => unary('chain.getChainId', () => 1);
+  const getBlockHeight = () => unary('blocks.getBlockHeight', () => ({ finalized: 100n, locallyExecuted: 100n }));
+  const getChainId = () => unary('chain.getChainId', () => 2);
 
   let restoreCounter = 0;
   const compression = {

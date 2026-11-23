@@ -26,7 +26,6 @@ export interface BatchTransport {
 
 export interface BufferedEventQueueOptions<TEvent> {
   transport: BatchTransport;
-  /** Serialize a batch of events into the request body. */
   serializeBatch(events: TEvent[]): string;
   /** Maximum events per upload. Defaults to 20. */
   maxBatchEvents?: number;

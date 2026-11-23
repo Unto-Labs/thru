@@ -1,7 +1,7 @@
 /* Reflection types that represent ABI type information */
 
 use abi_gen::abi::resolved::{ResolvedType, ResolvedTypeKind};
-use abi_gen::abi::types::{PrimitiveType, ValueFormat};
+use abi_gen::abi::types::{PrimitiveType, StructDisplay, ValueFormat};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -26,6 +26,10 @@ pub struct ReflectedType {
     /* Optional display/serialization format hint */
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<ValueFormat>,
+
+    /* Display names and synthetic fields, for structs that declare them */
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display: Option<StructDisplay>,
 
     /* Fully-qualified dynamic parameter references (owner -> path -> primitive) */
     pub dynamic_params: BTreeMap<String, BTreeMap<String, PrimitiveType>>,
@@ -187,6 +191,7 @@ impl ReflectedType {
             alignment: resolved.alignment,
             comment: resolved.comment.clone(),
             format,
+            display: None,
             dynamic_params: resolved.dynamic_params.clone(),
         }
     }

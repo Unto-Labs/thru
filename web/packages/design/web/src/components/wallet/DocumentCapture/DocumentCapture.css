@@ -1,0 +1,125 @@
+.tds-doc-capture,
+.tds-doc-capture > [role="group"] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.tds-doc-capture__preview {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 96px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-higher);
+  border-radius: var(--radius-none);
+  color: var(--color-text-tertiary);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.tds-doc-capture__preview[data-empty] {
+  border-style: dashed;
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+/* A set height: the frame eases to it when the image is added, before the image has loaded. */
+.tds-doc-capture__image {
+  display: block;
+  width: 100%;
+  height: 220px;
+  object-fit: contain;
+  background: var(--color-surface-lower);
+}
+
+.tds-doc-capture__file {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  width: 100%;
+  min-width: 0;
+}
+
+.tds-doc-capture__file svg {
+  flex-shrink: 0;
+}
+
+.tds-doc-capture__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.tds-doc-capture__size {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.tds-doc-capture__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.tds-doc-capture__pick {
+  appearance: none;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  align-self: stretch;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tds-doc-capture__pick:disabled {
+  cursor: default;
+}
+
+.tds-doc-capture [data-error] .tds-doc-capture__preview {
+  border-color: var(--color-border-danger);
+}
+
+/* Opened by the buttons; display: none keeps "No file chosen" out of selection and copy. */
+.tds-doc-capture__input {
+  display: none;
+}
+
+.tds-doc-capture__image,
+.tds-doc-capture__file {
+  animation: tds-doc-capture-enter var(--duration-fast) var(--ease-standard);
+}
+
+@keyframes tds-doc-capture-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tds-doc-capture__image,
+  .tds-doc-capture__file {
+    animation: none;
+  }
+}

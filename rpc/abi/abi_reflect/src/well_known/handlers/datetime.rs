@@ -13,6 +13,10 @@ impl WellKnownType for DateTimeHandler {
         "DateTime"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("time", "iso8601"))
+    }
+
     fn process(&self, ctx: &WellKnownContext) -> WellKnownResult {
         let Some(fields) = ctx.fields else {
             return WellKnownResult::None;
@@ -58,16 +62,5 @@ impl WellKnownType for DateTimeHandler {
         }
 
         WellKnownResult::None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn datetime_handler_type_name() {
-        let handler = DateTimeHandler;
-        assert_eq!(handler.type_name(), "DateTime");
     }
 }

@@ -4,8 +4,8 @@
   gap: 40px;
   height: 64px;
   padding: 0 28px;
-  background: var(--teal-200);
-  border-bottom: 1px solid var(--teal-300);
+  background: var(--neutral-0);
+  border-bottom: 1px solid var(--neutral-200);
 }
 
 .uds-navbar__brand {
@@ -15,12 +15,7 @@
   text-decoration: none;
 }
 .uds-navbar__wordmark {
-  font-family: var(--font-sans);
-  font-weight: 800;
-  font-style: italic;
-  font-size: 24px;
-  letter-spacing: -1.1px;
-  color: var(--teal-700);
+  color: var(--color-text-primary);
 }
 .uds-navbar__logo {
   display: block;
@@ -28,14 +23,14 @@
   width: auto;
 }
 .uds-navbar__tag {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: var(--text-label);
   font-weight: 600;
-  letter-spacing: 0.16em;
+  letter-spacing: var(--tracking-utility);
   text-transform: uppercase;
-  color: var(--teal-600);
-  border: 1px solid var(--teal-300);
-  border-radius: var(--radius-none);
+  color: var(--neutral-600);
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius-box);
   padding: 4px 8px 3px;
 }
 
@@ -55,9 +50,9 @@
   border: none;
   cursor: pointer;
   text-decoration: none;
-  font-family: var(--font-mono);
-  font-size: 15px;
-  color: var(--teal-600);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  color: var(--neutral-600);
   transition: color var(--duration-fast) var(--ease-standard);
 }
 .uds-navbar__item::after {
@@ -67,13 +62,13 @@
   background: transparent;
 }
 .uds-navbar__item:hover {
-  color: var(--teal-800);
+  color: var(--neutral-800);
 }
 .uds-navbar__item[data-active] {
-  color: var(--teal-800);
+  color: var(--neutral-800);
 }
 .uds-navbar__item[data-active]::after {
-  background: var(--brick-400);
+  background: var(--color-surface-accent);
 }
 
 .uds-navbar__spacer {
@@ -86,11 +81,11 @@
   gap: 9px;
   padding: 8px 14px;
   margin: 0;
-  background: color-mix(in srgb, var(--teal-0) 55%, transparent);
-  border: 1px solid var(--teal-300);
-  border-radius: var(--radius-none);
+  background: color-mix(in srgb, var(--neutral-0) 55%, transparent);
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius-box);
   cursor: default;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   white-space: nowrap;
   transition:
     background-color var(--duration-fast) var(--ease-standard),
@@ -101,8 +96,8 @@ button.uds-navbar__status {
 }
 button.uds-navbar__status:hover,
 .uds-navbar__status[data-open] {
-  background: var(--teal-0);
-  border-color: var(--teal-400);
+  background: var(--neutral-0);
+  border-color: var(--neutral-400);
 }
 .uds-navbar__dot {
   position: relative;
@@ -116,27 +111,27 @@ button.uds-navbar__status:hover,
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--grass-300);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--grass-300) 55%, transparent);
+  background: var(--success-300);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--success-300) 55%, transparent);
 }
 .uds-navbar__dot--off .uds-navbar__dot-core {
-  background: var(--teal-400);
+  background: var(--neutral-400);
   box-shadow: none;
 }
 .uds-navbar__dot-pulse {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: var(--grass-300);
-  animation: uds-navbar-pulse 1.9s cubic-bezier(0, 0, 0.2, 1) infinite;
+  background: var(--success-300);
+  animation: uds-navbar-pulse 1.9s var(--ease-out) infinite;
 }
 .uds-navbar__status-net {
-  font-size: 13px;
-  color: var(--teal-700);
+  font-size: var(--text-ui);
+  color: var(--neutral-700);
 }
 .uds-navbar__status-slot {
-  font-size: 13px;
-  color: var(--teal-500);
+  font-size: var(--text-ui);
+  color: var(--neutral-500);
 }
 
 :where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar {
@@ -144,7 +139,6 @@ button.uds-navbar__status:hover,
   border-bottom-color: var(--color-border-tertiary);
 }
 
-:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar__wordmark,
 :where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar__item:hover,
 :where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar__item[data-active],
 :where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar__status-net {
@@ -163,7 +157,7 @@ button.uds-navbar__status:hover,
 }
 
 :where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar__item[data-active]::after {
-  background: var(--color-surface-brick);
+  background: var(--color-surface-accent);
 }
 
 :where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .uds-navbar__status-slot {
@@ -211,7 +205,7 @@ button.uds-navbar__status:hover,
   padding: 0;
   background: var(--color-surface-higher);
   border: none;
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
   color: var(--color-text-primary);
   cursor: pointer;
   flex: none;
@@ -246,7 +240,7 @@ button.uds-navbar__status:hover,
   border: none;
   border-bottom: 1px solid var(--color-border-secondary);
   box-shadow: none;
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
   transition: none;
 }
 /* Keyframes, not transitions: an animation always fires `animationend`, even
@@ -317,9 +311,9 @@ button.uds-navbar__status:hover,
   display: none;
 }
 .uds-navbar__drawer-nav .uds-navbar__item[data-active] {
-  color: var(--teal-800);
-  border-left-color: var(--brick-400);
-  background: var(--teal-0);
+  color: var(--color-text-primary);
+  border-left-color: var(--color-border-brand);
+  background: var(--color-surface-lower);
 }
 
 @media (max-width: 640px) {
@@ -343,4 +337,15 @@ button.uds-navbar__status:hover,
   .uds-navbar__status-slot {
     display: none;
   }
+}
+
+.uds-navbar__item:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: -2px;
+}
+
+.uds-navbar__burger:focus-visible,
+.uds-navbar__status:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
 }

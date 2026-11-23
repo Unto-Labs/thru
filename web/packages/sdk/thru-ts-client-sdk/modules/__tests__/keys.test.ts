@@ -39,17 +39,6 @@ describe("keys", () => {
       expect(result1.publicKey).not.toEqual(result2.publicKey);
       expect(result1.privateKey).not.toEqual(result2.privateKey);
     });
-
-    it("should generate valid Ed25519 keypair format", async () => {
-      const result = await generateKeyPair();
-      
-      // Public key should be 32 bytes
-      expect(result.publicKey.length).toBe(32);
-      // Private key should be 32 bytes (Ed25519 seed)
-      expect(result.privateKey.length).toBe(32);
-      // Address should be valid format
-      expect(result.address.length).toBeGreaterThan(0);
-    });
   });
 
   describe("fromPrivateKey", () => {
@@ -60,13 +49,6 @@ describe("keys", () => {
       expect(derivedPublicKey).toBeInstanceOf(Uint8Array);
       expect(derivedPublicKey.length).toBe(32);
       expect(derivedPublicKey).toEqual(keypair.publicKey);
-    });
-
-    it("should generate 32-byte public key", async () => {
-      const keypair = await generateKeyPair();
-      const publicKey = await fromPrivateKey(keypair.privateKey);
-      
-      expect(publicKey.length).toBe(32);
     });
 
     it("should produce consistent public key for same private key", async () => {

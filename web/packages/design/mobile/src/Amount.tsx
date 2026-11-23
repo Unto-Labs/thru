@@ -141,7 +141,6 @@ export function AmountDisplay({
 function Caret({ height }: { height: number }) {
   const styles = useStyles();
   const [blink] = useState(() => new Animated.Value(1));
-  /* Under reduced motion the caret stays lit. */
   const reduceMotion = useReduceMotion();
   useEffect(() => {
     if (reduceMotion) {

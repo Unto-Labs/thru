@@ -4,25 +4,25 @@ import * as React from "react";
 import { Toast as Base } from "@base-ui/react/toast";
 import "./Toast.css";
 
-export type ToastKind = "success" | "error" | "info" | "warn";
+export type ToastTone = "success" | "danger" | "info" | "warning";
 
-const Icon = ({ kind }: { kind: ToastKind }) => {
+const Icon = ({ tone }: { tone: ToastTone }) => {
   const p = { width: 13, height: 13, viewBox: "0 0 16 16", fill: "none", "aria-hidden": true } as const;
   const s = { stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-  if (kind === "success") return <svg {...p}><path d="M3 8.5l3.5 3.5L13 4" {...s} /></svg>;
-  if (kind === "error") return <svg {...p}><path d="M4 4l8 8M12 4l-8 8" {...s} /></svg>;
-  if (kind === "warn") return <svg {...p}><path d="M8 2l6 11H2L8 2zM8 6.5v3" {...s} /><circle cx="8" cy="11.5" r="0.6" fill="currentColor" /></svg>;
+  if (tone === "success") return <svg {...p}><path d="M3 8.5l3.5 3.5L13 4" {...s} /></svg>;
+  if (tone === "danger") return <svg {...p}><path d="M4 4l8 8M12 4l-8 8" {...s} /></svg>;
+  if (tone === "warning") return <svg {...p}><path d="M8 2l6 11H2L8 2zM8 6.5v3" {...s} /><circle cx="8" cy="11.5" r="0.6" fill="currentColor" /></svg>;
   return <svg {...p}><path d="M8 7.5v4M8 4.6v.2" {...s} /><circle cx="8" cy="8" r="6.2" {...s} /></svg>;
 };
 
 function ToastList() {
   const { toasts } = Base.useToastManager();
   return toasts.map((toast) => {
-    const kind = ((toast.data as { kind?: ToastKind } | undefined)?.kind ?? "info") as ToastKind;
+    const tone = ((toast.data as { tone?: ToastTone } | undefined)?.tone ?? "info") as ToastTone;
     return (
-      <Base.Root key={toast.id} toast={toast} className={`uds-toast uds-toast--${kind}`}>
+      <Base.Root key={toast.id} toast={toast} className={`uds-toast uds-toast--${tone}`}>
         <span className="uds-toast__icon">
-          <Icon kind={kind} />
+          <Icon tone={tone} />
         </span>
         <div className="uds-toast__main">
           <Base.Title className="uds-toast__title" />
@@ -51,7 +51,7 @@ function ToastList() {
  *   </Toast.Provider>
  *
  *   const toast = Toast.useToast();
- *   toast.add({ title: "Saved", description: "…", data: { kind: "success" } });
+ *   toast.add({ title: "Saved", description: "…", data: { tone: "success" } });
  */
 export const Toast = {
   Provider: Base.Provider,

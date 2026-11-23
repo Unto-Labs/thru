@@ -4,18 +4,19 @@
   justify-content: space-between;
   gap: var(--space-2);
   min-width: 12rem;
-  font-family: var(--font-mono);
+  box-sizing: border-box;
+  font-family: var(--font-sans);
   background: var(--color-surface-higher);
   color: var(--color-text-primary);
-  border: 1px solid var(--color-border-tertiary);
-  border-radius: var(--radius-none);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-box);
   cursor: pointer;
   transition: border-color var(--duration-fast) var(--ease-standard);
 }
-.uds-select-trigger--sm { padding: var(--space-2) var(--space-3);  font-size: 0.875rem; line-height: 1.25rem; }
-.uds-select-trigger--md { padding: var(--space-2) var(--space-3);  font-size: 1rem;     line-height: 1.5rem; }
+.uds-select-trigger--sm { height: var(--control-sm); padding: 0 var(--space-3); font-size: var(--text-ui); }
+.uds-select-trigger--md { height: var(--control-md); padding: 0 var(--space-3); font-size: var(--text-ui); }
 
-.uds-select-trigger:hover { border-color: var(--color-border-secondary); }
+.uds-select-trigger:hover { border-color: var(--color-text-primary); }
 .uds-select-trigger[data-popup-open] { border-color: var(--color-border-brand); }
 .uds-select-trigger:focus-visible {
   outline: 2px solid var(--color-border-brand);
@@ -32,11 +33,28 @@
   max-height: var(--available-height);
   overflow: auto;
   background: var(--color-surface-higher);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-none);
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-box);
   padding: var(--space-1);
   box-shadow: var(--shadow-md);
   outline: none;
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+.uds-select-popup[data-starting-style],
+.uds-select-popup[data-ending-style] {
+  opacity: 0;
+  transform: scale(0.97);
+}
+@media (prefers-reduced-motion: reduce) {
+  .uds-select-popup {
+    transition: opacity var(--duration-fast) var(--ease-standard);
+  }
+  .uds-select-popup[data-starting-style],
+  .uds-select-popup[data-ending-style] {
+    transform: none;
+  }
 }
 
 .uds-select-item {
@@ -44,10 +62,10 @@
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
-  font-family: var(--font-mono);
-  font-size: 0.875rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
   color: var(--color-text-primary);
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
   cursor: pointer;
   user-select: none;
 }

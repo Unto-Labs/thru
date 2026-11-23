@@ -6,20 +6,20 @@
 }
 .uds-state-picker > .uds-field__error {
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--text-caption);
 }
 .uds-state-picker__trigger {
   box-sizing: border-box;
   position: relative;
   width: 100%;
   min-width: 0;
-  height: 48px;
+  height: var(--control-lg);
   padding: 0 40px 0 var(--space-3);
   background: var(--color-surface-higher);
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
   color: var(--color-text-primary);
-  font: 16px var(--font-mono);
+  font: var(--text-lead) var(--font-sans);
   text-align: left;
   cursor: pointer;
   outline: none;
@@ -28,8 +28,8 @@
 .uds-state-picker__trigger:hover:not(:disabled),
 .uds-state-picker__trigger:focus-visible,
 .uds-state-picker__trigger[data-popup-open] {
-  border-color: var(--color-border-primary);
-  box-shadow: inset 0 0 0 1px var(--color-border-primary);
+  border-color: var(--color-border-brand);
+  box-shadow: inset 0 0 0 1px var(--color-border-brand);
 }
 .uds-state-picker__trigger[data-error] {
   border-color: var(--color-border-danger);
@@ -74,14 +74,14 @@
   width: 100%;
   height: 48px;
   padding: 0 var(--space-3);
-  font: 16px var(--font-sans);
+  font: var(--text-lead) var(--font-sans);
 }
 .uds-state-picker__search.uds-combobox-input::placeholder {
-  color: var(--steel-500);
+  color: var(--neutral-500);
 }
 .uds-state-picker__search.uds-combobox-input:focus {
-  border-color: var(--color-border-primary);
-  box-shadow: inset 0 0 0 1px var(--color-border-primary);
+  border-color: var(--color-border-brand);
+  box-shadow: inset 0 0 0 1px var(--color-border-brand);
 }
 .uds-state-picker__list {
   flex: 1;
@@ -93,12 +93,12 @@
   box-sizing: border-box;
   min-height: 44px;
   padding: var(--space-2) var(--space-3) var(--space-2) var(--space-5);
-  font: 13px var(--font-sans);
+  font: var(--text-ui) var(--font-sans);
 }
 .uds-state-picker__code {
   flex: none;
   width: 24px;
-  font: 11px var(--font-mono);
+  font: var(--text-label) var(--font-sans);
   color: var(--color-text-secondary);
 }
 .uds-state-picker__text {
@@ -107,7 +107,7 @@
   min-width: 0;
 }
 .uds-state-picker__reason {
-  font-size: 12px;
+  font-size: var(--text-caption);
   color: var(--color-text-secondary);
 }
 .uds-state-picker__option[data-highlighted] .uds-state-picker__code {
@@ -119,11 +119,11 @@
   cursor: not-allowed;
 }
 .uds-state-picker__option[data-disabled][data-highlighted] {
-  box-shadow: inset 0 0 0 1px var(--color-border-primary);
+  box-shadow: inset 0 0 0 1px var(--color-border-brand);
 }
 .uds-state-picker__empty.uds-combobox-item {
   padding: var(--space-2) var(--space-3);
-  font: 13px var(--font-sans);
+  font: var(--text-ui) var(--font-sans);
   color: var(--color-text-secondary);
 }
 .uds-state-picker__empty.uds-combobox-item:empty {
@@ -140,6 +140,6 @@
   box-shadow: inset 0 0 0 1px var(--color-border-danger);
 }
 .uds-state-picker__trigger[data-error]:focus-visible {
-  outline: 2px solid var(--color-border-primary);
+  outline: 2px solid var(--color-border-brand);
   outline-offset: 1px;
 }

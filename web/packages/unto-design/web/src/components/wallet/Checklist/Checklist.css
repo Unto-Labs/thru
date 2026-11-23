@@ -6,7 +6,7 @@
   background: var(--color-surface-higher);
   display: flex;
   flex-direction: column;
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
 }
 
 .uds-checklist__item {
@@ -16,12 +16,12 @@
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
   min-height: 36px;
-  font-size: 13px;
+  font-size: var(--text-ui);
   color: var(--color-text-primary);
 }
 
 .uds-checklist__check {
-  color: var(--grass-400);
+  color: var(--color-text-success);
   display: inline-flex;
   flex: none;
 }

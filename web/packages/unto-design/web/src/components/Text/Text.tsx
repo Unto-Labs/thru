@@ -5,9 +5,8 @@ import { cn } from "../../utils";
  * Typography components — thin wrappers that apply the `.type-*` classes shipped
  * by @unto/design/tokens (typography.css).
  *
- * The foundation stylesheet (`@unto/design/web/styles.css` or
- * `@unto/design/tokens/theme.css`) must be imported once per app so the
- * `.type-*` classes are present.
+ * The foundation stylesheet (`@unto/design/web/styles.css`) must be imported
+ * once per app so the `.type-*` classes are present.
  */
 export interface TextProps extends React.HTMLAttributes<HTMLElement> {
   as?: React.ElementType;

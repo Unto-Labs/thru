@@ -1106,8 +1106,259 @@ const __tn_ir_CoreManagerError = {
   root: { op: "const", value: 8n }
 } as const;
 
+export class CoreManagerError_error_instruction_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CoreManagerError_error_instruction_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("CoreManagerError_error_instruction_Inner.__tnCreateView requires a Uint8Array");
+    return new CoreManagerError_error_instruction_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class CoreManagerError_error_binding_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CoreManagerError_error_binding_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("CoreManagerError_error_binding_Inner.__tnCreateView requires a Uint8Array");
+    return new CoreManagerError_error_binding_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class CoreManagerError_error_config_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CoreManagerError_error_config_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("CoreManagerError_error_config_Inner.__tnCreateView requires a Uint8Array");
+    return new CoreManagerError_error_config_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class CoreManagerError_error_admin_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CoreManagerError_error_admin_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("CoreManagerError_error_admin_Inner.__tnCreateView requires a Uint8Array");
+    return new CoreManagerError_error_admin_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class CoreManagerError_error_authorization_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CoreManagerError_error_authorization_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("CoreManagerError_error_authorization_Inner.__tnCreateView requires a Uint8Array");
+    return new CoreManagerError_error_authorization_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class CoreManagerError_error_account_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CoreManagerError_error_account_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("CoreManagerError_error_account_Inner.__tnCreateView requires a Uint8Array");
+    return new CoreManagerError_error_account_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class CoreManagerError_error_state_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CoreManagerError_error_state_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("CoreManagerError_error_state_Inner.__tnCreateView requires a Uint8Array");
+    return new CoreManagerError_error_state_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class CoreManagerError_error_protected_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CoreManagerError_error_protected_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("CoreManagerError_error_protected_Inner.__tnCreateView requires a Uint8Array");
+    return new CoreManagerError_error_protected_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class CoreManagerError_error_image_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CoreManagerError_error_image_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("CoreManagerError_error_image_Inner.__tnCreateView requires a Uint8Array");
+    return new CoreManagerError_error_image_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class CoreManagerError_error_proof_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CoreManagerError_error_proof_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("CoreManagerError_error_proof_Inner.__tnCreateView requires a Uint8Array");
+    return new CoreManagerError_error_proof_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class CoreManagerError_error_namespace_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CoreManagerError_error_namespace_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("CoreManagerError_error_namespace_Inner.__tnCreateView requires a Uint8Array");
+    return new CoreManagerError_error_namespace_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class CoreManagerError_error_Inner {
+  private view: DataView;
+  private __tnFieldContext: Record<string, number | bigint> | null = null;
+  private constructor(private buffer: Uint8Array, private descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    this.__tnFieldContext = fieldContext ?? null;
+  }
+
+  static __tnCreate(payload: Uint8Array, descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>): CoreManagerError_error_Inner {
+    return new CoreManagerError_error_Inner(new Uint8Array(payload), descriptor, fieldContext);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CoreManagerError_error_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["code"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 4097)) descriptor = { name: "instruction", tag: 4097, payloadSize: 0 };
+      if (__tnTagEquals(tag, 4098)) descriptor = { name: "binding", tag: 4098, payloadSize: 0 };
+      if (__tnTagEquals(tag, 4099)) descriptor = { name: "config", tag: 4099, payloadSize: 0 };
+      if (__tnTagEquals(tag, 4100)) descriptor = { name: "admin", tag: 4100, payloadSize: 0 };
+      if (__tnTagEquals(tag, 4101)) descriptor = { name: "authorization", tag: 4101, payloadSize: 0 };
+      if (__tnTagEquals(tag, 4102)) descriptor = { name: "account", tag: 4102, payloadSize: 0 };
+      if (__tnTagEquals(tag, 4103)) descriptor = { name: "state", tag: 4103, payloadSize: 0 };
+      if (__tnTagEquals(tag, 4104)) descriptor = { name: "protected", tag: 4104, payloadSize: 0 };
+      if (__tnTagEquals(tag, 4105)) descriptor = { name: "image", tag: 4105, payloadSize: 0 };
+      if (__tnTagEquals(tag, 4106)) descriptor = { name: "proof", tag: 4106, payloadSize: 0 };
+      if (__tnTagEquals(tag, 4107)) descriptor = { name: "namespace", tag: 4107, payloadSize: 0 };
+    }
+    return new CoreManagerError_error_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
+  bytes(): Uint8Array {
+    return new Uint8Array(this.buffer);
+  }
+
+  variant(): __TnVariantDescriptor | null {
+    return this.descriptor;
+  }
+
+  asInstruction(): CoreManagerError_error_instruction_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4097)) return null;
+    return CoreManagerError_error_instruction_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asBinding(): CoreManagerError_error_binding_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4098)) return null;
+    return CoreManagerError_error_binding_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asConfig(): CoreManagerError_error_config_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4099)) return null;
+    return CoreManagerError_error_config_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAdmin(): CoreManagerError_error_admin_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4100)) return null;
+    return CoreManagerError_error_admin_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAuthorization(): CoreManagerError_error_authorization_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4101)) return null;
+    return CoreManagerError_error_authorization_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAccount(): CoreManagerError_error_account_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4102)) return null;
+    return CoreManagerError_error_account_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asState(): CoreManagerError_error_state_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4103)) return null;
+    return CoreManagerError_error_state_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asProtected(): CoreManagerError_error_protected_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4104)) return null;
+    return CoreManagerError_error_protected_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asImage(): CoreManagerError_error_image_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4105)) return null;
+    return CoreManagerError_error_image_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asProof(): CoreManagerError_error_proof_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4106)) return null;
+    return CoreManagerError_error_proof_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asNamespace(): CoreManagerError_error_namespace_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4107)) return null;
+    return CoreManagerError_error_namespace_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+}
+
 export class CoreManagerError {
   private view: DataView;
+  private static readonly __tnFieldOffset_error = 8;
 
   private constructor(private buffer: Uint8Array) {
     this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
@@ -1127,6 +1378,86 @@ export class CoreManagerError {
     return CoreManagerError.from_array(buffer);
   }
 
+  static readonly errorVariantDescriptors = Object.freeze([
+    {
+      name: "instruction",
+      tag: 4097,
+      payloadSize: 0,
+      payloadType: "CoreManagerError::error::instruction",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "binding",
+      tag: 4098,
+      payloadSize: 0,
+      payloadType: "CoreManagerError::error::binding",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "config",
+      tag: 4099,
+      payloadSize: 0,
+      payloadType: "CoreManagerError::error::config",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "admin",
+      tag: 4100,
+      payloadSize: 0,
+      payloadType: "CoreManagerError::error::admin",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "authorization",
+      tag: 4101,
+      payloadSize: 0,
+      payloadType: "CoreManagerError::error::authorization",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "account",
+      tag: 4102,
+      payloadSize: 0,
+      payloadType: "CoreManagerError::error::account",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "state",
+      tag: 4103,
+      payloadSize: 0,
+      payloadType: "CoreManagerError::error::state",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "protected",
+      tag: 4104,
+      payloadSize: 0,
+      payloadType: "CoreManagerError::error::protected",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "image",
+      tag: 4105,
+      payloadSize: 0,
+      payloadType: "CoreManagerError::error::image",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "proof",
+      tag: 4106,
+      payloadSize: 0,
+      payloadType: "CoreManagerError::error::proof",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "namespace",
+      tag: 4107,
+      payloadSize: 0,
+      payloadType: "CoreManagerError::error::namespace",
+      createPayloadBuilder: () => null,
+    },
+  ] as const);
+
   get_code(): bigint {
     const offset = 0;
     return this.view.getBigUint64(offset, true); /* little-endian */
@@ -1143,6 +1474,22 @@ export class CoreManagerError {
 
   set code(value: bigint) {
     this.set_code(value);
+  }
+
+  errorVariant(): typeof CoreManagerError.errorVariantDescriptors[number] | null {
+    const tag: number | bigint | null = this.get_code();
+    return CoreManagerError.errorVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
+  }
+
+  error(): CoreManagerError_error_Inner {
+    const descriptor = this.errorVariant();
+    if (!descriptor) throw new Error("CoreManagerError: unknown error variant");
+    const offset = CoreManagerError.__tnFieldOffset_error;
+    const remaining = this.buffer.length - offset;
+    const payloadLength = descriptor.payloadSize ?? remaining;
+    if (payloadLength < 0 || offset + payloadLength > this.buffer.length) throw new Error("CoreManagerError: payload exceeds buffer bounds");
+    const slice = this.buffer.subarray(offset, offset + payloadLength);
+    return CoreManagerError_error_Inner.__tnCreate(slice, descriptor, undefined);
   }
 
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
@@ -1176,17 +1523,33 @@ export class CoreManagerError {
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
     if (buffer.length < 8) return { ok: false, code: "tn.buffer_too_small", consumed: 8 };
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed: 8 };
   }
 
-  static new(code: bigint): CoreManagerError {
-    const buffer = new Uint8Array(8);
-    const view = new DataView(buffer.buffer);
-
-    let offset = 0;
-    view.setBigUint64(0, code, true); /* code (little-endian) */
-
-    return new CoreManagerError(buffer);
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 8 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 4097n: t3 = 0; break;
+  case 4098n: t3 = 0; break;
+  case 4099n: t3 = 0; break;
+  case 4100n: t3 = 0; break;
+  case 4101n: t3 = 0; break;
+  case 4102n: t3 = 0; break;
+  case 4103n: t3 = 0; break;
+  case 4104n: t3 = 0; break;
+  case 4105n: t3 = 0; break;
+  case 4106n: t3 = 0; break;
+  case 4107n: t3 = 0; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array): CoreManagerError | null {
@@ -1204,35 +1567,117 @@ export class CoreManagerError {
 }
 
 export class CoreManagerErrorBuilder {
-  private buffer: Uint8Array;
-  private view: DataView;
+  private tag: number | null = null;
+  private payload: Uint8Array | null = null;
 
-  constructor() {
-    this.buffer = new Uint8Array(8);
-    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  constructor() {}
+
+  select_instruction(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_instruction expects 0 bytes");
+    this.tag = 4097;
+    this.payload = new Uint8Array(bytes);
+    return this;
   }
 
-  set_code(value: bigint): this {
-    const cast = __tnToBigInt(value);
-    this.view.setBigUint64(0, cast, true);
+  select_binding(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_binding expects 0 bytes");
+    this.tag = 4098;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_config(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_config expects 0 bytes");
+    this.tag = 4099;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_admin(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_admin expects 0 bytes");
+    this.tag = 4100;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_authorization(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_authorization expects 0 bytes");
+    this.tag = 4101;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_account(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_account expects 0 bytes");
+    this.tag = 4102;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_state(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_state expects 0 bytes");
+    this.tag = 4103;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_protected(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_protected expects 0 bytes");
+    this.tag = 4104;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_image(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_image expects 0 bytes");
+    this.tag = 4105;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_proof(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_proof expects 0 bytes");
+    this.tag = 4106;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_namespace(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_namespace expects 0 bytes");
+    this.tag = 4107;
+    this.payload = new Uint8Array(bytes);
     return this;
   }
 
   build(): Uint8Array {
-    const buffer = this.buffer.slice();
+    if (this.tag === null || !this.payload) throw new Error("CoreManagerError builder missing variant");
+    const buffer = new Uint8Array(1 + this.payload.length);
+    buffer[0] = this.tag;
+    buffer.set(this.payload, 1);
     __tnBuilderValidateOrThrow("CoreManagerError", CoreManagerError.validate(buffer));
     return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
-    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
-    __tnBuilderValidateOrThrow("CoreManagerError", CoreManagerError.validate(this.buffer));
-    target.set(this.buffer, offset);
+    const bytes = this.build();
+    if (target.length - offset < bytes.length) throw new Error("target buffer too small");
+    target.set(bytes, offset);
     return target;
   }
 
   finish(): CoreManagerError {
-    const view = CoreManagerError.from_array(this.buffer.slice());
+    const view = CoreManagerError.from_array(this.build());
     if (!view) throw new Error("failed to build CoreManagerError");
     return view;
   }
@@ -1726,6 +2171,7 @@ export class ProofSlotBuilder {
       this.__tnFamWriter_metadata_proof = __tnCreateFamWriter(this, "metadata_proof", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("ProofSlotBuilder: metadata_proof has more than 4294967295 elements");
         this.__tnFam_metadata_proof = bytes;
         this.__tnFam_metadata_proofCount = elementCount;
         this.set_metadata_proof_size(elementCount);
@@ -1740,6 +2186,7 @@ export class ProofSlotBuilder {
       this.__tnFamWriter_program_proof = __tnCreateFamWriter(this, "program_proof", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("ProofSlotBuilder: program_proof has more than 4294967295 elements");
         this.__tnFam_program_proof = bytes;
         this.__tnFam_program_proofCount = elementCount;
         this.set_program_proof_size(elementCount);
@@ -1749,7 +2196,13 @@ export class ProofSlotBuilder {
     return this.__tnFamWriter_program_proof!;
   }
 
+  private __tnSyncLengths(): void {
+    if (this.__tnFam_metadata_proofCount !== null) this.set_metadata_proof_size(this.__tnFam_metadata_proofCount);
+    if (this.__tnFam_program_proofCount !== null) this.set_program_proof_size(this.__tnFam_program_proofCount);
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = ProofSlot.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -1759,6 +2212,7 @@ export class ProofSlotBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = ProofSlot.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("ProofSlotBuilder: target buffer too small");
@@ -4832,6 +5286,7 @@ export class WriteProofSlotArgsBuilder {
       this.__tnFamWriter_metadata_proof = __tnCreateFamWriter(this, "metadata_proof", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("WriteProofSlotArgsBuilder: metadata_proof has more than 4294967295 elements");
         this.__tnFam_metadata_proof = bytes;
         this.__tnFam_metadata_proofCount = elementCount;
         this.set_metadata_proof_size(elementCount);
@@ -4846,6 +5301,7 @@ export class WriteProofSlotArgsBuilder {
       this.__tnFamWriter_program_proof = __tnCreateFamWriter(this, "program_proof", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("WriteProofSlotArgsBuilder: program_proof has more than 4294967295 elements");
         this.__tnFam_program_proof = bytes;
         this.__tnFam_program_proofCount = elementCount;
         this.set_program_proof_size(elementCount);
@@ -4855,7 +5311,13 @@ export class WriteProofSlotArgsBuilder {
     return this.__tnFamWriter_program_proof!;
   }
 
+  private __tnSyncLengths(): void {
+    if (this.__tnFam_metadata_proofCount !== null) this.set_metadata_proof_size(this.__tnFam_metadata_proofCount);
+    if (this.__tnFam_program_proofCount !== null) this.set_program_proof_size(this.__tnFam_program_proofCount);
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = WriteProofSlotArgs.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -4865,6 +5327,7 @@ export class WriteProofSlotArgsBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = WriteProofSlotArgs.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("WriteProofSlotArgsBuilder: target buffer too small");

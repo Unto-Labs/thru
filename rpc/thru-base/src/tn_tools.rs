@@ -85,6 +85,47 @@ impl KeyPair {
     pub fn public_key_str(&self) -> String {
         tn_pubkey_to_address_string(&self.public_key)
     }
+
+    fn local_signer(&self) -> crate::signer::LocalSigner {
+        crate::signer::LocalSigner::from_seed(self.private_key)
+    }
+}
+
+/// A `KeyPair` holds a raw Ed25519 seed, so it is a local [`Signer`]: every
+/// operation delegates to [`crate::signer::LocalSigner`] over the same seed.
+/// This lets code that already holds a `KeyPair` sign through the `Signer`
+/// abstraction (and later swap in a hardware signer) without re-plumbing.
+///
+/// [`Signer`]: crate::signer::Signer
+impl crate::signer::Signer for KeyPair {
+    fn public_key(&self) -> [u8; 32] {
+        self.local_signer().public_key()
+    }
+    fn sign(
+        &self,
+        msg: &crate::signer::SigningMessage,
+    ) -> std::result::Result<[u8; 64], crate::signer::SignError> {
+        self.local_signer().sign(msg)
+    }
+    fn sign_message(
+        &self,
+        message: &[u8],
+    ) -> std::result::Result<[u8; 64], crate::signer::SignError> {
+        self.local_signer().sign_message(message)
+    }
+    fn sign_eoa_auth(
+        &self,
+        kind: crate::signer::EoaAuthKind,
+        chain_id: u16,
+        fee_payer: &TnPubkey,
+        account: &TnPubkey,
+    ) -> std::result::Result<[u8; 64], crate::signer::SignError> {
+        self.local_signer()
+            .sign_eoa_auth(kind, chain_id, fee_payer, account)
+    }
+    fn supports_legacy_scheme(&self) -> bool {
+        true
+    }
 }
 
 /// A public key on the blockchain
@@ -293,6 +334,33 @@ pub enum ValidationError {
 mod tests {
 
     use super::*;
+
+    #[test]
+    fn keypair_signer_matches_local_signer() {
+        use crate::signer::{self, EoaAuthKind, LocalSigner, Signer};
+        let seed = [3u8; 32];
+        let kp = KeyPair::from_hex_private_key("k", hex::encode(seed)).unwrap();
+        let local = LocalSigner::from_seed(seed);
+        assert_eq!(Signer::public_key(&kp), kp.public_key);
+        assert_eq!(Signer::public_key(&kp), local.public_key());
+        let mut body = vec![0u8; 120];
+        body[48..80].copy_from_slice(&kp.public_key);
+        assert_eq!(
+            signer::sign_transaction_body_with(&kp, &body).unwrap(),
+            signer::sign_transaction_body_with(&local, &body).unwrap()
+        );
+        assert_eq!(
+            signer::sign_message_with(&kp, b"m").unwrap(),
+            signer::sign_message_with(&local, b"m").unwrap()
+        );
+        let fp = [1u8; 32];
+        assert_eq!(
+            signer::sign_eoa_auth_with(&kp, EoaAuthKind::Create, 1, &fp, &kp.public_key).unwrap(),
+            signer::sign_eoa_auth_with(&local, EoaAuthKind::Create, 1, &fp, &kp.public_key)
+                .unwrap()
+        );
+        assert!(Signer::supports_legacy_scheme(&kp));
+    }
 
     #[test]
     fn test_pubkey_validation() {

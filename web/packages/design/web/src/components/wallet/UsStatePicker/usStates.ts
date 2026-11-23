@@ -1,3 +1,10 @@
+import {
+  matchesRegion,
+  type RegionOption,
+} from "../RegionPicker/regionOptions";
+
+export { regionOptionLabel as usStateOptionLabel } from "../RegionPicker/regionOptions";
+
 export const US_STATES = [
   { code: "AL", name: "Alabama" },
   { code: "AK", name: "Alaska" },
@@ -56,24 +63,15 @@ export const US_STATES = [
 export type UsStateCode = (typeof US_STATES)[number]["code"];
 export type UsStateBlocks = Partial<Record<UsStateCode, string>>;
 
-export interface UsStateOption {
-  code: UsStateCode;
-  name: string;
-  blockedReason?: string;
-}
+export type UsStateOption = RegionOption<UsStateCode>;
 
 export function usStateOptions(blocked?: UsStateBlocks): UsStateOption[] {
-  return US_STATES.map((state) => ({ ...state, blockedReason: blocked?.[state.code] }));
+  return US_STATES.map((state) => ({
+    ...state,
+    blockedReason: blocked?.[state.code],
+  }));
 }
 
 export function matchesUsState(option: UsStateOption, query: string): boolean {
-  const normalized = query.trim().toLowerCase();
-  return option.code.toLowerCase().startsWith(normalized)
-    || ` ${option.name.toLowerCase()}`.includes(` ${normalized}`);
-}
-
-export function usStateOptionLabel(option: UsStateOption): string {
-  return option.blockedReason === undefined
-    ? option.name
-    : `${option.name}. ${option.blockedReason}`;
+  return matchesRegion(option, query);
 }

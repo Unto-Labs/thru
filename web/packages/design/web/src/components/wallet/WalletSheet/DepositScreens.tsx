@@ -64,6 +64,11 @@ const BankIcon = (p: React.SVGProps<SVGSVGElement>) => (
     <path d="M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square" />
   </svg>
 );
+const ArrowUpRight = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" aria-hidden {...p}>
+    <path d="M7 17 17 7M8 7h9v9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square" />
+  </svg>
+);
 const DropIcon = (p: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="none" aria-hidden {...p}>
     <path
@@ -366,6 +371,10 @@ export interface WalletSheetDepositProps {
   cardDescription?: React.ReactNode;
   faucetTitle?: React.ReactNode;
   faucetDescription?: React.ReactNode;
+  /** Draws a "Cash out" row after the deposit methods. It always navigates, even in accordion mode. */
+  onCashOut?: () => void;
+  cashOutTitle?: React.ReactNode;
+  cashOutDescription?: React.ReactNode;
   /** "Deposits land in ● Main · taAAAA…AAMD" footer; omit to hide. */
   destination?: DepositDestinationInfo;
   onCrypto?: () => void;
@@ -457,6 +466,9 @@ function DepositScreen({
   cardDescription = "Debit card via Coinbase · US only",
   faucetTitle = "Test faucet",
   faucetDescription = "Test tokens with no real value · developer mode",
+  onCashOut,
+  cashOutTitle = "Cash out",
+  cashOutDescription = "To a US bank",
   destination,
   onCrypto,
   onBank,
@@ -521,6 +533,18 @@ function DepositScreen({
             onCollapse={onCollapse}
             panel={cardPanel}
             panelRef={cardPanelRef}
+          />
+        )}
+        {onCashOut && (
+          <DepositMethodRow
+            art={
+              <span className="tds-dep__method-glyph">
+                <ArrowUpRight width={20} height={20} />
+              </span>
+            }
+            title={cashOutTitle}
+            description={cashOutDescription}
+            onSelect={onCashOut}
           />
         )}
         {methods.includes("faucet") && (
@@ -619,7 +643,6 @@ export interface WalletSheetDepositCryptoProps {
   description?: React.ReactNode;
   networkLabel?: React.ReactNode;
   networks: DepositNetworkOption[];
-  /** Selected network id. */
   network: string;
   onNetworkChange?: (id: string) => void;
   /** The deposit address; omit while it is being created (skeleton). */

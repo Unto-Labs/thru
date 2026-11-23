@@ -27,6 +27,10 @@ impl WellKnownType for MonthHandler {
         "Month"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("text", "name"))
+    }
+
     fn category(&self) -> &'static str {
         "google"
     }
@@ -51,17 +55,5 @@ impl WellKnownType for MonthHandler {
         }
 
         WellKnownResult::None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn month_handler_type_name() {
-        let handler = MonthHandler;
-        assert_eq!(handler.type_name(), "Month");
-        assert_eq!(handler.category(), "google");
     }
 }

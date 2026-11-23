@@ -9,7 +9,7 @@ import {
     TransactionView
 } from "@thru/sdk/proto";
 
-export const DEFAULT_HOST = "https://rpc.alphanet.thru.org";
+export const DEFAULT_HOST = "https://rpc.betanet.thru.org";
 
 export const DEFAULT_ACCOUNT_VIEW = AccountView.FULL;
 export const DEFAULT_BLOCK_VIEW = BlockView.FULL;
@@ -22,7 +22,7 @@ export const DEFAULT_VERSION_CONTEXT = create(VersionContextSchema, {
     },
 });
 
-export const DEFAULT_FEE = 1n;
+export const DEFAULT_FEE = 0n;
 export const DEFAULT_COMPUTE_UNITS = 0;
 export const DEFAULT_STATE_UNITS = 0;
 export const DEFAULT_MEMORY_UNITS = 0;

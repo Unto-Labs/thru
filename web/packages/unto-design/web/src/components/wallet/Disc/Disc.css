@@ -14,7 +14,7 @@
   overflow: hidden;
 }
 .uds-disc__glyph {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-weight: var(--fw-semibold);
   line-height: 1;
 }

@@ -18,7 +18,7 @@ import { BrowserSDK } from '@thru/wallet';
 // Configure the wallet iframe location and the RPC endpoint to talk to
 const sdk = new BrowserSDK({
   iframeUrl: 'https://app.tid.sh/embedded',
-  rpcUrl: 'https://rpc.alphanet.thru.org',
+  rpcUrl: 'https://rpc.betanet.thru.org',
   // Default: true. Set false to stop all SDK and hosted-wallet telemetry.
   telemetryEnabled: true,
 });
@@ -126,7 +126,7 @@ Turn on developer mode for builds your team tests with. The wallet then:
 
 - shows the raw error, with a Copy action, on its failure screens;
 - runs card purchases on Coinbase's sandbox, so no money moves;
-- offers a Test faucet in the web Add funds sheet on alphanet. Its
+- offers a Test faucet in the web Add funds sheet on betanet. Its
   `deposit:*` events report `method: 'faucet'`.
 
 It is off by default. The wallet's account menu has its own Developer mode

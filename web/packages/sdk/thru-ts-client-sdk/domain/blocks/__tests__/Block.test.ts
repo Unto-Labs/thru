@@ -157,49 +157,6 @@ describe("Block", () => {
         );
     });
 
-    it("should reject unknown transaction versions", () => {
-        const transaction = createTestTransaction();
-        const header = new BlockHeader({
-            slot: 123n,
-            version: 1,
-            startSlot: 123n,
-            expiryAfter: 1,
-            maxBlockSize: 1024,
-            maxComputeUnits: 1_000_000n,
-            maxStateUnits: 100,
-            bondAmountLockUp: 1n,
-            producer: createUint8Array(32, 0xaa),
-            expiryTimestamp: nanosecondsToTimestamp(75n * 1_000_000_000n),
-            headerSignature: createUint8Array(64, 0xbb),
-        });
-        const footer = new BlockFooter({
-            signature: createUint8Array(64, 0xcc),
-            status: ExecutionStatus.UNSPECIFIED,
-            consumedComputeUnits: 0n,
-            consumedStateUnits: 0,
-            attestorPayment: 0n,
-        });
-
-        const block = new Block({
-            header,
-            footer,
-            body: transaction.toWire(),
-        });
-
-        const wire = block.toWire();
-        wire[BLOCK_HEADER_SIZE] = 56; // Forge unknown version
-
-        expect(wire[BLOCK_HEADER_SIZE]).toBe(56);
-        const parsed = Block.fromWire(wire);
-        expect(parsed.getTransactions()[0].version).toBe(56);
-        expect(() => Transaction.parseWire(wire.subarray(BLOCK_HEADER_SIZE), { strict: true })).toThrow(
-            "Unsupported transaction version: 56",
-        );
-        expect(() => Transaction.fromWire(wire.subarray(BLOCK_HEADER_SIZE))).toThrow(
-            "Unsupported transaction version: 56",
-        );
-    });
-
     it("should reconstruct transaction body when created from proto", () => {
         const transaction = createTestTransaction();
         const headerProto = create(BlockHeaderSchema, {

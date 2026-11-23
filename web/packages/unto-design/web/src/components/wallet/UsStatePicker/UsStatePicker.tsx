@@ -24,11 +24,11 @@ export function UsStatePicker({
   const selected = options.find((option) => option.code === value) ?? null;
   const errorId = React.useId();
   const labelId = React.useId();
-  // Portal into the caller's skin scope so the popup keeps its theme and custom properties.
+  // Portal into the caller's theme scope so the popup keeps its theme and custom properties.
   const [portalContainer, setPortalContainer] = React.useState<HTMLElement | null>(null);
   const [collisionBoundary, setCollisionBoundary] = React.useState<Element | null>(null);
   const triggerRef = React.useCallback((node: HTMLButtonElement | null) => {
-    setPortalContainer(node?.closest<HTMLElement>("body [data-uds-skin]") ?? null);
+    setPortalContainer(node?.closest<HTMLElement>("body [data-theme]") ?? null);
     setCollisionBoundary(node?.closest(".uds-frame") ?? null);
   }, []);
 

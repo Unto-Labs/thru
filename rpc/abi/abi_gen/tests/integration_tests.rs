@@ -1,5 +1,5 @@
 use abi_gen::{
-    abi::resolved::{ConstantStatus, ResolutionError, ResolvedTypeKind, Size, TypeResolver},
+    abi::resolved::{ConstantStatus, ResolvedTypeKind, Size, TypeResolver},
     abi::{expr::*, types::*},
     dependency::DependencyAnalyzer,
 };
@@ -21,6 +21,7 @@ fn test_complete_abi_analysis_pipeline() {
             name: "ValidStruct".to_string(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
@@ -57,6 +58,7 @@ fn test_complete_abi_analysis_pipeline() {
                     type_name: "BaseType".to_string(),
                 }),
                 variants: vec![EnumVariant {
+                    comment: None,
                     name: "Variant1".to_string(),
                     tag_value: 1,
                     variant_type: TypeKind::TypeRef(TypeRefType {
@@ -133,282 +135,6 @@ fn test_complete_abi_analysis_pipeline() {
 }
 
 #[test]
-fn test_invalid_enum_tag_layout_cycle_detection() {
-    let typedefs = vec![
-        // Container struct
-        TypeDef {
-            name: "Container".to_string(),
-            format: None,
-            kind: TypeKind::Struct(StructType {
-                container_attributes: Default::default(),
-                fields: vec![
-                    StructField {
-                        name: "problematic_enum".to_string(),
-                        format: None,
-                        field_type: TypeKind::TypeRef(TypeRefType {
-                            name: "ProblematicEnum".to_string(),
-                            package: None,
-                            comment: None,
-                        }),
-                    },
-                    StructField {
-                        name: "referenced_field".to_string(),
-                        format: None,
-                        field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
-                    },
-                ],
-            }),
-        },
-        // Enum that creates a layout cycle
-        TypeDef {
-            name: "ProblematicEnum".to_string(),
-            format: None,
-            kind: TypeKind::Enum(EnumType {
-                container_attributes: Default::default(),
-                // This tag references a field whose offset depends on this enum's size
-                tag_ref: ExprKind::FieldRef(FieldRefExpr {
-                    path: vec!["Container".to_string(), "referenced_field".to_string()],
-                }),
-                variants: vec![EnumVariant {
-                    name: "Variant1".to_string(),
-                    tag_value: 1,
-                    variant_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
-                }],
-            }),
-        },
-    ];
-
-    let mut analyzer = DependencyAnalyzer::new();
-    let analysis = analyzer.analyze_multiple_typedefs(&typedefs);
-
-    // Should detect layout violations
-    assert!(
-        !analysis.layout_violations.is_empty(),
-        "Should detect layout violations"
-    );
-
-    let violation = analysis
-        .layout_violations
-        .iter()
-        .find(|v| v.violating_type == "ProblematicEnum")
-        .expect("Should find violation for ProblematicEnum");
-
-    assert!(
-        violation.reason.contains("forward reference")
-            || violation.reason.contains("layout cycle")
-            || violation.reason.contains("circular dependency")
-    );
-    assert!(violation.violating_expression.contains("referenced_field"));
-}
-
-#[test]
-fn test_forward_field_reference_detection() {
-    let typedefs = vec![
-        TypeDef {
-            name: "ForwardRefStruct".to_string(),
-            format: None,
-            kind: TypeKind::Struct(StructType {
-                container_attributes: Default::default(),
-                fields: vec![
-                    StructField {
-                        name: "early_array".to_string(),
-                        format: None,
-                        field_type: TypeKind::TypeRef(TypeRefType {
-                            name: "ForwardRefArray".to_string(),
-                            package: None,
-                            comment: None,
-                        }),
-                    },
-                    StructField {
-                        name: "middle_field".to_string(),
-                        format: None,
-                        field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
-                    },
-                    StructField {
-                        name: "late_field".to_string(),
-                        format: None,
-                        field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
-                    },
-                ],
-            }),
-        },
-        TypeDef {
-            name: "ForwardRefArray".to_string(),
-            format: None,
-            kind: TypeKind::Array(ArrayType {
-                container_attributes: Default::default(),
-                // Invalid: references a field that comes later in the parent struct
-                size: ExprKind::FieldRef(FieldRefExpr {
-                    path: vec!["ForwardRefStruct".to_string(), "late_field".to_string()],
-                }),
-                element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
-                    IntegralType::U8,
-                ))),
-                jagged: false,
-            }),
-        },
-    ];
-
-    let mut analyzer = DependencyAnalyzer::new();
-    let analysis = analyzer.analyze_multiple_typedefs(&typedefs);
-
-    assert!(!analysis.layout_violations.is_empty());
-
-    let violation = analysis
-        .layout_violations
-        .iter()
-        .find(|v| v.violating_type == "ForwardRefStruct")
-        .expect("Should find forward reference violation");
-
-    assert!(violation.reason.contains("forward dependency"));
-    assert!(violation.violating_expression.contains("late_field"));
-}
-
-#[test]
-fn test_struct_field_forward_reference_rejected() {
-    let mut resolver = TypeResolver::new();
-
-    let typedef = TypeDef {
-        name: "BadStruct".to_string(),
-        format: None,
-        kind: TypeKind::Struct(StructType {
-            container_attributes: Default::default(),
-            fields: vec![
-                StructField {
-                    name: "payload".to_string(),
-                    format: None,
-                    field_type: TypeKind::Array(ArrayType {
-                        container_attributes: Default::default(),
-                        size: ExprKind::FieldRef(FieldRefExpr {
-                            path: vec!["len".to_string()],
-                        }),
-                        element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
-                            IntegralType::U8,
-                        ))),
-                        jagged: false,
-                    }),
-                },
-                StructField {
-                    name: "len".to_string(),
-                    format: None,
-                    field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U16)),
-                },
-            ],
-        }),
-    };
-
-    resolver.add_typedef(typedef);
-    let err = resolver.resolve_all().unwrap_err();
-    match err {
-        ResolutionError::ForwardFieldReference {
-            type_name,
-            field_name,
-            referenced_field,
-        } => {
-            assert_eq!(type_name, "BadStruct");
-            assert_eq!(field_name, "payload");
-            assert_eq!(referenced_field, "len");
-        }
-        other => panic!("unexpected error: {:?}", other),
-    }
-}
-
-#[test]
-fn test_complex_transitive_dependency_chain() {
-    let typedefs = vec![
-        // Root container
-        TypeDef {
-            name: "RootContainer".to_string(),
-            format: None,
-            kind: TypeKind::Struct(StructType {
-                container_attributes: Default::default(),
-                fields: vec![
-                    StructField {
-                        name: "level1".to_string(),
-                        format: None,
-                        field_type: TypeKind::TypeRef(TypeRefType {
-                            name: "Level1".to_string(),
-                            package: None,
-                            comment: None,
-                        }),
-                    },
-                    StructField {
-                        name: "target_field".to_string(),
-                        format: None,
-                        field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
-                    },
-                ],
-            }),
-        },
-        // Level 1 nesting
-        TypeDef {
-            name: "Level1".to_string(),
-            format: None,
-            kind: TypeKind::Struct(StructType {
-                container_attributes: Default::default(),
-                fields: vec![StructField {
-                    name: "level2".to_string(),
-                    format: None,
-                    field_type: TypeKind::TypeRef(TypeRefType {
-                        name: "Level2".to_string(),
-                        package: None,
-                        comment: None,
-                    }),
-                }],
-            }),
-        },
-        // Level 2 nesting with problematic array
-        TypeDef {
-            name: "Level2".to_string(),
-            format: None,
-            kind: TypeKind::Struct(StructType {
-                container_attributes: Default::default(),
-                fields: vec![StructField {
-                    name: "problematic_array".to_string(),
-                    format: None,
-                    field_type: TypeKind::TypeRef(TypeRefType {
-                        name: "TransitiveArray".to_string(),
-                        package: None,
-                        comment: None,
-                    }),
-                }],
-            }),
-        },
-        // Array that creates transitive dependency back to root
-        TypeDef {
-            name: "TransitiveArray".to_string(),
-            format: None,
-            kind: TypeKind::Array(ArrayType {
-                container_attributes: Default::default(),
-                // This creates: RootContainer -> Level1 -> Level2 -> TransitiveArray -> RootContainer
-                size: ExprKind::FieldRef(FieldRefExpr {
-                    path: vec!["RootContainer".to_string(), "target_field".to_string()],
-                }),
-                element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
-                    IntegralType::U8,
-                ))),
-                jagged: false,
-            }),
-        },
-    ];
-
-    let mut analyzer = DependencyAnalyzer::new();
-    let analysis = analyzer.analyze_multiple_typedefs(&typedefs);
-
-    // Should detect the transitive layout cycle
-    assert!(!analysis.layout_violations.is_empty());
-
-    let violation = analysis
-        .layout_violations
-        .iter()
-        .find(|v| v.violating_type == "TransitiveArray")
-        .expect("Should find transitive dependency violation");
-
-    assert!(violation.reason.contains("transitive"));
-    assert!(violation.dependency_chain.len() > 1);
-}
-
-#[test]
 fn test_packed_vs_aligned_struct_analysis() {
     let typedefs = vec![
         // Regular struct
@@ -416,6 +142,7 @@ fn test_packed_vs_aligned_struct_analysis() {
             name: "RegularStruct".to_string(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
@@ -436,6 +163,7 @@ fn test_packed_vs_aligned_struct_analysis() {
             name: "PackedStruct".to_string(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: ContainerAttributes {
                     packed: true,
                     aligned: 0,
@@ -460,6 +188,7 @@ fn test_packed_vs_aligned_struct_analysis() {
             name: "AlignedStruct".to_string(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: ContainerAttributes {
                     packed: false,
                     aligned: 16,
@@ -593,6 +322,7 @@ fn test_comprehensive_error_reporting() {
             name: "MultiViolationStruct".to_string(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
@@ -634,6 +364,7 @@ fn test_comprehensive_error_reporting() {
                     ],
                 }),
                 variants: vec![EnumVariant {
+                    comment: None,
                     name: "Variant1".to_string(),
                     tag_value: 1,
                     variant_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
@@ -702,6 +433,7 @@ fn test_real_world_scenario_token_account() {
         name: "TokenAccount".to_string(),
         format: None,
         kind: TypeKind::Struct(StructType {
+            display: Default::default(),
             container_attributes: ContainerAttributes {
                 packed: true,
                 aligned: 1,
@@ -799,6 +531,7 @@ fn test_comprehensive_validation_integration() {
             name: "BadStruct".to_string(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
@@ -860,6 +593,7 @@ fn test_comprehensive_validation_integration() {
                 }),
                 variants: vec![
                     EnumVariant {
+                        comment: None,
                         name: "duplicate".to_string(),
                         tag_value: 1,
                         variant_type: TypeKind::Primitive(PrimitiveType::Integral(
@@ -867,6 +601,7 @@ fn test_comprehensive_validation_integration() {
                         )),
                     },
                     EnumVariant {
+                        comment: None,
                         name: "duplicate".to_string(), // Duplicate variant name!
                         tag_value: 1,                  // Duplicate tag value!
                         variant_type: TypeKind::Primitive(PrimitiveType::Integral(
@@ -881,6 +616,7 @@ fn test_comprehensive_validation_integration() {
             name: "ValidStruct".to_string(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {

@@ -119,7 +119,7 @@ vi.mock("@thru/programs/token", () => ({
 }));
 
 const DESTINATION: DepositDestination = {
-  network: ThruNetwork.Alphanet,
+  network: ThruNetwork.Betanet,
   depositTarget: DepositTarget.UUSD,
   tokenAccountAddress: "ta_token_account",
   mintAddress: "ta_mint",

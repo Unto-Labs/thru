@@ -35,19 +35,19 @@
 .uds-screen__badge {
   width: 38px;
   height: 38px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-box);
   background: var(--color-surface-primary);
   display: grid;
   place-items: center;
   color: var(--color-text-tertiary);
 }
 .uds-screen__badge--success {
-  background: var(--color-surface-grass);
+  background: var(--color-surface-success);
   color: var(--color-text-primary-inverse);
 }
 .uds-screen__badge--danger {
-  background: var(--brick-100);
-  color: var(--brick-400);
+  background: color-mix(in srgb, var(--color-text-danger) 14%, transparent);
+  color: var(--color-text-danger);
 }
 .uds-screen__badge--plain {
   width: auto;
@@ -59,13 +59,14 @@
   color: inherit;
 }
 .uds-screen__title {
-  font-size: 16px;
+  font-size: var(--text-title);
+  line-height: 1.25;
   font-weight: var(--fw-semibold);
-  letter-spacing: -0.2px;
+  letter-spacing: var(--tracking-display);
   color: var(--color-text-primary);
 }
 .uds-screen__sub {
-  font-size: 12px;
+  font-size: var(--text-ui);
   color: var(--color-text-tertiary);
   text-wrap: pretty;
 }
@@ -86,12 +87,11 @@
   min-height: 48px;
 }
 .uds-screen__header--lg .uds-screen__title {
-  font-size: 20px;
-  letter-spacing: -0.3px;
-  line-height: 1.2;
+  font-size: 24px;
+  line-height: 1.15;
 }
 .uds-screen__header--lg .uds-screen__sub {
-  font-size: 14px;
+  font-size: var(--text-body);
   line-height: 1.45;
 }
 
@@ -101,7 +101,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
 }
 
 .uds-screen__actions {
@@ -126,7 +126,7 @@
   cursor: pointer;
   font-family: var(--font-sans);
   font-weight: var(--fw-semibold);
-  font-size: 13px;
+  font-size: var(--text-ui);
   color: var(--color-text-primary);
   width: 100%;
 }
@@ -166,4 +166,9 @@
     min-height: 48px;
     font-size: 17px;
   }
+}
+
+.uds-screen__bottom:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: -2px;
 }

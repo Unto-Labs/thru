@@ -9,6 +9,9 @@ type WasmReflectBindings = {
   reflect_instruction: (abi: string, buffer: Uint8Array) => string;
   reflect_account: (abi: string, buffer: Uint8Array) => string;
   reflect_event: (abi: string, buffer: Uint8Array) => string;
+  reflect_error: (abi: string, code: string) => string;
+  error_variants: (abi: string) => string;
+  reflect_error_with_manifest: (manifest: string, rootPackage: string, code: string) => string;
   build_layout_ir: (abi: string) => string;
   format_reflection: (raw: string) => string;
   format_reflection_with_options: (raw: string, options: string) => string;
@@ -299,6 +302,20 @@ async function importBindings(relativePath: string): Promise<WasmReflectBindings
   return unwrapImportedBindings(imported, relativePath);
 }
 
+/* JSON.parse rounds integers above Number.MAX_SAFE_INTEGER, and synthetic
+ * fields are computed later, in formatReflection. Keep the exact JSON each
+ * reflect call returned, keyed by the parsed object, and format from that
+ * string so u64 amounts reach the formatter unrounded. */
+const rawReflectionJson = new WeakMap<object, string>();
+
+function parseRawReflection(json: string): JsonValue {
+  const parsed = JSON.parse(json) as JsonValue;
+  if (parsed !== null && typeof parsed === "object") {
+    rawReflectionJson.set(parsed, json);
+  }
+  return parsed;
+}
+
 async function callReflect(
   abiYaml: string,
   typeName: string,
@@ -306,7 +323,7 @@ async function callReflect(
 ): Promise<JsonValue> {
   const bindings = await loadBindings();
   const result = bindings.reflect(abiYaml, typeName, buffer);
-  return JSON.parse(result);
+  return parseRawReflection(result);
 }
 
 async function callLayoutIr(abiYaml: string): Promise<JsonValue> {
@@ -321,7 +338,7 @@ async function callReflectInstruction(
 ): Promise<JsonValue> {
   const bindings = await loadBindings();
   const result = bindings.reflect_instruction(abiYaml, buffer);
-  return JSON.parse(result);
+  return parseRawReflection(result);
 }
 
 async function callReflectAccount(
@@ -330,7 +347,7 @@ async function callReflectAccount(
 ): Promise<JsonValue> {
   const bindings = await loadBindings();
   const result = bindings.reflect_account(abiYaml, buffer);
-  return JSON.parse(result);
+  return parseRawReflection(result);
 }
 
 async function callReflectEvent(
@@ -339,7 +356,7 @@ async function callReflectEvent(
 ): Promise<JsonValue> {
   const bindings = await loadBindings();
   const result = bindings.reflect_event(abiYaml, buffer);
-  return JSON.parse(result);
+  return parseRawReflection(result);
 }
 
 export type BinaryLike = Uint8Array | ArrayBuffer | ArrayBufferView | number[];
@@ -385,6 +402,44 @@ export async function reflectEvent(
   return callReflectEvent(abiYaml, payloadBytes(payload));
 }
 
+/** One named revert code from a program ABI's errors root. */
+export interface ReflectedError {
+  /** Name of the errors root type, e.g. "TokenError". */
+  typeName: string;
+  /** Variant name, e.g. "insufficient_funds". */
+  name: string;
+  /** The code as an unsigned 64-bit decimal string. */
+  code: string;
+  /** One-sentence meaning, when the ABI gives one. */
+  comment?: string;
+}
+
+function errorCodeString(code: bigint | number | string): string {
+  /* Programs revert with a u64. Accept the signed reading too (-101) and
+     fold it to the unsigned value the ABI lookup compares against. */
+  return BigInt.asUintN(64, BigInt(code)).toString();
+}
+
+/**
+ * Name a program's revert code using the ABI's errors root.
+ *
+ * Returns `null` when the ABI does not list that code. Throws when the ABI
+ * declares no errors root.
+ */
+export async function reflectError(
+  abiYaml: string,
+  code: bigint | number | string,
+): Promise<ReflectedError | null> {
+  const bindings = await loadBindings();
+  return JSON.parse(bindings.reflect_error(abiYaml, errorCodeString(code)));
+}
+
+/** List every named revert code of the ABI's errors root, in ABI order. */
+export async function errorVariants(abiYaml: string): Promise<ReflectedError[]> {
+  const bindings = await loadBindings();
+  return JSON.parse(bindings.error_variants(abiYaml));
+}
+
 export async function ensureWasmLoaded(): Promise<void> {
   await loadBindings();
 }
@@ -398,11 +453,14 @@ function requireBindings(): WasmReflectBindings {
 
 export interface FormatOptions {
   includeByteOffsets?: boolean;
+  /** The transaction's account list, in order, for fields that read account indexes. */
+  accountAddresses?: string[];
 }
 
 export function formatReflection(raw: JsonValue, options?: FormatOptions): FormattedReflection {
   const bindings = requireBindings();
-  const serialized = JSON.stringify(raw);
+  const exact = raw !== null && typeof raw === "object" ? rawReflectionJson.get(raw) : undefined;
+  const serialized = exact ?? JSON.stringify(raw);
 
   if (options && Object.keys(options).length > 0) {
     const optionsJson = JSON.stringify(options);
@@ -432,7 +490,7 @@ async function callReflectWithManifest(
   const bindings = await loadBindings();
   const manifestJson = JSON.stringify(manifest);
   const result = bindings.reflect_with_manifest(manifestJson, rootPackage, typeName, buffer);
-  return JSON.parse(result);
+  return parseRawReflection(result);
 }
 
 async function callReflectInstructionWithManifest(
@@ -443,7 +501,7 @@ async function callReflectInstructionWithManifest(
   const bindings = await loadBindings();
   const manifestJson = JSON.stringify(manifest);
   const result = bindings.reflect_instruction_with_manifest(manifestJson, rootPackage, buffer);
-  return JSON.parse(result);
+  return parseRawReflection(result);
 }
 
 async function callReflectAccountWithManifest(
@@ -454,7 +512,7 @@ async function callReflectAccountWithManifest(
   const bindings = await loadBindings();
   const manifestJson = JSON.stringify(manifest);
   const result = bindings.reflect_account_with_manifest(manifestJson, rootPackage, buffer);
-  return JSON.parse(result);
+  return parseRawReflection(result);
 }
 
 async function callReflectEventWithManifest(
@@ -465,7 +523,7 @@ async function callReflectEventWithManifest(
   const bindings = await loadBindings();
   const manifestJson = JSON.stringify(manifest);
   const result = bindings.reflect_event_with_manifest(manifestJson, rootPackage, buffer);
-  return JSON.parse(result);
+  return parseRawReflection(result);
 }
 
 /**
@@ -516,6 +574,22 @@ export async function reflectEventWithManifest(
   payload: ReflectRootPayload,
 ): Promise<JsonValue> {
   return callReflectEventWithManifest(manifest, rootPackage, payloadBytes(payload));
+}
+
+/**
+ * Name a program's revert code using a pre-resolved manifest. The errors root
+ * is read from `rootPackage`. See `reflectError`.
+ */
+export async function reflectErrorWithManifest(
+  manifest: Manifest,
+  rootPackage: string,
+  code: bigint | number | string,
+): Promise<ReflectedError | null> {
+  const bindings = await loadBindings();
+  const manifestJson = JSON.stringify(manifest);
+  return JSON.parse(
+    bindings.reflect_error_with_manifest(manifestJson, rootPackage, errorCodeString(code)),
+  );
 }
 
 /**

@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "../../../utils";
+import { Spinner } from "../../Spinner/Spinner";
 import "./Steps.css";
 
 const Check = (p: React.SVGProps<SVGSVGElement>) => (
@@ -28,7 +29,7 @@ export function StepGlyph({ status }: { status: StepStatus | "failed" }) {
     <span className="uds-steps__glyph">
       {status === "done" && <Check width={13} height={13} className="uds-steps__check" />}
       {status === "failed" && <Cross width={13} height={13} className="uds-steps__cross" />}
-      {status === "active" && <span className="uds-steps__spin" />}
+      {status === "active" && <Spinner tone="inherit" className="uds-steps__spin" role={undefined} aria-label={undefined} aria-hidden />}
       {status === "pending" && <span className="uds-steps__dot" />}
     </span>
   );

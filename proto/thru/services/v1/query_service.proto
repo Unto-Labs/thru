@@ -57,6 +57,9 @@ message GetTransactionRequest {
   optional thru.core.v1.TransactionView view = 2 [(google.api.field_behavior) = OPTIONAL];
   thru.common.v1.VersionContext version_context = 3
       [(google.api.field_behavior) = REQUIRED];
+  // Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+  // INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+  // which is LOCALLY_EXECUTED.
   optional thru.common.v1.ConsensusStatus min_consensus = 4
       [(google.api.field_behavior) = OPTIONAL];
 }
@@ -66,6 +69,9 @@ message GetRawTransactionRequest {
   thru.common.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
   thru.common.v1.VersionContext version_context = 2
       [(google.api.field_behavior) = REQUIRED];
+  // Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+  // INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+  // which is LOCALLY_EXECUTED.
   optional thru.common.v1.ConsensusStatus min_consensus = 3
       [(google.api.field_behavior) = OPTIONAL];
 }
@@ -94,6 +100,9 @@ message GetBlockRequest {
     thru.core.v1.BlockHash block_hash = 2 [(google.api.field_behavior) = OPTIONAL];
   }
   optional thru.core.v1.BlockView view = 3 [(google.api.field_behavior) = OPTIONAL];
+  // Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+  // INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+  // which is LOCALLY_EXECUTED.
   optional thru.common.v1.ConsensusStatus min_consensus = 4
       [(google.api.field_behavior) = OPTIONAL];
 }
@@ -110,6 +119,9 @@ message GetRawBlockRequest {
     uint64 slot = 1 [(google.api.field_behavior) = OPTIONAL];
     thru.core.v1.BlockHash block_hash = 2 [(google.api.field_behavior) = OPTIONAL];
   }
+  // Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+  // INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+  // which is LOCALLY_EXECUTED.
   optional thru.common.v1.ConsensusStatus min_consensus = 3
       [(google.api.field_behavior) = OPTIONAL];
 }
@@ -250,6 +262,9 @@ message ListAccountsRequest {
   // CEL filter expression (REQUIRED). See message documentation for examples.
   optional thru.common.v1.Filter filter = 3 [(google.api.field_behavior) = OPTIONAL];
   optional thru.common.v1.PageRequest page = 4 [(google.api.field_behavior) = OPTIONAL];
+  // Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+  // INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+  // which is LOCALLY_EXECUTED.
   optional thru.common.v1.ConsensusStatus min_consensus = 5
       [(google.api.field_behavior) = OPTIONAL];
   // Omitted or UNSPECIFIED means ALL. Use LIVE for the previous live-only
@@ -300,7 +315,7 @@ message ListAccountsResponse {
 //   - block.footer.attestor_payment (uint64): Payment to attestors for block validation
 //
 // Consensus status:
-//   - block.consensus_status (int32): Consensus status (always CONSENSUS_STATUS_INCLUDED for persisted blocks)
+//   - block.consensus_status (int32): Consensus status (stored blocks report CONSENSUS_STATUS_LOCALLY_EXECUTED)
 //
 // Available CEL functions:
 //   - has(field): Check if optional field exists
@@ -427,6 +442,9 @@ message ListBlocksRequest {
   optional thru.common.v1.Filter filter = 1 [(google.api.field_behavior) = OPTIONAL];
   optional thru.common.v1.PageRequest page = 2 [(google.api.field_behavior) = OPTIONAL];
   optional thru.core.v1.BlockView view = 3 [(google.api.field_behavior) = OPTIONAL];
+  // Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+  // INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+  // which is LOCALLY_EXECUTED.
   optional thru.common.v1.ConsensusStatus min_consensus = 4
       [(google.api.field_behavior) = OPTIONAL];
 }
@@ -817,6 +835,9 @@ message ListEventsRequest {
   optional thru.common.v1.PageRequest page = 2 [(google.api.field_behavior) = OPTIONAL];
   optional thru.common.v1.VersionContext version_context = 3
       [(google.api.field_behavior) = OPTIONAL];
+  // Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+  // INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+  // which is LOCALLY_EXECUTED.
   optional thru.common.v1.ConsensusStatus min_consensus = 4
       [(google.api.field_behavior) = OPTIONAL];
 }
@@ -955,6 +976,9 @@ message ListTransactionsRequest {
   optional bool return_events = 3 [(google.api.field_behavior) = OPTIONAL];
   optional thru.common.v1.VersionContext version_context = 4
       [(google.api.field_behavior) = OPTIONAL];
+  // Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+  // INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+  // which is LOCALLY_EXECUTED.
   optional thru.common.v1.ConsensusStatus min_consensus = 5
       [(google.api.field_behavior) = OPTIONAL];
 }
@@ -984,8 +1008,16 @@ message GetHeightRequest {}
 
 // GetHeightResponse
 message GetHeightResponse {
+  // Highest slot known to be finalized, capped by the newest block this
+  // thrud has seen. This is a finality height, NOT a current-slot clock; use
+  // locally_executed for the current slot.
   uint64 finalized = 1 [(google.api.field_behavior) = REQUIRED];
+  // Highest slot known to have finished executing on this node. A lifetime
+  // watermark: it never goes backwards (also across reconnects), and the query
+  // service seeds it at boot from its durable cursor, so it can be ahead of the
+  // attached node's current replay position until live execution overtakes it.
   uint64 locally_executed = 2 [(google.api.field_behavior) = REQUIRED];
+  // Always 0 until UNTO-3677.
   uint64 cluster_executed = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
@@ -1131,10 +1163,12 @@ message GetNodeStatusResponse {
   // Repair subsystem state.
   NodeRepairStatus repair = 3;
 
-  // Latest finalized slot.
+  // Highest finalized slot; same meaning as GetHeightResponse.finalized (a
+  // finality height, not a current-slot clock).
   uint64 finalized_slot = 4;
 
-  // Latest locally executed slot.
+  // Same meaning as GetHeightResponse.locally_executed (a lifetime watermark
+  // seeded from the durable cursor at boot).
   uint64 locally_executed_slot = 5;
 }
 
@@ -1188,6 +1222,9 @@ message BatchGetRawAccountsRequest {
   // repeating the same context on each item.
   optional thru.common.v1.VersionContext version_context = 2
       [(google.api.field_behavior) = OPTIONAL];
+  // Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+  // INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+  // which is LOCALLY_EXECUTED.
   optional thru.common.v1.ConsensusStatus min_consensus = 3
       [(google.api.field_behavior) = OPTIONAL];
   optional thru.core.v1.AccountView view = 4
@@ -1225,6 +1262,9 @@ message BatchGetTransactionsRequest {
       [(google.api.field_behavior) = REQUIRED];
   optional thru.common.v1.VersionContext version_context = 2
       [(google.api.field_behavior) = OPTIONAL];
+  // Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+  // INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+  // which is LOCALLY_EXECUTED.
   optional thru.common.v1.ConsensusStatus min_consensus = 3
       [(google.api.field_behavior) = OPTIONAL];
   optional thru.core.v1.TransactionView view = 4

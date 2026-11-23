@@ -3,10 +3,10 @@
   position: relative;
   overflow: hidden;
   background: var(--color-surface-lower);
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
 }
 .uds-skeleton--rounded {
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-box);
 }
 .uds-skeleton::after {
   content: "";

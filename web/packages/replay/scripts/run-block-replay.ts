@@ -24,7 +24,7 @@ interface ReplayRunnerConfig {
 }
 
 const DEFAULT_CONFIG: ReplayRunnerConfig = {
-  baseUrl: "https://rpc.alphanet.thru.org",
+  baseUrl: "https://rpc.betanet.thru.org",
   apiKey: undefined,
   userAgent: undefined,
   startSlot: 0n,

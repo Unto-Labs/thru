@@ -98,21 +98,37 @@ wthruSeed.set(new TextEncoder().encode('wthru'));
 const wthruMintSeed = deriveAddress([
   Pubkey.from(BOOTSTRAP_PROGRAM_ADDRESSES.wthru).toBytes(), wthruSeed,
 ]).bytes;
+const wthruMintAddress = deriveProgramAddress({
+  programAddress: BOOTSTRAP_PROGRAM_ADDRESSES.token, seed: wthruMintSeed,
+}).address;
+
+/** The WTHRU token account the Token program creates for `owner` with `seed`
+ * (UTF-8, at most 32 bytes, zero-padded; empty is the default account): the
+ * Token PDA of SHA256(owner || WTHRU mint || seed), as the Token SDK's
+ * deriveTokenAccountAddress computes it. */
+export function deriveWthruTokenAccountAddress(owner: string, seed = ''): string {
+  const padded = new Uint8Array(32);
+  padded.set(new TextEncoder().encode(seed));
+  return deriveProgramAddress({
+    programAddress: BOOTSTRAP_PROGRAM_ADDRESSES.token,
+    seed: deriveAddress([Pubkey.from(owner).toBytes(), Pubkey.from(wthruMintAddress).toBytes(), padded]).bytes,
+  }).address;
+}
 
 /** State pre-created by mksnap before the managed executables are deployed.
- * Consensus state uses its own namespace; WTHRU matches program initialization. */
+ * The attestor table uses the consensus program's own namespace.  The
+ * consensus vaults and the WTHRU mint and vault are created where the
+ * programs' initialization creates them; the consensus vaults are WTHRU
+ * token accounts and are not published as constants (generate-addresses.ts):
+ * consumers derive them or read them from the attestor table header. */
 export const BOOTSTRAP_STATE_ADDRESSES = Object.freeze({
   core_config: stateAddress(CORE_MANAGER_PROGRAM_ADDRESS, CORE_CONFIG_SEED),
   core_peer_config: stateAddress(CORE_PEER_MANAGER_PROGRAM_ADDRESS, CORE_CONFIG_SEED),
   feature_gate_global_account: stateAddress(BOOTSTRAP_PROGRAM_ADDRESSES.feature_gate, FEATURE_GATE_GLOBAL_SEED),
   attestor_table: stateAddress(BOOTSTRAP_PROGRAM_ADDRESSES.consensus_validator, 'attestor_table'),
-  attestor_mint: stateAddress(BOOTSTRAP_PROGRAM_ADDRESSES.consensus_validator, 'attestor_mint'),
-  converted_vault: stateAddress(BOOTSTRAP_PROGRAM_ADDRESSES.consensus_validator, 'converted_vault'),
-  unclaimed_vault: stateAddress(BOOTSTRAP_PROGRAM_ADDRESSES.consensus_validator, 'unclaimed_vault'),
-  validator_token_base: stateAddress(BOOTSTRAP_PROGRAM_ADDRESSES.consensus_validator, 'validator_token'),
-  wthru_mint: deriveProgramAddress({
-    programAddress: BOOTSTRAP_PROGRAM_ADDRESSES.token, seed: wthruMintSeed,
-  }).address,
+  converted_vault: deriveWthruTokenAccountAddress(BOOTSTRAP_PROGRAM_ADDRESSES.consensus_validator, 'converted_vault'),
+  unclaimed_vault: deriveWthruTokenAccountAddress(BOOTSTRAP_PROGRAM_ADDRESSES.consensus_validator, 'unclaimed_vault'),
+  wthru_mint: wthruMintAddress,
   wthru_vault: stateAddress(BOOTSTRAP_PROGRAM_ADDRESSES.wthru, 'vault'),
   /* UNTO-3561: genesis-only Native Token Vault accounts. The receiver is the
      runtime's TN_ABSENT_BLOCK_PRODUCER_FEE_RECEIVER_ADDR_BYTES. */

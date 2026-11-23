@@ -1,13 +1,14 @@
 import { readAccount, rpcChainId, type ThruClient } from './rpc';
 
 /* The header fields transactions.build would otherwise fetch on every call,
-   one after another: the fee payer's nonce, the finalized slot and the
+   one after another: the fee payer's nonce, the current slot and the
    chain id (three sequential round trips before every transaction). Here
    they are fetched in parallel, and only when not cached:
 
    - chain id: fixed for the life of a client (rpcChainId, shared with
      the chain check);
-   - start slot: the finalized slot, reused for SLOT_MAX_AGE_MS and
+   - start slot: the locally executed slot (the live execution clock; the
+     finalized height is a finality height, not a current-slot clock), reused for SLOT_MAX_AGE_MS and
      refreshed in the background once SLOT_REFRESH_MS old. A transaction is
      valid for DEFAULT_EXPIRY_AFTER (100) slots from its start slot, about
      50 s on Betanet (2 slots/s), so a start slot a few seconds old costs a
@@ -107,8 +108,8 @@ export class TxHeaderCache {
       this.slotRead = Promise.resolve()
         .then(() => this.sdk.blocks.getBlockHeight())
         .then((height) => {
-          if (!this.slot || height.finalized >= this.slot.value) this.slot = { value: height.finalized, at };
-          return height.finalized;
+          if (!this.slot || height.locallyExecuted >= this.slot.value) this.slot = { value: height.locallyExecuted, at };
+          return height.locallyExecuted;
         })
         .finally(() => {
           this.slotRead = null;

@@ -1,4 +1,3 @@
-/** Canonical catalog of wallet telemetry event names. */
 export const TELEMETRY_EVENTS = {
   ACCOUNT_DISCOVERY_COMPLETED: 'account.discovery_completed',
   ACCOUNT_DISCOVERY_FAILED: 'account.discovery_failed',

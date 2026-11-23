@@ -29,7 +29,7 @@ describe("deposit symbol normalization", () => {
 
   it("accepts a previously prepared destination that still says CREDITS", () => {
     const expected = {
-      network: ThruNetwork.Alphanet,
+      network: ThruNetwork.Betanet,
       depositTarget: DepositTarget.UUSD,
       tokenAccountAddress: "ta_token_account",
       mintAddress: "ta_mint",
@@ -53,10 +53,10 @@ describe("deposit symbol normalization", () => {
 
   it("reports $ for a target whose config still says CREDITS", () => {
     const config = createDepositConfig({
-      defaultNetwork: "alphanet",
+      defaultNetwork: "betanet",
       networkConfigJson: JSON.stringify({
-        alphanet: {
-          rpc_url: "https://rpc.alphanet.example",
+        betanet: {
+          rpc_url: "https://rpc.betanet.example",
           default_deposit_target: "credits",
           providers: { coinbase: { orders_enabled: true } },
           targets: {
@@ -70,7 +70,7 @@ describe("deposit symbol normalization", () => {
         },
       }),
     });
-    const target = config.getTarget("alphanet", "credits");
+    const target = config.getTarget("betanet", "credits");
     expect(target.symbol).toBe("$");
     expect(target.depositTarget).toBe("credits");
   });

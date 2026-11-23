@@ -12,11 +12,9 @@ pub use crate::bootstrap_addresses::{
     EOA_PROGRAM_BYTES as EOA_PROGRAM,
     ATTESTOR_TABLE_BYTES as ATTESTOR_TABLE,
     CONSENSUS_VALIDATOR_PROGRAM_BYTES as CONSENSUS_VALIDATOR_PROGRAM,
-    CONVERTED_VAULT_BYTES as CONVERTED_VAULT,
     FAUCET_PROGRAM_BYTES as FAUCET_PROGRAM,
     NOOP_PROGRAM_BYTES as NOOP_PROGRAM,
     TOKEN_PROGRAM_BYTES as TOKEN_PROGRAM,
-    UNCLAIMED_VAULT_BYTES as UNCLAIMED_VAULT,
     UPLOADER_PROGRAM_BYTES as UPLOADER_PROGRAM,
     // Test harnesses must upload this fixture; production networks do not install it.
     SYSTEM_TEST_PROGRAM_BYTES as SYSTEM_TEST_PROGRAM,
@@ -76,15 +74,66 @@ pub struct ConsensusValidatorAccounts {
 }
 
 impl Default for ConsensusValidatorAccounts {
+    /// The canonical accounts.  The vaults have no constant: they are derived
+    /// as the program's Init creates them ([`consensus_validator_vault_address`]).
     fn default() -> Self {
+        let wthru_mint = crate::bootstrap_addresses::WTHRU_MINT_BYTES;
         Self {
             program: CONSENSUS_VALIDATOR_PROGRAM,
             attestor_table: ATTESTOR_TABLE,
             token_program: TOKEN_PROGRAM,
-            converted_vault: CONVERTED_VAULT,
-            unclaimed_vault: UNCLAIMED_VAULT,
+            converted_vault: consensus_validator_vault_address(
+                &TOKEN_PROGRAM,
+                &CONSENSUS_VALIDATOR_PROGRAM,
+                &wthru_mint,
+                CONSENSUS_CONVERTED_VAULT_SEED,
+            ),
+            unclaimed_vault: consensus_validator_vault_address(
+                &TOKEN_PROGRAM,
+                &CONSENSUS_VALIDATOR_PROGRAM,
+                &wthru_mint,
+                CONSENSUS_UNCLAIMED_VAULT_SEED,
+            ),
         }
     }
+}
+
+/// Seed of the consensus validator's converted (stake) vault.
+pub const CONSENSUS_CONVERTED_VAULT_SEED: &[u8] = b"converted_vault";
+/// Seed of the consensus validator's unclaimed (reward) vault.
+pub const CONSENSUS_UNCLAIMED_VAULT_SEED: &[u8] = b"unclaimed_vault";
+
+/// A consensus validator vault, derived as the program's Init creates it
+/// (`tn_consensus_validator_vault_address` in
+/// programs/c/examples/tn_consensus_validator_program.c): the Token account
+/// PDA(token_program, SHA256(program || wthru_mint || seed)), with `seed`
+/// zero-padded to 32 bytes.  On a running chain the attestor table header
+/// records the vaults and the program pins every vault index to it.
+///
+/// # Panics
+///
+/// If `seed` is longer than 32 bytes.
+pub fn consensus_validator_vault_address(
+    token_program: &[u8; 32],
+    program: &[u8; 32],
+    wthru_mint: &[u8; 32],
+    seed: &[u8],
+) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    assert!(seed.len() <= 32, "consensus vault seed exceeds 32 bytes");
+    let mut padded = [0u8; 32];
+    padded[..seed.len()].copy_from_slice(seed);
+    let mut hasher = Sha256::new();
+    hasher.update(program);
+    hasher.update(wthru_mint);
+    hasher.update(padded);
+    let mut token_seed = [0u8; 32];
+    token_seed.copy_from_slice(&hasher.finalize()[..32]);
+    crate::tn_public_address::create_program_defined_account_address(
+        token_program,
+        false,
+        &token_seed,
+    )
 }
 
 fn build_consensus_validator_tx(
@@ -1491,6 +1540,46 @@ mod tests {
         );
     }
 
+    /// The default vaults are the token accounts Init creates, not the retired
+    /// PDA(program, seed) state addresses.  The pinned bytes were computed
+    /// independently (python hashlib).
+    #[test]
+    fn consensus_default_vaults_match_init_derivation() {
+        use crate::tn_public_address::{
+            create_program_defined_account_address, tn_pubkey_to_address_string,
+        };
+        let accounts = ConsensusValidatorAccounts::default();
+        assert_eq!(
+            tn_pubkey_to_address_string(&accounts.converted_vault),
+            "tau1YuXs3QDzkjPJXXHACa-5QetQacxoB2Sx1UYAz8yhrL"
+        );
+        assert_eq!(
+            hex::encode(accounts.converted_vault),
+            "bb562e5ecdd00f39233c95d71c009afb941eb5069cc680764b1d54600cfcca1a"
+        );
+        assert_eq!(
+            tn_pubkey_to_address_string(&accounts.unclaimed_vault),
+            "taTQvE1X-dPasR88rBCQakbwleuiEUkxyjA1gwmKnGYbT1"
+        );
+        assert_eq!(
+            hex::encode(accounts.unclaimed_vault),
+            "4d0bc4d57f9d3dab11f3cac10906a46f095eba2114931ca303583098a9c661b4"
+        );
+        for (vault, seed) in [
+            (accounts.converted_vault, CONSENSUS_CONVERTED_VAULT_SEED),
+            (accounts.unclaimed_vault, CONSENSUS_UNCLAIMED_VAULT_SEED),
+        ] {
+            let mut padded = [0u8; 32];
+            padded[..seed.len()].copy_from_slice(seed);
+            let retired = create_program_defined_account_address(
+                &CONSENSUS_VALIDATOR_PROGRAM,
+                false,
+                &padded,
+            );
+            assert_ne!(vault, retired);
+        }
+    }
+
     /// The canonical WTHRU mint derivation must equal TN_WTHRU_MINT_ADDR_BYTES from
     /// programs/c/examples/tn_wthru_mint.h, since the bond TA derivation depends
     /// on the mint bytes.
@@ -1837,6 +1926,13 @@ mod tests {
                 TransactionBuilder::build_wthru_deposit(fp, prog, a, b, c, d, 1, 0, 0).unwrap(),
             ),
             (
+                "build_wthru_deposit_with_transfer",
+                TransactionBuilder::build_wthru_deposit_with_transfer(
+                    fp, prog, a, b, c, d, e, f, 5, 1, 0, 0,
+                )
+                .unwrap(),
+            ),
+            (
                 "build_wthru_withdraw",
                 TransactionBuilder::build_wthru_withdraw(fp, prog, a, b, c, d, e, 5, 1, 0, 0)
                     .unwrap(),
@@ -1885,6 +1981,70 @@ mod tests {
         for (name, tx) in cases {
             assert_eq!(tx.req_state_units, 0, "{name}");
         }
+    }
+
+    /// The atomic WTHRU deposit is one Multicall transaction: the EOA transfer
+    /// from the fee payer into the vault first, then the WTHRU deposit, with
+    /// every index pointing at the right account.
+    #[test]
+    fn wthru_deposit_with_transfer_batches_transfer_then_deposit() {
+        let (fee_payer, multicall) = (key(1), key(2));
+        // Distinct sort orders so a wrong index cannot pass by accident.
+        let (vault, dest, mint) = (key(0x10), key(0x20), key(0x30));
+        let (eoa, wthru, token) = (key(0x40), key(0x50), key(0x60));
+        let amount = 1_234_567u64;
+
+        let tx = TransactionBuilder::build_wthru_deposit_with_transfer(
+            fee_payer, multicall, eoa, wthru, token, mint, vault, dest, amount, 1, 9, 77,
+        )
+        .unwrap();
+
+        assert_eq!(tx.fee_payer, fee_payer);
+        assert_eq!(tx.program, multicall);
+        assert_eq!((tx.fee, tx.nonce, tx.start_slot), (1, 9, 77));
+        assert_eq!(tx.req_compute_units, WTHRU_DEPOSIT_WITH_TRANSFER_COMPUTE_UNITS);
+        assert_eq!(tx.req_state_units, 0);
+
+        // [0] fee payer, [1] multicall, rw sorted, then ro sorted.
+        assert_eq!(tx.rw_accs.clone().unwrap(), vec![vault, dest, mint]);
+        assert_eq!(tx.r_accs.clone().unwrap(), vec![eoa, wthru, token]);
+        let (vault_idx, dest_idx, mint_idx) = (2u16, 3u16, 4u16);
+        let (eoa_idx, wthru_idx, token_idx) = (5u16, 6u16, 7u16);
+
+        // Decode the Multicall instruction: u16 count, then per call a u16
+        // program index, a u64 length and the callee's instruction data.
+        let data = tx.instructions.clone().unwrap();
+        assert_eq!(u16::from_le_bytes([data[0], data[1]]), 2);
+        let mut off = 2usize;
+        let mut calls = Vec::new();
+        for _ in 0..2 {
+            let program_idx = u16::from_le_bytes([data[off], data[off + 1]]);
+            let len = u64::from_le_bytes(data[off + 2..off + 10].try_into().unwrap()) as usize;
+            calls.push((program_idx, data[off + 10..off + 10 + len].to_vec()));
+            off += 10 + len;
+        }
+        assert_eq!(off, data.len());
+
+        // Call 1: EOA Transfer { amount, from: fee payer, to: vault }.
+        let mut transfer = 1u32.to_le_bytes().to_vec();
+        transfer.extend_from_slice(&amount.to_le_bytes());
+        transfer.extend_from_slice(&0u16.to_le_bytes());
+        transfer.extend_from_slice(&vault_idx.to_le_bytes());
+        assert_eq!(calls[0], (eoa_idx, transfer));
+
+        // Call 2: WTHRU Deposit { token_program, vault, mint, dest }.
+        let mut deposit = TN_WTHRU_INSTRUCTION_DEPOSIT.to_le_bytes().to_vec();
+        for idx in [token_idx, vault_idx, mint_idx, dest_idx] {
+            deposit.extend_from_slice(&idx.to_le_bytes());
+        }
+        assert_eq!(calls[1], (wthru_idx, deposit));
+
+        // The deposit call is byte-identical to the standalone deposit
+        // instruction built against the same indices.
+        assert_eq!(
+            calls[1].1,
+            build_wthru_deposit_instruction(token_idx, vault_idx, mint_idx, dest_idx).unwrap()
+        );
     }
 
     /// Builders that create accounts request one unit per new account footprint.
@@ -4686,6 +4846,11 @@ pub const TOKEN_TICKER_MAX_LEN: usize = 8;
 pub const TN_WTHRU_INSTRUCTION_INITIALIZE_MINT: u32 = 0;
 pub const TN_WTHRU_INSTRUCTION_DEPOSIT: u32 = 1;
 pub const TN_WTHRU_INSTRUCTION_WITHDRAW: u32 = 2;
+
+/// Compute budget for an atomic WTHRU deposit: the standalone deposit
+/// requests 400,000 and the EOA transfer 10,000; the rest covers Multicall
+/// and its two invokes.
+pub const WTHRU_DEPOSIT_WITH_TRANSFER_COMPUTE_UNITS: u32 = 500_000;
 // lease, resolve (lil library), show lease info,
 // cost to lease, renew, record management, listing records for domain,
 // subdomain management
@@ -5363,6 +5528,9 @@ impl TransactionBuilder {
     /// transaction as this instruction (e.g. batched via the multicall
     /// program); if the two are submitted separately, the delta sits
     /// unattributed on-chain and any caller can be credited it instead.
+    /// [`Self::build_wthru_deposit_with_transfer`] builds that batched
+    /// transaction. Use this builder on its own only to settle a delta that is
+    /// already pending in the vault.
     pub fn build_wthru_deposit(
         fee_payer: TnPubkey,
         wthru_program: TnPubkey,
@@ -5402,6 +5570,84 @@ impl TransactionBuilder {
             mint_account_idx,
             dest_account_idx,
         )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build an atomic WTHRU deposit: fund the vault and mint in one transaction.
+    ///
+    /// The top-level program is `multicall_program`, which invokes, in order:
+    ///
+    /// 1. `eoa_program` `Transfer` of `amount` from the fee payer (index 0)
+    ///    to `vault_account`;
+    /// 2. `wthru_program` `Deposit`, which mints the vault's unaccounted
+    ///    balance delta to `dest_token_account`.
+    ///
+    /// Both callees revert the whole transaction on failure, so the transfer
+    /// and the mint land together or not at all, and no other caller can claim
+    /// the transferred amount in between (see [`Self::build_wthru_deposit`]).
+    /// The deposit mints the whole pending delta, so any delta already in the
+    /// vault when this transaction executes is minted to `dest_token_account`
+    /// as well.
+    ///
+    /// Account layout: `[0] fee_payer`, `[1] multicall_program`, then the
+    /// read-write accounts `{mint, vault, dest_token_account}` sorted by
+    /// pubkey, then the read-only programs `{token, wthru, eoa}` sorted by
+    /// pubkey.
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_wthru_deposit_with_transfer(
+        fee_payer: TnPubkey,
+        multicall_program: TnPubkey,
+        eoa_program: TnPubkey,
+        wthru_program: TnPubkey,
+        token_program: TnPubkey,
+        mint_account: TnPubkey,
+        vault_account: TnPubkey,
+        dest_token_account: TnPubkey,
+        amount: u64,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let tx = Transaction::new(fee_payer, multicall_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(100)
+            .with_compute_units(WTHRU_DEPOSIT_WITH_TRANSFER_COMPUTE_UNITS)
+            .with_state_units(0)
+            .with_memory_units(10_000);
+
+        let accounts = [
+            (mint_account, true),
+            (vault_account, true),
+            (dest_token_account, true),
+            (token_program, false),
+            (wthru_program, false),
+            (eoa_program, false),
+        ];
+
+        let (tx, indices) = add_sorted_accounts(tx, &accounts);
+
+        let mint_account_idx = indices[0];
+        let vault_account_idx = indices[1];
+        let dest_account_idx = indices[2];
+        let token_program_idx = indices[3];
+        let wthru_program_idx = indices[4];
+        let eoa_program_idx = indices[5];
+
+        // The fee payer (index 0) funds the vault. It signed the transaction,
+        // so the EOA program sees it as authorized inside the Multicall invoke.
+        let transfer = build_transfer_instruction(0, vault_account_idx, amount)?;
+        let deposit = build_wthru_deposit_instruction(
+            token_program_idx,
+            vault_account_idx,
+            mint_account_idx,
+            dest_account_idx,
+        )?;
+
+        let instruction_data = crate::program_abi::build_multicall_instruction(&[
+            (eoa_program_idx, transfer),
+            (wthru_program_idx, deposit),
+        ])?;
 
         Ok(tx.with_instructions(instruction_data))
     }
@@ -5870,12 +6116,12 @@ impl TransactionBuilder {
     ///
     /// # Arguments
     /// * `fee_payer` - The validator identity (also the signer)
-    /// * `source_token_account` - The validator's token account with staking tokens
+    /// * `source_token_account` - The validator's WTHRU token account holding the stake
     /// * `bls_pk` - BLS public key for the validator as tn_bls_pubkey_t bytes
     /// * `bls_pop` - Proof over compressed `bls_pk` followed by `fee_payer`,
     ///   under the PoP tag, as tn_bls_signature_t bytes
     /// * `claim_authority` - Pubkey that can claim rewards for this validator
-    /// * `token_amount` - Amount of tokens to stake
+    /// * `token_amount` - WTHRU base units to stake (a whole, nonzero multiple of the table's min_stake, the stake increment)
     /// * `fee` - Transaction fee
     /// * `nonce` - Account nonce
     /// * `start_slot` - Starting slot for transaction validity
@@ -6009,6 +6255,9 @@ impl TransactionBuilder {
     }
 
     /// Build consensus validator program CONVERT_TOKENS transaction.
+    /// `token_amount` is WTHRU base units: a whole, nonzero multiple of the
+    /// table's min_stake (the stake increment); it adds
+    /// `token_amount / stake_units_per_weight` power.
     pub fn build_convert_tokens(
         fee_payer: TnPubkey,
         source_token_account: TnPubkey,
@@ -7293,6 +7542,215 @@ fn build_set_claim_authority_instruction(
     instruction_data.extend_from_slice(&new_claim_authority);
 
     Ok(instruction_data)
+}
+
+/* ---------------- consensus validator manager ---------------- */
+
+/// Consensus validator manager instruction discriminants
+/// (TN_CONSENSUS_VALIDATOR_INSTRUCTION_*; 7 is reserved for UPDATE_ID).
+pub const CV_INSTRUCTION_INIT_VALIDATOR_MANAGER: u32 = 8;
+pub const CV_INSTRUCTION_SET_VALIDATOR_MANAGER: u32 = 9;
+pub const CV_INSTRUCTION_SET_SELF_SERVICE: u32 = 10;
+pub const CV_INSTRUCTION_MANAGER_ACTIVATE: u32 = 11;
+pub const CV_INSTRUCTION_MANAGER_DEACTIVATE: u32 = 12;
+pub const CV_INSTRUCTION_SET_PARAMS: u32 = 13;
+pub const CV_INSTRUCTION_MANAGER_SET_WEIGHT: u32 = 14;
+
+/// The attestor table's staking parameters, in SetParams order
+/// (tn_consensus_validator_set_params_args_t after attestor_table_idx).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CvStakeParams {
+    pub stake_units_per_weight: u64,
+    pub min_stake: u64,
+    pub max_decay_bps: u64,
+    pub idle_gap_decay_bps: u64,
+    pub max_idle_gap_decay_bps: u64,
+    pub attestor_decay_fraction_bps: u64,
+}
+
+fn cv_instruction(discriminant: u32, attestor_table_idx: u64, capacity: usize) -> Vec<u8> {
+    let mut data = Vec::with_capacity(4 + 8 + capacity);
+    data.extend_from_slice(&discriminant.to_le_bytes());
+    data.extend_from_slice(&attestor_table_idx.to_le_bytes());
+    data
+}
+
+/// InitValidatorManager (tn_consensus_validator_init_manager_args_t): the
+/// program's application authority installs the first validator manager.
+pub fn build_cv_init_validator_manager_instruction(
+    attestor_table_idx: u64,
+    program_meta_idx: u16,
+    validator_manager: TnPubkey,
+) -> Vec<u8> {
+    let mut data = cv_instruction(CV_INSTRUCTION_INIT_VALIDATOR_MANAGER, attestor_table_idx, 34);
+    data.extend_from_slice(&program_meta_idx.to_le_bytes());
+    data.extend_from_slice(&validator_manager);
+    data
+}
+
+/// SetValidatorManager (tn_consensus_validator_set_manager_args_t).
+pub fn build_cv_set_validator_manager_instruction(attestor_table_idx: u64, validator_manager: TnPubkey) -> Vec<u8> {
+    let mut data = cv_instruction(CV_INSTRUCTION_SET_VALIDATOR_MANAGER, attestor_table_idx, 32);
+    data.extend_from_slice(&validator_manager);
+    data
+}
+
+/// SetSelfService (tn_consensus_validator_set_self_service_args_t).
+pub fn build_cv_set_self_service_instruction(attestor_table_idx: u64, enabled: bool) -> Vec<u8> {
+    let mut data = cv_instruction(CV_INSTRUCTION_SET_SELF_SERVICE, attestor_table_idx, 1);
+    data.push(u8::from(enabled));
+    data
+}
+
+/// ManagerActivate (tn_consensus_validator_manager_activate_args_t). bls_pop
+/// signs the compressed key followed by identity (bls_activation_key).
+pub fn build_cv_manager_activate_instruction(
+    attestor_table_idx: u64,
+    identity: TnPubkey,
+    bls_pk: [u8; 96],
+    bls_pop: [u8; 192],
+    claim_authority: TnPubkey,
+    weight: u64,
+) -> Vec<u8> {
+    let mut data = cv_instruction(CV_INSTRUCTION_MANAGER_ACTIVATE, attestor_table_idx, 360);
+    data.extend_from_slice(&identity);
+    data.extend_from_slice(&bls_pk);
+    data.extend_from_slice(&bls_pop);
+    data.extend_from_slice(&claim_authority);
+    data.extend_from_slice(&weight.to_le_bytes());
+    data
+}
+
+/// ManagerDeactivate (tn_consensus_validator_manager_deactivate_args_t).
+pub fn build_cv_manager_deactivate_instruction(attestor_table_idx: u64, identity: TnPubkey) -> Vec<u8> {
+    let mut data = cv_instruction(CV_INSTRUCTION_MANAGER_DEACTIVATE, attestor_table_idx, 32);
+    data.extend_from_slice(&identity);
+    data
+}
+
+/// SetParams (tn_consensus_validator_set_params_args_t).
+pub fn build_cv_set_params_instruction(attestor_table_idx: u64, params: &CvStakeParams) -> Vec<u8> {
+    let mut data = cv_instruction(CV_INSTRUCTION_SET_PARAMS, attestor_table_idx, 48);
+    for value in [
+        params.stake_units_per_weight,
+        params.min_stake,
+        params.max_decay_bps,
+        params.idle_gap_decay_bps,
+        params.max_idle_gap_decay_bps,
+        params.attestor_decay_fraction_bps,
+    ] {
+        data.extend_from_slice(&value.to_le_bytes());
+    }
+    data
+}
+
+/// ManagerSetWeight (tn_consensus_validator_manager_set_weight_args_t).
+pub fn build_cv_manager_set_weight_instruction(attestor_table_idx: u64, identity: TnPubkey, weight: u64) -> Vec<u8> {
+    let mut data = cv_instruction(CV_INSTRUCTION_MANAGER_SET_WEIGHT, attestor_table_idx, 40);
+    data.extend_from_slice(&identity);
+    data.extend_from_slice(&weight.to_le_bytes());
+    data
+}
+
+impl TransactionBuilder {
+    /// A consensus validator manager transaction: the attestor table
+    /// (writable) and, for InitValidatorManager, the program's metadata
+    /// account (read-only). `encode` gets the table's index and the
+    /// metadata's. The fee payer is the authority (the manager, or the
+    /// application authority for InitValidatorManager). `proof` raises the
+    /// compute budget for an instruction that verifies a BLS proof of
+    /// possession (ManagerActivate).
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_cv_manager_with_accounts(
+        fee_payer: TnPubkey,
+        accounts: ConsensusValidatorAccounts,
+        program_meta: Option<TnPubkey>,
+        proof: bool,
+        encode: impl FnOnce(u64, Option<u16>) -> Vec<u8>,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let mut tx = build_consensus_validator_tx(fee_payer, accounts.program, fee, nonce, start_slot);
+        if proof {
+            tx = tx.with_compute_units(CONSENSUS_VALIDATOR_PROOF_COMPUTE_UNITS);
+        }
+        let mut tx_accounts = vec![(accounts.attestor_table, true)];
+        if let Some(meta) = program_meta {
+            tx_accounts.push((meta, false));
+        }
+        let (tx, indices) = add_sorted_accounts(tx, &tx_accounts);
+        let data = encode(indices[0] as u64, program_meta.map(|_| indices[1]));
+        Ok(tx.with_instructions(data))
+    }
+}
+
+#[cfg(test)]
+mod cv_manager_instruction_tests {
+    use super::*;
+
+    /* Sizes are 4 (discriminant) + sizeof the packed args struct in
+       tn_consensus_validator_program.h. */
+    #[test]
+    fn manager_instructions_match_the_c_args() {
+        let key = [7u8; 32];
+        let init = build_cv_init_validator_manager_instruction(2, 3, key);
+        assert_eq!(init.len(), 4 + 42);
+        assert_eq!(&init[..4], &8u32.to_le_bytes());
+        assert_eq!(&init[4..12], &2u64.to_le_bytes());
+        assert_eq!(&init[12..14], &3u16.to_le_bytes());
+        assert_eq!(&init[14..], &key);
+        assert_eq!(build_cv_set_validator_manager_instruction(2, key).len(), 4 + 40);
+        assert_eq!(
+            build_cv_set_self_service_instruction(2, false),
+            [&10u32.to_le_bytes()[..], &2u64.to_le_bytes()[..], &[0u8][..]].concat()
+        );
+        assert_eq!(build_cv_set_self_service_instruction(2, true)[12], 1);
+        let activate = build_cv_manager_activate_instruction(2, key, [1; 96], [2; 192], [3; 32], 100);
+        assert_eq!(activate.len(), 4 + 368);
+        assert_eq!(&activate[activate.len() - 8..], &100u64.to_le_bytes());
+        assert_eq!(build_cv_manager_deactivate_instruction(2, key).len(), 4 + 40);
+        let params = CvStakeParams {
+            stake_units_per_weight: 1,
+            min_stake: 2,
+            max_decay_bps: 3,
+            idle_gap_decay_bps: 4,
+            max_idle_gap_decay_bps: 5,
+            attestor_decay_fraction_bps: 6,
+        };
+        let set_params = build_cv_set_params_instruction(2, &params);
+        assert_eq!(set_params.len(), 4 + 56);
+        for (i, value) in (1u64..=6).enumerate() {
+            assert_eq!(&set_params[12 + 8 * i..20 + 8 * i], &value.to_le_bytes());
+        }
+        let set_weight = build_cv_manager_set_weight_instruction(2, key, 300);
+        assert_eq!(set_weight.len(), 4 + 48);
+        assert_eq!(&set_weight[..4], &14u32.to_le_bytes());
+    }
+
+    #[test]
+    fn manager_transaction_indexes_the_table_and_metadata() {
+        let accounts = ConsensusValidatorAccounts::default();
+        let meta = [9u8; 32];
+        let mut seen = None;
+        TransactionBuilder::build_cv_manager_with_accounts(
+            [1u8; 32],
+            accounts,
+            Some(meta),
+            false,
+            |table, meta_idx| {
+                seen = Some((table, meta_idx));
+                build_cv_init_validator_manager_instruction(table, meta_idx.unwrap(), [5u8; 32])
+            },
+            0,
+            0,
+            0,
+        )
+        .unwrap();
+        /* The table is the only writable account (2); the metadata is the
+           only read-only one (3). */
+        assert_eq!(seen, Some((2, Some(3))));
+    }
 }
 
 #[repr(C, packed)]

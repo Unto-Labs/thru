@@ -267,7 +267,7 @@
   background: var(--color-surface-grass);
   box-shadow: 0 0 6px var(--color-surface-grass);
 }
-/* Read before the name ("Network: Alphanet"), never shown. */
+/* Read before the name ("Network: Betanet"), never shown. */
 .tds-frame__network-hint {
   position: absolute;
   width: 1px;

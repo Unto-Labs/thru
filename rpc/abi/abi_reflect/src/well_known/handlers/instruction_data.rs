@@ -50,15 +50,3 @@ impl WellKnownType for InstructionDataHandler {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn instruction_data_handler_type_name() {
-        let handler = InstructionDataHandler;
-        assert_eq!(handler.type_name(), "InstructionData");
-        assert_eq!(handler.category(), "system");
-    }
-}

@@ -20,7 +20,7 @@ export function ErrorBox({ message, copyLabel = "Copy error", className }: Error
   return (
     <Screen.Box className={cn("uds-errbox", className)}>
       <div className="uds-errbox__msg">{message}</div>
-      <CopyButton value={message} text label={copyLabel} className="uds-errbox__copy" />
+      <CopyButton value={message} variant="text" label={copyLabel} className="uds-errbox__copy" />
     </Screen.Box>
   );
 }

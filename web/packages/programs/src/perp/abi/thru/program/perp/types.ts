@@ -10677,8 +10677,2019 @@ const __tn_ir_PerpError = {
   root: { op: "const", value: 8n }
 } as const;
 
+export class PerpError_error_invalid_instr_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_invalid_instr_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_invalid_instr_size_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_invalid_instr_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_invalid_instr_type_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_invalid_instr_type_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_invalid_instr_type_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_invalid_instr_type_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_invalid_exchange_init_proof_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_invalid_exchange_init_proof_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_invalid_exchange_init_proof_size_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_invalid_exchange_init_proof_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_invalid_status_flags_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_invalid_status_flags_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_invalid_status_flags_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_invalid_status_flags_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_indivisible_price_ticks_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_indivisible_price_ticks_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_indivisible_price_ticks_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_indivisible_price_ticks_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_indivisible_qty_lots_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_indivisible_qty_lots_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_indivisible_qty_lots_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_indivisible_qty_lots_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_over_max_price_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_over_max_price_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_over_max_price_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_over_max_price_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_invalid_lot_or_tick_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_invalid_lot_or_tick_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_invalid_lot_or_tick_size_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_invalid_lot_or_tick_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_gtt_order_expired_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_gtt_order_expired_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_gtt_order_expired_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_gtt_order_expired_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_order_id_not_found_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_order_id_not_found_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_order_id_not_found_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_order_id_not_found_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_client_id_not_found_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_client_id_not_found_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_client_id_not_found_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_client_id_not_found_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_modify_increase_not_allowed_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_modify_increase_not_allowed_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_modify_increase_not_allowed_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_modify_increase_not_allowed_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_ask_bid_side_undef_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_ask_bid_side_undef_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_ask_bid_side_undef_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_ask_bid_side_undef_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_cbook_full_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_cbook_full_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_cbook_full_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_cbook_full_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_ob_side_state_mismatch_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_ob_side_state_mismatch_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_ob_side_state_mismatch_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_ob_side_state_mismatch_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_insufficient_funds_quote_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_insufficient_funds_quote_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_insufficient_funds_quote_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_insufficient_funds_quote_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_market_deposits_frozen_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_market_deposits_frozen_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_market_deposits_frozen_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_market_deposits_frozen_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_market_withdrawals_frozen_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_market_withdrawals_frozen_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_market_withdrawals_frozen_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_market_withdrawals_frozen_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_market_paused_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_market_paused_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_market_paused_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_market_paused_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_market_postonly_mode_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_market_postonly_mode_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_market_postonly_mode_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_market_postonly_mode_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_seat_not_found_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_seat_not_found_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_seat_not_found_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_seat_not_found_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_seat_arena_data_not_found_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_seat_arena_data_not_found_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_seat_arena_data_not_found_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_seat_arena_data_not_found_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_seat_arena_full_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_seat_arena_full_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_seat_arena_full_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_seat_arena_full_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_entry_idx_out_of_bounds_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_entry_idx_out_of_bounds_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_entry_idx_out_of_bounds_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_entry_idx_out_of_bounds_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_reserved_seat_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_reserved_seat_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_reserved_seat_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_reserved_seat_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_arena_entry_not_active_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_arena_entry_not_active_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_arena_entry_not_active_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_arena_entry_not_active_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_arena_full_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_arena_full_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_arena_full_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_arena_full_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_invalid_account_type_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_invalid_account_type_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_invalid_account_type_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_invalid_account_type_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_invalid_account_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_invalid_account_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_invalid_account_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_invalid_account_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_invalid_vault_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_invalid_vault_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_invalid_vault_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_invalid_vault_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_exchange_meta_invalid_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_exchange_meta_invalid_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_exchange_meta_invalid_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_exchange_meta_invalid_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_exchange_meta_not_found_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_exchange_meta_not_found_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_exchange_meta_not_found_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_exchange_meta_not_found_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_exchange_meta_wrong_owner_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_exchange_meta_wrong_owner_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_exchange_meta_wrong_owner_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_exchange_meta_wrong_owner_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_exchange_meta_invalid_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_exchange_meta_invalid_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_exchange_meta_invalid_size_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_exchange_meta_invalid_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_exchange_meta_invalid_account_type_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_exchange_meta_invalid_account_type_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_exchange_meta_invalid_account_type_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_exchange_meta_invalid_account_type_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_program_meta_invalid_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_program_meta_invalid_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_program_meta_invalid_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_program_meta_invalid_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_program_meta_not_found_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_program_meta_not_found_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_program_meta_not_found_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_program_meta_not_found_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_program_meta_wrong_owner_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_program_meta_wrong_owner_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_program_meta_wrong_owner_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_program_meta_wrong_owner_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_program_meta_invalid_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_program_meta_invalid_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_program_meta_invalid_size_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_program_meta_invalid_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_token_program_invalid_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_token_program_invalid_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_token_program_invalid_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_token_program_invalid_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_token_program_not_found_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_token_program_not_found_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_token_program_not_found_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_token_program_not_found_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_token_account_not_program_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_token_account_not_program_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_token_account_not_program_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_token_account_not_program_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_token_program_not_canonical_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_token_program_not_canonical_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_token_program_not_canonical_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_token_program_not_canonical_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_mismatch_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_mismatch_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_mismatch_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_mismatch_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_mismatch_token_program_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_mismatch_token_program_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_mismatch_token_program_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_mismatch_token_program_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_mismatch_seat_auth_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_mismatch_seat_auth_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_mismatch_seat_auth_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_mismatch_seat_auth_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_mismatch_quote_vault_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_mismatch_quote_vault_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_mismatch_quote_vault_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_mismatch_quote_vault_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_mismatch_market_auth_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_mismatch_market_auth_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_mismatch_market_auth_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_mismatch_market_auth_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_mismatch_order_arena_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_mismatch_order_arena_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_mismatch_order_arena_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_mismatch_order_arena_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_mismatch_bids_cbook_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_mismatch_bids_cbook_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_mismatch_bids_cbook_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_mismatch_bids_cbook_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_mismatch_asks_cbook_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_mismatch_asks_cbook_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_mismatch_asks_cbook_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_mismatch_asks_cbook_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_mismatch_exchange_meta_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_mismatch_exchange_meta_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_mismatch_exchange_meta_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_mismatch_exchange_meta_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_mismatch_program_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_mismatch_program_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_mismatch_program_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_mismatch_program_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_unauthorized_seat_auth_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_unauthorized_seat_auth_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_unauthorized_seat_auth_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_unauthorized_seat_auth_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_unauthorized_market_auth_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_unauthorized_market_auth_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_unauthorized_market_auth_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_unauthorized_market_auth_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_unauthorized_wallet_owner_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_unauthorized_wallet_owner_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_unauthorized_wallet_owner_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_unauthorized_wallet_owner_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_exchange_auth_invalid_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_exchange_auth_invalid_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_exchange_auth_invalid_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_exchange_auth_invalid_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_exchange_auth_not_signer_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_exchange_auth_not_signer_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_exchange_auth_not_signer_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_exchange_auth_not_signer_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_exchange_auth_mismatch_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_exchange_auth_mismatch_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_exchange_auth_mismatch_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_exchange_auth_mismatch_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_exchange_admin_invalid_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_exchange_admin_invalid_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_exchange_admin_invalid_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_exchange_admin_invalid_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_exchange_admin_not_signer_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_exchange_admin_not_signer_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_exchange_admin_not_signer_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_exchange_admin_not_signer_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_exchange_admin_mismatch_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_exchange_admin_mismatch_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_exchange_admin_mismatch_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_exchange_admin_mismatch_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_new_exchange_admin_invalid_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_new_exchange_admin_invalid_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_new_exchange_admin_invalid_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_new_exchange_admin_invalid_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_invalid_market_record_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_invalid_market_record_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_invalid_market_record_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_invalid_market_record_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_market_record_missing_seat_authority_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_market_record_missing_seat_authority_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_market_record_missing_seat_authority_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_market_record_missing_seat_authority_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_market_record_missing_seat_arena_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_market_record_missing_seat_arena_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_market_record_missing_seat_arena_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_market_record_missing_seat_arena_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_market_record_missing_market_auth_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_market_record_missing_market_auth_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_market_record_missing_market_auth_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_market_record_missing_market_auth_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_market_record_mismatch_seat_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_market_record_mismatch_seat_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_market_record_mismatch_seat_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_market_record_mismatch_seat_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_price_above_cap_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_price_above_cap_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_price_above_cap_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_price_above_cap_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_invalid_price_cap_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_invalid_price_cap_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_invalid_price_cap_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_invalid_price_cap_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_invalid_position_limit_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_invalid_position_limit_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_invalid_position_limit_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_invalid_position_limit_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_position_limit_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_position_limit_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_position_limit_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_position_limit_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_arith_overflow_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_arith_overflow_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_arith_overflow_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_arith_overflow_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_oracle_missing_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_oracle_missing_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_oracle_missing_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_oracle_missing_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_oracle_mismatch_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_oracle_mismatch_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_oracle_mismatch_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_oracle_mismatch_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_oracle_invalid_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_oracle_invalid_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_oracle_invalid_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_oracle_invalid_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_oracle_stale_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_oracle_stale_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_oracle_stale_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_oracle_stale_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_invalid_margin_params_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_invalid_margin_params_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_invalid_margin_params_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_invalid_margin_params_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_not_liquidatable_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_not_liquidatable_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_not_liquidatable_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_not_liquidatable_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_self_liquidation_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_self_liquidation_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_self_liquidation_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_self_liquidation_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_funding_disabled_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_funding_disabled_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_funding_disabled_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_funding_disabled_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_invalid_funding_params_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_invalid_funding_params_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_invalid_funding_params_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_invalid_funding_params_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_funding_update_not_alone_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_funding_update_not_alone_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_funding_update_not_alone_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_funding_update_not_alone_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_margin_account_missing_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_margin_account_missing_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_margin_account_missing_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_margin_account_missing_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_margin_link_mismatch_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_margin_link_mismatch_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_margin_link_mismatch_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_margin_link_mismatch_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_margin_link_limit_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_margin_link_limit_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_margin_link_limit_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_margin_link_limit_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_margin_already_linked_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_margin_already_linked_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_margin_already_linked_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_margin_already_linked_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_margin_vault_mismatch_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_margin_vault_mismatch_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_margin_vault_mismatch_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_margin_vault_mismatch_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_margin_seat_not_flat_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_margin_seat_not_flat_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_margin_seat_not_flat_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_margin_seat_not_flat_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_margin_account_invalid_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_margin_account_invalid_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_margin_account_invalid_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_margin_account_invalid_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_margin_unauthorized_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_margin_unauthorized_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_margin_unauthorized_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_margin_unauthorized_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_invalid_cross_params_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_invalid_cross_params_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_invalid_cross_params_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_invalid_cross_params_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_nothing_resolved_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_nothing_resolved_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_nothing_resolved_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_nothing_resolved_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_risk_param_invalid_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_risk_param_invalid_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_risk_param_invalid_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_risk_param_invalid_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_fee_param_invalid_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_fee_param_invalid_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_fee_param_invalid_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_fee_param_invalid_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_fee_seat_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_fee_seat_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_fee_seat_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_fee_seat_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_builder_invalid_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_builder_invalid_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_builder_invalid_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_builder_invalid_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_fee_claim_blocked_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_fee_claim_blocked_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_fee_claim_blocked_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_fee_claim_blocked_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_insufficient_collateral_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_insufficient_collateral_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PerpError_error_insufficient_collateral_Inner.__tnCreateView requires a Uint8Array");
+    return new PerpError_error_insufficient_collateral_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PerpError_error_Inner {
+  private view: DataView;
+  private __tnFieldContext: Record<string, number | bigint> | null = null;
+  private constructor(private buffer: Uint8Array, private descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    this.__tnFieldContext = fieldContext ?? null;
+  }
+
+  static __tnCreate(payload: Uint8Array, descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>): PerpError_error_Inner {
+    return new PerpError_error_Inner(new Uint8Array(payload), descriptor, fieldContext);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PerpError_error_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["code"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 18446744073709551515n)) descriptor = { name: "invalid_instr_size", tag: 18446744073709551515n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551514n)) descriptor = { name: "invalid_instr_type", tag: 18446744073709551514n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551513n)) descriptor = { name: "invalid_exchange_init_proof_size", tag: 18446744073709551513n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551512n)) descriptor = { name: "invalid_status_flags", tag: 18446744073709551512n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551415n)) descriptor = { name: "indivisible_price_ticks", tag: 18446744073709551415n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551414n)) descriptor = { name: "indivisible_qty_lots", tag: 18446744073709551414n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551413n)) descriptor = { name: "over_max_price", tag: 18446744073709551413n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551412n)) descriptor = { name: "invalid_lot_or_tick_size", tag: 18446744073709551412n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551315n)) descriptor = { name: "gtt_order_expired", tag: 18446744073709551315n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551314n)) descriptor = { name: "order_id_not_found", tag: 18446744073709551314n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551313n)) descriptor = { name: "client_id_not_found", tag: 18446744073709551313n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551312n)) descriptor = { name: "modify_increase_not_allowed", tag: 18446744073709551312n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551311n)) descriptor = { name: "ask_bid_side_undef", tag: 18446744073709551311n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551310n)) descriptor = { name: "cbook_full", tag: 18446744073709551310n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551308n)) descriptor = { name: "ob_side_state_mismatch", tag: 18446744073709551308n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551215n)) descriptor = { name: "insufficient_funds_quote", tag: 18446744073709551215n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551115n)) descriptor = { name: "market_deposits_frozen", tag: 18446744073709551115n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551114n)) descriptor = { name: "market_withdrawals_frozen", tag: 18446744073709551114n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551113n)) descriptor = { name: "market_paused", tag: 18446744073709551113n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551112n)) descriptor = { name: "market_postonly_mode", tag: 18446744073709551112n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551015n)) descriptor = { name: "seat_not_found", tag: 18446744073709551015n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551014n)) descriptor = { name: "seat_arena_data_not_found", tag: 18446744073709551014n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551013n)) descriptor = { name: "seat_arena_full", tag: 18446744073709551013n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551012n)) descriptor = { name: "entry_idx_out_of_bounds", tag: 18446744073709551012n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551011n)) descriptor = { name: "reserved_seat_idx", tag: 18446744073709551011n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551010n)) descriptor = { name: "arena_entry_not_active", tag: 18446744073709551010n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551009n)) descriptor = { name: "arena_full", tag: 18446744073709551009n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550915n)) descriptor = { name: "invalid_account_type", tag: 18446744073709550915n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550914n)) descriptor = { name: "invalid_account_idx", tag: 18446744073709550914n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550913n)) descriptor = { name: "invalid_vault_pubkey", tag: 18446744073709550913n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550912n)) descriptor = { name: "exchange_meta_invalid_idx", tag: 18446744073709550912n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550911n)) descriptor = { name: "exchange_meta_not_found", tag: 18446744073709550911n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550910n)) descriptor = { name: "exchange_meta_wrong_owner", tag: 18446744073709550910n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550909n)) descriptor = { name: "exchange_meta_invalid_size", tag: 18446744073709550909n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550908n)) descriptor = { name: "exchange_meta_invalid_account_type", tag: 18446744073709550908n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550906n)) descriptor = { name: "program_meta_invalid_idx", tag: 18446744073709550906n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550905n)) descriptor = { name: "program_meta_not_found", tag: 18446744073709550905n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550904n)) descriptor = { name: "program_meta_wrong_owner", tag: 18446744073709550904n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550903n)) descriptor = { name: "program_meta_invalid_size", tag: 18446744073709550903n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550902n)) descriptor = { name: "token_program_invalid_idx", tag: 18446744073709550902n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550901n)) descriptor = { name: "token_program_not_found", tag: 18446744073709550901n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550900n)) descriptor = { name: "token_account_not_program", tag: 18446744073709550900n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550899n)) descriptor = { name: "token_program_not_canonical", tag: 18446744073709550899n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550815n)) descriptor = { name: "mismatch_pubkey", tag: 18446744073709550815n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550814n)) descriptor = { name: "mismatch_token_program_pubkey", tag: 18446744073709550814n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550813n)) descriptor = { name: "mismatch_seat_auth_pubkey", tag: 18446744073709550813n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550811n)) descriptor = { name: "mismatch_quote_vault_pubkey", tag: 18446744073709550811n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550810n)) descriptor = { name: "mismatch_market_auth_pubkey", tag: 18446744073709550810n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550809n)) descriptor = { name: "mismatch_order_arena_pubkey", tag: 18446744073709550809n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550808n)) descriptor = { name: "mismatch_bids_cbook_pubkey", tag: 18446744073709550808n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550807n)) descriptor = { name: "mismatch_asks_cbook_pubkey", tag: 18446744073709550807n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550806n)) descriptor = { name: "mismatch_exchange_meta_pubkey", tag: 18446744073709550806n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550805n)) descriptor = { name: "mismatch_program_pubkey", tag: 18446744073709550805n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550715n)) descriptor = { name: "unauthorized_seat_auth", tag: 18446744073709550715n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550714n)) descriptor = { name: "unauthorized_market_auth", tag: 18446744073709550714n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550713n)) descriptor = { name: "unauthorized_wallet_owner", tag: 18446744073709550713n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550712n)) descriptor = { name: "exchange_auth_invalid_idx", tag: 18446744073709550712n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550711n)) descriptor = { name: "exchange_auth_not_signer", tag: 18446744073709550711n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550710n)) descriptor = { name: "exchange_auth_mismatch", tag: 18446744073709550710n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550709n)) descriptor = { name: "exchange_admin_invalid_idx", tag: 18446744073709550709n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550708n)) descriptor = { name: "exchange_admin_not_signer", tag: 18446744073709550708n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550707n)) descriptor = { name: "exchange_admin_mismatch", tag: 18446744073709550707n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550706n)) descriptor = { name: "new_exchange_admin_invalid_idx", tag: 18446744073709550706n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550615n)) descriptor = { name: "invalid_market_record_idx", tag: 18446744073709550615n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550614n)) descriptor = { name: "market_record_missing_seat_authority", tag: 18446744073709550614n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550613n)) descriptor = { name: "market_record_missing_seat_arena", tag: 18446744073709550613n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550612n)) descriptor = { name: "market_record_missing_market_auth", tag: 18446744073709550612n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550610n)) descriptor = { name: "market_record_mismatch_seat_idx", tag: 18446744073709550610n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551411n)) descriptor = { name: "price_above_cap", tag: 18446744073709551411n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551410n)) descriptor = { name: "invalid_price_cap", tag: 18446744073709551410n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551409n)) descriptor = { name: "invalid_position_limit", tag: 18446744073709551409n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551408n)) descriptor = { name: "position_limit", tag: 18446744073709551408n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551407n)) descriptor = { name: "arith_overflow", tag: 18446744073709551407n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551406n)) descriptor = { name: "oracle_missing", tag: 18446744073709551406n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551405n)) descriptor = { name: "oracle_mismatch", tag: 18446744073709551405n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551404n)) descriptor = { name: "oracle_invalid", tag: 18446744073709551404n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551403n)) descriptor = { name: "oracle_stale", tag: 18446744073709551403n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551402n)) descriptor = { name: "invalid_margin_params", tag: 18446744073709551402n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551401n)) descriptor = { name: "not_liquidatable", tag: 18446744073709551401n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551400n)) descriptor = { name: "self_liquidation", tag: 18446744073709551400n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551399n)) descriptor = { name: "funding_disabled", tag: 18446744073709551399n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551398n)) descriptor = { name: "invalid_funding_params", tag: 18446744073709551398n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551397n)) descriptor = { name: "funding_update_not_alone", tag: 18446744073709551397n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551396n)) descriptor = { name: "margin_account_missing", tag: 18446744073709551396n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551395n)) descriptor = { name: "margin_link_mismatch", tag: 18446744073709551395n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551394n)) descriptor = { name: "margin_link_limit", tag: 18446744073709551394n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551393n)) descriptor = { name: "margin_already_linked", tag: 18446744073709551393n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551392n)) descriptor = { name: "margin_vault_mismatch", tag: 18446744073709551392n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551391n)) descriptor = { name: "margin_seat_not_flat", tag: 18446744073709551391n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551390n)) descriptor = { name: "margin_account_invalid", tag: 18446744073709551390n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551389n)) descriptor = { name: "margin_unauthorized", tag: 18446744073709551389n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551388n)) descriptor = { name: "invalid_cross_params", tag: 18446744073709551388n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551387n)) descriptor = { name: "nothing_resolved", tag: 18446744073709551387n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551386n)) descriptor = { name: "risk_param_invalid", tag: 18446744073709551386n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551385n)) descriptor = { name: "fee_param_invalid", tag: 18446744073709551385n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551384n)) descriptor = { name: "fee_seat", tag: 18446744073709551384n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551383n)) descriptor = { name: "builder_invalid", tag: 18446744073709551383n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551382n)) descriptor = { name: "fee_claim_blocked", tag: 18446744073709551382n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551213n)) descriptor = { name: "insufficient_collateral", tag: 18446744073709551213n, payloadSize: 0 };
+    }
+    return new PerpError_error_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
+  bytes(): Uint8Array {
+    return new Uint8Array(this.buffer);
+  }
+
+  variant(): __TnVariantDescriptor | null {
+    return this.descriptor;
+  }
+
+  asInvalidInstrSize(): PerpError_error_invalid_instr_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551515n)) return null;
+    return PerpError_error_invalid_instr_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidInstrType(): PerpError_error_invalid_instr_type_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551514n)) return null;
+    return PerpError_error_invalid_instr_type_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidExchangeInitProofSize(): PerpError_error_invalid_exchange_init_proof_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551513n)) return null;
+    return PerpError_error_invalid_exchange_init_proof_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidStatusFlags(): PerpError_error_invalid_status_flags_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551512n)) return null;
+    return PerpError_error_invalid_status_flags_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asIndivisiblePriceTicks(): PerpError_error_indivisible_price_ticks_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551415n)) return null;
+    return PerpError_error_indivisible_price_ticks_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asIndivisibleQtyLots(): PerpError_error_indivisible_qty_lots_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551414n)) return null;
+    return PerpError_error_indivisible_qty_lots_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asOverMaxPrice(): PerpError_error_over_max_price_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551413n)) return null;
+    return PerpError_error_over_max_price_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidLotOrTickSize(): PerpError_error_invalid_lot_or_tick_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551412n)) return null;
+    return PerpError_error_invalid_lot_or_tick_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asGttOrderExpired(): PerpError_error_gtt_order_expired_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551315n)) return null;
+    return PerpError_error_gtt_order_expired_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asOrderIdNotFound(): PerpError_error_order_id_not_found_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551314n)) return null;
+    return PerpError_error_order_id_not_found_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asClientIdNotFound(): PerpError_error_client_id_not_found_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551313n)) return null;
+    return PerpError_error_client_id_not_found_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asModifyIncreaseNotAllowed(): PerpError_error_modify_increase_not_allowed_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551312n)) return null;
+    return PerpError_error_modify_increase_not_allowed_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAskBidSideUndef(): PerpError_error_ask_bid_side_undef_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551311n)) return null;
+    return PerpError_error_ask_bid_side_undef_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asCbookFull(): PerpError_error_cbook_full_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551310n)) return null;
+    return PerpError_error_cbook_full_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asObSideStateMismatch(): PerpError_error_ob_side_state_mismatch_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551308n)) return null;
+    return PerpError_error_ob_side_state_mismatch_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInsufficientFundsQuote(): PerpError_error_insufficient_funds_quote_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551215n)) return null;
+    return PerpError_error_insufficient_funds_quote_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketDepositsFrozen(): PerpError_error_market_deposits_frozen_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551115n)) return null;
+    return PerpError_error_market_deposits_frozen_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketWithdrawalsFrozen(): PerpError_error_market_withdrawals_frozen_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551114n)) return null;
+    return PerpError_error_market_withdrawals_frozen_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketPaused(): PerpError_error_market_paused_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551113n)) return null;
+    return PerpError_error_market_paused_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketPostonlyMode(): PerpError_error_market_postonly_mode_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551112n)) return null;
+    return PerpError_error_market_postonly_mode_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSeatNotFound(): PerpError_error_seat_not_found_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551015n)) return null;
+    return PerpError_error_seat_not_found_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSeatArenaDataNotFound(): PerpError_error_seat_arena_data_not_found_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551014n)) return null;
+    return PerpError_error_seat_arena_data_not_found_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSeatArenaFull(): PerpError_error_seat_arena_full_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551013n)) return null;
+    return PerpError_error_seat_arena_full_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asEntryIdxOutOfBounds(): PerpError_error_entry_idx_out_of_bounds_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551012n)) return null;
+    return PerpError_error_entry_idx_out_of_bounds_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asReservedSeatIdx(): PerpError_error_reserved_seat_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551011n)) return null;
+    return PerpError_error_reserved_seat_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asArenaEntryNotActive(): PerpError_error_arena_entry_not_active_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551010n)) return null;
+    return PerpError_error_arena_entry_not_active_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asArenaFull(): PerpError_error_arena_full_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551009n)) return null;
+    return PerpError_error_arena_full_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidAccountType(): PerpError_error_invalid_account_type_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550915n)) return null;
+    return PerpError_error_invalid_account_type_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidAccountIdx(): PerpError_error_invalid_account_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550914n)) return null;
+    return PerpError_error_invalid_account_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidVaultPubkey(): PerpError_error_invalid_vault_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550913n)) return null;
+    return PerpError_error_invalid_vault_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeMetaInvalidIdx(): PerpError_error_exchange_meta_invalid_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550912n)) return null;
+    return PerpError_error_exchange_meta_invalid_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeMetaNotFound(): PerpError_error_exchange_meta_not_found_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550911n)) return null;
+    return PerpError_error_exchange_meta_not_found_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeMetaWrongOwner(): PerpError_error_exchange_meta_wrong_owner_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550910n)) return null;
+    return PerpError_error_exchange_meta_wrong_owner_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeMetaInvalidSize(): PerpError_error_exchange_meta_invalid_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550909n)) return null;
+    return PerpError_error_exchange_meta_invalid_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeMetaInvalidAccountType(): PerpError_error_exchange_meta_invalid_account_type_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550908n)) return null;
+    return PerpError_error_exchange_meta_invalid_account_type_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asProgramMetaInvalidIdx(): PerpError_error_program_meta_invalid_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550906n)) return null;
+    return PerpError_error_program_meta_invalid_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asProgramMetaNotFound(): PerpError_error_program_meta_not_found_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550905n)) return null;
+    return PerpError_error_program_meta_not_found_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asProgramMetaWrongOwner(): PerpError_error_program_meta_wrong_owner_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550904n)) return null;
+    return PerpError_error_program_meta_wrong_owner_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asProgramMetaInvalidSize(): PerpError_error_program_meta_invalid_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550903n)) return null;
+    return PerpError_error_program_meta_invalid_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asTokenProgramInvalidIdx(): PerpError_error_token_program_invalid_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550902n)) return null;
+    return PerpError_error_token_program_invalid_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asTokenProgramNotFound(): PerpError_error_token_program_not_found_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550901n)) return null;
+    return PerpError_error_token_program_not_found_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asTokenAccountNotProgram(): PerpError_error_token_account_not_program_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550900n)) return null;
+    return PerpError_error_token_account_not_program_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asTokenProgramNotCanonical(): PerpError_error_token_program_not_canonical_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550899n)) return null;
+    return PerpError_error_token_program_not_canonical_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchPubkey(): PerpError_error_mismatch_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550815n)) return null;
+    return PerpError_error_mismatch_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchTokenProgramPubkey(): PerpError_error_mismatch_token_program_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550814n)) return null;
+    return PerpError_error_mismatch_token_program_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchSeatAuthPubkey(): PerpError_error_mismatch_seat_auth_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550813n)) return null;
+    return PerpError_error_mismatch_seat_auth_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchQuoteVaultPubkey(): PerpError_error_mismatch_quote_vault_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550811n)) return null;
+    return PerpError_error_mismatch_quote_vault_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchMarketAuthPubkey(): PerpError_error_mismatch_market_auth_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550810n)) return null;
+    return PerpError_error_mismatch_market_auth_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchOrderArenaPubkey(): PerpError_error_mismatch_order_arena_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550809n)) return null;
+    return PerpError_error_mismatch_order_arena_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchBidsCbookPubkey(): PerpError_error_mismatch_bids_cbook_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550808n)) return null;
+    return PerpError_error_mismatch_bids_cbook_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchAsksCbookPubkey(): PerpError_error_mismatch_asks_cbook_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550807n)) return null;
+    return PerpError_error_mismatch_asks_cbook_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchExchangeMetaPubkey(): PerpError_error_mismatch_exchange_meta_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550806n)) return null;
+    return PerpError_error_mismatch_exchange_meta_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchProgramPubkey(): PerpError_error_mismatch_program_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550805n)) return null;
+    return PerpError_error_mismatch_program_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asUnauthorizedSeatAuth(): PerpError_error_unauthorized_seat_auth_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550715n)) return null;
+    return PerpError_error_unauthorized_seat_auth_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asUnauthorizedMarketAuth(): PerpError_error_unauthorized_market_auth_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550714n)) return null;
+    return PerpError_error_unauthorized_market_auth_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asUnauthorizedWalletOwner(): PerpError_error_unauthorized_wallet_owner_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550713n)) return null;
+    return PerpError_error_unauthorized_wallet_owner_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeAuthInvalidIdx(): PerpError_error_exchange_auth_invalid_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550712n)) return null;
+    return PerpError_error_exchange_auth_invalid_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeAuthNotSigner(): PerpError_error_exchange_auth_not_signer_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550711n)) return null;
+    return PerpError_error_exchange_auth_not_signer_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeAuthMismatch(): PerpError_error_exchange_auth_mismatch_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550710n)) return null;
+    return PerpError_error_exchange_auth_mismatch_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeAdminInvalidIdx(): PerpError_error_exchange_admin_invalid_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550709n)) return null;
+    return PerpError_error_exchange_admin_invalid_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeAdminNotSigner(): PerpError_error_exchange_admin_not_signer_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550708n)) return null;
+    return PerpError_error_exchange_admin_not_signer_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeAdminMismatch(): PerpError_error_exchange_admin_mismatch_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550707n)) return null;
+    return PerpError_error_exchange_admin_mismatch_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asNewExchangeAdminInvalidIdx(): PerpError_error_new_exchange_admin_invalid_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550706n)) return null;
+    return PerpError_error_new_exchange_admin_invalid_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidMarketRecordIdx(): PerpError_error_invalid_market_record_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550615n)) return null;
+    return PerpError_error_invalid_market_record_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketRecordMissingSeatAuthority(): PerpError_error_market_record_missing_seat_authority_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550614n)) return null;
+    return PerpError_error_market_record_missing_seat_authority_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketRecordMissingSeatArena(): PerpError_error_market_record_missing_seat_arena_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550613n)) return null;
+    return PerpError_error_market_record_missing_seat_arena_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketRecordMissingMarketAuth(): PerpError_error_market_record_missing_market_auth_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550612n)) return null;
+    return PerpError_error_market_record_missing_market_auth_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketRecordMismatchSeatIdx(): PerpError_error_market_record_mismatch_seat_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550610n)) return null;
+    return PerpError_error_market_record_mismatch_seat_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asPriceAboveCap(): PerpError_error_price_above_cap_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551411n)) return null;
+    return PerpError_error_price_above_cap_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidPriceCap(): PerpError_error_invalid_price_cap_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551410n)) return null;
+    return PerpError_error_invalid_price_cap_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidPositionLimit(): PerpError_error_invalid_position_limit_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551409n)) return null;
+    return PerpError_error_invalid_position_limit_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asPositionLimit(): PerpError_error_position_limit_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551408n)) return null;
+    return PerpError_error_position_limit_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asArithOverflow(): PerpError_error_arith_overflow_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551407n)) return null;
+    return PerpError_error_arith_overflow_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asOracleMissing(): PerpError_error_oracle_missing_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551406n)) return null;
+    return PerpError_error_oracle_missing_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asOracleMismatch(): PerpError_error_oracle_mismatch_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551405n)) return null;
+    return PerpError_error_oracle_mismatch_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asOracleInvalid(): PerpError_error_oracle_invalid_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551404n)) return null;
+    return PerpError_error_oracle_invalid_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asOracleStale(): PerpError_error_oracle_stale_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551403n)) return null;
+    return PerpError_error_oracle_stale_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidMarginParams(): PerpError_error_invalid_margin_params_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551402n)) return null;
+    return PerpError_error_invalid_margin_params_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asNotLiquidatable(): PerpError_error_not_liquidatable_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551401n)) return null;
+    return PerpError_error_not_liquidatable_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSelfLiquidation(): PerpError_error_self_liquidation_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551400n)) return null;
+    return PerpError_error_self_liquidation_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asFundingDisabled(): PerpError_error_funding_disabled_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551399n)) return null;
+    return PerpError_error_funding_disabled_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidFundingParams(): PerpError_error_invalid_funding_params_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551398n)) return null;
+    return PerpError_error_invalid_funding_params_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asFundingUpdateNotAlone(): PerpError_error_funding_update_not_alone_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551397n)) return null;
+    return PerpError_error_funding_update_not_alone_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarginAccountMissing(): PerpError_error_margin_account_missing_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551396n)) return null;
+    return PerpError_error_margin_account_missing_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarginLinkMismatch(): PerpError_error_margin_link_mismatch_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551395n)) return null;
+    return PerpError_error_margin_link_mismatch_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarginLinkLimit(): PerpError_error_margin_link_limit_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551394n)) return null;
+    return PerpError_error_margin_link_limit_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarginAlreadyLinked(): PerpError_error_margin_already_linked_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551393n)) return null;
+    return PerpError_error_margin_already_linked_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarginVaultMismatch(): PerpError_error_margin_vault_mismatch_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551392n)) return null;
+    return PerpError_error_margin_vault_mismatch_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarginSeatNotFlat(): PerpError_error_margin_seat_not_flat_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551391n)) return null;
+    return PerpError_error_margin_seat_not_flat_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarginAccountInvalid(): PerpError_error_margin_account_invalid_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551390n)) return null;
+    return PerpError_error_margin_account_invalid_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarginUnauthorized(): PerpError_error_margin_unauthorized_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551389n)) return null;
+    return PerpError_error_margin_unauthorized_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidCrossParams(): PerpError_error_invalid_cross_params_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551388n)) return null;
+    return PerpError_error_invalid_cross_params_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asNothingResolved(): PerpError_error_nothing_resolved_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551387n)) return null;
+    return PerpError_error_nothing_resolved_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asRiskParamInvalid(): PerpError_error_risk_param_invalid_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551386n)) return null;
+    return PerpError_error_risk_param_invalid_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asFeeParamInvalid(): PerpError_error_fee_param_invalid_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551385n)) return null;
+    return PerpError_error_fee_param_invalid_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asFeeSeat(): PerpError_error_fee_seat_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551384n)) return null;
+    return PerpError_error_fee_seat_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asBuilderInvalid(): PerpError_error_builder_invalid_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551383n)) return null;
+    return PerpError_error_builder_invalid_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asFeeClaimBlocked(): PerpError_error_fee_claim_blocked_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551382n)) return null;
+    return PerpError_error_fee_claim_blocked_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInsufficientCollateral(): PerpError_error_insufficient_collateral_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551213n)) return null;
+    return PerpError_error_insufficient_collateral_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+}
+
 export class PerpError {
   private view: DataView;
+  private static readonly __tnFieldOffset_error = 8;
 
   private constructor(private buffer: Uint8Array) {
     this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
@@ -10698,6 +12709,702 @@ export class PerpError {
     return PerpError.from_array(buffer);
   }
 
+  static readonly errorVariantDescriptors = Object.freeze([
+    {
+      name: "invalid_instr_size",
+      tag: 18446744073709551515n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::invalid_instr_size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_instr_type",
+      tag: 18446744073709551514n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::invalid_instr_type",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_exchange_init_proof_size",
+      tag: 18446744073709551513n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::invalid_exchange_init_proof_size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_status_flags",
+      tag: 18446744073709551512n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::invalid_status_flags",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "indivisible_price_ticks",
+      tag: 18446744073709551415n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::indivisible_price_ticks",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "indivisible_qty_lots",
+      tag: 18446744073709551414n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::indivisible_qty_lots",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "over_max_price",
+      tag: 18446744073709551413n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::over_max_price",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_lot_or_tick_size",
+      tag: 18446744073709551412n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::invalid_lot_or_tick_size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "gtt_order_expired",
+      tag: 18446744073709551315n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::gtt_order_expired",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "order_id_not_found",
+      tag: 18446744073709551314n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::order_id_not_found",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "client_id_not_found",
+      tag: 18446744073709551313n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::client_id_not_found",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "modify_increase_not_allowed",
+      tag: 18446744073709551312n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::modify_increase_not_allowed",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "ask_bid_side_undef",
+      tag: 18446744073709551311n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::ask_bid_side_undef",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "cbook_full",
+      tag: 18446744073709551310n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::cbook_full",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "ob_side_state_mismatch",
+      tag: 18446744073709551308n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::ob_side_state_mismatch",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "insufficient_funds_quote",
+      tag: 18446744073709551215n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::insufficient_funds_quote",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "market_deposits_frozen",
+      tag: 18446744073709551115n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::market_deposits_frozen",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "market_withdrawals_frozen",
+      tag: 18446744073709551114n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::market_withdrawals_frozen",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "market_paused",
+      tag: 18446744073709551113n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::market_paused",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "market_postonly_mode",
+      tag: 18446744073709551112n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::market_postonly_mode",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "seat_not_found",
+      tag: 18446744073709551015n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::seat_not_found",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "seat_arena_data_not_found",
+      tag: 18446744073709551014n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::seat_arena_data_not_found",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "seat_arena_full",
+      tag: 18446744073709551013n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::seat_arena_full",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "entry_idx_out_of_bounds",
+      tag: 18446744073709551012n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::entry_idx_out_of_bounds",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "reserved_seat_idx",
+      tag: 18446744073709551011n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::reserved_seat_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "arena_entry_not_active",
+      tag: 18446744073709551010n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::arena_entry_not_active",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "arena_full",
+      tag: 18446744073709551009n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::arena_full",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_account_type",
+      tag: 18446744073709550915n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::invalid_account_type",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_account_idx",
+      tag: 18446744073709550914n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::invalid_account_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_vault_pubkey",
+      tag: 18446744073709550913n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::invalid_vault_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_meta_invalid_idx",
+      tag: 18446744073709550912n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::exchange_meta_invalid_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_meta_not_found",
+      tag: 18446744073709550911n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::exchange_meta_not_found",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_meta_wrong_owner",
+      tag: 18446744073709550910n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::exchange_meta_wrong_owner",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_meta_invalid_size",
+      tag: 18446744073709550909n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::exchange_meta_invalid_size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_meta_invalid_account_type",
+      tag: 18446744073709550908n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::exchange_meta_invalid_account_type",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "program_meta_invalid_idx",
+      tag: 18446744073709550906n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::program_meta_invalid_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "program_meta_not_found",
+      tag: 18446744073709550905n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::program_meta_not_found",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "program_meta_wrong_owner",
+      tag: 18446744073709550904n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::program_meta_wrong_owner",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "program_meta_invalid_size",
+      tag: 18446744073709550903n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::program_meta_invalid_size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "token_program_invalid_idx",
+      tag: 18446744073709550902n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::token_program_invalid_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "token_program_not_found",
+      tag: 18446744073709550901n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::token_program_not_found",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "token_account_not_program",
+      tag: 18446744073709550900n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::token_account_not_program",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "token_program_not_canonical",
+      tag: 18446744073709550899n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::token_program_not_canonical",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_pubkey",
+      tag: 18446744073709550815n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::mismatch_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_token_program_pubkey",
+      tag: 18446744073709550814n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::mismatch_token_program_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_seat_auth_pubkey",
+      tag: 18446744073709550813n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::mismatch_seat_auth_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_quote_vault_pubkey",
+      tag: 18446744073709550811n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::mismatch_quote_vault_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_market_auth_pubkey",
+      tag: 18446744073709550810n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::mismatch_market_auth_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_order_arena_pubkey",
+      tag: 18446744073709550809n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::mismatch_order_arena_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_bids_cbook_pubkey",
+      tag: 18446744073709550808n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::mismatch_bids_cbook_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_asks_cbook_pubkey",
+      tag: 18446744073709550807n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::mismatch_asks_cbook_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_exchange_meta_pubkey",
+      tag: 18446744073709550806n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::mismatch_exchange_meta_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_program_pubkey",
+      tag: 18446744073709550805n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::mismatch_program_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "unauthorized_seat_auth",
+      tag: 18446744073709550715n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::unauthorized_seat_auth",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "unauthorized_market_auth",
+      tag: 18446744073709550714n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::unauthorized_market_auth",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "unauthorized_wallet_owner",
+      tag: 18446744073709550713n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::unauthorized_wallet_owner",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_auth_invalid_idx",
+      tag: 18446744073709550712n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::exchange_auth_invalid_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_auth_not_signer",
+      tag: 18446744073709550711n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::exchange_auth_not_signer",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_auth_mismatch",
+      tag: 18446744073709550710n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::exchange_auth_mismatch",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_admin_invalid_idx",
+      tag: 18446744073709550709n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::exchange_admin_invalid_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_admin_not_signer",
+      tag: 18446744073709550708n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::exchange_admin_not_signer",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_admin_mismatch",
+      tag: 18446744073709550707n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::exchange_admin_mismatch",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "new_exchange_admin_invalid_idx",
+      tag: 18446744073709550706n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::new_exchange_admin_invalid_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_market_record_idx",
+      tag: 18446744073709550615n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::invalid_market_record_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "market_record_missing_seat_authority",
+      tag: 18446744073709550614n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::market_record_missing_seat_authority",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "market_record_missing_seat_arena",
+      tag: 18446744073709550613n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::market_record_missing_seat_arena",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "market_record_missing_market_auth",
+      tag: 18446744073709550612n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::market_record_missing_market_auth",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "market_record_mismatch_seat_idx",
+      tag: 18446744073709550610n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::market_record_mismatch_seat_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "price_above_cap",
+      tag: 18446744073709551411n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::price_above_cap",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_price_cap",
+      tag: 18446744073709551410n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::invalid_price_cap",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_position_limit",
+      tag: 18446744073709551409n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::invalid_position_limit",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "position_limit",
+      tag: 18446744073709551408n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::position_limit",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "arith_overflow",
+      tag: 18446744073709551407n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::arith_overflow",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "oracle_missing",
+      tag: 18446744073709551406n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::oracle_missing",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "oracle_mismatch",
+      tag: 18446744073709551405n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::oracle_mismatch",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "oracle_invalid",
+      tag: 18446744073709551404n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::oracle_invalid",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "oracle_stale",
+      tag: 18446744073709551403n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::oracle_stale",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_margin_params",
+      tag: 18446744073709551402n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::invalid_margin_params",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "not_liquidatable",
+      tag: 18446744073709551401n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::not_liquidatable",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "self_liquidation",
+      tag: 18446744073709551400n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::self_liquidation",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "funding_disabled",
+      tag: 18446744073709551399n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::funding_disabled",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_funding_params",
+      tag: 18446744073709551398n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::invalid_funding_params",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "funding_update_not_alone",
+      tag: 18446744073709551397n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::funding_update_not_alone",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "margin_account_missing",
+      tag: 18446744073709551396n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::margin_account_missing",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "margin_link_mismatch",
+      tag: 18446744073709551395n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::margin_link_mismatch",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "margin_link_limit",
+      tag: 18446744073709551394n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::margin_link_limit",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "margin_already_linked",
+      tag: 18446744073709551393n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::margin_already_linked",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "margin_vault_mismatch",
+      tag: 18446744073709551392n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::margin_vault_mismatch",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "margin_seat_not_flat",
+      tag: 18446744073709551391n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::margin_seat_not_flat",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "margin_account_invalid",
+      tag: 18446744073709551390n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::margin_account_invalid",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "margin_unauthorized",
+      tag: 18446744073709551389n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::margin_unauthorized",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_cross_params",
+      tag: 18446744073709551388n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::invalid_cross_params",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "nothing_resolved",
+      tag: 18446744073709551387n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::nothing_resolved",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "risk_param_invalid",
+      tag: 18446744073709551386n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::risk_param_invalid",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "fee_param_invalid",
+      tag: 18446744073709551385n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::fee_param_invalid",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "fee_seat",
+      tag: 18446744073709551384n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::fee_seat",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "builder_invalid",
+      tag: 18446744073709551383n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::builder_invalid",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "fee_claim_blocked",
+      tag: 18446744073709551382n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::fee_claim_blocked",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "insufficient_collateral",
+      tag: 18446744073709551213n,
+      payloadSize: 0,
+      payloadType: "PerpError::error::insufficient_collateral",
+      createPayloadBuilder: () => null,
+    },
+  ] as const);
+
   get_code(): bigint {
     const offset = 0;
     return this.view.getBigUint64(offset, true); /* little-endian */
@@ -10714,6 +13421,22 @@ export class PerpError {
 
   set code(value: bigint) {
     this.set_code(value);
+  }
+
+  errorVariant(): typeof PerpError.errorVariantDescriptors[number] | null {
+    const tag: number | bigint | null = this.get_code();
+    return PerpError.errorVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
+  }
+
+  error(): PerpError_error_Inner {
+    const descriptor = this.errorVariant();
+    if (!descriptor) throw new Error("PerpError: unknown error variant");
+    const offset = PerpError.__tnFieldOffset_error;
+    const remaining = this.buffer.length - offset;
+    const payloadLength = descriptor.payloadSize ?? remaining;
+    if (payloadLength < 0 || offset + payloadLength > this.buffer.length) throw new Error("PerpError: payload exceeds buffer bounds");
+    const slice = this.buffer.subarray(offset, offset + payloadLength);
+    return PerpError_error_Inner.__tnCreate(slice, descriptor, undefined);
   }
 
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
@@ -10747,17 +13470,121 @@ export class PerpError {
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
     if (buffer.length < 8) return { ok: false, code: "tn.buffer_too_small", consumed: 8 };
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed: 8 };
   }
 
-  static new(code: bigint): PerpError {
-    const buffer = new Uint8Array(8);
-    const view = new DataView(buffer.buffer);
-
-    let offset = 0;
-    view.setBigUint64(0, code, true); /* code (little-endian) */
-
-    return new PerpError(buffer);
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 8 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 18446744073709551515n: t3 = 0; break;
+  case 18446744073709551514n: t3 = 0; break;
+  case 18446744073709551513n: t3 = 0; break;
+  case 18446744073709551512n: t3 = 0; break;
+  case 18446744073709551415n: t3 = 0; break;
+  case 18446744073709551414n: t3 = 0; break;
+  case 18446744073709551413n: t3 = 0; break;
+  case 18446744073709551412n: t3 = 0; break;
+  case 18446744073709551315n: t3 = 0; break;
+  case 18446744073709551314n: t3 = 0; break;
+  case 18446744073709551313n: t3 = 0; break;
+  case 18446744073709551312n: t3 = 0; break;
+  case 18446744073709551311n: t3 = 0; break;
+  case 18446744073709551310n: t3 = 0; break;
+  case 18446744073709551308n: t3 = 0; break;
+  case 18446744073709551215n: t3 = 0; break;
+  case 18446744073709551115n: t3 = 0; break;
+  case 18446744073709551114n: t3 = 0; break;
+  case 18446744073709551113n: t3 = 0; break;
+  case 18446744073709551112n: t3 = 0; break;
+  case 18446744073709551015n: t3 = 0; break;
+  case 18446744073709551014n: t3 = 0; break;
+  case 18446744073709551013n: t3 = 0; break;
+  case 18446744073709551012n: t3 = 0; break;
+  case 18446744073709551011n: t3 = 0; break;
+  case 18446744073709551010n: t3 = 0; break;
+  case 18446744073709551009n: t3 = 0; break;
+  case 18446744073709550915n: t3 = 0; break;
+  case 18446744073709550914n: t3 = 0; break;
+  case 18446744073709550913n: t3 = 0; break;
+  case 18446744073709550912n: t3 = 0; break;
+  case 18446744073709550911n: t3 = 0; break;
+  case 18446744073709550910n: t3 = 0; break;
+  case 18446744073709550909n: t3 = 0; break;
+  case 18446744073709550908n: t3 = 0; break;
+  case 18446744073709550906n: t3 = 0; break;
+  case 18446744073709550905n: t3 = 0; break;
+  case 18446744073709550904n: t3 = 0; break;
+  case 18446744073709550903n: t3 = 0; break;
+  case 18446744073709550902n: t3 = 0; break;
+  case 18446744073709550901n: t3 = 0; break;
+  case 18446744073709550900n: t3 = 0; break;
+  case 18446744073709550899n: t3 = 0; break;
+  case 18446744073709550815n: t3 = 0; break;
+  case 18446744073709550814n: t3 = 0; break;
+  case 18446744073709550813n: t3 = 0; break;
+  case 18446744073709550811n: t3 = 0; break;
+  case 18446744073709550810n: t3 = 0; break;
+  case 18446744073709550809n: t3 = 0; break;
+  case 18446744073709550808n: t3 = 0; break;
+  case 18446744073709550807n: t3 = 0; break;
+  case 18446744073709550806n: t3 = 0; break;
+  case 18446744073709550805n: t3 = 0; break;
+  case 18446744073709550715n: t3 = 0; break;
+  case 18446744073709550714n: t3 = 0; break;
+  case 18446744073709550713n: t3 = 0; break;
+  case 18446744073709550712n: t3 = 0; break;
+  case 18446744073709550711n: t3 = 0; break;
+  case 18446744073709550710n: t3 = 0; break;
+  case 18446744073709550709n: t3 = 0; break;
+  case 18446744073709550708n: t3 = 0; break;
+  case 18446744073709550707n: t3 = 0; break;
+  case 18446744073709550706n: t3 = 0; break;
+  case 18446744073709550615n: t3 = 0; break;
+  case 18446744073709550614n: t3 = 0; break;
+  case 18446744073709550613n: t3 = 0; break;
+  case 18446744073709550612n: t3 = 0; break;
+  case 18446744073709550610n: t3 = 0; break;
+  case 18446744073709551411n: t3 = 0; break;
+  case 18446744073709551410n: t3 = 0; break;
+  case 18446744073709551409n: t3 = 0; break;
+  case 18446744073709551408n: t3 = 0; break;
+  case 18446744073709551407n: t3 = 0; break;
+  case 18446744073709551406n: t3 = 0; break;
+  case 18446744073709551405n: t3 = 0; break;
+  case 18446744073709551404n: t3 = 0; break;
+  case 18446744073709551403n: t3 = 0; break;
+  case 18446744073709551402n: t3 = 0; break;
+  case 18446744073709551401n: t3 = 0; break;
+  case 18446744073709551400n: t3 = 0; break;
+  case 18446744073709551399n: t3 = 0; break;
+  case 18446744073709551398n: t3 = 0; break;
+  case 18446744073709551397n: t3 = 0; break;
+  case 18446744073709551396n: t3 = 0; break;
+  case 18446744073709551395n: t3 = 0; break;
+  case 18446744073709551394n: t3 = 0; break;
+  case 18446744073709551393n: t3 = 0; break;
+  case 18446744073709551392n: t3 = 0; break;
+  case 18446744073709551391n: t3 = 0; break;
+  case 18446744073709551390n: t3 = 0; break;
+  case 18446744073709551389n: t3 = 0; break;
+  case 18446744073709551388n: t3 = 0; break;
+  case 18446744073709551387n: t3 = 0; break;
+  case 18446744073709551386n: t3 = 0; break;
+  case 18446744073709551385n: t3 = 0; break;
+  case 18446744073709551384n: t3 = 0; break;
+  case 18446744073709551383n: t3 = 0; break;
+  case 18446744073709551382n: t3 = 0; break;
+  case 18446744073709551213n: t3 = 0; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array): PerpError | null {
@@ -10775,35 +13602,821 @@ export class PerpError {
 }
 
 export class PerpErrorBuilder {
-  private buffer: Uint8Array;
-  private view: DataView;
+  private tag: number | null = null;
+  private payload: Uint8Array | null = null;
 
-  constructor() {
-    this.buffer = new Uint8Array(8);
-    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  constructor() {}
+
+  select_invalid_instr_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_instr_size expects 0 bytes");
+    this.tag = 18446744073709551515;
+    this.payload = new Uint8Array(bytes);
+    return this;
   }
 
-  set_code(value: bigint): this {
-    const cast = __tnToBigInt(value);
-    this.view.setBigUint64(0, cast, true);
+  select_invalid_instr_type(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_instr_type expects 0 bytes");
+    this.tag = 18446744073709551514;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_exchange_init_proof_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_exchange_init_proof_size expects 0 bytes");
+    this.tag = 18446744073709551513;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_status_flags(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_status_flags expects 0 bytes");
+    this.tag = 18446744073709551512;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_indivisible_price_ticks(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_indivisible_price_ticks expects 0 bytes");
+    this.tag = 18446744073709551415;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_indivisible_qty_lots(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_indivisible_qty_lots expects 0 bytes");
+    this.tag = 18446744073709551414;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_over_max_price(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_over_max_price expects 0 bytes");
+    this.tag = 18446744073709551413;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_lot_or_tick_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_lot_or_tick_size expects 0 bytes");
+    this.tag = 18446744073709551412;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_gtt_order_expired(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_gtt_order_expired expects 0 bytes");
+    this.tag = 18446744073709551315;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_order_id_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_order_id_not_found expects 0 bytes");
+    this.tag = 18446744073709551314;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_client_id_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_client_id_not_found expects 0 bytes");
+    this.tag = 18446744073709551313;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_modify_increase_not_allowed(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_modify_increase_not_allowed expects 0 bytes");
+    this.tag = 18446744073709551312;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_ask_bid_side_undef(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_ask_bid_side_undef expects 0 bytes");
+    this.tag = 18446744073709551311;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_cbook_full(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_cbook_full expects 0 bytes");
+    this.tag = 18446744073709551310;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_ob_side_state_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_ob_side_state_mismatch expects 0 bytes");
+    this.tag = 18446744073709551308;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_insufficient_funds_quote(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_insufficient_funds_quote expects 0 bytes");
+    this.tag = 18446744073709551215;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_market_deposits_frozen(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_market_deposits_frozen expects 0 bytes");
+    this.tag = 18446744073709551115;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_market_withdrawals_frozen(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_market_withdrawals_frozen expects 0 bytes");
+    this.tag = 18446744073709551114;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_market_paused(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_market_paused expects 0 bytes");
+    this.tag = 18446744073709551113;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_market_postonly_mode(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_market_postonly_mode expects 0 bytes");
+    this.tag = 18446744073709551112;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_seat_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_seat_not_found expects 0 bytes");
+    this.tag = 18446744073709551015;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_seat_arena_data_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_seat_arena_data_not_found expects 0 bytes");
+    this.tag = 18446744073709551014;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_seat_arena_full(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_seat_arena_full expects 0 bytes");
+    this.tag = 18446744073709551013;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_entry_idx_out_of_bounds(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_entry_idx_out_of_bounds expects 0 bytes");
+    this.tag = 18446744073709551012;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_reserved_seat_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_reserved_seat_idx expects 0 bytes");
+    this.tag = 18446744073709551011;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_arena_entry_not_active(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_arena_entry_not_active expects 0 bytes");
+    this.tag = 18446744073709551010;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_arena_full(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_arena_full expects 0 bytes");
+    this.tag = 18446744073709551009;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_account_type(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_account_type expects 0 bytes");
+    this.tag = 18446744073709550915;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_account_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_account_idx expects 0 bytes");
+    this.tag = 18446744073709550914;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_vault_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_vault_pubkey expects 0 bytes");
+    this.tag = 18446744073709550913;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_meta_invalid_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_meta_invalid_idx expects 0 bytes");
+    this.tag = 18446744073709550912;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_meta_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_meta_not_found expects 0 bytes");
+    this.tag = 18446744073709550911;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_meta_wrong_owner(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_meta_wrong_owner expects 0 bytes");
+    this.tag = 18446744073709550910;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_meta_invalid_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_meta_invalid_size expects 0 bytes");
+    this.tag = 18446744073709550909;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_meta_invalid_account_type(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_meta_invalid_account_type expects 0 bytes");
+    this.tag = 18446744073709550908;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_program_meta_invalid_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_program_meta_invalid_idx expects 0 bytes");
+    this.tag = 18446744073709550906;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_program_meta_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_program_meta_not_found expects 0 bytes");
+    this.tag = 18446744073709550905;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_program_meta_wrong_owner(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_program_meta_wrong_owner expects 0 bytes");
+    this.tag = 18446744073709550904;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_program_meta_invalid_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_program_meta_invalid_size expects 0 bytes");
+    this.tag = 18446744073709550903;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_token_program_invalid_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_token_program_invalid_idx expects 0 bytes");
+    this.tag = 18446744073709550902;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_token_program_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_token_program_not_found expects 0 bytes");
+    this.tag = 18446744073709550901;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_token_account_not_program(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_token_account_not_program expects 0 bytes");
+    this.tag = 18446744073709550900;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_token_program_not_canonical(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_token_program_not_canonical expects 0 bytes");
+    this.tag = 18446744073709550899;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_pubkey expects 0 bytes");
+    this.tag = 18446744073709550815;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_token_program_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_token_program_pubkey expects 0 bytes");
+    this.tag = 18446744073709550814;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_seat_auth_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_seat_auth_pubkey expects 0 bytes");
+    this.tag = 18446744073709550813;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_quote_vault_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_quote_vault_pubkey expects 0 bytes");
+    this.tag = 18446744073709550811;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_market_auth_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_market_auth_pubkey expects 0 bytes");
+    this.tag = 18446744073709550810;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_order_arena_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_order_arena_pubkey expects 0 bytes");
+    this.tag = 18446744073709550809;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_bids_cbook_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_bids_cbook_pubkey expects 0 bytes");
+    this.tag = 18446744073709550808;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_asks_cbook_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_asks_cbook_pubkey expects 0 bytes");
+    this.tag = 18446744073709550807;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_exchange_meta_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_exchange_meta_pubkey expects 0 bytes");
+    this.tag = 18446744073709550806;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_program_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_program_pubkey expects 0 bytes");
+    this.tag = 18446744073709550805;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_unauthorized_seat_auth(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_unauthorized_seat_auth expects 0 bytes");
+    this.tag = 18446744073709550715;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_unauthorized_market_auth(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_unauthorized_market_auth expects 0 bytes");
+    this.tag = 18446744073709550714;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_unauthorized_wallet_owner(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_unauthorized_wallet_owner expects 0 bytes");
+    this.tag = 18446744073709550713;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_auth_invalid_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_auth_invalid_idx expects 0 bytes");
+    this.tag = 18446744073709550712;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_auth_not_signer(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_auth_not_signer expects 0 bytes");
+    this.tag = 18446744073709550711;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_auth_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_auth_mismatch expects 0 bytes");
+    this.tag = 18446744073709550710;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_admin_invalid_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_admin_invalid_idx expects 0 bytes");
+    this.tag = 18446744073709550709;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_admin_not_signer(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_admin_not_signer expects 0 bytes");
+    this.tag = 18446744073709550708;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_admin_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_admin_mismatch expects 0 bytes");
+    this.tag = 18446744073709550707;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_new_exchange_admin_invalid_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_new_exchange_admin_invalid_idx expects 0 bytes");
+    this.tag = 18446744073709550706;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_market_record_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_market_record_idx expects 0 bytes");
+    this.tag = 18446744073709550615;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_market_record_missing_seat_authority(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_market_record_missing_seat_authority expects 0 bytes");
+    this.tag = 18446744073709550614;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_market_record_missing_seat_arena(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_market_record_missing_seat_arena expects 0 bytes");
+    this.tag = 18446744073709550613;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_market_record_missing_market_auth(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_market_record_missing_market_auth expects 0 bytes");
+    this.tag = 18446744073709550612;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_market_record_mismatch_seat_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_market_record_mismatch_seat_idx expects 0 bytes");
+    this.tag = 18446744073709550610;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_price_above_cap(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_price_above_cap expects 0 bytes");
+    this.tag = 18446744073709551411;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_price_cap(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_price_cap expects 0 bytes");
+    this.tag = 18446744073709551410;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_position_limit(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_position_limit expects 0 bytes");
+    this.tag = 18446744073709551409;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_position_limit(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_position_limit expects 0 bytes");
+    this.tag = 18446744073709551408;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_arith_overflow(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_arith_overflow expects 0 bytes");
+    this.tag = 18446744073709551407;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_oracle_missing(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_oracle_missing expects 0 bytes");
+    this.tag = 18446744073709551406;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_oracle_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_oracle_mismatch expects 0 bytes");
+    this.tag = 18446744073709551405;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_oracle_invalid(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_oracle_invalid expects 0 bytes");
+    this.tag = 18446744073709551404;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_oracle_stale(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_oracle_stale expects 0 bytes");
+    this.tag = 18446744073709551403;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_margin_params(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_margin_params expects 0 bytes");
+    this.tag = 18446744073709551402;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_not_liquidatable(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_not_liquidatable expects 0 bytes");
+    this.tag = 18446744073709551401;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_self_liquidation(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_self_liquidation expects 0 bytes");
+    this.tag = 18446744073709551400;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_funding_disabled(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_funding_disabled expects 0 bytes");
+    this.tag = 18446744073709551399;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_funding_params(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_funding_params expects 0 bytes");
+    this.tag = 18446744073709551398;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_funding_update_not_alone(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_funding_update_not_alone expects 0 bytes");
+    this.tag = 18446744073709551397;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_margin_account_missing(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_margin_account_missing expects 0 bytes");
+    this.tag = 18446744073709551396;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_margin_link_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_margin_link_mismatch expects 0 bytes");
+    this.tag = 18446744073709551395;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_margin_link_limit(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_margin_link_limit expects 0 bytes");
+    this.tag = 18446744073709551394;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_margin_already_linked(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_margin_already_linked expects 0 bytes");
+    this.tag = 18446744073709551393;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_margin_vault_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_margin_vault_mismatch expects 0 bytes");
+    this.tag = 18446744073709551392;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_margin_seat_not_flat(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_margin_seat_not_flat expects 0 bytes");
+    this.tag = 18446744073709551391;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_margin_account_invalid(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_margin_account_invalid expects 0 bytes");
+    this.tag = 18446744073709551390;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_margin_unauthorized(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_margin_unauthorized expects 0 bytes");
+    this.tag = 18446744073709551389;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_cross_params(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_cross_params expects 0 bytes");
+    this.tag = 18446744073709551388;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_nothing_resolved(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_nothing_resolved expects 0 bytes");
+    this.tag = 18446744073709551387;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_risk_param_invalid(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_risk_param_invalid expects 0 bytes");
+    this.tag = 18446744073709551386;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_fee_param_invalid(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_fee_param_invalid expects 0 bytes");
+    this.tag = 18446744073709551385;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_fee_seat(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_fee_seat expects 0 bytes");
+    this.tag = 18446744073709551384;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_builder_invalid(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_builder_invalid expects 0 bytes");
+    this.tag = 18446744073709551383;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_fee_claim_blocked(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_fee_claim_blocked expects 0 bytes");
+    this.tag = 18446744073709551382;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_insufficient_collateral(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_insufficient_collateral expects 0 bytes");
+    this.tag = 18446744073709551213;
+    this.payload = new Uint8Array(bytes);
     return this;
   }
 
   build(): Uint8Array {
-    const buffer = this.buffer.slice();
+    if (this.tag === null || !this.payload) throw new Error("PerpError builder missing variant");
+    const buffer = new Uint8Array(1 + this.payload.length);
+    buffer[0] = this.tag;
+    buffer.set(this.payload, 1);
     __tnBuilderValidateOrThrow("PerpError", PerpError.validate(buffer));
     return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
-    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
-    __tnBuilderValidateOrThrow("PerpError", PerpError.validate(this.buffer));
-    target.set(this.buffer, offset);
+    const bytes = this.build();
+    if (target.length - offset < bytes.length) throw new Error("target buffer too small");
+    target.set(bytes, offset);
     return target;
   }
 
   finish(): PerpError {
-    const view = PerpError.from_array(this.buffer.slice());
+    const view = PerpError.from_array(this.build());
     if (!view) throw new Error("failed to build PerpError");
     return view;
   }

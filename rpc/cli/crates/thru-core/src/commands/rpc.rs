@@ -192,6 +192,14 @@ pub async fn get_account_info(
                 "isPrivileged".to_string(),
                 serde_json::Value::Bool(account.is_privileged),
             );
+            account_data.insert(
+                "isUncompressable".to_string(),
+                serde_json::Value::Bool(account.is_uncompressable),
+            );
+            account_data.insert(
+                "isNativeReceiver".to_string(),
+                serde_json::Value::Bool(account.is_native_receiver),
+            );
 
             // Handle data display based on data_start/data_len parameters
             if data_start.is_some() || data_len.is_some() {

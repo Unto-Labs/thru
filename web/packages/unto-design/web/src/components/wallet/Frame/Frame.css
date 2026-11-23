@@ -9,7 +9,7 @@
   width: 360px;
   max-width: 100%;
   box-shadow: var(--shadow-lg);
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
   font-family: var(--font-sans);
 }
 .uds-frame--full {
@@ -61,8 +61,8 @@
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: var(--text-caption);
   color: var(--color-text-primary);
 }
 .uds-frame__label {
@@ -85,13 +85,13 @@
   height: 22px;
   flex: none;
   border-radius: var(--radius-pill);
-  background: var(--color-surface-brick);
+  background: var(--color-surface-accent);
 }
 .uds-frame__verified {
   width: 15px;
   height: 15px;
   border-radius: var(--radius-pill);
-  background: var(--color-surface-grass);
+  background: var(--color-surface-success);
   color: var(--color-text-primary-inverse);
   display: grid;
   place-items: center;
@@ -99,10 +99,10 @@
 }
 .uds-frame__chip {
   flex: none;
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-family: var(--font-sans);
+  font-size: var(--text-label);
   padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-box);
   background: var(--color-surface-primary);
   color: var(--color-text-tertiary);
 }
@@ -118,7 +118,7 @@
   padding: 0;
   background: none;
   border: none;
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
   cursor: pointer;
   color: var(--color-text-tertiary);
   transition:
@@ -160,7 +160,7 @@
     width: 100%;
     max-width: 100%;
     border-width: 0;
-    border-radius: 12px 12px 0 0;
+    border-radius: var(--radius-box) var(--radius-box) 0 0;
     padding-top: 4px;
   }
 
@@ -170,7 +170,7 @@
     width: 36px;
     height: 4px;
     margin: 4px auto 0;
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-box);
     background: var(--color-border-secondary);
     flex: none;
   }
@@ -187,7 +187,7 @@
   }
 
   .uds-frame__site {
-    font-size: 13px;
+    font-size: var(--text-ui);
   }
 
   .uds-frame__logo {
@@ -201,7 +201,7 @@
   }
 
   .uds-frame__chip {
-    font-size: 11px;
+    font-size: var(--text-label);
     padding: 3px 8px;
   }
 
@@ -253,8 +253,8 @@
   gap: 6px;
   margin: 0;
   padding: var(--uds-network-space) var(--space-4);
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-family: var(--font-sans);
+  font-size: var(--text-label);
   line-height: 16px;
   color: var(--color-text-tertiary);
   pointer-events: none;
@@ -264,10 +264,10 @@
   height: 6px;
   flex: none;
   border-radius: var(--radius-pill);
-  background: var(--color-surface-grass);
-  box-shadow: 0 0 6px var(--color-surface-grass);
+  background: var(--color-surface-success);
+  box-shadow: 0 0 6px var(--color-surface-success);
 }
-/* Read before the name ("Network: Alphanet"), never shown. */
+/* Read before the name ("Network: Betanet"), never shown. */
 .uds-frame__network-hint {
   position: absolute;
   width: 1px;

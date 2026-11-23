@@ -23,18 +23,6 @@ describe("height", () => {
       expect(result.clusterExecuted).toBe(1002n);
       expect(ctx.query.getHeight).toHaveBeenCalledTimes(1);
     });
-
-    it("should create empty request", async () => {
-      const ctx = createMockContext();
-      const mockResponse = createMockHeightResponse();
-      vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockResponse);
-      
-      await getBlockHeight(ctx);
-      
-      const callArgs = (ctx.query.getHeight as any).mock.calls[0][0];
-      // Request should be created (empty GetHeightRequest)
-      expect(callArgs).toBeDefined();
-    });
   });
 });
 

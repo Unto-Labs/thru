@@ -103,6 +103,34 @@ types:
             field-type:
               primitive: u8
 
+  # Bool: true or false, stored as one byte (0 is false, anything else true)
+  - name: "Bool"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "value"
+            field-type:
+              primitive: u8
+
+  # Text: UTF-8 text with a 16-bit byte length
+  - name: "Text"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "len"
+            field-type:
+              primitive: u16
+          - name: "bytes"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["len"]
+                element-type:
+                  primitive: u8
+
   # InstructionData: Opaque instruction data for recursive reflection
   - name: "InstructionData"
     kind:

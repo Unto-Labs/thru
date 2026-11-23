@@ -16,7 +16,7 @@ import type {
 const WALLET_URL = 'https://app.tid.sh/embedded';
 const APP_ORIGIN = 'https://jcoin.example';
 const DESTINATION: DepositDestination = {
-  network: ThruNetwork.Alphanet,
+  network: ThruNetwork.Betanet,
   depositTarget: DepositTarget.UUSD,
   tokenAccountAddress: 'ta_token_account',
   mintAddress: 'ta_mint',
@@ -61,7 +61,7 @@ describe('deposit protocol round-trip', () => {
 
     const provider = new EmbeddedProvider({
       iframeUrl: WALLET_URL,
-      network: ThruNetwork.Alphanet,
+      network: ThruNetwork.Betanet,
       depositUiConfig: DEPOSIT_UI_CONFIG,
     });
     const result = await provider.prepareDeposit(DepositTarget.UUSD);
@@ -70,12 +70,12 @@ describe('deposit protocol round-trip', () => {
     expect(captured!.type).toBe(POST_MESSAGE_REQUEST_TYPES.PREPARE_DEPOSIT);
     expect(captured!.payload).toEqual({
       depositTarget: DepositTarget.UUSD,
-      network: ThruNetwork.Alphanet,
+      network: ThruNetwork.Betanet,
     });
     expect(result).toEqual(DESTINATION);
   });
 
-  it('tags each deposit with the active network across Alphanet -> Betanet -> Alphanet switches', async () => {
+  it('tags each deposit with the active network across Devnet -> Betanet -> Devnet switches', async () => {
     const captured: PostMessageRequest[] = [];
     let generation = 1;
     function report(provider: EmbeddedProvider, id: string, generation: number) {
@@ -100,7 +100,7 @@ describe('deposit protocol round-trip', () => {
     }
     const provider = new EmbeddedProvider({
       iframeUrl: WALLET_URL,
-      network: ThruNetwork.Alphanet,
+      network: ThruNetwork.Devnet,
     });
     vi.spyOn(IframeManager.prototype, 'showModal').mockImplementation(() => {});
     vi.spyOn(IframeManager.prototype, 'hide').mockImplementation(async () => {});
@@ -116,20 +116,20 @@ describe('deposit protocol round-trip', () => {
         return { id: request.id, success: true, result } as never;
       }
     );
-    report(provider, 'alphanet', generation);
+    report(provider, 'devnet', generation);
 
     await provider.deposit({ enabledProviders: [] });
     await provider.switchNetwork('betanet');
     await provider.prepareDeposit(DepositTarget.UUSD);
     await provider.deposit({ enabledProviders: [] });
-    await provider.switchNetwork('alphanet');
+    await provider.switchNetwork('devnet');
     await provider.deposit({ enabledProviders: [] });
 
     expect(
       captured
         .filter((request) => request.type === POST_MESSAGE_REQUEST_TYPES.DEPOSIT)
         .map((request) => request.payload.network)
-    ).toEqual(['alphanet', 'betanet', 'alphanet']);
+    ).toEqual(['devnet', 'betanet', 'devnet']);
     expect(captured.find((request) =>
       request.type === POST_MESSAGE_REQUEST_TYPES.PREPARE_DEPOSIT
     )?.payload).toEqual({
@@ -154,12 +154,12 @@ describe('deposit protocol round-trip', () => {
     vi.spyOn(IframeManager.prototype, 'hide').mockImplementation(async () => {});
     const provider = new EmbeddedProvider({
       iframeUrl: WALLET_URL,
-      network: ThruNetwork.Alphanet,
+      network: ThruNetwork.Betanet,
     });
 
     await provider.deposit({});
 
-    expect(captured!.payload).toEqual({ network: 'alphanet' });
+    expect(captured!.payload).toEqual({ network: 'betanet' });
   });
 
   it('sends a DEPOSIT request with the prepared destination and resolves the result', async () => {
@@ -188,7 +188,7 @@ describe('deposit protocol round-trip', () => {
 
     const provider = new EmbeddedProvider({
       iframeUrl: WALLET_URL,
-      network: ThruNetwork.Alphanet,
+      network: ThruNetwork.Betanet,
       depositUiConfig: DEPOSIT_UI_CONFIG,
     });
     const result = await provider.deposit({
@@ -239,7 +239,7 @@ describe('deposit protocol round-trip', () => {
 
     const provider = new EmbeddedProvider({
       iframeUrl: WALLET_URL,
-      network: ThruNetwork.Alphanet,
+      network: ThruNetwork.Betanet,
     });
     await provider.deposit({
       providerId: 'coinbase',

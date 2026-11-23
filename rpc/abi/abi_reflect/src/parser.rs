@@ -101,10 +101,12 @@ impl<'a> Parser<'a> {
     }
 
     fn reflected_type(&self, resolved_type: &ResolvedType) -> ReflectedType {
-        ReflectedType::from_resolved_with_format(
+        let mut info = ReflectedType::from_resolved_with_format(
             resolved_type,
             self.resolver.format_for_type(&resolved_type.name).cloned(),
-        )
+        );
+        info.display = self.resolver.display_for_type(&resolved_type.name).cloned();
+        info
     }
 
     /* Parse a value from binary data, within the decode limits */

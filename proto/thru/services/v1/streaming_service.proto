@@ -120,6 +120,13 @@ message StreamBlocksRequest {
   optional uint64 start_slot = 1 [(google.api.field_behavior) = OPTIONAL];
   optional thru.common.v1.Filter filter = 2 [(google.api.field_behavior) = OPTIONAL];
   optional thru.core.v1.BlockView view = 3 [(google.api.field_behavior) = OPTIONAL];
+  // Minimum level a block must reach before it is delivered. The stream
+  // starts at subscription; a block is delivered when it first reaches this
+  // level. Prefer this threshold over exact-level CEL on
+  // block.block.consensus_status. FINALIZED or higher can be refused with
+  // FAILED_PRECONDITION when the connected node does not report finality, or
+  // UNAVAILABLE while the status window is incomplete. CLUSTER_EXECUTED is
+  // not supported yet.
   optional thru.common.v1.ConsensusStatus min_consensus = 4
       [(google.api.field_behavior) = OPTIONAL];
 }
@@ -354,7 +361,14 @@ message StreamAccountUpdatesResponse {
 // Available consensus_status field:
 //   consensus_status (int32) - Current consensus status of the transaction
 //   Values: CONSENSUS_STATUS_UNSPECIFIED = 0, CONSENSUS_STATUS_OBSERVED = 1,
-//           CONSENSUS_STATUS_INCLUDED = 2
+//           CONSENSUS_STATUS_INCLUDED = 2, CONSENSUS_STATUS_FINALIZED = 3,
+//           CONSENSUS_STATUS_LOCALLY_EXECUTED = 4,
+//           CONSENSUS_STATUS_CLUSTER_EXECUTED = 5 (not reported yet)
+//   The values form a chain: each level implies every lower one. Prefer
+//   threshold filters (the min_consensus field or `consensus_status >= int(N)`)
+//   over exact-level CEL such as `consensus_status == int(2)`: a transaction
+//   moves up through the levels, and an exact-level filter matches only the
+//   publication made at that level.
 //
 // Filter expression examples:
 //
@@ -412,8 +426,20 @@ message StreamAccountUpdatesResponse {
 // Note: The min_consensus field in the request provides built-in consensus filtering
 // without requiring a CEL expression. Use it in combination with filter expressions
 // for more complex filtering logic.
+//
+// Delivery: the stream starts at subscription. A subscriber receives a
+// transaction when it first reaches the minimum level. A minimum of FINALIZED
+// or higher can be refused with FAILED_PRECONDITION when the connected node
+// does not report finality, or with UNAVAILABLE while the status window is
+// incomplete.
 message StreamTransactionsRequest {
   optional thru.common.v1.Filter filter = 1 [(google.api.field_behavior) = OPTIONAL];
+  // Minimum level a transaction must reach before it is delivered. The
+  // stream starts at subscription; a transaction is delivered when it first
+  // reaches this level. FINALIZED or higher can be refused with
+  // FAILED_PRECONDITION when the connected node does not report finality, or
+  // UNAVAILABLE while the status window is incomplete. CLUSTER_EXECUTED is
+  // not supported yet.
   optional thru.common.v1.ConsensusStatus min_consensus = 2
       [(google.api.field_behavior) = OPTIONAL];
 }
@@ -422,6 +448,11 @@ message StreamTransactionsRequest {
 message StreamTransactionsResponse {
   thru.core.v1.Transaction transaction = 1
       [(google.api.field_behavior) = REQUIRED];
+
+  // The consensus level of this publication. The same transaction can be
+  // published again at a higher level.
+  thru.common.v1.ConsensusStatus consensus_status = 2
+      [(google.api.field_behavior) = OPTIONAL];
 }
 
 // StreamEventsRequest subscribes to chain events.
@@ -731,8 +762,17 @@ message StreamHeightRequest {}
 
 // StreamHeightResponse delivers height update events.
 message StreamHeightResponse {
+  // Highest slot known to be finalized, capped by the newest block this
+  // thrud has seen. This is a finality height, NOT a current-slot clock; use
+  // locally_executed for the current slot.
   uint64 finalized = 1 [(google.api.field_behavior) = REQUIRED];
+  // Highest slot known to have finished executing on this node, from this
+  // thrud's own connection to the node. A lifetime watermark: it never goes
+  // backwards (also across reconnects). Unlike GetHeight it is not seeded from
+  // the query service's durable cursor, so right after a restart it can be
+  // lower than GetHeight's locally_executed until live execution reports it.
   uint64 locally_executed = 2 [(google.api.field_behavior) = REQUIRED];
+  // Always 0 until UNTO-3677.
   uint64 cluster_executed = 3 [(google.api.field_behavior) = REQUIRED];
 }
 

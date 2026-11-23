@@ -17,7 +17,6 @@ export interface BrandMarkProps {
   size?: number;
   /** Defaults to the theme foreground. */
   color?: string;
-  /** Renders as an outline instead of a solid fill. */
   outline?: boolean;
   strokeWidth?: number;
 }

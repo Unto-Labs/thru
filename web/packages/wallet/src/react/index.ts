@@ -44,6 +44,7 @@ export type {
   SignMessageParams,
   SignMessageResult,
   ThruSigningContext,
+  ThruSigningMode,
   ThruSigningSession,
   ThruSigningSessionCreateOptions,
   ThruSigningSessionDescriptor,

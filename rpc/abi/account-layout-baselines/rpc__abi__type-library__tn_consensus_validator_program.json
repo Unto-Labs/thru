@@ -61,7 +61,7 @@
                     }
                   },
                   {
-                    "name": "attestor_mint",
+                    "name": "wthru_mint",
                     "offset": 32,
                     "type": {
                       "alignment": 1,
@@ -205,7 +205,7 @@
                     }
                   },
                   {
-                    "name": "admin",
+                    "name": "validator_manager",
                     "offset": 128,
                     "type": {
                       "alignment": 1,
@@ -308,7 +308,7 @@
                     }
                   },
                   {
-                    "name": "last_decay_emit_slot",
+                    "name": "last_processed_slot",
                     "offset": 200,
                     "type": {
                       "alignment": 8,
@@ -319,7 +319,7 @@
                     }
                   },
                   {
-                    "name": "last_processed_slot",
+                    "name": "pending_map_off",
                     "offset": 208,
                     "type": {
                       "alignment": 8,
@@ -330,7 +330,7 @@
                     }
                   },
                   {
-                    "name": "pending_map_off",
+                    "name": "pending_cap",
                     "offset": 216,
                     "type": {
                       "alignment": 8,
@@ -341,7 +341,7 @@
                     }
                   },
                   {
-                    "name": "pending_cap",
+                    "name": "stake_units_per_weight",
                     "offset": 224,
                     "type": {
                       "alignment": 8,
@@ -352,8 +352,110 @@
                     }
                   },
                   {
-                    "name": "body",
+                    "name": "min_stake",
                     "offset": 232,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "max_decay_bps",
+                    "offset": 240,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "idle_gap_decay_bps",
+                    "offset": 248,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "max_idle_gap_decay_bps",
+                    "offset": 256,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "attestor_decay_fraction_bps",
+                    "offset": 264,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "pending_idle_slots",
+                    "offset": 272,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "self_service_disabled",
+                    "offset": 280,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  },
+                  {
+                    "name": "header_reserved",
+                    "offset": 281,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "array": {
+                          "element": {
+                            "alignment": 1,
+                            "kind": {
+                              "primitive": "Integral(U8)"
+                            },
+                            "size": 1
+                          },
+                          "jagged": false,
+                          "size": {
+                            "literal": {
+                              "u64": 3814
+                            }
+                          }
+                        }
+                      },
+                      "size": 3814
+                    }
+                  },
+                  {
+                    "name": "body",
+                    "offset": 4095,
                     "type": {
                       "alignment": 1,
                       "kind": {
@@ -377,7 +479,7 @@
                               },
                               "right": {
                                 "literal": {
-                                  "u64": 232
+                                  "u64": 4095
                                 }
                               }
                             }

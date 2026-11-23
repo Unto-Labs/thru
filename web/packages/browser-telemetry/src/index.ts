@@ -10,7 +10,7 @@ export const BROWSER_LAUNCH_LABELS = {
   cache: ['warm', 'cold'],
   outcome: ['ok', 'signed_in', 'signed_out', 'value', 'unavailable', 'rows', 'empty', 'failed', 'abandoned', 'interrupted'],
   /** The chain a milestone read from. `none` before any chain data loads (ttfb, shell). */
-  network: ['none', 'alphanet', 'betanet', 'custom'],
+  network: ['none', 'betanet', 'custom'],
 } as const;
 type LaunchLabels = typeof BROWSER_LAUNCH_LABELS;
 const LAUNCH_KEYS = Object.keys(BROWSER_LAUNCH_LABELS) as (keyof LaunchLabels)[];

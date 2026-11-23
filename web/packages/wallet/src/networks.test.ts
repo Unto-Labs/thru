@@ -14,14 +14,14 @@ import {
 describe("wallet network selection", () => {
   it("identifies custom nodes by hostname even when their alias matches a preset", () => {
     expect(formatWalletNetworkLabel({
-      custom: true, rpcUrl: "https://PRIVATE.example:8443/rpc", name: "Alphanet",
-    })).toBe("Custom · private.example:8443 (Alphanet)");
+      custom: true, rpcUrl: "https://PRIVATE.example:8443/rpc", name: "Betanet",
+    })).toBe("Custom · private.example:8443 (Betanet)");
     expect(formatWalletNetworkLabel({ custom: true, rpcUrl: "https://node.example" }))
       .toBe("Custom · node.example");
-    expect(formatWalletNetworkLabel({ custom: true, rpcUrl: "invalid", name: "Alphanet" }))
+    expect(formatWalletNetworkLabel({ custom: true, rpcUrl: "invalid", name: "Betanet" }))
       .toBe("Custom · invalid RPC URL");
-    expect(formatWalletNetworkLabel(resolveWalletNetworkSelection("alphanet", DEFAULT_WALLET_NETWORKS)))
-      .toBe("Alphanet");
+    expect(formatWalletNetworkLabel(resolveWalletNetworkSelection("betanet", DEFAULT_WALLET_NETWORKS)))
+      .toBe("Betanet");
   });
   it("resolves presets and normalizes a compatible rpcUrl input to its preset", () => {
     expect(
@@ -31,8 +31,8 @@ describe("wallet network selection", () => {
       ),
     ).toMatchObject({ id: "betanet", custom: false });
     expect(
-      resolveWalletNetworkSelection("alphanet", DEFAULT_WALLET_NETWORKS).rpcUrl,
-    ).toBe("https://rpc.alphanet.thru.org");
+      resolveWalletNetworkSelection("betanet", DEFAULT_WALLET_NETWORKS).rpcUrl,
+    ).toBe("https://rpc.betanet.thru.org");
   });
   it.each([
     "file:///tmp/rpc",

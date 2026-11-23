@@ -31,7 +31,6 @@ export interface AddressFieldProps {
   onScan?: () => void;
   /** Clear, shown once it has a value; empties the field when absent. */
   onClear?: () => void;
-  /** Marks the value as wrong. */
   error?: boolean;
   placeholder?: string;
   accessibilityLabel?: string;

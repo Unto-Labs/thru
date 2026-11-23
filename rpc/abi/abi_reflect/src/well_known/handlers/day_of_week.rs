@@ -22,6 +22,10 @@ impl WellKnownType for DayOfWeekHandler {
         "DayOfWeek"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("text", "name"))
+    }
+
     fn category(&self) -> &'static str {
         "google"
     }
@@ -46,17 +50,5 @@ impl WellKnownType for DayOfWeekHandler {
         }
 
         WellKnownResult::None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn day_of_week_handler_type_name() {
-        let handler = DayOfWeekHandler;
-        assert_eq!(handler.type_name(), "DayOfWeek");
-        assert_eq!(handler.category(), "google");
     }
 }

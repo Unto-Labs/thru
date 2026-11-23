@@ -158,7 +158,7 @@ export function streamTransactions(
                 continue;
             }
             try {
-                yield toStreamTransactionUpdate(response.transaction);
+                yield toStreamTransactionUpdate(response.transaction, response.consensusStatus);
             } catch (err) {
                 console.error("streamTransactions: failed to decode transaction update", err);
             }

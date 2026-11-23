@@ -1,7 +1,7 @@
 .uds-details {
   background: var(--color-surface-primary);
   width: 100%;
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
 }
 
 .uds-details__trigger {
@@ -15,7 +15,7 @@
   border: none;
   cursor: pointer;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--text-ui);
   color: var(--color-text-tertiary);
 }
 .uds-details__trigger:hover {
@@ -38,7 +38,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  font-size: 13px;
+  font-size: var(--text-ui);
   min-height: 20px;
 }
 .uds-details__label {
@@ -51,8 +51,8 @@
 
 .uds-details__loading {
   color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: var(--text-caption);
   padding: var(--space-1) 0;
 }
 
@@ -60,4 +60,9 @@
   .uds-details__trigger {
     min-height: 44px;
   }
+}
+
+.uds-details__trigger:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: -2px;
 }

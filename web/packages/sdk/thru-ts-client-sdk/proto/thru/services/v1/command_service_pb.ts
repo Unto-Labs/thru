@@ -22,7 +22,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file thru/services/v1/command_service.proto.
  */
 export const file_thru_services_v1_command_service: GenFile = /*@__PURE__*/
-  fileDesc("CiZ0aHJ1L3NlcnZpY2VzL3YxL2NvbW1hbmRfc2VydmljZS5wcm90bxIQdGhydS5zZXJ2aWNlcy52MSI2ChZTZW5kVHJhbnNhY3Rpb25SZXF1ZXN0EhwKD3Jhd190cmFuc2FjdGlvbhgBIAEoDEID4EECIkwKF1NlbmRUcmFuc2FjdGlvblJlc3BvbnNlEjEKCXNpZ25hdHVyZRgBIAEoCzIZLnRocnUuY29tbW9uLnYxLlNpZ25hdHVyZUID4EECIlIKHEJhdGNoU2VuZFRyYW5zYWN0aW9uc1JlcXVlc3QSHQoQcmF3X3RyYW5zYWN0aW9ucxgBIAMoDEID4EECEhMKC251bV9yZXRyaWVzGAIgASgFImoKHUJhdGNoU2VuZFRyYW5zYWN0aW9uc1Jlc3BvbnNlEjIKCnNpZ25hdHVyZXMYASADKAsyGS50aHJ1LmNvbW1vbi52MS5TaWduYXR1cmVCA+BBAhIVCghhY2NlcHRlZBgCIAMoCEID4EECIl4KFlNlbmRBbmRUcmFja1R4blJlcXVlc3QSGAoLdHJhbnNhY3Rpb24YASABKAxCA+BBAhIqCgd0aW1lb3V0GAIgASgLMhkuZ29vZ2xlLnByb3RvYnVmLkR1cmF0aW9uIv8BChdTZW5kQW5kVHJhY2tUeG5SZXNwb25zZRI3CgZzdGF0dXMYASABKA4yIi50aHJ1LnNlcnZpY2VzLnYxLlN1Ym1pc3Npb25TdGF0dXNCA+BBAhIsCglzaWduYXR1cmUYAiABKAsyGS50aHJ1LmNvbW1vbi52MS5TaWduYXR1cmUSOQoQY29uc2Vuc3VzX3N0YXR1cxgDIAEoDjIfLnRocnUuY29tbW9uLnYxLkNvbnNlbnN1c1N0YXR1cxJCChBleGVjdXRpb25fcmVzdWx0GAQgASgLMigudGhydS5jb3JlLnYxLlRyYW5zYWN0aW9uRXhlY3V0aW9uUmVzdWx0KnUKEFN1Ym1pc3Npb25TdGF0dXMSIQodU1VCTUlTU0lPTl9TVEFUVVNfVU5TUEVDSUZJRUQQABIeChpTVUJNSVNTSU9OX1NUQVRVU19SRUNFSVZFRBABEh4KGlNVQk1JU1NJT05fU1RBVFVTX0FDQ0VQVEVEEAIy1wMKDkNvbW1hbmRTZXJ2aWNlEoMBCg9TZW5kVHJhbnNhY3Rpb24SKC50aHJ1LnNlcnZpY2VzLnYxLlNlbmRUcmFuc2FjdGlvblJlcXVlc3QaKS50aHJ1LnNlcnZpY2VzLnYxLlNlbmRUcmFuc2FjdGlvblJlc3BvbnNlIhuC0+STAhU6ASoiEC92MS90cmFuc2FjdGlvbnMSmwEKFUJhdGNoU2VuZFRyYW5zYWN0aW9ucxIuLnRocnUuc2VydmljZXMudjEuQmF0Y2hTZW5kVHJhbnNhY3Rpb25zUmVxdWVzdBovLnRocnUuc2VydmljZXMudjEuQmF0Y2hTZW5kVHJhbnNhY3Rpb25zUmVzcG9uc2UiIYLT5JMCGzoBKiIWL3YxL3RyYW5zYWN0aW9ucy9iYXRjaBKLAQoPU2VuZEFuZFRyYWNrVHhuEigudGhydS5zZXJ2aWNlcy52MS5TZW5kQW5kVHJhY2tUeG5SZXF1ZXN0GikudGhydS5zZXJ2aWNlcy52MS5TZW5kQW5kVHJhY2tUeG5SZXNwb25zZSIhgtPkkwIbOgEqIhYvdjEvdHJhbnNhY3Rpb25zL3RyYWNrMAEaE8pBEGFwaS50aHJ1Lm5ldHdvcmtC3gEKFGNvbS50aHJ1LnNlcnZpY2VzLnYxQhNDb21tYW5kU2VydmljZVByb3RvUAFaSGdpdGh1Yi5jb20vVW50by1MYWJzL3RocnUtbmV0L2dycGMvcGtnL3Byb3RvL3RocnUvc2VydmljZXMvdjE7c2VydmljZXN2MaICA1RTWKoCEFRocnUuU2VydmljZXMuVjG6AgRUSFVTygIQVGhydVxTZXJ2aWNlc1xWMeICHFRocnVcU2VydmljZXNcVjFcR1BCTWV0YWRhdGHqAhJUaHJ1OjpTZXJ2aWNlczo6VjFiBnByb3RvMw", [file_google_api_annotations, file_google_api_client, file_thru_common_v1_primitives, file_thru_common_v1_consensus, file_google_api_field_behavior, file_thru_core_v1_transaction, file_thru_core_v1_types, file_google_protobuf_duration]);
+  fileDesc("CiZ0aHJ1L3NlcnZpY2VzL3YxL2NvbW1hbmRfc2VydmljZS5wcm90bxIQdGhydS5zZXJ2aWNlcy52MSI2ChZTZW5kVHJhbnNhY3Rpb25SZXF1ZXN0EhwKD3Jhd190cmFuc2FjdGlvbhgBIAEoDEID4EECIkwKF1NlbmRUcmFuc2FjdGlvblJlc3BvbnNlEjEKCXNpZ25hdHVyZRgBIAEoCzIZLnRocnUuY29tbW9uLnYxLlNpZ25hdHVyZUID4EECIlIKHEJhdGNoU2VuZFRyYW5zYWN0aW9uc1JlcXVlc3QSHQoQcmF3X3RyYW5zYWN0aW9ucxgBIAMoDEID4EECEhMKC251bV9yZXRyaWVzGAIgASgFImoKHUJhdGNoU2VuZFRyYW5zYWN0aW9uc1Jlc3BvbnNlEjIKCnNpZ25hdHVyZXMYASADKAsyGS50aHJ1LmNvbW1vbi52MS5TaWduYXR1cmVCA+BBAhIVCghhY2NlcHRlZBgCIAMoCEID4EECIrIBChZTZW5kQW5kVHJhY2tUeG5SZXF1ZXN0EhgKC3RyYW5zYWN0aW9uGAEgASgMQgPgQQISKgoHdGltZW91dBgCIAEoCzIZLmdvb2dsZS5wcm90b2J1Zi5EdXJhdGlvbhJACg1taW5fY29uc2Vuc3VzGAMgASgOMh8udGhydS5jb21tb24udjEuQ29uc2Vuc3VzU3RhdHVzQgPgQQFIAIgBAUIQCg5fbWluX2NvbnNlbnN1cyL/AQoXU2VuZEFuZFRyYWNrVHhuUmVzcG9uc2USNwoGc3RhdHVzGAEgASgOMiIudGhydS5zZXJ2aWNlcy52MS5TdWJtaXNzaW9uU3RhdHVzQgPgQQISLAoJc2lnbmF0dXJlGAIgASgLMhkudGhydS5jb21tb24udjEuU2lnbmF0dXJlEjkKEGNvbnNlbnN1c19zdGF0dXMYAyABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXMSQgoQZXhlY3V0aW9uX3Jlc3VsdBgEIAEoCzIoLnRocnUuY29yZS52MS5UcmFuc2FjdGlvbkV4ZWN1dGlvblJlc3VsdCp1ChBTdWJtaXNzaW9uU3RhdHVzEiEKHVNVQk1JU1NJT05fU1RBVFVTX1VOU1BFQ0lGSUVEEAASHgoaU1VCTUlTU0lPTl9TVEFUVVNfUkVDRUlWRUQQARIeChpTVUJNSVNTSU9OX1NUQVRVU19BQ0NFUFRFRBACMtcDCg5Db21tYW5kU2VydmljZRKDAQoPU2VuZFRyYW5zYWN0aW9uEigudGhydS5zZXJ2aWNlcy52MS5TZW5kVHJhbnNhY3Rpb25SZXF1ZXN0GikudGhydS5zZXJ2aWNlcy52MS5TZW5kVHJhbnNhY3Rpb25SZXNwb25zZSIbgtPkkwIVOgEqIhAvdjEvdHJhbnNhY3Rpb25zEpsBChVCYXRjaFNlbmRUcmFuc2FjdGlvbnMSLi50aHJ1LnNlcnZpY2VzLnYxLkJhdGNoU2VuZFRyYW5zYWN0aW9uc1JlcXVlc3QaLy50aHJ1LnNlcnZpY2VzLnYxLkJhdGNoU2VuZFRyYW5zYWN0aW9uc1Jlc3BvbnNlIiGC0+STAhs6ASoiFi92MS90cmFuc2FjdGlvbnMvYmF0Y2gSiwEKD1NlbmRBbmRUcmFja1R4bhIoLnRocnUuc2VydmljZXMudjEuU2VuZEFuZFRyYWNrVHhuUmVxdWVzdBopLnRocnUuc2VydmljZXMudjEuU2VuZEFuZFRyYWNrVHhuUmVzcG9uc2UiIYLT5JMCGzoBKiIWL3YxL3RyYW5zYWN0aW9ucy90cmFjazABGhPKQRBhcGkudGhydS5uZXR3b3JrQt4BChRjb20udGhydS5zZXJ2aWNlcy52MUITQ29tbWFuZFNlcnZpY2VQcm90b1ABWkhnaXRodWIuY29tL1VudG8tTGFicy90aHJ1LW5ldC9ncnBjL3BrZy9wcm90by90aHJ1L3NlcnZpY2VzL3YxO3NlcnZpY2VzdjGiAgNUU1iqAhBUaHJ1LlNlcnZpY2VzLlYxugIEVEhVU8oCEFRocnVcU2VydmljZXNcVjHiAhxUaHJ1XFNlcnZpY2VzXFYxXEdQQk1ldGFkYXRh6gISVGhydTo6U2VydmljZXM6OlYxYgZwcm90bzM", [file_google_api_annotations, file_google_api_client, file_thru_common_v1_primitives, file_thru_common_v1_consensus, file_google_api_field_behavior, file_thru_core_v1_transaction, file_thru_core_v1_types, file_google_protobuf_duration]);
 
 /**
  * SendTransactionRequest submits a transaction to the cluster.
@@ -135,11 +135,24 @@ export type SendAndTrackTxnRequest = Message<"thru.services.v1.SendAndTrackTxnRe
 
   /**
    * Optional timeout for tracking the transaction execution.
-   * If not specified, the stream will remain open until the transaction is executed or the client cancels.
+   * If not specified, the stream will remain open until the transaction reaches
+   * the requested min_consensus (by default, until it is executed) or the client cancels.
    *
    * @generated from field: google.protobuf.Duration timeout = 2;
    */
   timeout?: Duration | undefined;
+
+  /**
+   * Level at which tracking closes. Absent, UNSPECIFIED, OBSERVED and
+   * INCLUDED close at the first execution result (the default). FINALIZED and
+   * LOCALLY_EXECUTED close at the first message that carries a result and a
+   * level of at least this minimum. CLUSTER_EXECUTED and values outside the
+   * enum fail with INVALID_ARGUMENT before submission. FAILED_PRECONDITION is
+   * returned when the connected node does not report finality.
+   *
+   * @generated from field: optional thru.common.v1.ConsensusStatus min_consensus = 3;
+   */
+  minConsensus?: ConsensusStatus | undefined;
 };
 
 /**
@@ -170,7 +183,7 @@ export type SendAndTrackTxnResponse = Message<"thru.services.v1.SendAndTrackTxnR
   signature?: Signature | undefined;
 
   /**
-   * Consensus status (populated for tracking messages).
+   * Consensus level of this message (populated for tracking messages).
    *
    * @generated from field: thru.common.v1.ConsensusStatus consensus_status = 3;
    */
@@ -255,7 +268,10 @@ export const CommandService: GenService<{
   /**
    * Submit a transaction and track its execution status.
    * Returns a stream of status updates starting with RECEIVED, then ACCEPTED,
-   * followed by consensus and execution updates, closing after the transaction is executed.
+   * followed by consensus and execution updates. The stream closes at the first
+   * message that carries an execution result and a consensus level of at least
+   * min_consensus (absent, UNSPECIFIED, OBSERVED or INCLUDED: the first
+   * execution result).
    *
    * @generated from rpc thru.services.v1.CommandService.SendAndTrackTxn
    */

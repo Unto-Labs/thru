@@ -1,0 +1,404 @@
+{
+  "abi": "specs/synthetic-fields/tn_token_program.friendly-draft.abi.yaml",
+  "account_root": "TokenProgramAccount",
+  "values": {
+    "1": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "decimals",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  },
+                  {
+                    "name": "supply",
+                    "offset": 1,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "creator",
+                    "offset": 9,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "mint_authority",
+                    "offset": 41,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "freeze_authority",
+                    "offset": 73,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "has_freeze_authority",
+                    "offset": 105,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  },
+                  {
+                    "name": "ticker",
+                    "offset": 106,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "length",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "primitive": "Integral(U8)"
+                                    },
+                                    "size": 1
+                                  }
+                                },
+                                {
+                                  "name": "bytes",
+                                  "offset": 1,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 8
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 8
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 9
+                        },
+                        "ref": "TickerField"
+                      },
+                      "size": 9
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 115
+          },
+          "ref": "TokenMintAccount"
+        },
+        "size": 115
+      },
+      "variant": "mint_v1"
+    },
+    "2": {
+      "layout": {
+        "alignment": 1,
+        "kind": {
+          "layout": {
+            "alignment": 1,
+            "kind": {
+              "struct": {
+                "aligned": null,
+                "fields": [
+                  {
+                    "name": "mint",
+                    "offset": 0,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "owner",
+                    "offset": 32,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "layout": {
+                          "alignment": 1,
+                          "kind": {
+                            "struct": {
+                              "aligned": null,
+                              "fields": [
+                                {
+                                  "name": "bytes",
+                                  "offset": 0,
+                                  "type": {
+                                    "alignment": 1,
+                                    "kind": {
+                                      "array": {
+                                        "element": {
+                                          "alignment": 1,
+                                          "kind": {
+                                            "primitive": "Integral(U8)"
+                                          },
+                                          "size": 1
+                                        },
+                                        "jagged": false,
+                                        "size": {
+                                          "literal": {
+                                            "u64": 32
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "size": 32
+                                  }
+                                }
+                              ],
+                              "packed": true
+                            }
+                          },
+                          "size": 32
+                        },
+                        "ref": "Pubkey"
+                      },
+                      "size": 32
+                    }
+                  },
+                  {
+                    "name": "amount",
+                    "offset": 64,
+                    "type": {
+                      "alignment": 8,
+                      "kind": {
+                        "primitive": "Integral(U64)"
+                      },
+                      "size": 8
+                    }
+                  },
+                  {
+                    "name": "is_frozen",
+                    "offset": 72,
+                    "type": {
+                      "alignment": 1,
+                      "kind": {
+                        "primitive": "Integral(U8)"
+                      },
+                      "size": 1
+                    }
+                  }
+                ],
+                "packed": true
+              }
+            },
+            "size": 73
+          },
+          "ref": "TokenAccount"
+        },
+        "size": 73
+      },
+      "variant": "token_account_v1"
+    }
+  }
+}

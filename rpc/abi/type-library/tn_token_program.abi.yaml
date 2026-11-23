@@ -50,40 +50,62 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Create token mint
       fields:
       - name: mint_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_account_index)'
+        display-name: Mint
+        user-display: true
       - name: decimals
+        display-name: Decimals
         field-type:
           primitive: u8
       - name: creator
+        user-display: false
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: mint_authority
+        display-name: Mint authority
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: freeze_authority
+        user-display: false
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: has_freeze_authority
+        user-display: false
         field-type:
           primitive: u8
+      - name: freeze_authority_or_none
+        type: synthetic
+        return-type: { optional: { type-ref: { name: Pubkey } } }
+        expression: 'if has_freeze_authority != 0 { freeze_authority } else { none }'
+        display-name: Freeze authority
+        user-display: true
       - name: ticker
+        display-name: Ticker
         field-type:
           type-ref:
             name: TickerField
       - name: seed
+        user-display: false
         field-type:
           type-ref:
             name: Seed32
       - name: state_proof
+        user-display: false
         field-type:
           type-ref:
             name: StateProof
@@ -92,21 +114,45 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Create token account
       fields:
       - name: token_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: token_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(token_account_index)'
+        display-name: Token account
+        user-display: true
       - name: mint_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_account_index)'
+        display-name: Mint
+        user-display: true
       - name: owner_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: owner
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(owner_account_index)'
+        display-name: Owner
+        user-display: true
       - name: new_account_seed
+        user-display: false
         field-type:
           type-ref:
             name: Seed32
       - name: state_proof
+        user-display: false
         field-type:
           type-ref:
             name: StateProof
@@ -115,37 +161,84 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Transfer tokens
       fields:
       - name: source_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: source_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(source_account_index)'
+        display-name: Source token account
+        user-display: true
       - name: dest_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: dest_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(dest_account_index)'
+        display-name: Destination token account
+        user-display: true
       - name: amount
+        display-name: Amount (base units)
         field-type:
           primitive: u64
 - name: TransferCheckedInstruction
   kind:
     struct:
       packed: true
+      display-name: Transfer tokens
       fields:
+      - name: amount_display
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: '`${toDecimal(amount, decimals)} ${text(ticker.bytes, ticker.length)}`'
+        display-name: Amount
+        user-display: true
       - name: source_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: source_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(source_account_index)'
+        display-name: Source token account
+        user-display: true
       - name: dest_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: dest_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(dest_account_index)'
+        display-name: Destination token account
+        user-display: true
       - name: mint_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_account_index)'
+        display-name: Mint
+        user-display: true
       - name: amount
+        user-display: false
         field-type:
           primitive: u64
       - name: decimals
+        user-display: false
         field-type:
           primitive: u8
       - name: ticker
+        user-display: false
         field-type:
           type-ref:
             name: TickerField
@@ -153,84 +246,191 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Mint tokens
       fields:
       - name: mint_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_account_index)'
+        display-name: Mint
+        user-display: true
       - name: dest_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: dest_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(dest_account_index)'
+        display-name: Destination token account
+        user-display: true
       - name: authority_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: authority
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_index)'
+        display-name: Mint authority
+        user-display: true
       - name: amount
+        display-name: Amount (base units)
         field-type:
           primitive: u64
 - name: BurnInstruction
   kind:
     struct:
       packed: true
+      display-name: Burn tokens
       fields:
       - name: token_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: token_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(token_account_index)'
+        display-name: Token account
+        user-display: true
       - name: mint_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_account_index)'
+        display-name: Mint
+        user-display: true
       - name: authority_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: owner
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_index)'
+        display-name: Owner
+        user-display: true
       - name: amount
+        display-name: Amount (base units)
         field-type:
           primitive: u64
 - name: CloseAccountInstruction
   kind:
     struct:
       packed: true
+      display-name: Close token account
       fields:
       - name: token_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: token_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(token_account_index)'
+        display-name: Token account
+        user-display: true
       - name: dest_account_index
+        user-display: false
         field-type:
           primitive: u16
       - name: authority_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: owner
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_index)'
+        display-name: Owner
+        user-display: true
 - name: FreezeAccountInstruction
   kind:
     struct:
       packed: true
+      display-name: Freeze token account
       fields:
       - name: token_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: token_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(token_account_index)'
+        display-name: Token account
+        user-display: true
       - name: mint_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_account_index)'
+        display-name: Mint
+        user-display: true
       - name: authority_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: freeze_authority
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_index)'
+        display-name: Freeze authority
+        user-display: true
 - name: ThawAccountInstruction
   kind:
     struct:
       packed: true
+      display-name: Unfreeze token account
       fields:
       - name: token_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: token_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(token_account_index)'
+        display-name: Token account
+        user-display: true
       - name: mint_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_account_index)'
+        display-name: Mint
+        user-display: true
       - name: authority_account_index
+        user-display: false
         field-type:
           primitive: u16
+      - name: freeze_authority
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_index)'
+        display-name: Freeze authority
+        user-display: true
 - name: TokenInstruction
   kind:
     struct:
       packed: true
       fields:
       - name: tag
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -291,32 +491,58 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Token mint
       fields:
+      - name: ticker_text
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'text(ticker.bytes, ticker.length)'
+        display-name: Ticker
+        user-display: true
       - name: decimals
+        display-name: Decimals
         field-type:
           primitive: u8
       - name: supply
+        user-display: false
         field-type:
           primitive: u64
+      - name: supply_display
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: '`${toDecimal(supply, decimals)} ${text(ticker.bytes, ticker.length)}`'
+        display-name: Supply
+        user-display: true
       - name: creator
+        display-name: Creator
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: mint_authority
+        display-name: Mint authority
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: freeze_authority
+        user-display: false
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: has_freeze_authority
+        user-display: false
         field-type:
           primitive: u8
+      - name: freeze_authority_or_none
+        type: synthetic
+        return-type: { optional: { type-ref: { name: Pubkey } } }
+        expression: 'if has_freeze_authority != 0 { freeze_authority } else { none }'
+        display-name: Freeze authority
+        user-display: true
       - name: ticker
+        user-display: false
         field-type:
           type-ref:
             name: TickerField
@@ -324,23 +550,34 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Token account
       fields:
       - name: mint
+        display-name: Mint
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: owner
+        display-name: Owner
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: amount
+        display-name: Balance (base units)
         field-type:
           primitive: u64
       - name: is_frozen
+        user-display: false
         field-type:
           primitive: u8
+      - name: frozen
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if is_frozen != 0 { "Yes" } else { "No" }'
+        display-name: Frozen
+        user-display: true
 # Account root: byte 0 of every token program account is account_type and
 # the payload follows. One value per (account kind, layout); 0 is invalid, so
 # a zeroed or closed account never decodes. Values are never reused: a new
@@ -351,6 +588,7 @@ types:
       packed: true
       fields:
       - name: account_type
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -376,32 +614,46 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Token mint created
       fields:
       - name: mint
+        display-name: Mint
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: mint_authority
+        display-name: Mint authority
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: freeze_authority
+        user-display: false
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: supply
+        user-display: false
         field-type:
           primitive: u64
       - name: decimals
+        display-name: Decimals
         field-type:
           primitive: u8
       - name: has_freeze_authority
+        user-display: false
         field-type:
           primitive: u8
+      - name: freeze_authority_or_none
+        type: synthetic
+        return-type: { optional: { type-ref: { name: Pubkey } } }
+        expression: 'if has_freeze_authority != 0 { freeze_authority } else { none }'
+        display-name: Freeze authority
+        user-display: true
       - name: ticker
+        display-name: Ticker
         field-type:
           type-ref:
             name: TickerField
@@ -409,18 +661,22 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Token account created
       fields:
       - name: account
+        display-name: Account
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: owner
+        display-name: Owner
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: mint
+        display-name: Mint
         field-type:
           type-ref:
             name: Pubkey
@@ -429,100 +685,125 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Tokens transferred
       fields:
       - name: source
+        display-name: Source token account
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: dest
+        display-name: Destination token account
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: amount
+        display-name: Amount (base units)
         field-type:
           primitive: u64
       - name: source_post_balance
+        display-name: Source balance after (base units)
         field-type:
           primitive: u64
       - name: dest_post_balance
+        display-name: Destination balance after (base units)
         field-type:
           primitive: u64
 - name: MintToEventData
   kind:
     struct:
       packed: true
+      display-name: Tokens minted
       fields:
       - name: mint
+        display-name: Mint
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: dest
+        display-name: Destination token account
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: authority
+        display-name: Mint authority
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: amount
+        display-name: Amount (base units)
         field-type:
           primitive: u64
       - name: dest_post_balance
+        display-name: Destination balance after (base units)
         field-type:
           primitive: u64
       - name: mint_supply
+        display-name: Supply after (base units)
         field-type:
           primitive: u64
 - name: BurnEventData
   kind:
     struct:
       packed: true
+      display-name: Tokens burned
       fields:
       - name: mint
+        display-name: Mint
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: account
+        display-name: Token account
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: authority
+        display-name: Owner
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: amount
+        display-name: Amount (base units)
         field-type:
           primitive: u64
       - name: account_post_balance
+        display-name: Balance after (base units)
         field-type:
           primitive: u64
       - name: mint_supply
+        display-name: Supply after (base units)
         field-type:
           primitive: u64
 - name: CloseAccountEventData
   kind:
     struct:
       packed: true
+      display-name: Token account closed
       fields:
       - name: account
+        display-name: Token account
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: destination
+        display-name: Destination
+        user-display: false
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: authority
+        display-name: Owner
         field-type:
           type-ref:
             name: Pubkey
@@ -531,18 +812,22 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Token account frozen
       fields:
       - name: account
+        display-name: Token account
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: mint
+        display-name: Mint
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: authority
+        display-name: Freeze authority
         field-type:
           type-ref:
             name: Pubkey
@@ -551,18 +836,22 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Token account unfrozen
       fields:
       - name: account
+        display-name: Token account
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: mint
+        display-name: Mint
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: authority
+        display-name: Freeze authority
         field-type:
           type-ref:
             name: Pubkey
@@ -573,6 +862,7 @@ types:
       packed: true
       fields:
       - name: event_type
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -641,3 +931,77 @@ types:
       - name: code
         field-type:
           primitive: u64
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: invalid_instruction_data_size
+              tag-value: 1
+              comment: Instruction data is too short or the wrong size for this instruction.
+            - name: invalid_instruction
+              tag-value: 2
+              comment: Instruction tag is not a known token instruction.
+            - name: insufficient_funds
+              tag-value: 4
+              comment: Source balance is lower than the amount to transfer or burn.
+            - name: owner_mismatch
+              tag-value: 5
+              comment: Signing authority is not the owner of the token account.
+            - name: authority_mismatch
+              tag-value: 6
+              comment: Signing authority is not the mint authority or freeze authority of the mint.
+            - name: missing_required_signer
+              tag-value: 7
+              comment: Owner or authority of the account did not authorize this transaction.
+            - name: account_frozen
+              tag-value: 8
+              comment: Token account is frozen.
+            - name: account_not_owned_by_program
+              tag-value: 9
+              comment: Account is not owned by the token program.
+            - name: invalid_mint
+              tag-value: 10
+              comment: Mint account is not valid.
+            - name: non_zero_balance
+              tag-value: 11
+              comment: Token account still holds a balance and cannot be closed.
+            - name: invalid_account_data_size
+              tag-value: 12
+              comment: Account data is not the size of a mint or token account.
+            - name: overflow
+              tag-value: 13
+              comment: Amount is too large and would overflow the balance or supply.
+            - name: mint_mismatch
+              tag-value: 14
+              comment: Token account belongs to a different mint.
+            - name: incorrect_program_id
+              tag-value: 15
+              comment: Program id is not the token program.
+            - name: invalid_txn
+              tag-value: 16
+              comment: Transaction is not valid for this instruction.
+            - name: invalid_proof
+              tag-value: 17
+              comment: State proof in the instruction data is missing or malformed.
+            - name: invalid_account
+              tag-value: 18
+              comment: Account index is out of range, or the account is not the expected mint or token account.
+            - name: mint_cannot_freeze
+              tag-value: 19
+              comment: Mint has no freeze authority.
+            - name: syscall_failed
+              tag-value: 20
+              comment: Token program could not create or update the account.
+            - name: decimals_mismatch
+              tag-value: 21
+              comment: Mint decimals differ from the decimals the instruction expects.
+            - name: ticker_mismatch
+              tag-value: 22
+              comment: Mint ticker differs from the ticker the instruction expects.
+            - name: invalid_ticker
+              tag-value: 23
+              comment: Expected ticker is longer than 8 bytes or is not zero padded.

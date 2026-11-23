@@ -11,6 +11,7 @@ import {
   type WalletSDKStorage,
 } from "./storage";
 import type { TelemetryClient } from "./telemetry";
+import { decodeAddress } from "@thru/sdk/helpers";
 
 /** @deprecated Use WalletSDKStorage. */
 export type SigningSessionStorage = WalletSDKStorage;
@@ -41,6 +42,24 @@ export function isSigningSessionUnavailable(error: unknown): boolean {
     typeof error === "object" &&
     (error as { code?: unknown }).code === "SIGNING_SESSION_UNAVAILABLE"
   );
+}
+
+/** Whether `session` may sign a request that states `feePayerPublicKey`.
+    A session's key pays the fee, so it fits only a request built against
+    that key, or one that states no fee payer. */
+export function sessionPaysStatedFeePayer(
+  session: Pick<ThruSigningSessionDescriptor, "publicKey">,
+  feePayerPublicKey: string | undefined,
+): boolean {
+  if (feePayerPublicKey === undefined) return true;
+  if (session.publicKey === feePayerPublicKey) return true;
+  try {
+    const a = decodeAddress(session.publicKey);
+    const b = decodeAddress(feePayerPublicKey);
+    return a.length === b.length && a.every((byte, i) => byte === b[i]);
+  } catch {
+    return false;
+  }
 }
 
 export function getDefaultBrowserSigningSessionStorage(): SigningSessionStorage | null {

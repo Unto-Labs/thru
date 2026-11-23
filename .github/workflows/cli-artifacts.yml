@@ -40,31 +40,36 @@ jobs:
     continue-on-error: ${{ matrix.best_effort || false }}
     env:
       TAG_NAME: ${{ github.event.release.tag_name || inputs.tag }}
-      # Linux portability toolchain pins (see cli-cloud-vm-portability-plan.md).
-      # zig sha256 is for the x86_64-linux tarball, from
-      # https://ziglang.org/download/index.json — update it when bumping
-      # ZIG_VERSION.
-      ZIG_VERSION: "0.16.0"
-      ZIG_SHA256: "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00"
-      CARGO_ZIGBUILD_VERSION: "0.22.3"
+      # Linux portability toolchain pin (see cli-cloud-vm-portability-plan.md).
+      # Ubuntu 24.04's musl-dev for arm64, from the noble release pocket
+      # (frozen, so the URL never moves). It ships the aarch64-linux-musl-gcc
+      # wrapper around gcc-aarch64-linux-gnu, plus musl's aarch64 headers and
+      # libc.a. Update both values together.
+      MUSL_DEV_ARM64_DEB: "musl-dev_1.2.4-2_arm64.deb"
+      MUSL_DEV_ARM64_SHA256: "56e4fa8e6fcd2825ca9e262e8807d2038d4a0e91274bd51fce1653b219f5ae92"
       # cargo-xwin 0.20+ needs rustc 1.89; the CLI is pinned to 1.88.
       CARGO_XWIN_VERSION: "0.19.2"
     strategy:
       fail-fast: false
       matrix:
-        # glibc_floor: Linux binaries are linked against this glibc version
-        # via cargo-zigbuild so they run on older cloud distros (Ubuntu 22.04
-        # = 2.35, RHEL/Rocky 9 and Amazon Linux 2023 = 2.34, CentOS 7 = 2.17).
-        # Building plain gnu targets on the Ubuntu 24.04 runner stamps a
-        # glibc 2.39 floor, which fails to launch on all of the above.
+        # Linux binaries are static musl executables, so they have no glibc
+        # floor and run on any Linux kernel the Rust target supports,
+        # including older cloud distros (Ubuntu 22.04 = 2.35, RHEL/Rocky 9
+        # and Amazon Linux 2023 = 2.34, CentOS 7 = 2.17). Building plain gnu
+        # targets on the Ubuntu 24.04 runner stamps a glibc 2.39 floor, which
+        # fails to launch on all of the above. musl_cc / musl_ar compile and
+        # archive the vendored C dependencies (openssl, libgit2, libssh2,
+        # zlib, aws-lc, ring, blst) for the target.
         include:
           - os: ubuntu-large
-            target: x86_64-unknown-linux-gnu
-            glibc_floor: "2.17"
+            target: x86_64-unknown-linux-musl
+            musl_cc: x86_64-linux-musl-gcc
+            musl_ar: ar
             asset_platform: Linux-x86_64
           - os: ubuntu-large
-            target: aarch64-unknown-linux-gnu
-            glibc_floor: "2.17"
+            target: aarch64-unknown-linux-musl
+            musl_cc: aarch64-linux-musl-gcc
+            musl_ar: aarch64-linux-gnu-ar
             asset_platform: Linux-aarch64
           - os: macos-latest-xlarge
             target: aarch64-apple-darwin
@@ -114,10 +119,6 @@ jobs:
       run: |
         .github/scripts/apt-install-with-retry.sh build-essential pkg-config libssl-dev libclang-dev
 
-    # zig provides the linker and glibc stubs for both Linux targets, so no
-    # distro cross toolchain (gcc-aarch64-linux-gnu) is needed. zig is
-    # downloaded straight from ziglang.org and checksum-verified instead of
-    # going through a third-party setup action.
     - name: Set up cargo-xwin
       if: ${{ matrix.xwin }}
       run: |
@@ -125,22 +126,28 @@ jobs:
         .github/scripts/apt-install-with-retry.sh clang lld llvm
         cargo install cargo-xwin --locked --version "${CARGO_XWIN_VERSION}"
 
-    - name: Set up Zig and cargo-zigbuild
-      if: ${{ matrix.glibc_floor != '' }}
+    # x86_64 uses the distro musl-tools. aarch64 is cross-compiled with the
+    # distro gcc-aarch64-linux-gnu plus the checksum-verified arm64
+    # musl-dev, extracted in place rather than installed through apt
+    # multiarch (which would need arm64 package sources on the runner).
+    - name: Set up musl toolchain
+      if: ${{ matrix.musl_cc }}
       run: |
         set -euo pipefail
 
-        ZIG_DIR="zig-x86_64-linux-${ZIG_VERSION}"
-        curl -fsSL --retry 5 --retry-delay 5 -O "https://ziglang.org/download/${ZIG_VERSION}/${ZIG_DIR}.tar.xz"
-        echo "${ZIG_SHA256}  ${ZIG_DIR}.tar.xz" | sha256sum -c -
-        sudo tar -xJf "${ZIG_DIR}.tar.xz" -C /opt
-        rm "${ZIG_DIR}.tar.xz"
-        echo "/opt/${ZIG_DIR}" >> "$GITHUB_PATH"
-
-        # --locked pins cargo-zigbuild's own dependency tree; crates.io
-        # checksums cover the source. A couple of minutes per leg is
-        # acceptable for a release build.
-        cargo install cargo-zigbuild --locked --version "${CARGO_ZIGBUILD_VERSION}"
+        case "${{ matrix.target }}" in
+          x86_64-*)
+            .github/scripts/apt-install-with-retry.sh musl-tools
+            ;;
+          aarch64-*)
+            .github/scripts/apt-install-with-retry.sh gcc-aarch64-linux-gnu
+            curl -fsSL --retry 5 --retry-delay 5 -O "https://ports.ubuntu.com/ubuntu-ports/pool/universe/m/musl/${MUSL_DEV_ARM64_DEB}"
+            echo "${MUSL_DEV_ARM64_SHA256}  ${MUSL_DEV_ARM64_DEB}" | sha256sum -c -
+            sudo dpkg-deb -x "${MUSL_DEV_ARM64_DEB}" /
+            rm "${MUSL_DEV_ARM64_DEB}"
+            ;;
+        esac
+        "${{ matrix.musl_cc }}" --version | head -1
 
     - name: Cache cargo registry
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
@@ -158,15 +165,13 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-${{ matrix.target }}-cli-cargo-index-rust-1.88-
 
-    # The zig segment keeps zig-linked and gcc-linked object files from
-    # sharing a cache; bumping ZIG_VERSION rolls the key over.
     - name: Cache target directory
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
       with:
         path: rpc/cli/target
-        key: ${{ runner.os }}-${{ matrix.target }}-cli-cargo-target-rust-1.88-${{ matrix.glibc_floor && format('zig{0}-glibc{1}-', env.ZIG_VERSION, matrix.glibc_floor) || '' }}${{ hashFiles('rpc/cli/Cargo.lock') }}
+        key: ${{ runner.os }}-${{ matrix.target }}-cli-cargo-target-rust-1.88-${{ hashFiles('rpc/cli/Cargo.lock') }}
         restore-keys: |
-          ${{ runner.os }}-${{ matrix.target }}-cli-cargo-target-rust-1.88-${{ matrix.glibc_floor && format('zig{0}-glibc{1}-', env.ZIG_VERSION, matrix.glibc_floor) || '' }}
+          ${{ runner.os }}-${{ matrix.target }}-cli-cargo-target-rust-1.88-
 
     # Same convention as crates-publish.yml: the workspace crates stay at
     # 0.1.0 in the repo, so release builds must sync the manifests with the
@@ -203,14 +208,18 @@ jobs:
         export THRU_BUILD_CHANNEL=release
         echo "THRU_BUILD_VERSION=${THRU_BUILD_VERSION}"
 
-        # Linux legs build with cargo-zigbuild and a glibc-suffixed target so
-        # the binaries run on older distros (see the matrix comment). The
-        # output path is unaffected: zigbuild writes to the plain triple
-        # directory, rpc/cli/target/<target>/release/.
+        # Linux legs: cc/cmake-based build scripts and the final link use the
+        # musl toolchain for the target. Rust's musl targets link statically
+        # by default.
         if [ "${{ matrix.xwin }}" = "true" ]; then
           cargo xwin build --release --locked --target "${{ matrix.target }}" --manifest-path rpc/cli/Cargo.toml --bin thru
-        elif [ -n "${{ matrix.glibc_floor }}" ]; then
-          cargo zigbuild --release --locked --target "${{ matrix.target }}.${{ matrix.glibc_floor }}" --manifest-path rpc/cli/Cargo.toml --bin thru
+        elif [ -n "${{ matrix.musl_cc }}" ]; then
+          TARGET_ENV="$(echo "${{ matrix.target }}" | tr '-' '_')"
+          TARGET_ENV_UPPER="$(echo "${TARGET_ENV}" | tr '[:lower:]' '[:upper:]')"
+          export "CC_${TARGET_ENV}=${{ matrix.musl_cc }}"
+          export "AR_${TARGET_ENV}=${{ matrix.musl_ar }}"
+          export "CARGO_TARGET_${TARGET_ENV_UPPER}_LINKER=${{ matrix.musl_cc }}"
+          cargo build --release --locked --target "${{ matrix.target }}" --manifest-path rpc/cli/Cargo.toml --bin thru
         else
           cargo build --release --locked --target "${{ matrix.target }}" --manifest-path rpc/cli/Cargo.toml --bin thru
         fi
@@ -223,35 +232,38 @@ jobs:
         BIN="rpc/cli/target/${{ matrix.target }}/release/thru"
         python3 .github/scripts/verify-elf-debug-info.py "$BIN"
 
-    # Regression guard for the portability work: fail the leg if the binary's
-    # glibc requirement ever creeps above the floor again (e.g. a runner image
-    # bump combined with a zigbuild regression), or if a C dependency that is
-    # supposed to be vendored/static (openssl, libgit2, libssh2, zlib) shows
-    # up as a dynamic dependency. readelf is used instead of objdump because
-    # it handles foreign-arch ELFs (the aarch64 leg is inspected on x86_64).
-    - name: Assert glibc floor
-      if: ${{ matrix.glibc_floor != '' }}
+    # Regression guard for the portability work: fail the leg if the binary
+    # stops being fully static. Any NEEDED entry, ELF interpreter or GLIBC_
+    # symbol version would tie it to the build runner's libc again (glibc
+    # 2.39 on Ubuntu 24.04) or to a library the target distro may lack: the
+    # C dependencies (openssl, libgit2, libssh2, zlib) must stay vendored,
+    # and libudev must stay unused (Ledger USB support uses hidapi's
+    # pure-Rust backend; Amazon Linux 2023 containers have no libudev.so.1).
+    # readelf is used instead of objdump because it handles foreign-arch
+    # ELFs (the aarch64 leg is inspected on x86_64).
+    - name: Assert static linking
+      if: ${{ matrix.musl_cc }}
       shell: bash
       run: |
         set -euo pipefail
 
         BIN="rpc/cli/target/${{ matrix.target }}/release/thru"
-        FLOOR="GLIBC_${{ matrix.glibc_floor }}"
+        readelf -h "$BIN" | grep -E 'Type:|Machine:'
 
-        MAX_GLIBC="$(readelf -V "$BIN" | grep -oE 'GLIBC_2\.[0-9]+(\.[0-9]+)?' | sort -Vu | tail -1)"
-        echo "Maximum glibc symbol version: ${MAX_GLIBC} (floor: ${FLOOR})"
-        HIGHEST="$(printf '%s\n%s\n' "$MAX_GLIBC" "$FLOOR" | sort -V | tail -1)"
-        if [ "$HIGHEST" != "$FLOOR" ]; then
-          echo "::error::thru requires ${MAX_GLIBC}, above the ${FLOOR} floor; it would fail to launch on older distros." >&2
+        # Capture readelf output first so a failed inspection fails the step
+        # instead of reading as "no matches".
+        DYNAMIC="$(readelf -dW "$BIN")"
+        PHDRS="$(readelf -lW "$BIN")"
+        VERSIONS="$(readelf -VW "$BIN")"
+        NEEDED="$(grep NEEDED <<<"$DYNAMIC" || true)"
+        INTERP="$(grep -i 'program interpreter' <<<"$PHDRS" || true)"
+        GLIBC_REFS="$(grep -oE 'GLIBC_[0-9.]+' <<<"$VERSIONS" | sort -Vu || true)"
+        if [ -n "${NEEDED}${INTERP}${GLIBC_REFS}" ]; then
+          printf '%s\n' "$NEEDED" "$INTERP" "$GLIBC_REFS" >&2
+          echo "::error::thru is not fully static; it would fail to launch on distros whose libc or libraries differ from the build runner's." >&2
           exit 1
         fi
-
-        echo "Dynamic dependencies:"
-        readelf -d "$BIN" | grep NEEDED || true
-        if readelf -d "$BIN" | grep NEEDED | grep -E 'libssl|libcrypto|libgit2|libssh2|libz\.so'; then
-          echo "::error::Unexpected dynamic dependency; these libraries must stay vendored/statically linked for portability." >&2
-          exit 1
-        fi
+        echo "Static: no NEEDED entries, no interpreter, no GLIBC_ symbol versions."
 
     - name: Smoke test thru CLI binary
       # aarch64-linux and Windows are cross-compiled and cannot execute on
@@ -260,7 +272,7 @@ jobs:
       # arm64 macOS runners). The version assertion guards the
       # THRU_BUILD_VERSION stamping above: a binary that reports the
       # crate-default "0.1.0-local+..." must not ship.
-      if: ${{ matrix.target != 'aarch64-unknown-linux-gnu' && !matrix.xwin }}
+      if: ${{ matrix.target != 'aarch64-unknown-linux-musl' && !matrix.xwin }}
       shell: bash
       run: |
         BIN_NAME="thru"
@@ -640,12 +652,12 @@ jobs:
         cat cli-release-artifacts/thru-cli-SHA256SUMS
 
   # Install the freshly built .deb/.rpm in clean containers and run the
-  # binary. This is the executable proof of the glibc 2.17 floor: all of
-  # these distros ship a glibc older than the 24.04 build runner's (ubuntu
-  # 22.04 = 2.35, debian 12 = 2.36, amazonlinux 2023 and rocky 9 = 2.34), so
-  # the old un-zigbuilt binaries failed to even launch here. x86_64 only:
-  # the runners cannot execute aarch64 binaries (that leg's floor is covered
-  # by the readelf assertion in build-cli-artifacts).
+  # binary. This is the executable proof of portability: all of these
+  # distros ship a glibc older than the 24.04 build runner's (ubuntu 22.04 =
+  # 2.35, debian 12 = 2.36, amazonlinux 2023 and rocky 9 = 2.34), so a plain
+  # gnu build from that runner fails to even launch here. x86_64 only: the
+  # runners cannot execute aarch64 binaries (that leg is covered by the
+  # static-linking assertion in build-cli-artifacts).
   test-linux-packages:
     needs: [upload-cli-release-artifacts]
     if: ${{ needs.upload-cli-release-artifacts.outputs.packages_built == 'true' }}

@@ -15,6 +15,10 @@ impl WellKnownType for SignatureHandler {
         "Signature"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("signature", "signature"))
+    }
+
     fn process(&self, ctx: &WellKnownContext) -> WellKnownResult {
         let Some(fields) = ctx.fields else {
             return WellKnownResult::None;

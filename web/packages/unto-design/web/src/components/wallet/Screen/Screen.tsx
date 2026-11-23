@@ -21,9 +21,9 @@ export type ScreenHeaderTone = "neutral" | "success" | "danger" | "plain";
 export type ScreenHeaderSize = "md" | "lg";
 
 export interface ScreenHeaderProps {
-  /** Centered badge glyph; defaults to an info icon. */
+  /** Centered badge glyph; defaults to an info icon. `false` drops the badge. */
   icon?: React.ReactNode;
-  /** `plain` drops the pill so a self-contained mark (the Thru disc, the dove) sits directly in the hero. */
+  /** `plain` drops the pill so a self-contained mark sits directly in the hero. */
   tone?: ScreenHeaderTone;
   title: React.ReactNode;
   /** Optional subtitle / supporting content. */
@@ -47,9 +47,11 @@ export function ScreenHeader({
 }: ScreenHeaderProps) {
   return (
     <div className={cn("uds-screen__header", size === "lg" && "uds-screen__header--lg", className)}>
-      <span className={cn("uds-screen__badge", `uds-screen__badge--${tone}`)}>
-        {icon ?? <Info width={16} height={16} />}
-      </span>
+      {icon !== false && (
+        <span className={cn("uds-screen__badge", `uds-screen__badge--${tone}`)}>
+          {icon ?? <Info width={16} height={16} />}
+        </span>
+      )}
       <div className="uds-screen__title">{title}</div>
       {content && <div className="uds-screen__sub">{content}</div>}
     </div>

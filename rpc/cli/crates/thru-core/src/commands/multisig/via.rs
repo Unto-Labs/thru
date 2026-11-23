@@ -721,3 +721,54 @@ async fn program_upgrade_with_abi(
     }
     Ok(())
 }
+
+/* ---------------- consensus validator manager ---------------- */
+
+/// A consensus validator manager instruction from a multisig: the manager,
+/// or for InitValidatorManager the program's application authority. The
+/// child writes the attestor table (and Init reads the program's metadata);
+/// the CV program authorizes the multisig as the instruction's caller.
+/// `manager` is the table's current validator manager when the instruction
+/// needs one; it must be the multisig. The instruction runs when the
+/// request executes, as it would at the top level: ManagerActivate,
+/// ManagerDeactivate and ManagerSetWeight update the consensus state and
+/// emit their events then.
+#[allow(clippy::too_many_arguments)]
+pub async fn cv_manager_instruction(
+    config: &Config,
+    via: &ViaMultisigArgs,
+    fee_payer: Option<&str>,
+    label: &str,
+    program: TnPubkey,
+    attestor_table: TnPubkey,
+    program_meta: Option<TnPubkey>,
+    manager: Option<TnPubkey>,
+    encode: impl Fn(u64, Option<u16>) -> Vec<u8> + Send + 'static,
+    json: bool,
+) -> Result<(), CliError> {
+    let v = Via::new(config, via, fee_payer, json)?;
+    if let Some(manager) = manager {
+        if manager != v.multisig {
+            return Err(CliError::Validation(format!(
+                "the validator manager is {}, not the multisig {}",
+                addr(&manager),
+                addr(&v.multisig)
+            )));
+        }
+    }
+    let summary = format!("consensus validator {}", label);
+    v.propose(ProposeSpec::invoke(
+        summary,
+        program,
+        vec![attestor_table],
+        program_meta.into_iter().collect(),
+        move |l, _| {
+            let meta_idx = match program_meta {
+                Some(meta) => Some(ix(l, &meta)?),
+                None => None,
+            };
+            Ok(encode(u64::from(ix(l, &attestor_table)?), meta_idx))
+        },
+    ))
+    .await
+}

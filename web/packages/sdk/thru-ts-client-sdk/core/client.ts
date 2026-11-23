@@ -8,7 +8,7 @@ import {
     resolveTransactionSigningScheme,
     TransactionSigningScheme,
 } from "../domain/transactions/transaction-signing-scheme";
-import { CommandService, QueryService, StreamingService } from "@thru/sdk/proto";
+import { CommandService, DebugService, QueryService, StreamingService } from "@thru/sdk/proto";
 
 type PartialTransportOptions = Partial<GrpcWebTransportOptions>;
 
@@ -31,6 +31,7 @@ export interface ThruClientConfig {
 type QueryClient = ReturnType<typeof createClient<typeof QueryService>>;
 type CommandClient = ReturnType<typeof createClient<typeof CommandService>>;
 type StreamingClient = ReturnType<typeof createClient<typeof StreamingService>>;
+type DebugClient = ReturnType<typeof createClient<typeof DebugService>>;
 
 export interface ThruClientContext {
     baseUrl: string;
@@ -38,6 +39,7 @@ export interface ThruClientContext {
     query: QueryClient;
     command: CommandClient;
     streaming: StreamingClient;
+    debug: DebugClient;
     callOptions?: CallOptions;
     transactionSigningScheme: TransactionSigningScheme;
 }
@@ -68,6 +70,7 @@ export function createThruClientContext(config: ThruClientConfig = {}): ThruClie
         query: createClient(QueryService, clientTransport),
         command: createClient(CommandService, clientTransport),
         streaming: createClient(StreamingService, clientTransport),
+        debug: createClient(DebugService, clientTransport),
         callOptions: withApiKey(config.callOptions, config.apiKey),
         transactionSigningScheme: resolveTransactionSigningScheme(
             config.transactionSigningScheme,

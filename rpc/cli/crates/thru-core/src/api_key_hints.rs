@@ -198,7 +198,7 @@ mod tests {
     #[test]
     fn token_presence_matches_what_would_be_sent() {
         let keyless = Config {
-            rpc_base_url: "https://rpc.alphanet.thru.org".into(),
+            rpc_base_url: "https://rpc.betanet.thru.org".into(),
             ..Config::default()
         };
         assert!(!keyless.rpc_auth_token_present());

@@ -53,7 +53,7 @@ abi:
     - type: onchain
       address: "takGtYKFLFlA3-JmS8d3F-ti4F6cW1tcjVnNR1bVw913Gu"  # Thru address
       target: program       # "program", "abi-meta", or "abi"
-      network: "alphanet"   # network identifier
+      network: "betanet"    # network identifier
       revision: 5           # exact revision, ">=5" (minimum), or "latest"
 ```
 
@@ -142,7 +142,7 @@ const manifest = { [packageName]: abiYaml };
 
 // For ABIs with on-chain imports, resolve dependencies
 const result = await resolveImports(abiYaml, {
-  rpcEndpoints: { alphanet: "https://rpc.alphanet.thru.org" }
+  rpcEndpoints: { betanet: "https://rpc.betanet.thru.org" }
 });
 const manifest = createManifest(result);
 
@@ -178,7 +178,7 @@ let config = FetcherConfig {
     enable_http: true,
     enable_onchain: true,
     rpc_endpoints: HashMap::from([
-        ("alphanet".to_string(), "https://rpc.alphanet.thru.org".to_string()),
+        ("betanet".to_string(), "https://rpc.betanet.thru.org".to_string()),
     ]),
     cache_dir: Some(dirs::cache_dir().unwrap().join("thru/abi-cache")),
 };

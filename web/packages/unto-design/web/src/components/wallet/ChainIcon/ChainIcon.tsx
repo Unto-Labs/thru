@@ -28,7 +28,7 @@ export function ChainIcon({
   glyph,
   src,
   logo = true,
-  size = "medium",
+  size = "md",
   border = false,
   className,
 }: ChainIconProps) {

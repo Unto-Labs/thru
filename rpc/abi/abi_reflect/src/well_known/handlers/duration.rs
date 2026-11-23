@@ -12,6 +12,10 @@ impl WellKnownType for DurationHandler {
         "Duration"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("duration", "iso8601"))
+    }
+
     fn process(&self, ctx: &WellKnownContext) -> WellKnownResult {
         let Some(fields) = ctx.fields else {
             return WellKnownResult::None;

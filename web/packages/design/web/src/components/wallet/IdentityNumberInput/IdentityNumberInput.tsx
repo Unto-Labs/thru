@@ -11,6 +11,8 @@ export interface IdentityNumberInputProps {
   value: string;
   onValueChange: (raw: string) => void;
   label: string;
+  placeholder?: string;
+  inputMode?: "numeric" | "text";
   error?: string;
   revealed?: boolean;
   defaultRevealed?: boolean;
@@ -21,8 +23,19 @@ export interface IdentityNumberInputProps {
 }
 
 export function IdentityNumberInput({
-  kind, value, onValueChange, label, error, revealed, defaultRevealed = false,
-  onRevealedChange, disabled, id, className,
+  kind,
+  value,
+  onValueChange,
+  label,
+  placeholder,
+  inputMode,
+  error,
+  revealed,
+  defaultRevealed = false,
+  onRevealedChange,
+  disabled,
+  id,
+  className,
 }: IdentityNumberInputProps) {
   const generatedId = React.useId();
   const inputId = id ?? generatedId;
@@ -39,9 +52,16 @@ export function IdentityNumberInput({
       disabled={disabled}
       className={cn("tds-identity-input", className)}
       value={display}
-      onChange={(e) => onValueChange(fmt.normalize(applyMaskedEdit(e, display, fmt.format)))}
-      inputMode={fmt.inputMode}
-      placeholder={fmt.placeholder}
+      onChange={(e) => {
+        const text =
+          kind === "id"
+            ? e.currentTarget.value
+            : applyMaskedEdit(e, display, fmt.format);
+        onValueChange(fmt.normalize(text));
+      }}
+      inputMode={inputMode ?? fmt.inputMode}
+      placeholder={placeholder ?? fmt.placeholder}
+      maxLength={fmt.maxLength}
       errorMessage={error}
       type="text"
       autoComplete="off"

@@ -11,7 +11,7 @@ You are working in the Thru monorepo. `design/` is `@thru/design`; the wallet is
 - **Home shows four rows** under a `SectionLabel` **Tokens**: UUSD first, then the next three tokens by ticker A→Z. **VIEW ALL →** (mono 11 brick, 44 pt hit, accessible name "View all tokens") appears in the label row only when more exist and pushes the **Tokens** screen. Home must not scroll at 390×844: the stack is 619 px in a 631 px viewport — Tokens label 24 above / 8 below, Recent activity label 20 above, trailing spacer 4; Recent activity shows **two** rows when the token list is full (four rows) and three otherwise.
 - **Row visual = today's Balances row**, applied to every token: `Cell` h64, `TokenMark` 28, ticker 15/500, subtitle mono 11 `fgMuted`, amount mono 14 right, hairlines inset 16, press `bgMuted`, **no chevron** — the whole row taps. UUSD's subtitle is **"56 UUSD"** (units + ticker) and its right value **$56.00**; every other row's subtitle is the **shortened mint** (`taZt…9Kq2`, 4…4, never uppercased) and its right value the **exact token amount**.
 - **No prices.** The only dollar figure anywhere is UUSD's ($1). No fiat for other tokens, no 24 h change, no portfolio total; the Home hero is labelled **Balance** and is the UUSD balance.
-- **Header top right is Settings** (sliders glyph, 44 pt), not scan. A small network badge (forest dot + ALPHANET / BETANET, mono 10 caps) sits beside the account chip — drop it if the existing header label already covers this.
+- **Header top right is Settings** (sliders glyph, 44 pt), not scan. A small network badge (forest dot + BETANET, mono 10 caps) sits beside the account chip — drop it if the existing header label already covers this.
 - **Receive by token:** UUSD, ETH, BTC → the existing Deposit sheet (Unifold) with the source pre-selected (UUSD → USDC on Solana, ETH → ETH on Ethereum, BTC → BTC on Bitcoin); ETH and BTC show a `Callout` **"Arrives in your wallet as UUSD"** before the handoff; UUSD's path is plain. Any other token → the **Receive on Thru** sheet.
 - Contrast and copy as the Activity handoff: `fgMuted` for secondary text (not `fgSubtle`), brick for errors, addresses 4…4 mono, U+2212 for minus.
 
@@ -54,17 +54,17 @@ Route `/token/<mint>`, pushed from a row; back returns to the list it came from.
   - Send opens the existing Send flow with this token pre-selected (pass the mint; don't redesign Send).
   - Disabled with a reason line under the pair (info 14 + 13 `fgMuted`, 10 below; Send at 40 % opacity, `aria-disabled`, `aria-describedby` the reason): **"Nothing to send"** (spendable 0), **"This token is frozen"**, **"Unsupported token"** (unknown decimals). Receive stays live.
   - Receive: see §1 — Deposit handoff for UUSD/ETH/BTC (ETH/BTC show the "Arrives in your wallet as UUSD" `Callout` with body "ETH you deposit is converted on the way in and lands as dollars."), Receive on Thru sheet for everything else.
-- Details `MetaTable` rows 52: **Decimals** (or "Unknown"), **Network** ("thru-alphanet"), **Receive via** ("Deposit · USDC on Solana" / "Deposit · ETH on Ethereum" / "Thru Alphanet"). No history list in this ticket.
+- Details `MetaTable` rows 52: **Decimals** (or "Unknown"), **Network** ("thru-betanet"), **Receive via** ("Deposit · USDC on Solana" / "Deposit · ETH on Ethereum" / "Thru Betanet"). No history list in this ticket.
 - **Not found** (token not held or bad link): `NavBar` "Token" + `EmptyState`: "?" disc 48 `bgMuted`, "This token isn't in your wallet" 17/600, "It may sit in another account, or the link is out of date." 14 `fgMuted`, `Button` secondary **Back to Home**.
 
 ## 6. Receive on Thru sheet (`Receive Thru Sheet.dc.html`)
 
 Kit `Sheet`, content height on phones (58 below = 24 + home indicator), the centred 480 dialog ≥ 640 (24 below, radius 12, 64 % scrim, Escape closes). Leading title **"Receive COOL"** + Close 44. Then, centred, 16 gaps:
 - **QRCard** (new kit part): 200 box, 1 px `#B6CECE`, 10 pad, modules `#181B1B` on `#F9FBFB` **in both themes** (dark-on-light always), error correction H, the Thru mark 32 knocked out on a 3 px `#F9FBFB` pad. Encodes the bare address. `aria-label` "QR code of your address".
-- Copy line 15/500: **"Send COOL to this address on Thru Alphanet"** (ticker mono).
+- Copy line 15/500: **"Send COOL to this address on Thru Betanet"** (ticker mono).
 - **AddressCard** (new kit part): the full address mono 13/1.5 centred in a 1 px `borderStrong` box; an attached 44 pt row below with **Copy address** | **Share**, hairline between, `bgMuted`. Copy → **"Copied"** with a check in forest for 1.2 s, `aria-live`. Share = Web Share with the address, copy fallback.
-- `Callout` warn (`saffronSoft`, triangle 16 saffron): **"Only Thru Alphanet transfers arrive here."** + "Tokens sent from any other network can't be recovered." 13 `fgMuted`.
-Network name follows the active network (Alphanet / Betanet).
+- `Callout` warn (`saffronSoft`, triangle 16 saffron): **"Only Thru Betanet transfers arrive here."** + "Tokens sent from any other network can't be recovered." 13 `fgMuted`.
+Network name follows the active network (Betanet).
 
 New kit parts (nothing in the kit fits): **AddressRow** (read-only address + copy — `AddressField` is an input), **QRCard**, **AddressCard**. Reused: everything else, incl. `InlineError`, `EmptyState`, `DesktopShell` from Activity.
 

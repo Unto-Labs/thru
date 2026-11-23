@@ -28,6 +28,7 @@ export * as accounts from "./modules/accounts";
 export * as blocks from "./modules/blocks";
 export * as chain from "./modules/chain";
 export * as consensus from "./modules/consensus";
+export * as debug from "./modules/debug";
 export * as events from "./modules/events";
 export * as height from "./modules/height";
 export * as keys from "./modules/keys";
@@ -235,8 +236,10 @@ export type {
 // Type Exports - Proofs Module
 // ============================================================================
 export type { GenerateStateProofOptions } from "./types/types";
+export type { ReExecuteTransactionOptions } from "./modules/debug";
 export type { GetStateRootsOptions, GenerateStateProofsOptions, StateProofOutcome } from "./modules/proofs";
 
 export * from "./domain/transactions/intent";
+export * from "./domain/transactions/execution-errors";
 export { CompressionError } from "./modules/compression";
 export type { CompressionModule, CompressionOptions, KeypairCompressionOptions, WalletCompressionOptions, DecompressionOptions, CompressionResult, CompressionErrorCode, AccountOutcome, AccountCompressionStatus, UploadCleanup, CompressionJournal, PendingCompressionTransaction } from "./modules/compression";

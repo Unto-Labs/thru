@@ -50,8 +50,7 @@ describe("events", () => {
       await getEvent(ctx, "test-event-id", { versionContext });
       
       const callArgs = (ctx.query.getEvent as any).mock.calls[0][0];
-      expect(callArgs.versionContext).toBeDefined();
-      expect(callArgs.versionContext.version?.case).toBe("current");
+      expect(callArgs.versionContext).toBe(versionContext);
     });
 
     it("should throw error for empty eventId", () => {

@@ -10,7 +10,7 @@ abi:
       root-types:
         instruction-root: NftInstruction
         account-root: NftProgramAccount
-        errors: null
+        errors: NftError
         events: null
 types:
 - name: Hash
@@ -1349,24 +1349,29 @@ types:
       comment: null
       fields:
       - name: discriminant
+        user-display: false
         field-type:
           primitive: u32
 - name: NftMintAccount
   kind:
     struct:
+      display-name: NFT mint
       packed: true
       aligned: 0
       comment: null
       fields:
       - name: mint_authority
+        display-name: Mint authority
         field-type:
           type-ref:
             name: Pubkey
             comment: null
       - name: supply
+        display-name: Supply
         field-type:
           primitive: u64
       - name: next_id
+        display-name: Next NFT ID
         field-type:
           primitive: u64
 - name: NftMetadata
@@ -1377,9 +1382,11 @@ types:
       comment: null
       fields:
       - name: flags
+        user-display: false
         field-type:
           primitive: u64
       - name: external_metadata_uri
+        format: text
         field-type:
           array:
             packed: false
@@ -1394,44 +1401,71 @@ types:
 - name: NftAccount
   kind:
     struct:
+      display-name: NFT
       packed: true
       aligned: 0
       comment: null
       fields:
       - name: mint
+        display-name: Mint
         field-type:
           type-ref:
             name: Pubkey
             comment: null
       - name: owner
+        display-name: Owner
         field-type:
           type-ref:
             name: Pubkey
             comment: null
       - name: id
+        display-name: NFT ID
         field-type:
           primitive: u64
       - name: metadata
+        user-display: false
         field-type:
           type-ref:
             name: NftMetadata
             comment: null
+      - name: owner_can_transfer
+        type: synthetic
+        return-type: { type-ref: { name: Bool } }
+        expression: 'metadata.flags % 2 == 1'
+        display-name: Owner can transfer
+        user-display: true
+      - name: owner_can_burn
+        type: synthetic
+        return-type: { type-ref: { name: Bool } }
+        expression: '(metadata.flags / 2) % 2 == 1'
+        display-name: Owner can burn
+        user-display: true
 - name: NftInitializeMintArgs
   kind:
     struct:
+      display-name: Create NFT mint
       packed: true
       aligned: 0
       comment: null
       fields:
       - name: mint_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_account_idx)'
+        display-name: Mint
+        user-display: true
       - name: mint_authority
+        display-name: Mint authority
         field-type:
           type-ref:
             name: Pubkey
             comment: null
       - name: seed
+        user-display: false
         field-type:
           type-ref:
             name: Seed
@@ -1439,82 +1473,191 @@ types:
 - name: NftMintToArgs
   kind:
     struct:
+      display-name: Mint NFT
       packed: true
       aligned: 0
       comment: null
       fields:
       - name: mint_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_account_idx)'
+        display-name: Mint
+        user-display: true
       - name: nft_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: nft_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(nft_account_idx)'
+        display-name: NFT account
+        user-display: true
       - name: owner_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: owner
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(owner_account_idx)'
+        display-name: Owner
+        user-display: true
       - name: metadata
+        user-display: false
         field-type:
           type-ref:
             name: NftMetadata
             comment: null
+      - name: owner_can_transfer
+        type: synthetic
+        return-type: { type-ref: { name: Bool } }
+        expression: 'metadata.flags % 2 == 1'
+        display-name: Owner can transfer
+        user-display: true
+      - name: owner_can_burn
+        type: synthetic
+        return-type: { type-ref: { name: Bool } }
+        expression: '(metadata.flags / 2) % 2 == 1'
+        display-name: Owner can burn
+        user-display: true
 - name: NftTransferArgs
   kind:
     struct:
+      display-name: Transfer NFT
       packed: true
       aligned: 0
       comment: null
       fields:
       - name: nft_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: nft_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(nft_account_idx)'
+        display-name: NFT account
+        user-display: true
       - name: dest_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: new_owner
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(dest_account_idx)'
+        display-name: New owner
+        user-display: true
       - name: mint_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_account_idx)'
+        display-name: Mint
+        user-display: true
 - name: NftBurnArgs
   kind:
     struct:
+      display-name: Burn NFT
       packed: true
       aligned: 0
       comment: null
       fields:
       - name: nft_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: nft_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(nft_account_idx)'
+        display-name: NFT account
+        user-display: true
       - name: mint_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_account_idx)'
+        display-name: Mint
+        user-display: true
 - name: NftUpdateMetadataArgs
   kind:
     struct:
+      display-name: Update NFT metadata
       packed: true
       aligned: 0
       comment: null
       fields:
       - name: nft_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: nft_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(nft_account_idx)'
+        display-name: NFT account
+        user-display: true
       - name: mint_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_account_idx)'
+        display-name: Mint
+        user-display: true
       - name: metadata
+        user-display: false
         field-type:
           type-ref:
             name: NftMetadata
             comment: null
+      - name: owner_can_transfer
+        type: synthetic
+        return-type: { type-ref: { name: Bool } }
+        expression: 'metadata.flags % 2 == 1'
+        display-name: Owner can transfer
+        user-display: true
+      - name: owner_can_burn
+        type: synthetic
+        return-type: { type-ref: { name: Bool } }
+        expression: '(metadata.flags / 2) % 2 == 1'
+        display-name: Owner can burn
+        user-display: true
 - name: NftSetAuthorityArgs
   kind:
     struct:
+      display-name: Set mint authority
       packed: true
       aligned: 0
       comment: null
       fields:
       - name: mint_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_account_idx)'
+        display-name: Mint
+        user-display: true
       - name: new_authority
+        display-name: New mint authority
         field-type:
           type-ref:
             name: Pubkey
@@ -1522,24 +1665,35 @@ types:
 - name: NftInitializeMintWithProof
   kind:
     struct:
+      display-name: Create NFT mint
       packed: true
       aligned: 0
       comment: null
       fields:
       - name: mint_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_account_idx)'
+        display-name: Mint
+        user-display: true
       - name: mint_authority
+        display-name: Mint authority
         field-type:
           type-ref:
             name: Pubkey
             comment: null
       - name: seed
+        user-display: false
         field-type:
           type-ref:
             name: Seed
             comment: null
       - name: state_proof
+        user-display: false
         field-type:
           type-ref:
             name: StateProof
@@ -1547,25 +1701,61 @@ types:
 - name: NftMintToWithProof
   kind:
     struct:
+      display-name: Mint NFT
       packed: true
       aligned: 0
       comment: null
       fields:
       - name: mint_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: mint
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(mint_account_idx)'
+        display-name: Mint
+        user-display: true
       - name: nft_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: nft_account
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(nft_account_idx)'
+        display-name: NFT account
+        user-display: true
       - name: owner_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: owner
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(owner_account_idx)'
+        display-name: Owner
+        user-display: true
       - name: metadata
+        user-display: false
         field-type:
           type-ref:
             name: NftMetadata
             comment: null
+      - name: owner_can_transfer
+        type: synthetic
+        return-type: { type-ref: { name: Bool } }
+        expression: 'metadata.flags % 2 == 1'
+        display-name: Owner can transfer
+        user-display: true
+      - name: owner_can_burn
+        type: synthetic
+        return-type: { type-ref: { name: Bool } }
+        expression: '(metadata.flags / 2) % 2 == 1'
+        display-name: Owner can burn
+        user-display: true
       - name: state_proof
+        user-display: false
         field-type:
           type-ref:
             name: StateProof
@@ -1578,6 +1768,7 @@ types:
       comment: null
       fields:
       - name: discriminant
+        user-display: false
         field-type:
           primitive: u32
       - name: payload
@@ -1639,6 +1830,7 @@ types:
       packed: true
       fields:
       - name: account_type
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -1660,3 +1852,34 @@ types:
               variant-type:
                 type-ref:
                   name: NftAccount
+- name: NftError
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: code
+        field-type:
+          primitive: u64
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: invalid_instruction
+              tag-value: 1
+              comment: Instruction data is malformed, the wrong size, or not a known NFT instruction.
+            - name: invalid_account
+              tag-value: 2
+              comment: An account index is out of range, or an account is not the NFT or mint account this instruction expects.
+            - name: mint_already_initialized
+              tag-value: 3
+              comment: The mint account is already set up.
+            - name: unauthorized
+              tag-value: 4
+              comment: The mint authority, or the NFT owner where the NFT allows it, did not authorize this transaction.
+            - name: max_supply_reached
+              tag-value: 5
+              comment: This mint cannot issue any more NFTs.

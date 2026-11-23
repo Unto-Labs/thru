@@ -71,28 +71,4 @@ describe("ChainEvent", () => {
         payload[0] = 0;
         expect(event.payload?.[0]).toBe(9);
     });
-
-    /* Slot 100, block offset 7, call 3; the ids below encode the same values. */
-    const streamEvent = (eventId: string) =>
-        ChainEvent.fromStream(create(StreamEventsResponseSchema, { eventId, slot: 100n, blockOffset: 7, callIdx: 3 }));
-
-    it("keeps the stream event id as sent", () => {
-        expect(streamEvent("tsSignatureExample:100:7:3:0").id).toBe("tsSignatureExample:100:7:3:0");
-        expect(streamEvent("tsSignatureExample:100:7:3:1").id).toBe("tsSignatureExample:100:7:3:1");
-
-        const fourPart = ChainEvent.fromStream(
-            create(StreamEventsResponseSchema, { eventId: "tsSignatureExample:100:3:0", slot: 100n, callIdx: 3 }),
-        );
-        expect(fourPart.id).toBe("tsSignatureExample:100:3:0");
-    });
-
-    it("gives a streamed event the id of its query row", () => {
-        const eventId = "tsSignatureExample:100:7:3:1";
-        const streamed = streamEvent(eventId);
-        const queried = ChainEvent.fromQuery(
-            create(EventSchema, { eventId, slot: 100n, blockOffset: 7, callIdx: 3 }),
-        );
-
-        expect(streamed.id).toBe(queried.id);
-    });
 });

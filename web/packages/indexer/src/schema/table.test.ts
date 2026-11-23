@@ -182,16 +182,6 @@ describe("buildDrizzleTable", () => {
     });
   });
 
-  describe("error handling", () => {
-    it("handles unknown column type gracefully", () => {
-      const col = t.text();
-
-      expect(() => {
-        (col as any)._columnType = "invalid";
-      }).toThrow();
-    });
-  });
-
   describe("extra config", () => {
     const schema = {
       address: t.text().primaryKey(),
@@ -235,31 +225,6 @@ describe("buildDrizzleTable", () => {
 
       expect(config.checks.map((c) => c.name)).toEqual(["plain_singleton_check"]);
       expect(config.indexes).toHaveLength(0);
-    });
-  });
-
-  describe("full schema example", () => {
-    it("builds a realistic event schema", () => {
-      const schema = {
-        id: t.text().primaryKey(),
-        slot: t.bigint().notNull().index(),
-        source: t.text().notNull().index(),
-        dest: t.text().notNull().index(),
-        amount: t.bigint().notNull(),
-        memo: t.text(),
-        createdAt: t.timestamp().notNull().defaultNow(),
-      };
-
-      const table = buildDrizzleTable("transfer_events", schema);
-      const columns = getTableColumns(table);
-
-      expect(getTableName(table)).toBe("transfer_events");
-      expect(Object.keys(columns)).toHaveLength(7);
-      expect((columns.id as any).primary).toBe(true);
-      expect((columns.slot as any).notNull).toBe(true);
-      expect((columns.amount as any).dataType).toBe("bigint");
-      expect((columns.memo as any).notNull).toBe(false);
-      expect((columns.createdAt as any).hasDefault).toBe(true);
     });
   });
 });

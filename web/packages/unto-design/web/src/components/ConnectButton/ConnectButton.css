@@ -4,9 +4,9 @@
 .uds-connect--loading {
   cursor: progress;
 }
-.uds-connect--brick:hover:not(:disabled),
-.uds-connect--brick:focus-visible {
-  background: var(--brick-300);
+.uds-connect--accent:hover:not(:disabled),
+.uds-connect--accent:focus-visible {
+  background: var(--accent-300);
   opacity: 1;
 }
 
@@ -14,12 +14,13 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
+  box-sizing: border-box;
   margin: 0;
   background: var(--color-surface-higher);
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
   cursor: pointer;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   white-space: nowrap;
   color: var(--color-text-primary);
   transition:
@@ -28,7 +29,7 @@
 }
 .uds-connect-chip:hover,
 .uds-connect-chip[data-popup-open] {
-  border-color: var(--color-border-secondary);
+  border-color: var(--color-text-primary);
 }
 .uds-connect-chip:active {
   transform: translateY(1px);
@@ -37,9 +38,9 @@
   outline: 2px solid var(--color-border-brand);
   outline-offset: 2px;
 }
-.uds-connect-chip--md { padding: 7px 14px; font-size: 13px; }
-.uds-connect-chip--sm { padding: 6px 10px; font-size: 12px; }
-.uds-connect-chip--xs { padding: 4px 8px; font-size: 11px; }
+.uds-connect-chip--md { height: var(--control-md); padding: 0 var(--space-4); font-size: var(--text-ui); }
+.uds-connect-chip--sm { height: var(--control-sm); padding: 0 var(--space-3); font-size: var(--text-caption); }
+.uds-connect-chip--xs { height: var(--control-xs); padding: 0 var(--space-2); font-size: var(--text-label); }
 
 .uds-connect-chip__avatar {
   display: inline-flex;

@@ -183,9 +183,11 @@ async fn query_rpc_error_does_not_erase_streamed_execution_failure() {
 }
 
 #[tokio::test]
-async fn malformed_details_do_not_fabricate_an_absent_stream_execution_result() {
+async fn included_success_completes_and_malformed_details_keep_the_streamed_result() {
+    /* INCLUDED with a result is the usual first result; the stream then ends. */
     let outcome = services::SendAndTrackTxnResponse {
-        consensus_status: common::ConsensusStatus::Finalized as i32,
+        consensus_status: common::ConsensusStatus::Included as i32,
+        execution_result: Some(core::TransactionExecutionResult::default()),
         ..Default::default()
     };
     let query = core::Transaction {
@@ -200,7 +202,7 @@ async fn malformed_details_do_not_fabricate_an_absent_stream_execution_result() 
             ..
         } => {
             assert_eq!(*actual, outcome);
-            assert!(actual.execution_result.is_none());
+            assert!(actual.execution_result.is_some());
             assert!(matches!(*source, ClientError::Rpc(_)));
         }
         other => panic!("lost confirmation on malformed details: {other:?}"),

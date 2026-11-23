@@ -301,7 +301,7 @@ tn_crypto_pubkey_acc_add_batch( tn_bls_pubkey_acc_t *   acc,
   blst_p1s_add( &partial, points, cnt );
 
   if( seed_acc ) *acc = partial;
-  else           blst_p1_add( acc, acc, &partial );
+  else           blst_p1_add_or_double( acc, acc, &partial );
 
   return TN_CRYPTO_SUCCESS;
 }
@@ -366,7 +366,7 @@ tn_crypto_subtract_signature( tn_bls_signature_t *       aggregate,
   blst_p2_cneg( &sub, 1 );
 
   /* Add the negated signature (which is subtraction) */
-  blst_p2_add( &result, &agg, &sub );
+  blst_p2_add_or_double( &result, &agg, &sub );
 
   /* Convert back to affine */
   blst_p2_to_affine( aggregate, &result );
@@ -389,7 +389,7 @@ tn_crypto_subtract_pubkey( tn_bls_pubkey_t *       aggregate,
   blst_p1_cneg( &sub, 1 );
 
   /* Add the negated pubkey (which is subtraction) */
-  blst_p1_add( &result, &agg, &sub );
+  blst_p1_add_or_double( &result, &agg, &sub );
 
   /* Convert back to affine */
   blst_p1_to_affine( aggregate, &result );

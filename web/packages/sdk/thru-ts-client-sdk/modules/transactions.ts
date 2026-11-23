@@ -348,6 +348,14 @@ export async function batchSendAndTrack(
 export interface SendAndTrackTxnOptions {
     timeoutMs?: number;
     signal?: AbortSignal;
+    /**
+     * Close the stream at the first message that carries an execution result
+     * and a consensus level of at least this value (FINALIZED or
+     * LOCALLY_EXECUTED). Absent, UNSPECIFIED, OBSERVED and INCLUDED close at the
+     * first execution result. CLUSTER_EXECUTED is rejected by the server. An
+     * older server ignores this option.
+     */
+    minConsensus?: ConsensusStatus;
 }
 
 export interface SendAndTrackTxnUpdate {
@@ -374,6 +382,7 @@ export function sendAndTrackTxn(
     const raw = transaction instanceof Uint8Array ? transaction : transaction.toWire();
     const request = create(SendAndTrackTxnRequestSchema, {
         transaction: raw,
+        minConsensus: options.minConsensus,
         timeout:
             options.timeoutMs != null
                 ? {
@@ -533,7 +542,7 @@ async function createTransactionHeader(
     feePayerPublicKey: Uint8Array,
 ): Promise<TransactionHeaderInput> {
     const nonce = header.nonce ?? (await fetchFeePayerNonce(ctx, feePayerPublicKey));
-    const startSlot = header.startSlot ?? (await fetchFinalizedSlot(ctx));
+    const startSlot = header.startSlot ?? (await fetchCurrentSlot(ctx));
     const chainId = header.chainId ?? (await fetchChainId(ctx));
     return {
         fee: header.fee ?? DEFAULT_FEE,
@@ -642,9 +651,14 @@ async function fetchFeePayerNonce(ctx: ThruClientContext, feePayer: Uint8Array):
     return nonce;
 }
 
-async function fetchFinalizedSlot(ctx: ThruClientContext): Promise<bigint> {
+/**
+ * The live execution clock. `finalized` is a finality height that can trail
+ * (or, on some nodes, lead) the execution position, so it is not a safe start
+ * slot for a new transaction.
+ */
+async function fetchCurrentSlot(ctx: ThruClientContext): Promise<bigint> {
     const height = await getBlockHeight(ctx);
-    return height.finalized;
+    return height.locallyExecuted;
 }
 
 async function fetchChainId(ctx: ThruClientContext): Promise<number> {

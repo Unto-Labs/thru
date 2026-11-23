@@ -1,14 +1,14 @@
 import * as React from "react";
 import "./Tag.css";
 
-export type TagTone = "neutral" | "dark" | "brick" | "sky" | "grass" | "yellow";
+export type TagTone = "neutral" | "dark" | "accent" | "info" | "success" | "warning";
 
 export interface TagProps extends React.HTMLAttributes<HTMLSpanElement> {
   tone?: TagTone;
 }
 
 /**
- * Tag (a.k.a. Chip) — a solid-fill mono label. `tone` selects the fill/text
+ * Tag (a.k.a. Chip) — a solid-fill label. `tone` selects the fill/text
  * pair.
  */
 export const Tag = React.forwardRef<HTMLSpanElement, TagProps>(function Tag(

@@ -705,7 +705,7 @@ impl ProgramManager {
         let block_height = self.rpc_client.get_block_height().await.map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get current slot: {}", e))
         })?;
-        Ok(block_height.finalized_height)
+        Ok(block_height.locally_executed_height)
     }
 
     /// Submit and verify transaction
@@ -994,8 +994,7 @@ async fn create_program(
 
     // Set chain ID and sign transaction
     let mut transaction = transaction.with_chain_id(program_manager.chain_id);
-    transaction
-        .sign(&program_manager.fee_payer_keypair.private_key)
+    crate::signing::sign_transaction(&mut transaction, &program_manager.fee_payer_keypair)
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     // Submit and verify
@@ -1216,8 +1215,7 @@ async fn upgrade_program(
 
     // Set chain ID and sign transaction
     let mut transaction = transaction.with_chain_id(program_manager.chain_id);
-    transaction
-        .sign(&program_manager.fee_payer_keypair.private_key)
+    crate::signing::sign_transaction(&mut transaction, &program_manager.fee_payer_keypair)
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     // Submit and verify
@@ -1340,8 +1338,7 @@ async fn set_pause_program(
 
     // Set chain ID and sign transaction
     transaction = transaction.with_chain_id(program_manager.chain_id);
-    transaction
-        .sign(&program_manager.fee_payer_keypair.private_key)
+    crate::signing::sign_transaction(&mut transaction, &program_manager.fee_payer_keypair)
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     program_manager
@@ -1436,8 +1433,7 @@ async fn destroy_program(
 
     // Set chain ID and sign transaction
     transaction = transaction.with_chain_id(program_manager.chain_id);
-    transaction
-        .sign(&program_manager.fee_payer_keypair.private_key)
+    crate::signing::sign_transaction(&mut transaction, &program_manager.fee_payer_keypair)
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     if let Err(err) = program_manager
@@ -1655,8 +1651,7 @@ async fn finalize_program(
 
     // Set chain ID and sign transaction
     transaction = transaction.with_chain_id(program_manager.chain_id);
-    transaction
-        .sign(&program_manager.fee_payer_keypair.private_key)
+    crate::signing::sign_transaction(&mut transaction, &program_manager.fee_payer_keypair)
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     program_manager
@@ -1762,8 +1757,7 @@ async fn set_authority_program(
 
     // Set chain ID and sign transaction
     transaction = transaction.with_chain_id(program_manager.chain_id);
-    transaction
-        .sign(&program_manager.fee_payer_keypair.private_key)
+    crate::signing::sign_transaction(&mut transaction, &program_manager.fee_payer_keypair)
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     program_manager
@@ -1855,8 +1849,7 @@ async fn claim_authority_program(
 
     // Set chain ID and sign transaction
     transaction = transaction.with_chain_id(program_manager.chain_id);
-    transaction
-        .sign(&program_manager.fee_payer_keypair.private_key)
+    crate::signing::sign_transaction(&mut transaction, &program_manager.fee_payer_keypair)
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     program_manager

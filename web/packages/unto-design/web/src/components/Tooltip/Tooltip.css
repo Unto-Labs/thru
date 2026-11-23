@@ -1,10 +1,10 @@
 .uds-tooltip {
   background: var(--color-surface-lower-inverse);
   color: var(--color-text-primary-inverse);
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: var(--text-label);
   padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
   box-shadow: var(--shadow-md);
   max-width: 240px;
   transition: opacity var(--duration-fast) var(--ease-standard);

@@ -89,7 +89,7 @@ async fn setup_transaction_context(
         faucet_account_bytes,
         client,
         nonce,
-        start_slot: block_height.finalized_height,
+        start_slot: block_height.locally_executed_height,
         chain_id: chain_info.chain_id,
         timeout_seconds: config.timeout_seconds,
     })
@@ -149,8 +149,7 @@ async fn execute_transaction(
 ) -> Result<TransactionDetails, CliError> {
     // Set chain ID and sign transaction
     transaction = transaction.with_chain_id(context.chain_id);
-    transaction
-        .sign(&context.fee_payer_keypair.private_key)
+    crate::signing::sign_transaction(&mut transaction, &context.fee_payer_keypair)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;
 
     // Submit transaction

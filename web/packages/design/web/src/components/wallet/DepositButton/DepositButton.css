@@ -43,9 +43,6 @@
   --tds-deposit-sep-color: var(--color-text-tertiary-inverse);
   --tds-deposit-bal-color: var(--color-text-secondary-inverse);
 }
-.tds-deposit-btn--primary:hover:not(:disabled) {
-  background: var(--color-surface-higher-inverse);
-}
 .tds-deposit-btn--outline {
   background: transparent;
   color: var(--color-text-primary);
@@ -53,17 +50,11 @@
   --tds-deposit-sep-color: var(--color-border-strong);
   --tds-deposit-bal-color: var(--color-text-secondary);
 }
-.tds-deposit-btn--outline:hover:not(:disabled) {
-  border-color: var(--color-text-primary);
-}
 .tds-deposit-btn--brick {
   background: var(--brick-400);
   color: var(--color-text-primary-inverse);
   --tds-deposit-sep-color: var(--brick-200);
   --tds-deposit-bal-color: var(--color-text-secondary-inverse);
-}
-.tds-deposit-btn--brick:hover:not(:disabled) {
-  background: var(--brick-300);
 }
 .tds-deposit-btn--ghost {
   background: none;
@@ -73,9 +64,23 @@
   --tds-deposit-sep-color: var(--color-border-strong);
   --tds-deposit-bal-color: var(--color-text-secondary);
 }
-.tds-deposit-btn--ghost:hover:not(:disabled) {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+
+/* Hover styles wait for a real pointer: touch browsers keep :hover on
+   whatever was under the last tap. */
+@media (hover: hover) {
+  .tds-deposit-btn--primary:hover:not(:disabled) {
+    background: var(--color-surface-higher-inverse);
+  }
+  .tds-deposit-btn--outline:hover:not(:disabled) {
+    border-color: var(--color-text-primary);
+  }
+  .tds-deposit-btn--brick:hover:not(:disabled) {
+    background: var(--brick-300);
+  }
+  .tds-deposit-btn--ghost:hover:not(:disabled) {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
 }
 
 .tds-deposit-btn__sep {

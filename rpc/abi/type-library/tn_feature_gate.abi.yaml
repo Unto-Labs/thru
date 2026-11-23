@@ -352,3 +352,50 @@ types:
       - name: code
         field-type:
           primitive: u64
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: invalid_instruction
+              tag-value: 1
+              comment: Instruction is not a known feature gate instruction, or its reserved bytes are not zero.
+            - name: invalid_instruction_data_size
+              tag-value: 2
+              comment: Instruction data is too short or the wrong size for this instruction.
+            - name: not_implemented
+              tag-value: 3
+              comment: This instruction is not implemented.
+            - name: invalid_account
+              tag-value: 4
+              comment: The feature gate account is missing or is not the expected account.
+            - name: unauthorized
+              tag-value: 5
+              comment: The signer is not the admin allowed to do this.
+            - name: invalid_role
+              tag-value: 6
+              comment: The admin role is not known.
+            - name: invalid_index
+              tag-value: 7
+              comment: The feature index is out of range.
+            - name: value_unchanged
+              tag-value: 8
+              comment: The new value is the same as the current value.
+            - name: timing_constraint
+              tag-value: 9
+              comment: The requested slot or lead time is not allowed.
+            - name: already_armed
+              tag-value: 10
+              comment: Another feature change is already armed.
+            - name: not_armed
+              tag-value: 11
+              comment: This feature has no armed change.
+            - name: account_full
+              tag-value: 12
+              comment: The feature gate account cannot hold more features.
+            - name: invalid_state_params
+              tag-value: 13
+              comment: The value is not valid for this kind of feature.

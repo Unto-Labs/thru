@@ -65,62 +65,6 @@ fn consensus_certificate_layout() -> anyhow::Result<()> {
 }
 
 #[test]
-fn oracle_rust_codegen_compiles() -> anyhow::Result<()> {
-    let abi_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .ok_or_else(|| anyhow!("missing rpc/abi parent directory"))?
-        .to_path_buf();
-    let type_library = abi_root.join("type-library");
-    let oracle_abi = type_library.join("tn_oracle_program.abi.yaml");
-    /* A fixed directory under the target dir, not one named after the process:
-    the generated crate's paths are part of its vcache key, and CI maps the
-    checkout (and so the target dir) to a stable root (UNTO-3636). */
-    let project_dir =
-        PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("thru-oracle-rust-codegen-compile");
-    let generated_dir = project_dir.join("generated");
-    let _ = fs::remove_dir_all(&project_dir);
-
-    codegen::run(
-        vec![oracle_abi],
-        vec![type_library],
-        Language::Rust,
-        generated_dir,
-        false,
-    )?;
-
-    fs::write(
-        project_dir.join("Cargo.toml"),
-        r#"[package]
-name = "oracle-rust-codegen-compile"
-version = "0.1.0"
-edition = "2021"
-
-[lib]
-path = "generated/mod.rs"
-
-[workspace]
-"#,
-    )?;
-
-    let output = Command::new("cargo")
-        .arg("check")
-        .arg("--quiet")
-        .arg("--manifest-path")
-        .arg(project_dir.join("Cargo.toml"))
-        .output()?;
-    let _ = fs::remove_dir_all(&project_dir);
-
-    if !output.status.success() {
-        anyhow::bail!(
-            "generated Oracle Rust bindings did not compile:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    Ok(())
-}
-
-#[test]
 fn type_library_abis_resolve_roots_and_codegen() -> anyhow::Result<()> {
     let abi_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()

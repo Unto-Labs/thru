@@ -1,6 +1,9 @@
 //! Validator program command implementation
 
-use crate::cli::ValidatorCommands;
+use crate::cli::{
+    SelfServiceState, ValidatorCommands, ValidatorManagerCommands, ValidatorManagerTarget,
+    ViaMultisigArgs,
+};
 use crate::config::Config;
 use crate::error::CliError;
 use crate::keys::LoadedKey;
@@ -17,14 +20,33 @@ use thru_base::txn_lib::Transaction;
 use thru_base::txn_tools::CONSENSUS_VALIDATOR_POP_DST as BLS_POP_DST;
 use thru_base::txn_tools::bls_activation_key;
 use thru_base::txn_tools::{ConsensusValidatorAccounts, TransactionBuilder};
+use thru_base::txn_tools::{
+    CvStakeParams, build_cv_init_validator_manager_instruction,
+    build_cv_manager_activate_instruction, build_cv_manager_deactivate_instruction,
+    build_cv_manager_set_weight_instruction, build_cv_set_params_instruction,
+    build_cv_set_self_service_instruction, build_cv_set_validator_manager_instruction,
+};
 use thru_client::{Client, ClientBuilder, TransactionDetails};
 
 const CONSENSUS_VALIDATOR_FEE: u64 = 0;
 /* tn_consensus_validator_state_t: packed, account_type
 (TN_CONSENSUS_VALIDATOR_ACCOUNT_TYPE_ATTESTOR_TABLE_V1) at byte 0, then the
-232-byte payload. The account is variable size (the base state machine,
-metadata and pending map follow at the offsets the header records). */
-const CONSENSUS_VALIDATOR_STATE_HEADER_SIZE: usize = 233;
+281 bytes of header fields (wthru_mint @33, validator_manager @129,
+stake_units_per_weight @225, min_stake @233, max_decay_bps @241,
+idle_gap_decay_bps @249, max_idle_gap_decay_bps @257,
+attestor_decay_fraction_bps @265, pending_idle_slots @273,
+self_service_disabled @281), then header_reserved (@282 to the end of the
+header). The header is exactly one 4096-byte page (TN_CV_HEADER_SZ).
+header_reserved is reserved for future header fields, always zero and
+ignored here; new fields take their bytes from the front of it, so the base
+state machine stays at base_sm_off 4096. The account is variable size (the
+base state machine, metadata and pending map follow at the offsets the
+header records). */
+const CONSENSUS_VALIDATOR_STATE_HEADER_SIZE: usize = 4096;
+const CONSENSUS_VALIDATOR_SELF_SERVICE_DISABLED_OFFSET: usize = 281;
+/* Only the tests read it: the reader ignores header_reserved. */
+#[cfg(test)]
+const CONSENSUS_VALIDATOR_HEADER_RESERVED_OFFSET: usize = 282;
 const CONSENSUS_VALIDATOR_ACCOUNT_TYPE_ATTESTOR_TABLE_V1: u8 = 1;
 const CONSENSUS_STATE_BASE_HEADER_SIZE: usize = 248;
 // Identity, BLS key, and four u64 update indexes/timestamps.
@@ -37,11 +59,12 @@ const CONSENSUS_STATE_NO_SLOT: u64 = u64::MAX;
 #[derive(Debug, Clone)]
 struct ValidatorTable {
     attestor_table: [u8; 32],
-    attestor_mint: [u8; 32],
+    wthru_mint: [u8; 32],
     token_program: [u8; 32],
     converted_vault: [u8; 32],
     unclaimed_vault: [u8; 32],
-    admin: [u8; 32],
+    validator_manager: [u8; 32],
+    self_service_disabled: bool,
     current_slot: u64,
     account_slot: Option<u64>,
     data_size: usize,
@@ -52,10 +75,16 @@ struct ValidatorTable {
     frontier: u64,
     pending_decay: u64,
     last_decay_calc_slot: u64,
-    last_decay_emit_slot: u64,
     last_processed_slot: u64,
     pending_map_off: u64,
     pending_cap: u64,
+    stake_units_per_weight: u64,
+    min_stake: u64,
+    max_decay_bps: u64,
+    idle_gap_decay_bps: u64,
+    max_idle_gap_decay_bps: u64,
+    attestor_decay_fraction_bps: u64,
+    pending_idle_slots: u64,
     weight_updates_cnt: u64,
     total_weights_head: u64,
     total_weights_tail: u64,
@@ -142,7 +171,7 @@ async fn setup_transaction_context(
         fee_payer_keypair,
         client,
         nonce,
-        start_slot: block_height.finalized_height,
+        start_slot: block_height.locally_executed_height,
         chain_id: chain_info.chain_id,
         timeout_seconds: config.timeout_seconds,
     })
@@ -154,8 +183,7 @@ async fn execute_transaction(
     json_format: bool,
 ) -> Result<TransactionDetails, CliError> {
     transaction = transaction.with_chain_id(context.chain_id);
-    transaction
-        .sign(&context.fee_payer_keypair.private_key)
+    crate::signing::sign_transaction(&mut transaction, &context.fee_payer_keypair)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;
 
     let transaction_bytes = transaction.to_wire();
@@ -231,13 +259,16 @@ fn resolve_pubkey_or_key_name(config: &Config, value: &str) -> Result<[u8; 32], 
     config.keys.resolve_public_key(value)
 }
 
+/// The program, attestor table and token program a consensus transaction
+/// names, plus `vaults` (converted, unclaimed) from [`resolve_vaults`].
+/// Instructions that name no vault (SetClaimAuthority) pass `None`; their
+/// vault fields stay zero and are never sent.
 fn resolve_consensus_accounts(
     config: &Config,
     program: Option<&str>,
     attestor_table: Option<&str>,
     token_program: Option<&str>,
-    converted_vault: Option<&str>,
-    unclaimed_vault: Option<&str>,
+    vaults: Option<([u8; 32], [u8; 32])>,
 ) -> Result<ConsensusValidatorAccounts, CliError> {
     let default_program = config
         .get_consensus_validator_program_pubkey()?
@@ -261,32 +292,65 @@ fn resolve_consensus_accounts(
         .get_token_program_pubkey()?
         .to_bytes()
         .map_err(|e| CliError::Crypto(format!("Failed to convert token program pubkey: {}", e)))?;
-    let default_converted_vault = config
-        .get_consensus_converted_vault_pubkey()?
-        .to_bytes()
-        .map_err(|e| {
-            CliError::Crypto(format!(
-                "Failed to convert consensus converted vault pubkey: {}",
-                e
-            ))
-        })?;
-    let default_unclaimed_vault = config
-        .get_consensus_unclaimed_vault_pubkey()?
-        .to_bytes()
-        .map_err(|e| {
-            CliError::Crypto(format!(
-                "Failed to convert consensus unclaimed vault pubkey: {}",
-                e
-            ))
-        })?;
+    let (converted_vault, unclaimed_vault) = vaults.unwrap_or(([0u8; 32], [0u8; 32]));
 
     Ok(ConsensusValidatorAccounts {
         program: resolve_override_account(program, default_program)?,
         attestor_table: resolve_override_account(attestor_table, default_attestor_table)?,
         token_program: resolve_override_account(token_program, default_token_program)?,
-        converted_vault: resolve_override_account(converted_vault, default_converted_vault)?,
-        unclaimed_vault: resolve_override_account(unclaimed_vault, default_unclaimed_vault)?,
+        converted_vault,
+        unclaimed_vault,
     })
+}
+
+/// The vaults (converted, unclaimed) a consensus transaction names, read from
+/// the attestor table header: the program pins every vault index to the
+/// header's vault (require_vault_account), so no other address can work.  A
+/// configured `consensus_*_vault_public_key` or a `--converted-vault` /
+/// `--unclaimed-vault` flag only asserts the header's value; one that
+/// differs is an error, so a stale address is never sent.
+fn resolve_vaults(
+    config: &Config,
+    table: &ValidatorTable,
+    converted_vault: Option<&str>,
+    unclaimed_vault: Option<&str>,
+) -> Result<([u8; 32], [u8; 32]), CliError> {
+    let assertions = [
+        (
+            "consensus_converted_vault_public_key in the CLI config",
+            config.get_consensus_converted_vault_assertion()?,
+            table.converted_vault,
+        ),
+        (
+            "consensus_unclaimed_vault_public_key in the CLI config",
+            config.get_consensus_unclaimed_vault_assertion()?,
+            table.unclaimed_vault,
+        ),
+        (
+            "--converted-vault",
+            converted_vault.map(validate_address_or_hex).transpose()?,
+            table.converted_vault,
+        ),
+        (
+            "--unclaimed-vault",
+            unclaimed_vault.map(validate_address_or_hex).transpose()?,
+            table.unclaimed_vault,
+        ),
+    ];
+    for (source, asserted, header) in assertions {
+        if let Some(asserted) = asserted {
+            if asserted != header {
+                return Err(CliError::Validation(format!(
+                    "{} is {}, but attestor table {} records {}; remove it to use the table's vault",
+                    source,
+                    to_address_string(&asserted),
+                    to_address_string(&table.attestor_table),
+                    to_address_string(&header),
+                )));
+            }
+        }
+    }
+    Ok((table.converted_vault, table.unclaimed_vault))
 }
 
 fn parse_bls_pubkey_hex(value: &str) -> Result<[u8; 96], CliError> {
@@ -463,6 +527,55 @@ fn ensure_nonzero_amount(action: &str, token_amount: u64) -> Result<(), CliError
     Ok(())
 }
 
+/// Mirrors the program's Activate/ConvertTokens amount rules: a whole,
+/// nonzero multiple of the table's min_stake (the stake increment), which
+/// is itself a whole multiple of stake_units_per_weight.  Returns the
+/// attestor power the stake buys.
+fn stake_to_power(
+    action: &str,
+    token_amount: u64,
+    min_stake: u64,
+    stake_units_per_weight: u64,
+) -> Result<u64, CliError> {
+    if min_stake == 0 || token_amount < min_stake {
+        return Err(CliError::Validation(format!(
+            "{} amount {} is below the table's minimum stake (stake increment) of {} WTHRU base units",
+            action, token_amount, min_stake
+        )));
+    }
+    if token_amount % min_stake != 0 {
+        return Err(CliError::Validation(format!(
+            "{} amount {} is not a whole multiple of the table's stake increment (min_stake) of {} WTHRU base units",
+            action, token_amount, min_stake
+        )));
+    }
+    if stake_units_per_weight == 0 {
+        return Err(CliError::Validation(
+            "Validator table stake_units_per_weight is zero".to_string(),
+        ));
+    }
+    if token_amount % stake_units_per_weight != 0 {
+        return Err(CliError::Validation(format!(
+            "{} amount {} is not a multiple of the table's stake_units_per_weight ({})",
+            action, token_amount, stake_units_per_weight
+        )));
+    }
+    Ok(token_amount / stake_units_per_weight)
+}
+
+/// The validator manager for JSON output: its address, or null when none is set.
+fn manager_json(manager: &[u8; 32]) -> serde_json::Value {
+    if has_nonzero_bytes(manager) {
+        serde_json::Value::String(to_address_string(manager))
+    } else {
+        serde_json::Value::Null
+    }
+}
+
+fn manager_human(manager: &[u8; 32]) -> String {
+    if has_nonzero_bytes(manager) { to_address_string(manager) } else { "none".to_string() }
+}
+
 fn to_address_string(bytes: &[u8; 32]) -> String {
     Pubkey::from_bytes(bytes).to_string()
 }
@@ -518,19 +631,26 @@ fn parse_validator_table(data: &[u8], attestor_table: [u8; 32], current_slot: u6
     }
 
     let token_program = read_bytes::<32>(data, 1, "token_program")?;
-    let attestor_mint = read_bytes::<32>(data, 33, "attestor_mint")?;
+    let wthru_mint = read_bytes::<32>(data, 33, "wthru_mint")?;
     let converted_vault = read_bytes::<32>(data, 65, "converted_vault")?;
     let unclaimed_vault = read_bytes::<32>(data, 97, "unclaimed_vault")?;
-    let admin = read_bytes::<32>(data, 129, "admin")?;
+    let validator_manager = read_bytes::<32>(data, 129, "validator_manager")?;
+    let self_service_disabled = data[CONSENSUS_VALIDATOR_SELF_SERVICE_DISABLED_OFFSET] != 0;
     let server_count = read_u64(data, 161, "server_count")?;
     let base_sm_off = read_u64(data, 169, "base_sm_off")? as usize;
     let metadata_off = read_u64(data, 177, "metadata_off")? as usize;
     let pending_decay = read_u64(data, 185, "pending_decay")?;
     let last_decay_calc_slot = read_u64(data, 193, "last_decay_calc_slot")?;
-    let last_decay_emit_slot = read_u64(data, 201, "last_decay_emit_slot")?;
-    let last_processed_slot = read_u64(data, 209, "last_processed_slot")?;
-    let pending_map_off = read_u64(data, 217, "pending_map_off")?;
-    let pending_cap = read_u64(data, 225, "pending_cap")?;
+    let last_processed_slot = read_u64(data, 201, "last_processed_slot")?;
+    let pending_map_off = read_u64(data, 209, "pending_map_off")?;
+    let pending_cap = read_u64(data, 217, "pending_cap")?;
+    let stake_units_per_weight = read_u64(data, 225, "stake_units_per_weight")?;
+    let min_stake = read_u64(data, 233, "min_stake")?;
+    let max_decay_bps = read_u64(data, 241, "max_decay_bps")?;
+    let idle_gap_decay_bps = read_u64(data, 249, "idle_gap_decay_bps")?;
+    let max_idle_gap_decay_bps = read_u64(data, 257, "max_idle_gap_decay_bps")?;
+    let attestor_decay_fraction_bps = read_u64(data, 265, "attestor_decay_fraction_bps")?;
+    let pending_idle_slots = read_u64(data, 273, "pending_idle_slots")?;
 
     let server_count_usize = usize::try_from(server_count).map_err(|_| {
         CliError::Validation(format!("Validator table server_count {} is too large", server_count))
@@ -703,11 +823,12 @@ fn parse_validator_table(data: &[u8], attestor_table: [u8; 32], current_slot: u6
 
     Ok(ValidatorTable {
         attestor_table,
-        attestor_mint,
+        wthru_mint,
         token_program,
         converted_vault,
         unclaimed_vault,
-        admin,
+        validator_manager,
+        self_service_disabled,
         current_slot,
         account_slot,
         data_size: data.len(),
@@ -718,10 +839,16 @@ fn parse_validator_table(data: &[u8], attestor_table: [u8; 32], current_slot: u6
         frontier,
         pending_decay,
         last_decay_calc_slot,
-        last_decay_emit_slot,
         last_processed_slot,
         pending_map_off,
         pending_cap,
+        stake_units_per_weight,
+        min_stake,
+        max_decay_bps,
+        idle_gap_decay_bps,
+        max_idle_gap_decay_bps,
+        attestor_decay_fraction_bps,
+        pending_idle_slots,
         weight_updates_cnt,
         total_weights_head,
         total_weights_tail,
@@ -819,8 +946,8 @@ fn turnover_accepts_activation(table: &ValidatorTable, added_weight: u64) -> boo
     }
 }
 
-fn check_activate_turnover_window(table: &ValidatorTable, token_amount: u64) -> Result<(), CliError> {
-    if turnover_accepts_activation(table, token_amount) {
+fn check_activate_turnover_window(table: &ValidatorTable, added_weight: u64) -> Result<(), CliError> {
+    if turnover_accepts_activation(table, added_weight) {
         return Ok(());
     }
 
@@ -830,7 +957,7 @@ fn check_activate_turnover_window(table: &ValidatorTable, token_amount: u64) -> 
     let turnover_limit = table
         .turnover_limit
         .expect("turnover_accepts_activation returns true when the limit is unknown");
-    let projected_added = table.turnover_sum_added.saturating_add(token_amount);
+    let projected_added = table.turnover_sum_added.saturating_add(added_weight);
 
     let window_end_slot = if table.turnover_ring_head_slot == CONSENSUS_STATE_NO_SLOT {
         None
@@ -847,7 +974,7 @@ fn check_activate_turnover_window(table: &ValidatorTable, token_amount: u64) -> 
         "Validator activation would be rejected by the on-chain turnover window: current added weight in the {}-slot window is {}, activating {} more would project to {}, but the current limit is {}.",
         table.blocks_per_faulty_turnover,
         table.turnover_sum_added,
-        token_amount,
+        added_weight,
         projected_added,
         turnover_limit,
     );
@@ -973,7 +1100,7 @@ async fn fetch_validator_table(
         .decode(encoded_data)
         .map_err(|e| CliError::Validation(format!("Failed to decode validator table data: {}", e)))?;
 
-    parse_validator_table(&data, attestor_table, block_height.finalized_height, account.slot)
+    parse_validator_table(&data, attestor_table, block_height.locally_executed_height, account.slot)
 }
 
 pub async fn handle_validator_command(
@@ -1106,11 +1233,352 @@ pub async fn handle_validator_command(
         ValidatorCommands::BlsPubkey { bls_key } => {
             show_bls_pubkey(&bls_key, json_format)
         }
+        ValidatorCommands::BlsPop { identity, bls_key } => {
+            show_bls_pop(config, &identity, &bls_key, json_format)
+        }
         ValidatorCommands::Status {
             identity,
             attestor_table,
         } => show_validator_status(config, identity.as_deref(), attestor_table.as_deref(), json_format).await,
+        ValidatorCommands::Manager { command } => handle_manager_command(config, command, json_format).await,
     }
+}
+
+/* ---------------- validator manager ---------------- */
+
+type ManagerEncode = Arc<dyn Fn(u64, Option<u16>) -> Vec<u8> + Send + Sync>;
+
+/// One validator manager instruction, signed by the manager (the fee payer)
+/// or proposed from a multisig manager.
+struct ManagerOp {
+    /// JSON output key and multisig summary, e.g. "manager_set_weight"
+    action: &'static str,
+    /// Human-readable description for the proposal and the output
+    summary: String,
+    /// The CV program's metadata account (InitValidatorManager only)
+    program_meta: Option<[u8; 32]>,
+    /// The instruction may verify a BLS proof of possession
+    proof: bool,
+    /// The table's validator manager, which must sign; None for Init
+    manager: Option<[u8; 32]>,
+    encode: ManagerEncode,
+}
+
+/// The table's validator manager, or an error when none is set.
+fn require_manager(table: &ValidatorTable) -> Result<[u8; 32], CliError> {
+    if !has_nonzero_bytes(&table.validator_manager) {
+        return Err(CliError::Validation(
+            "the attestor table has no validator manager; install one with `validator manager init`".to_string(),
+        ));
+    }
+    Ok(table.validator_manager)
+}
+
+/// The seat of `identity`, when it is seated with weight.
+fn seated<'a>(table: &'a ValidatorTable, identity: &[u8; 32]) -> Option<&'a ValidatorEntry> {
+    table.validators.iter().find(|entry| entry.identity == *identity && entry.active)
+}
+
+fn require_seated<'a>(table: &'a ValidatorTable, identity: &[u8; 32]) -> Result<&'a ValidatorEntry, CliError> {
+    seated(table, identity).ok_or_else(|| {
+        CliError::Validation(format!("validator {} is not seated", to_address_string(identity)))
+    })
+}
+
+/// Checks SetParams' rules (tn_cv_stake_params_check) before a
+/// transaction is spent on them.
+fn check_stake_params(params: &CvStakeParams) -> Result<(), CliError> {
+    const BPS: u64 = 10_000;
+    let fail = |reason: &str| -> Result<(), CliError> {
+        Err(CliError::Validation(format!("invalid staking parameters: {}", reason)))
+    };
+    if params.stake_units_per_weight == 0 {
+        return fail("--stake-units-per-weight must be nonzero");
+    }
+    if params.min_stake == 0 || params.min_stake % params.stake_units_per_weight != 0 {
+        return fail("--min-stake must be a nonzero multiple of --stake-units-per-weight");
+    }
+    if params.max_decay_bps > BPS {
+        return fail("--max-decay-bps must be at most 10000");
+    }
+    if params.max_idle_gap_decay_bps > params.max_decay_bps {
+        return fail("--max-idle-gap-decay-bps must be at most --max-decay-bps");
+    }
+    if params.idle_gap_decay_bps > params.max_idle_gap_decay_bps {
+        return fail("--idle-gap-decay-bps must be at most --max-idle-gap-decay-bps");
+    }
+    if params.attestor_decay_fraction_bps > BPS {
+        return fail("--attestor-decay-fraction-bps must be at most 10000");
+    }
+    Ok(())
+}
+
+fn via_multisig(via: &ViaMultisigArgs) -> Option<&ViaMultisigArgs> {
+    via.via_multisig.as_ref().map(|_| via)
+}
+
+async fn handle_manager_command(
+    config: &Config,
+    command: ValidatorManagerCommands,
+    json_format: bool,
+) -> Result<(), CliError> {
+    match command {
+        ValidatorManagerCommands::Init {
+            manager,
+            program_meta,
+            target,
+            via,
+        } => {
+            let manager = resolve_pubkey_or_key_name(config, &manager)?;
+            let program_meta = resolve_override_account(
+                program_meta.as_deref(),
+                thru_base::bootstrap_addresses::CONSENSUS_VALIDATOR_PROGRAM_META_BYTES,
+            )?;
+            let table = fetch_validator_table(config, target.attestor_table.as_deref()).await?;
+            if has_nonzero_bytes(&table.validator_manager) {
+                return Err(CliError::Validation(format!(
+                    "the validator manager is already {}; hand it over with `validator manager set`",
+                    to_address_string(&table.validator_manager)
+                )));
+            }
+            let op = ManagerOp {
+                action: "init_validator_manager",
+                summary: format!("init-validator-manager {}", to_address_string(&manager)),
+                program_meta: Some(program_meta),
+                proof: false,
+                manager: None,
+                encode: Arc::new(move |table_idx: u64, meta_idx: Option<u16>| {
+                    build_cv_init_validator_manager_instruction(table_idx, meta_idx.unwrap_or_default(), manager)
+                }),
+            };
+            run_manager_op(config, &target, via_multisig(&via), op, json_format).await
+        }
+        ValidatorManagerCommands::Set { manager, target, via } => {
+            let new_manager = resolve_pubkey_or_key_name(config, &manager)?;
+            let table = fetch_validator_table(config, target.attestor_table.as_deref()).await?;
+            let op = ManagerOp {
+                action: "set_validator_manager",
+                summary: format!("set-validator-manager {}", to_address_string(&new_manager)),
+                program_meta: None,
+                proof: false,
+                manager: Some(require_manager(&table)?),
+                encode: Arc::new(move |table_idx: u64, _: Option<u16>| {
+                    build_cv_set_validator_manager_instruction(table_idx, new_manager)
+                }),
+            };
+            run_manager_op(config, &target, via_multisig(&via), op, json_format).await
+        }
+        ValidatorManagerCommands::SelfService { state, target, via } => {
+            let enabled = state == SelfServiceState::On;
+            let table = fetch_validator_table(config, target.attestor_table.as_deref()).await?;
+            let op = ManagerOp {
+                action: "set_self_service",
+                summary: format!("set-self-service {}", if enabled { "on" } else { "off" }),
+                program_meta: None,
+                proof: false,
+                manager: Some(require_manager(&table)?),
+                encode: Arc::new(move |table_idx: u64, _: Option<u16>| build_cv_set_self_service_instruction(table_idx, enabled)),
+            };
+            run_manager_op(config, &target, via_multisig(&via), op, json_format).await
+        }
+        ValidatorManagerCommands::Activate {
+            identity,
+            weight,
+            bls_pubkey,
+            bls_pop,
+            bls_seed,
+            bls_key,
+            claim_authority,
+            target,
+            via,
+        } => {
+            if weight == 0 {
+                return Err(CliError::Validation("--weight must be greater than 0".to_string()));
+            }
+            let identity = resolve_pubkey_or_key_name(config, &identity)?;
+            let claim_authority = match claim_authority.as_deref() {
+                Some(value) => resolve_pubkey_or_key_name(config, value)?,
+                None => identity,
+            };
+            let (bls_pubkey, bls_pop) = match (bls_pubkey.as_deref(), bls_pop.as_deref()) {
+                (Some(key), Some(proof)) => (parse_bls_pubkey_hex(key)?, parse_bls_pop_hex(proof)?),
+                _ => resolve_bls_activation_key(bls_seed, bls_key.as_deref(), &identity)?,
+            };
+            let table = fetch_validator_table(config, target.attestor_table.as_deref()).await?;
+            if seated(&table, &identity).is_some() {
+                return Err(CliError::Validation(format!(
+                    "validator {} is already seated; use `validator manager set-weight`",
+                    to_address_string(&identity)
+                )));
+            }
+            /* A multisig's ManagerActivate is applied later, against the
+               window at that time. */
+            if via.via_multisig.is_none() {
+                check_activate_turnover_window(&table, weight)?;
+            }
+            let op = ManagerOp {
+                action: "manager_activate",
+                summary: format!("manager-activate {} weight {}", to_address_string(&identity), weight),
+                program_meta: None,
+                proof: true,
+                manager: Some(require_manager(&table)?),
+                encode: Arc::new(move |table_idx: u64, _: Option<u16>| {
+                    build_cv_manager_activate_instruction(table_idx, identity, bls_pubkey, bls_pop, claim_authority, weight)
+                }),
+            };
+            run_manager_op(config, &target, via_multisig(&via), op, json_format).await
+        }
+        ValidatorManagerCommands::Deactivate { identity, target, via } => {
+            let identity = resolve_pubkey_or_key_name(config, &identity)?;
+            let table = fetch_validator_table(config, target.attestor_table.as_deref()).await?;
+            require_seated(&table, &identity)?;
+            let op = ManagerOp {
+                action: "manager_deactivate",
+                summary: format!("manager-deactivate {}", to_address_string(&identity)),
+                program_meta: None,
+                proof: false,
+                manager: Some(require_manager(&table)?),
+                encode: Arc::new(move |table_idx: u64, _: Option<u16>| build_cv_manager_deactivate_instruction(table_idx, identity)),
+            };
+            run_manager_op(config, &target, via_multisig(&via), op, json_format).await
+        }
+        ValidatorManagerCommands::SetWeight {
+            identity,
+            weight,
+            target,
+            via,
+        } => {
+            let identity = resolve_pubkey_or_key_name(config, &identity)?;
+            let table = fetch_validator_table(config, target.attestor_table.as_deref()).await?;
+            require_seated(&table, &identity)?;
+            let op = ManagerOp {
+                action: "manager_set_weight",
+                summary: format!("manager-set-weight {} weight {}", to_address_string(&identity), weight),
+                program_meta: None,
+                proof: false,
+                manager: Some(require_manager(&table)?),
+                encode: Arc::new(move |table_idx: u64, _: Option<u16>| {
+                    build_cv_manager_set_weight_instruction(table_idx, identity, weight)
+                }),
+            };
+            run_manager_op(config, &target, via_multisig(&via), op, json_format).await
+        }
+        ValidatorManagerCommands::SetParams {
+            stake_units_per_weight,
+            min_stake,
+            max_decay_bps,
+            idle_gap_decay_bps,
+            max_idle_gap_decay_bps,
+            attestor_decay_fraction_bps,
+            target,
+            via,
+        } => {
+            let params = CvStakeParams {
+                stake_units_per_weight,
+                min_stake,
+                max_decay_bps,
+                idle_gap_decay_bps,
+                max_idle_gap_decay_bps,
+                attestor_decay_fraction_bps,
+            };
+            check_stake_params(&params)?;
+            let table = fetch_validator_table(config, target.attestor_table.as_deref()).await?;
+            let op = ManagerOp {
+                action: "set_params",
+                summary: format!(
+                    "set-params stake_units_per_weight={} min_stake={} max_decay_bps={} idle_gap_decay_bps={} max_idle_gap_decay_bps={} attestor_decay_fraction_bps={}",
+                    stake_units_per_weight,
+                    min_stake,
+                    max_decay_bps,
+                    idle_gap_decay_bps,
+                    max_idle_gap_decay_bps,
+                    attestor_decay_fraction_bps
+                ),
+                program_meta: None,
+                proof: false,
+                manager: Some(require_manager(&table)?),
+                encode: Arc::new(move |table_idx: u64, _: Option<u16>| build_cv_set_params_instruction(table_idx, &params)),
+            };
+            run_manager_op(config, &target, via_multisig(&via), op, json_format).await
+        }
+    }
+}
+
+/// Sends `op` signed by the fee payer, or with `via` proposes it from the
+/// multisig.
+async fn run_manager_op(
+    config: &Config,
+    target: &ValidatorManagerTarget,
+    via: Option<&ViaMultisigArgs>,
+    op: ManagerOp,
+    json_format: bool,
+) -> Result<(), CliError> {
+    // Manager instructions name no vault.
+    let accounts = resolve_consensus_accounts(
+        config,
+        target.program.as_deref(),
+        target.attestor_table.as_deref(),
+        None,
+        None,
+    )?;
+    if let Some(via) = via {
+        let encode = op.encode.clone();
+        return crate::commands::multisig::via::cv_manager_instruction(
+            config,
+            via,
+            target.fee_payer.as_deref(),
+            &op.summary,
+            accounts.program,
+            accounts.attestor_table,
+            op.program_meta,
+            op.manager,
+            move |table_idx, meta_idx| encode(table_idx, meta_idx),
+            json_format,
+        )
+        .await;
+    }
+
+    let context = setup_transaction_context(config, target.fee_payer.as_deref()).await?;
+    if let Some(manager) = op.manager {
+        if manager != context.fee_payer_keypair.public_key {
+            return Err(CliError::Validation(format!(
+                "the validator manager is {}, not the fee payer {}; sign with the manager's key, or use --via-multisig for a multisig manager",
+                to_address_string(&manager),
+                context.fee_payer_keypair.address_string
+            )));
+        }
+    }
+    let encode = op.encode.clone();
+    let transaction = TransactionBuilder::build_cv_manager_with_accounts(
+        context.fee_payer_keypair.public_key,
+        accounts,
+        op.program_meta,
+        op.proof,
+        move |table_idx, meta_idx| encode(table_idx, meta_idx),
+        CONSENSUS_VALIDATOR_FEE,
+        context.nonce,
+        context.start_slot,
+    )
+    .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?;
+
+    let transaction_details = execute_transaction(transaction, &context, json_format).await?;
+    if json_format {
+        let response = serde_json::json!({
+            op.action: {
+                "status": "success",
+                "summary": op.summary,
+                "signer": context.fee_payer_keypair.address_string.to_string(),
+                "signature": transaction_details.signature.as_str(),
+                "slot": transaction_details.slot,
+                "compute_units_consumed": transaction_details.compute_units_consumed
+            }
+        });
+        crate::output::print_output(response, true);
+    } else {
+        println!("Validator manager: {} succeeded", op.summary);
+        println!("Transaction signature: {}", transaction_details.signature);
+    }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1132,17 +1600,24 @@ async fn activate(
 ) -> Result<(), CliError> {
     ensure_nonzero_amount("activation", token_amount)?;
 
+    let source_token_account = validate_address_or_hex(source_token_account)?;
+    let validator_table = fetch_validator_table(config, attestor_table).await?;
+    let vaults = resolve_vaults(config, &validator_table, converted_vault, None)?;
     let accounts = resolve_consensus_accounts(
         config,
         program,
         attestor_table,
         token_program,
-        converted_vault,
-        None,
+        Some(vaults),
     )?;
-    let source_token_account = validate_address_or_hex(source_token_account)?;
-    let validator_table = fetch_validator_table(config, attestor_table).await?;
-    check_activate_turnover_window(&validator_table, token_amount)?;
+    // The turnover window counts power, not WTHRU base units.
+    let power = stake_to_power(
+        "activation",
+        token_amount,
+        validator_table.min_stake,
+        validator_table.stake_units_per_weight,
+    )?;
+    check_activate_turnover_window(&validator_table, power)?;
     let context = setup_transaction_context(config, fee_payer).await?;
     let (bls_pubkey, bls_pop) = match (bls_pubkey, bls_pop) {
         (Some(key), Some(proof)) => (parse_bls_pubkey_hex(key)?, parse_bls_pop_hex(proof)?),
@@ -1206,13 +1681,14 @@ async fn deactivate(
     unclaimed_vault: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
+    let validator_table = fetch_validator_table(config, attestor_table).await?;
+    let vaults = resolve_vaults(config, &validator_table, None, unclaimed_vault)?;
     let accounts = resolve_consensus_accounts(
         config,
         program,
         attestor_table,
         token_program,
-        None,
-        unclaimed_vault,
+        Some(vaults),
     )?;
     let context = setup_transaction_context(config, fee_payer).await?;
     let dest_token_account = validate_address_or_hex(dest_token_account)?;
@@ -1266,13 +1742,20 @@ async fn convert_tokens(
 ) -> Result<(), CliError> {
     ensure_nonzero_amount("conversion", token_amount)?;
 
+    let validator_table = fetch_validator_table(config, attestor_table).await?;
+    let vaults = resolve_vaults(config, &validator_table, converted_vault, None)?;
     let accounts = resolve_consensus_accounts(
         config,
         program,
         attestor_table,
         token_program,
-        converted_vault,
-        None,
+        Some(vaults),
+    )?;
+    stake_to_power(
+        "conversion",
+        token_amount,
+        validator_table.min_stake,
+        validator_table.stake_units_per_weight,
     )?;
     let context = setup_transaction_context(config, fee_payer).await?;
     let source_token_account = validate_address_or_hex(source_token_account)?;
@@ -1326,13 +1809,14 @@ async fn claim(
     unclaimed_vault: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
+    let validator_table = fetch_validator_table(config, attestor_table).await?;
+    let vaults = resolve_vaults(config, &validator_table, None, unclaimed_vault)?;
     let accounts = resolve_consensus_accounts(
         config,
         program,
         attestor_table,
         token_program,
-        None,
-        unclaimed_vault,
+        Some(vaults),
     )?;
     let context = setup_transaction_context(config, fee_payer).await?;
     let subject_attestor = resolve_pubkey_or_key_name(config, subject_attestor)?;
@@ -1386,7 +1870,7 @@ async fn set_claim_authority(
     attestor_table: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
-    let accounts = resolve_consensus_accounts(config, program, attestor_table, None, None, None)?;
+    let accounts = resolve_consensus_accounts(config, program, attestor_table, None, None)?;
     let context = setup_transaction_context(config, fee_payer).await?;
     let subject_attestor = resolve_pubkey_or_key_name(config, subject_attestor)?;
     let new_claim_authority = resolve_pubkey_or_key_name(config, new_claim_authority)?;
@@ -1463,11 +1947,12 @@ async fn show_validator_table(
             "validator_table": {
                 "status": "success",
                 "attestor_table": to_address_string(&table.attestor_table),
-                "attestor_mint": to_address_string(&table.attestor_mint),
+                "wthru_mint": to_address_string(&table.wthru_mint),
                 "token_program": to_address_string(&table.token_program),
                 "converted_vault": to_address_string(&table.converted_vault),
                 "unclaimed_vault": to_address_string(&table.unclaimed_vault),
-                "admin": to_address_string(&table.admin),
+                "validator_manager": manager_json(&table.validator_manager),
+                "self_service_disabled": table.self_service_disabled,
                 "current_slot": table.current_slot,
                 "account_slot": table.account_slot,
                 "data_size": table.data_size,
@@ -1478,10 +1963,16 @@ async fn show_validator_table(
                 "frontier": table.frontier,
                 "pending_decay": table.pending_decay,
                 "last_decay_calc_slot": table.last_decay_calc_slot,
-                "last_decay_emit_slot": table.last_decay_emit_slot,
                 "last_processed_slot": table.last_processed_slot,
                 "pending_map_off": table.pending_map_off,
                 "pending_cap": table.pending_cap,
+                "stake_units_per_weight": table.stake_units_per_weight,
+                "min_stake": table.min_stake,
+                "max_decay_bps": table.max_decay_bps,
+                "idle_gap_decay_bps": table.idle_gap_decay_bps,
+                "max_idle_gap_decay_bps": table.max_idle_gap_decay_bps,
+                "attestor_decay_fraction_bps": table.attestor_decay_fraction_bps,
+                "pending_idle_slots": table.pending_idle_slots,
                 "weight_updates_cnt": table.weight_updates_cnt,
                 "total_weights_head": table.total_weights_head,
                 "total_weights_tail": table.total_weights_tail,
@@ -1516,8 +2007,25 @@ async fn show_validator_table(
             );
         }
         println!(
-            "Mint: {} | Converted vault: {} | Unclaimed vault: {}",
-            to_address_string(&table.attestor_mint),
+            "Stake rate: {} WTHRU base units per power | Stake increment (min_stake): {} WTHRU base units | Max decay: {} bps",
+            table.stake_units_per_weight, table.min_stake, table.max_decay_bps
+        );
+        println!(
+            "Idle gap decay: {} bps per idle slot, at most {} bps per emission | Pending idle slots: {}",
+            table.idle_gap_decay_bps, table.max_idle_gap_decay_bps, table.pending_idle_slots
+        );
+        println!(
+            "Payment decay: {} bps of the attestor payment's power per emission",
+            table.attestor_decay_fraction_bps
+        );
+        println!(
+            "Validator manager: {} | Self-service: {}",
+            manager_human(&table.validator_manager),
+            if table.self_service_disabled { "disabled" } else { "enabled" }
+        );
+        println!(
+            "WTHRU mint: {} | Converted vault: {} | Unclaimed vault: {}",
+            to_address_string(&table.wthru_mint),
             to_address_string(&table.converted_vault),
             to_address_string(&table.unclaimed_vault)
         );
@@ -1619,6 +2127,60 @@ fn show_bls_pubkey(bls_key: &str, json_format: bool) -> Result<(), CliError> {
         crate::output::print_output(response, true);
     } else {
         println!("bls-pubkey: {}", bls_pubkey_hex);
+    }
+
+    Ok(())
+}
+
+/// Encode the raw affine key and proof that `--bls-key` builds for Activate as
+/// the 96- and 192-byte uncompressed hex that `--bls-pubkey` and `--bls-pop`
+/// accept. `parse_bls_pubkey_hex` / `parse_bls_pop_hex` turn this hex back into
+/// the same raw bytes.
+fn export_bls_pop(identity: &[u8; 32], bls_key: &str) -> Result<(String, String), CliError> {
+    let (raw_pubkey, raw_pop) = resolve_bls_activation_key(None, Some(bls_key), identity)?;
+    // SAFETY: both arrays are exactly the size of the blst affine structs that
+    // bls_activation_key copied them from; read_unaligned has no alignment
+    // requirement.
+    let (pubkey, pop) = unsafe {
+        (
+            std::ptr::read_unaligned(raw_pubkey.as_ptr().cast::<blst::blst_p1_affine>()),
+            std::ptr::read_unaligned(raw_pop.as_ptr().cast::<blst::blst_p2_affine>()),
+        )
+    };
+    Ok((
+        hex::encode(BlsPublicKey::from(pubkey).serialize()),
+        hex::encode(blst::min_pk::Signature::from(pop).serialize()),
+    ))
+}
+
+/// `validator bls-pop --identity <id> --bls-key <bls.json>` — print what an
+/// operator sends a manager for `validator manager activate`: the identity,
+/// the BLS public key and the proof of possession bound to that identity.
+/// Offline: no RPC and no fee payer. The secret scalar is never printed.
+fn show_bls_pop(
+    config: &Config,
+    identity: &str,
+    bls_key: &str,
+    json_format: bool,
+) -> Result<(), CliError> {
+    let identity = resolve_pubkey_or_key_name(config, identity)?;
+    let (bls_pubkey, bls_pop) = export_bls_pop(&identity, bls_key)?;
+    let identity = to_address_string(&identity);
+
+    if json_format {
+        let response = serde_json::json!({
+            "validator_bls_pop": {
+                "status": "success",
+                "identity": identity,
+                "bls_pubkey": bls_pubkey,
+                "bls_pop": bls_pop,
+            }
+        });
+        crate::output::print_output(response, true);
+    } else {
+        println!("identity: {identity}");
+        println!("bls-pubkey: {bls_pubkey}");
+        println!("bls-pop: {bls_pop}");
     }
 
     Ok(())
@@ -1786,10 +2348,7 @@ async fn show_validator_status(
 mod tests {
     use super::*;
     use crate::keys::KeyManager;
-    use thru_base::txn_tools::{
-        ATTESTOR_TABLE, CONSENSUS_VALIDATOR_PROGRAM, CONVERTED_VAULT, TOKEN_PROGRAM,
-        UNCLAIMED_VAULT,
-    };
+    use thru_base::txn_tools::{ATTESTOR_TABLE, CONSENSUS_VALIDATOR_PROGRAM, TOKEN_PROGRAM};
 
     fn write_u64(buf: &mut [u8], offset: usize, value: u64) {
         buf[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
@@ -1797,8 +2356,9 @@ mod tests {
 
     fn build_test_validator_table_bytes() -> Vec<u8> {
         let server_count = 2usize;
-        /* init aligns the base state machine up from the 233-byte header. */
-        let base_sm_off = CONSENSUS_VALIDATOR_STATE_HEADER_SIZE.next_multiple_of(8);
+        /* init places the base state machine right after the 4096-byte
+        header page. */
+        let base_sm_off = CONSENSUS_VALIDATOR_STATE_HEADER_SIZE;
         let stake_slots_off = CONSENSUS_STATE_BASE_HEADER_SIZE;
         let base_weights_off = stake_slots_off + server_count * CONSENSUS_ATTESTOR_SEAT_SIZE;
         let total_weights_capacity = 26usize;
@@ -1823,10 +2383,16 @@ mod tests {
         write_u64(&mut data, 177, metadata_off as u64);
         write_u64(&mut data, 185, 7);
         write_u64(&mut data, 193, 8);
-        write_u64(&mut data, 201, 9);
-        write_u64(&mut data, 209, 10);
-        write_u64(&mut data, 217, pending_map_off as u64); // pending_map_off
-        write_u64(&mut data, 225, pending_cap as u64); // pending_cap
+        write_u64(&mut data, 201, 10);
+        write_u64(&mut data, 209, pending_map_off as u64); // pending_map_off
+        write_u64(&mut data, 217, pending_cap as u64); // pending_cap
+        write_u64(&mut data, 225, 100_000); // stake_units_per_weight
+        write_u64(&mut data, 233, 2_500_000_000); // min_stake
+        write_u64(&mut data, 241, 25); // max_decay_bps
+        write_u64(&mut data, 249, 10); // idle_gap_decay_bps
+        write_u64(&mut data, 257, 20); // max_idle_gap_decay_bps
+        write_u64(&mut data, 265, 1_000); // attestor_decay_fraction_bps
+        write_u64(&mut data, 273, 3); // pending_idle_slots
 
         write_u64(&mut data, base_sm_off, 16);
         write_u64(&mut data, base_sm_off + 8, 8);
@@ -1974,20 +2540,146 @@ mod tests {
     }
 
     /// Mirrors the C FD_STATIC_ASSERTs on tn_consensus_validator_state_t: the
-    /// on-chain state header is 233 bytes (account_type, then the payload),
-    /// with pending_map_off @217 and pending_cap @225.  C asserts don't reach
-    /// Rust, so this guards the positional parser against header drift.
+    /// on-chain state header is one 4096-byte page (account_type, the header
+    /// fields, then header_reserved from @282), with last_processed_slot
+    /// @201, pending_map_off @209, pending_cap @217, stake_units_per_weight
+    /// @225, min_stake @233, max_decay_bps @241, idle_gap_decay_bps @249,
+    /// max_idle_gap_decay_bps @257, attestor_decay_fraction_bps @265 and
+    /// pending_idle_slots @273.  C asserts don't reach Rust, so this guards
+    /// the positional parser against header drift.
     #[test]
-    fn validator_state_header_layout_is_233() {
-        assert_eq!(CONSENSUS_VALIDATOR_STATE_HEADER_SIZE, 233);
+    fn validator_state_header_is_one_4096_byte_page() {
+        assert_eq!(CONSENSUS_VALIDATOR_STATE_HEADER_SIZE, 4096);
         let data = build_test_validator_table_bytes();
         let table = parse_validator_table(&data, [0xaau8; 32], 100, None)
             .expect("validator table should parse");
         // The pending map follows metadata and extends to the account end.
         let pending_entry_stride = 48 + table.server_count.div_ceil(64) * 8;
         assert_eq!(table.pending_map_off + table.pending_cap * pending_entry_stride, table.data_size as u64);
-        assert_eq!(table.pending_cap, 11); // @225
-        assert_eq!(table.last_processed_slot, 10); // @209
+        assert_eq!(table.pending_cap, 11); // @217
+        assert_eq!(table.last_processed_slot, 10); // @201
+        assert_eq!(table.stake_units_per_weight, 100_000); // @225
+        assert_eq!(table.min_stake, 2_500_000_000); // @233
+        assert_eq!(table.max_decay_bps, 25); // @241
+        assert_eq!(table.idle_gap_decay_bps, 10); // @249
+        assert_eq!(table.max_idle_gap_decay_bps, 20); // @257
+        assert_eq!(table.attestor_decay_fraction_bps, 1_000); // @265
+        assert_eq!(table.pending_idle_slots, 3); // @273
+        assert_eq!(table.validator_manager, [0x50u8; 32]); // @129
+        assert!(!table.self_service_disabled); // @281
+        assert_eq!(CONSENSUS_VALIDATOR_SELF_SERVICE_DISABLED_OFFSET, 281);
+        assert_eq!(CONSENSUS_VALIDATOR_HEADER_RESERVED_OFFSET, CONSENSUS_VALIDATOR_SELF_SERVICE_DISABLED_OFFSET + 1);
+        // The base state machine starts right after the header page.
+        assert_eq!(read_u64(&data, 169, "base_sm_off").unwrap(), 4096); // @169
+        assert_eq!(table.wthru_mint, [0x20u8; 32]); // @33
+        // The base state machine is the 248-byte base header, then seats.
+        assert_eq!(CONSENSUS_STATE_BASE_HEADER_SIZE, 248);
+    }
+
+    /// The manager fields: self-service off is read, and a zero manager is
+    /// shown as none.
+    #[test]
+    fn reads_the_validator_manager_fields() {
+        let mut data = build_test_validator_table_bytes();
+        data[CONSENSUS_VALIDATOR_SELF_SERVICE_DISABLED_OFFSET] = 1;
+        let table = parse_validator_table(&data, [0xaau8; 32], 100, None).expect("validator table should parse");
+        assert!(table.self_service_disabled);
+        assert_eq!(manager_json(&[0u8; 32]), serde_json::Value::Null);
+        assert_eq!(manager_human(&[0u8; 32]), "none");
+        assert_eq!(manager_json(&[0x50u8; 32]), serde_json::Value::String(to_address_string(&[0x50u8; 32])));
+    }
+
+    #[test]
+    fn stake_params_follow_the_program_rules() {
+        let ok = CvStakeParams {
+            stake_units_per_weight: 100_000,
+            min_stake: 1_000_000_000,
+            max_decay_bps: 25,
+            idle_gap_decay_bps: 25,
+            max_idle_gap_decay_bps: 25,
+            attestor_decay_fraction_bps: 10_000,
+        };
+        assert!(check_stake_params(&ok).is_ok());
+        for bad in [
+            CvStakeParams { stake_units_per_weight: 0, ..ok },
+            CvStakeParams { min_stake: 0, ..ok },
+            CvStakeParams { min_stake: 150_000, ..ok },
+            CvStakeParams { max_decay_bps: 10_001, ..ok },
+            CvStakeParams { max_idle_gap_decay_bps: 26, ..ok },
+            CvStakeParams { idle_gap_decay_bps: 26, ..ok },
+            CvStakeParams { attestor_decay_fraction_bps: 10_001, ..ok },
+        ] {
+            assert!(check_stake_params(&bad).is_err(), "{:?} must be refused", bad);
+        }
+    }
+
+    #[test]
+    fn rejects_a_wrong_account_type() {
+        for account_type in [0u8, 2] {
+            let mut data = build_test_validator_table_bytes();
+            data[0] = account_type;
+            assert!(parse_validator_table(&data, [0xaau8; 32], 100, None).is_err());
+        }
+    }
+
+    /// header_reserved (@282 to the end of the 4096-byte header page) is
+    /// reserved for future header fields and always zero: the parser ignores
+    /// it, but the account must hold the whole header page.
+    #[test]
+    fn ignores_header_reserved_and_requires_the_header_page() {
+        let mut data = build_test_validator_table_bytes();
+        assert!(data[CONSENSUS_VALIDATOR_SELF_SERVICE_DISABLED_OFFSET..CONSENSUS_VALIDATOR_STATE_HEADER_SIZE]
+            .iter()
+            .all(|byte| *byte == 0));
+        let expected = parse_validator_table(&data, [0xaau8; 32], 100, None)
+            .expect("validator table should parse");
+        data[CONSENSUS_VALIDATOR_HEADER_RESERVED_OFFSET] = 0xff;
+        data[CONSENSUS_VALIDATOR_STATE_HEADER_SIZE - 1] = 0xff;
+        let table = parse_validator_table(&data, [0xaau8; 32], 100, None)
+            .expect("reserved header bytes are ignored");
+        assert_eq!(table.pending_idle_slots, expected.pending_idle_slots);
+        assert_eq!(table.pending_map_off, expected.pending_map_off);
+        assert_eq!(table.validators.len(), expected.validators.len());
+        assert_eq!(table.validators[0].weight, expected.validators[0].weight);
+        let truncated = &data[..CONSENSUS_VALIDATOR_STATE_HEADER_SIZE - 1];
+        assert!(parse_validator_table(truncated, [0xaau8; 32], 100, None).is_err());
+    }
+
+    #[test]
+    fn stake_to_power_mirrors_program_rules() {
+        const ONE_WTHRU: u64 = 1_000_000_000;
+        // Default rate and increment: 1 and 2 WTHRU buy 10,000 and 20,000 power.
+        assert_eq!(
+            stake_to_power("activation", ONE_WTHRU, ONE_WTHRU, 100_000).unwrap(),
+            10_000
+        );
+        assert_eq!(
+            stake_to_power("conversion", 2 * ONE_WTHRU, ONE_WTHRU, 100_000).unwrap(),
+            20_000
+        );
+        assert_eq!(
+            stake_to_power("conversion", 2 * ONE_WTHRU, ONE_WTHRU, 1_000_000).unwrap(),
+            2_000
+        );
+        // Below the increment: 0.5 WTHRU, and a zero increment.
+        assert!(stake_to_power("activation", ONE_WTHRU / 2, ONE_WTHRU, 100_000).is_err());
+        assert!(stake_to_power("activation", 1, ONE_WTHRU, 1).is_err());
+        assert!(stake_to_power("activation", ONE_WTHRU, 0, 100_000).is_err());
+        // Not a whole multiple of the increment: 1.1 WTHRU, or one power
+        // unit over 1 WTHRU.
+        assert!(stake_to_power("activation", ONE_WTHRU + ONE_WTHRU / 10, ONE_WTHRU, 100_000).is_err());
+        assert!(stake_to_power("conversion", 1_000_300_000, ONE_WTHRU, 100_000).is_err());
+        assert!(stake_to_power("conversion", 1_000_000_001, ONE_WTHRU, 100_000).is_err());
+        // The increment is the table's, not a constant: with 5 WTHRU, 10 is
+        // accepted, 7 is not a multiple and 4 is below it.
+        let five = 5 * ONE_WTHRU;
+        assert_eq!(stake_to_power("conversion", 10 * ONE_WTHRU, five, 100_000).unwrap(), 100_000);
+        assert!(stake_to_power("activation", 7 * ONE_WTHRU, five, 100_000).is_err());
+        assert!(stake_to_power("activation", 4 * ONE_WTHRU, five, 100_000).is_err());
+        assert_eq!(stake_to_power("activation", 400_000, 200_000, 100_000).unwrap(), 4);
+        assert!(stake_to_power("activation", 300_000, 200_000, 100_000).is_err());
+        // A zero rate is refused rather than dividing by zero.
+        assert!(stake_to_power("activation", ONE_WTHRU, ONE_WTHRU, 0).is_err());
     }
 
     #[test]
@@ -2026,14 +2718,15 @@ mod tests {
     #[test]
     fn resolves_consensus_accounts_with_defaults() {
         let (_guard, config) = create_test_config();
-        let accounts = resolve_consensus_accounts(&config, None, None, None, None, None)
+        let accounts = resolve_consensus_accounts(&config, None, None, None, None)
             .expect("default accounts should resolve");
 
         assert_eq!(accounts.program, CONSENSUS_VALIDATOR_PROGRAM);
         assert_eq!(accounts.attestor_table, ATTESTOR_TABLE);
         assert_eq!(accounts.token_program, TOKEN_PROGRAM);
-        assert_eq!(accounts.converted_vault, CONVERTED_VAULT);
-        assert_eq!(accounts.unclaimed_vault, UNCLAIMED_VAULT);
+        // No vault without the table header (SetClaimAuthority names none).
+        assert_eq!(accounts.converted_vault, [0u8; 32]);
+        assert_eq!(accounts.unclaimed_vault, [0u8; 32]);
     }
 
     #[test]
@@ -2041,22 +2734,85 @@ mod tests {
         let (_guard, config) = create_test_config();
         let program = [0x11; 32];
         let token_program = [0x22; 32];
-        let unclaimed_vault = [0x33; 32];
+        let vaults = ([0x33; 32], [0x44; 32]);
         let accounts = resolve_consensus_accounts(
             &config,
             Some(&hex::encode(program)),
             None,
             Some(&hex::encode(token_program)),
-            None,
-            Some(&hex::encode(unclaimed_vault)),
+            Some(vaults),
         )
         .expect("override accounts should resolve");
 
         assert_eq!(accounts.program, program);
         assert_eq!(accounts.attestor_table, ATTESTOR_TABLE);
         assert_eq!(accounts.token_program, token_program);
-        assert_eq!(accounts.converted_vault, CONVERTED_VAULT);
-        assert_eq!(accounts.unclaimed_vault, unclaimed_vault);
+        assert_eq!(accounts.converted_vault, vaults.0);
+        assert_eq!(accounts.unclaimed_vault, vaults.1);
+    }
+
+    #[test]
+    fn reads_the_vaults_from_the_attestor_table_header() {
+        let mut bytes = build_test_validator_table_bytes();
+        bytes[65..97].copy_from_slice(&[0x44; 32]);
+        bytes[97..129].copy_from_slice(&[0x55; 32]);
+        let table = parse_validator_table(&bytes, [0xaa; 32], 100, None)
+            .expect("validator table should parse");
+        let (_guard, config) = create_test_config();
+
+        let vaults = resolve_vaults(&config, &table, None, None).expect("header vaults");
+        assert_eq!(vaults, ([0x44; 32], [0x55; 32]));
+
+        // A flag only asserts the header's vault: equal passes, different fails.
+        assert_eq!(
+            resolve_vaults(&config, &table, Some(&hex::encode([0x44u8; 32])), None)
+                .expect("matching --converted-vault"),
+            vaults
+        );
+        let message = resolve_vaults(&config, &table, None, Some(&hex::encode([0x66u8; 32])))
+            .expect_err("a differing --unclaimed-vault is never sent")
+            .to_string();
+        assert!(message.contains("--unclaimed-vault"));
+        assert!(message.contains(&to_address_string(&[0x55; 32])));
+    }
+
+    #[test]
+    fn configured_vaults_only_assert_the_header() {
+        let (_guard, mut config) = create_test_config();
+        let defaults = ConsensusValidatorAccounts::default();
+        let mut table = table_with_turnover(0, None, 0, 0, 0);
+        table.attestor_table = ATTESTOR_TABLE;
+        table.converted_vault = defaults.converted_vault;
+        table.unclaimed_vault = defaults.unclaimed_vault;
+        let header = (table.converted_vault, table.unclaimed_vault);
+
+        // Earlier CLIs wrote PDA(program, seed) into every config; that retired
+        // default asserts nothing.
+        let retired = |seed: &[u8]| {
+            let mut padded = [0u8; 32];
+            padded[..seed.len()].copy_from_slice(seed);
+            to_address_string(
+                &thru_base::tn_public_address::create_program_defined_account_address(
+                    &CONSENSUS_VALIDATOR_PROGRAM,
+                    false,
+                    &padded,
+                ),
+            )
+        };
+        config.consensus_converted_vault_public_key = Some(retired(b"converted_vault"));
+        config.consensus_unclaimed_vault_public_key = Some(retired(b"unclaimed_vault"));
+        assert_eq!(resolve_vaults(&config, &table, None, None).expect("retired default"), header);
+
+        // An explicit value equal to the header passes.
+        config.consensus_converted_vault_public_key = Some(to_address_string(&header.0));
+        assert_eq!(resolve_vaults(&config, &table, None, None).expect("matching config"), header);
+
+        // A differing value fails and names the config key.
+        config.consensus_unclaimed_vault_public_key = Some(to_address_string(&[0x77; 32]));
+        let message = resolve_vaults(&config, &table, None, None)
+            .expect_err("a differing configured vault is never sent")
+            .to_string();
+        assert!(message.contains("consensus_unclaimed_vault_public_key"));
     }
 
     // ----------------------------------------------------------------------
@@ -2165,6 +2921,106 @@ mod tests {
         let (resolved, _) = resolve_bls_activation_key(None, Some(file.path().to_str().unwrap()), &[0u8; 32])
             .expect("bls-key should resolve");
         assert_eq!(hex::encode(resolved), G1_GENERATOR_RAW_AFFINE);
+    }
+
+    /// A nontrivial scalar below the group order, so a printed secret would be
+    /// recognisable in the output.
+    const BLS_POP_TEST_SCALAR: [u8; 32] = [0x2a; 32];
+
+    #[test]
+    fn bls_pop_export_round_trips_through_activate_parsers() {
+        let file = write_bls_key_file(&BLS_POP_TEST_SCALAR);
+        let path = file.path().to_str().unwrap();
+        let identity = [0x10u8; 32];
+        let (pubkey_hex, pop_hex) = export_bls_pop(&identity, path).expect("bls-pop should export");
+
+        assert_eq!(pubkey_hex.len(), 192);
+        assert_eq!(pop_hex.len(), 384);
+        assert!(pubkey_hex.chars().chain(pop_hex.chars()).all(|c| matches!(c, '0'..='9' | 'a'..='f')));
+
+        let expected = resolve_bls_activation_key(None, Some(path), &identity).unwrap();
+        assert_eq!(parse_bls_pubkey_hex(&pubkey_hex).unwrap(), expected.0);
+        assert_eq!(parse_bls_pop_hex(&pop_hex).unwrap(), expected.1);
+    }
+
+    #[test]
+    fn bls_pop_export_verifies_with_program_message_and_dst() {
+        let file = write_bls_key_file(&BLS_POP_TEST_SCALAR);
+        let identity = [0x10u8; 32];
+        let (pubkey_hex, pop_hex) =
+            export_bls_pop(&identity, file.path().to_str().unwrap()).unwrap();
+
+        let key = BlsPublicKey::deserialize(&hex::decode(&pubkey_hex).unwrap()).unwrap();
+        let signature = BlsSignature::deserialize(&hex::decode(&pop_hex).unwrap()).unwrap();
+        let message = |identity: &[u8; 32]| {
+            let mut message = [0u8; 48 + 32];
+            message[..48].copy_from_slice(&key.compress());
+            message[48..].copy_from_slice(identity);
+            message
+        };
+        assert_eq!(
+            signature.verify(true, &message(&identity), BLS_POP_DST, &[], &key, true),
+            blst::BLST_ERROR::BLST_SUCCESS
+        );
+        // The PoP is bound to the identity: it must not verify for another one.
+        assert_ne!(
+            signature.verify(true, &message(&[0x11u8; 32]), BLS_POP_DST, &[], &key, true),
+            blst::BLST_ERROR::BLST_SUCCESS
+        );
+    }
+
+    #[test]
+    fn bls_pop_export_builds_same_manager_activate_as_bls_key() {
+        let file = write_bls_key_file(&BLS_POP_TEST_SCALAR);
+        let path = file.path().to_str().unwrap();
+        let identity = [0x10u8; 32];
+        let claim_authority = [0x20u8; 32];
+        let (pubkey_hex, pop_hex) = export_bls_pop(&identity, path).unwrap();
+
+        // `manager activate --bls-pubkey <hex> --bls-pop <hex>`
+        let from_hex = build_cv_manager_activate_instruction(
+            7,
+            identity,
+            parse_bls_pubkey_hex(&pubkey_hex).unwrap(),
+            parse_bls_pop_hex(&pop_hex).unwrap(),
+            claim_authority,
+            300,
+        );
+        // `manager activate --bls-key <bls.json>`
+        let (key, proof) = resolve_bls_activation_key(None, Some(path), &identity).unwrap();
+        let from_key =
+            build_cv_manager_activate_instruction(7, identity, key, proof, claim_authority, 300);
+        assert_eq!(from_hex, from_key);
+    }
+
+    #[test]
+    fn bls_pop_export_never_prints_the_secret_scalar() {
+        let file = write_bls_key_file(&BLS_POP_TEST_SCALAR);
+        let (pubkey_hex, pop_hex) =
+            export_bls_pop(&[0x10u8; 32], file.path().to_str().unwrap()).unwrap();
+        let secret_hex = hex::encode(BLS_POP_TEST_SCALAR);
+        assert!(!pubkey_hex.contains(&secret_hex));
+        assert!(!pop_hex.contains(&secret_hex));
+    }
+
+    #[test]
+    fn bls_pop_export_rejects_invalid_key_file() {
+        let file = write_bls_key_file(&[0u8; 32]);
+        assert!(export_bls_pop(&[0x10u8; 32], file.path().to_str().unwrap()).is_err());
+        assert!(export_bls_pop(&[0x10u8; 32], "/nonexistent/path/to/bls.json").is_err());
+    }
+
+    #[test]
+    fn show_bls_pop_resolves_identity_offline() {
+        // The fixture config points at an unreachable RPC; the command must not use it.
+        let (_guard, mut config) = create_test_config();
+        config.rpc_base_url = "http://127.0.0.1:9".to_string();
+        let file = write_bls_key_file(&BLS_POP_TEST_SCALAR);
+        let path = file.path().to_str().unwrap();
+        show_bls_pop(&config, "alice", path, true).expect("key name should resolve");
+        show_bls_pop(&config, &to_address_string(&[0x10u8; 32]), path, false)
+            .expect("address should resolve");
+        assert!(show_bls_pop(&config, "not-a-key", path, true).is_err());
     }
 
     #[test]
@@ -2301,11 +3157,12 @@ mod tests {
     ) -> ValidatorTable {
         ValidatorTable {
             attestor_table: [0u8; 32],
-            attestor_mint: [0u8; 32],
+            wthru_mint: [0u8; 32],
             token_program: [0u8; 32],
             converted_vault: [0u8; 32],
             unclaimed_vault: [0u8; 32],
-            admin: [0u8; 32],
+            validator_manager: [0u8; 32],
+            self_service_disabled: false,
             current_slot,
             account_slot: None,
             data_size: 0,
@@ -2316,10 +3173,16 @@ mod tests {
             frontier: 0,
             pending_decay: 0,
             last_decay_calc_slot: 0,
-            last_decay_emit_slot: 0,
             last_processed_slot: 0,
             pending_map_off: 0,
             pending_cap: 0,
+            stake_units_per_weight: 100_000,
+            min_stake: 1_000_000_000,
+            max_decay_bps: 25,
+            idle_gap_decay_bps: 25,
+            max_idle_gap_decay_bps: 25,
+            attestor_decay_fraction_bps: 10_000,
+            pending_idle_slots: 0,
             weight_updates_cnt: 0,
             total_weights_head: 0,
             total_weights_tail: 0,

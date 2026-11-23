@@ -47,12 +47,21 @@ types:
 - name: CreatePriceFeedData
   kind:
     struct:
+      display-name: Price feed settings
       packed: true
       fields:
       - name: max_variance_bps
+        user-display: false
         field-type:
           primitive: u32
+      - name: max_variance
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: '`${toDecimal(max_variance_bps, 2)}%`'
+        display-name: Max variance
+        user-display: true
       - name: exponent
+        display-name: Exponent
         field-type:
           primitive: i32
 
@@ -60,6 +69,7 @@ types:
 - name: CreateBooleanFeedData
   kind:
     struct:
+      display-name: Boolean feed settings
       packed: true
       fields: []
 
@@ -78,38 +88,73 @@ types:
 - name: CreateFeedArgs
   kind:
     struct:
+      display-name: Create feed
       packed: true
       fields:
+      - name: feed
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(feed_account_idx)'
+        display-name: Feed
+        user-display: true
       - name: max_staleness_ns
+        display-name: Max staleness (ns)
         field-type:
           primitive: u64
       - name: proof_size
+        user-display: false
         field-type:
           primitive: u64
       - name: type_specific_size
+        user-display: false
         field-type:
           primitive: u64
       - name: admin_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: admin
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(admin_account_idx)'
+        display-name: Admin
+        user-display: true
       - name: reporter_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: reporter
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(reporter_account_idx)'
+        display-name: Reporter
+        user-display: true
       - name: feed_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: feed_type
+        user-display: false
         field-type:
           primitive: u8
+      - name: feed_type_name
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if feed_type == 1 { "Price" } else { if feed_type == 2 { "Boolean" } else { `Unknown (${feed_type})` } }'
+        display-name: Feed type
+        user-display: true
       - name: feed_account_seed
+        user-display: false
         field-type:
           type-ref:
             name: Seed32
       - name: feed_name
+        display-name: Feed name
         field-type:
           type-ref:
             name: FeedName64
       - name: type_specific
+        user-display: false
         field-type:
           enum:
             packed: true
@@ -129,6 +174,7 @@ types:
                 type-ref:
                   name: CreateBooleanFeedData
       - name: proof
+        user-display: false
         field-type:
           array:
             size:
@@ -143,30 +189,62 @@ types:
 - name: PostPriceUpdateArgs
   kind:
     struct:
+      display-name: Post price update
       packed: true
       fields:
+      - name: feed
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(feed_account_idx)'
+        display-name: Feed
+        user-display: true
       - name: price
+        display-name: Price (raw)
         field-type:
           primitive: u64
       - name: timestamp_ns
+        display-name: Timestamp (ns)
         field-type:
           primitive: u64
+      - name: time
+        display-name: Time
+        user-display: true
+        type: synthetic
+        return-type: { type-ref: { name: Timestamp } }
+        expression: 'timestamp(timestamp_ns / 1000000000)'
       - name: feed_account_idx
+        user-display: false
         field-type:
           primitive: u16
 
 - name: PostBooleanUpdateArgs
   kind:
     struct:
+      display-name: Post boolean update
       packed: true
       fields:
+      - name: feed
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(feed_account_idx)'
+        display-name: Feed
+        user-display: true
       - name: value
+        display-name: Value
         field-type:
           primitive: u8
       - name: timestamp_ns
+        display-name: Timestamp (ns)
         field-type:
           primitive: u64
+      - name: time
+        display-name: Time
+        user-display: true
+        type: synthetic
+        return-type: { type-ref: { name: Timestamp } }
+        expression: 'timestamp(timestamp_ns / 1000000000)'
       - name: feed_account_idx
+        user-display: false
         field-type:
           primitive: u16
 
@@ -196,41 +274,87 @@ types:
 - name: SetParamsArgs
   kind:
     struct:
+      display-name: Set feed parameters
       packed: true
       fields:
+      - name: feed
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(feed_account_idx)'
+        display-name: Feed
+        user-display: true
       - name: max_staleness_ns
+        display-name: Max staleness (ns)
         field-type:
           primitive: u64
       - name: max_variance_bps
+        user-display: false
         field-type:
           primitive: u32
+      - name: max_variance
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: '`${toDecimal(max_variance_bps, 2)}%`'
+        display-name: Max variance (price feeds only)
+        user-display: true
       - name: feed_account_idx
+        user-display: false
         field-type:
           primitive: u16
 
 - name: SetAdminArgs
   kind:
     struct:
+      display-name: Set feed admin
       packed: true
       fields:
       - name: feed_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: feed
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(feed_account_idx)'
+        display-name: Feed
+        user-display: true
       - name: new_admin_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: new_admin
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(new_admin_account_idx)'
+        display-name: New admin
+        user-display: true
 
 - name: SetReporterArgs
   kind:
     struct:
+      display-name: Set feed reporter
       packed: true
       fields:
       - name: feed_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: feed
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(feed_account_idx)'
+        display-name: Feed
+        user-display: true
       - name: new_reporter_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: new_reporter
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(new_reporter_account_idx)'
+        display-name: New reporter
+        user-display: true
 
 # Instruction discriminants:
 #   0 CREATE_FEED
@@ -244,6 +368,7 @@ types:
       packed: true
       fields:
       - name: discriminant
+        user-display: false
         field-type:
           primitive: u32
       - name: payload
@@ -287,25 +412,31 @@ types:
 - name: OracleFeedCommonData
   kind:
     struct:
+      display-name: Feed
       packed: true
       fields:
       - name: max_staleness_ns
+        display-name: Max staleness (ns)
         field-type:
           primitive: u64
       - name: last_update_ns
+        display-name: Last update (ns)
         field-type:
           primitive: u64
       - name: admin_address
+        display-name: Admin
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: reporter_address
+        display-name: Reporter
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: feed_name
+        display-name: Feed name
         field-type:
           type-ref:
             name: FeedName64
@@ -313,32 +444,52 @@ types:
 - name: OraclePriceFeedData
   kind:
     struct:
+      display-name: Price feed
       packed: true
       fields:
       - name: common
+        user-display: false
         field-type:
           type-ref:
             name: OracleFeedCommonData
       - name: price
+        user-display: false
         field-type:
           primitive: u64
+      - name: price_display
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if exponent <= 0 { `${toDecimal(price, 0 - exponent)}` } else { `${price} x 10^${exponent}` }'
+        display-name: Price
+        user-display: true
       - name: max_variance_bps
+        user-display: false
         field-type:
           primitive: u32
+      - name: max_variance
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: '`${toDecimal(max_variance_bps, 2)}%`'
+        display-name: Max variance
+        user-display: true
       - name: exponent
+        display-name: Exponent
         field-type:
           primitive: i32
 
 - name: OracleBooleanFeedData
   kind:
     struct:
+      display-name: Boolean feed
       packed: true
       fields:
       - name: common
+        user-display: false
         field-type:
           type-ref:
             name: OracleFeedCommonData
       - name: value
+        display-name: Value
         field-type:
           primitive: u8
 
@@ -352,6 +503,7 @@ types:
       packed: true
       fields:
       - name: account_type
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -379,50 +531,74 @@ types:
 - name: PriceUpdateEventData
   kind:
     struct:
+      display-name: Price updated
       packed: true
       fields:
       - name: feed_name
+        display-name: Feed name
         field-type:
           type-ref:
             name: FeedName64
       - name: feed_address
+        display-name: Feed
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: old_price
+        display-name: Previous price (raw)
         field-type:
           primitive: u64
       - name: new_price
+        display-name: New price (raw)
         field-type:
           primitive: u64
       - name: timestamp_ns
+        display-name: Timestamp (ns)
         field-type:
           primitive: u64
+      - name: time
+        display-name: Time
+        user-display: true
+        type: synthetic
+        return-type: { type-ref: { name: Timestamp } }
+        expression: 'timestamp(timestamp_ns / 1000000000)'
 
 - name: BooleanUpdateEventData
   kind:
     struct:
+      display-name: Boolean value updated
       packed: true
       fields:
       - name: feed_name
+        display-name: Feed name
         field-type:
           type-ref:
             name: FeedName64
       - name: feed_address
+        display-name: Feed
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: old_value
+        display-name: Previous value
         field-type:
           primitive: u8
       - name: new_value
+        display-name: New value
         field-type:
           primitive: u8
       - name: timestamp_ns
+        display-name: Timestamp (ns)
         field-type:
           primitive: u64
+      - name: time
+        display-name: Time
+        user-display: true
+        type: synthetic
+        return-type: { type-ref: { name: Timestamp } }
+        expression: 'timestamp(timestamp_ns / 1000000000)'
 
 # event_type=1 is PRICE_UPDATE; event_type=2 is BOOL_UPDATE.
 - name: OracleEvent
@@ -431,6 +607,7 @@ types:
       packed: true
       fields:
       - name: event_type
+        user-display: false
         field-type:
           primitive: u8
       - name: data
@@ -475,3 +652,44 @@ types:
       - name: code
         field-type:
           primitive: u64
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: invalid_instruction_data_size
+              tag-value: 1
+              comment: Instruction data is too short or the wrong size for this instruction.
+            - name: invalid_instruction
+              tag-value: 2
+              comment: Instruction is not a known oracle instruction.
+            - name: unauthorized_operation
+              tag-value: 3
+              comment: The signer is not allowed to do this, or the feed account is not writable in this transaction.
+            - name: feed_already_exists
+              tag-value: 4
+              comment: A feed already exists at this account.
+            - name: invalid_feed_account
+              tag-value: 5
+              comment: The feed account is not a feed of the expected type.
+            - name: invalid_account_idx
+              tag-value: 6
+              comment: An account index in the instruction is outside the account list of the transaction.
+            - name: invalid_feed_name_length
+              tag-value: 7
+              comment: The feed name is empty or too long.
+            - name: invalid_feed_type
+              tag-value: 8
+              comment: The feed type is not known.
+            - name: update_too_stale
+              tag-value: 9
+              comment: The update is too old to be accepted.
+            - name: feed_type_mismatch
+              tag-value: 10
+              comment: The feed is of a different type than the instruction expects.
+            - name: invalid_bool_value
+              tag-value: 11
+              comment: A boolean feed value must be 0 or 1.

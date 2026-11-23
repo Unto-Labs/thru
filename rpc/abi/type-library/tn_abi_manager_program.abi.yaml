@@ -41,6 +41,95 @@ types:
       - name: code
         field-type:
           primitive: u16
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: invalid_account_idx
+              tag-value: 1 # 0x0001
+              comment: An account index in the instruction is outside the account list of the transaction.
+            - name: account_not_found
+              tag-value: 2 # 0x0002
+              comment: A required account does not exist.
+            - name: account_not_writable
+              tag-value: 3 # 0x0003
+              comment: The ABI account is not writable in this transaction.
+            - name: invalid_size
+              tag-value: 4 # 0x0004
+              comment: The ABI account is not a valid ABI content account.
+            - name: invalid_owner
+              tag-value: 5 # 0x0005
+              comment: An account has the wrong owner.
+            - name: invalid_authority
+              tag-value: 6 # 0x0006
+              comment: The authority did not sign, or is not the authority allowed to manage this ABI.
+            - name: invalid_state
+              tag-value: 7 # 0x0007
+              comment: The ABI is finalized, or an account is not in the state this instruction requires.
+            - name: invalid_instruction
+              tag-value: 256 # 0x0100
+              comment: Instruction data is too short, is not a known instruction, or carries arguments this instruction does not accept.
+            - name: instruction_invalid_size
+              tag-value: 260 # 0x0104
+              comment: Instruction data is too short or the wrong size for this instruction.
+            - name: invalid_program_meta
+              tag-value: 512 # 0x0200
+              comment: The program metadata account is not valid, or does not match the program this ABI belongs to.
+            - name: program_meta_account_not_found
+              tag-value: 514 # 0x0202
+              comment: The program metadata account does not exist.
+            - name: program_meta_invalid_owner
+              tag-value: 517 # 0x0205
+              comment: The program metadata account is not owned by a program manager.
+            - name: program_meta_invalid_authority
+              tag-value: 518 # 0x0206
+              comment: The signer is not the authority of the program.
+            - name: invalid_abi_account
+              tag-value: 768 # 0x0300
+              comment: The ABI account is not the ABI account that belongs to this ABI metadata account.
+            - name: abi_account_invalid_account_idx
+              tag-value: 769 # 0x0301
+              comment: The ABI account index is outside the account list of the transaction.
+            - name: abi_account_account_not_writable
+              tag-value: 771 # 0x0303
+              comment: The ABI account to create is not writable in this transaction.
+            - name: abi_account_account_already_exists
+              tag-value: 776 # 0x0308
+              comment: The ABI account to create already exists.
+            - name: invalid_srcbuf
+              tag-value: 1024 # 0x0400
+              comment: The source buffer account is missing from the instruction or is the ABI account itself.
+            - name: srcbuf_invalid_account_idx
+              tag-value: 1025 # 0x0401
+              comment: The source buffer account index is outside the account list of the transaction.
+            - name: srcbuf_account_not_found
+              tag-value: 1026 # 0x0402
+              comment: The source buffer account does not exist.
+            - name: srcbuf_invalid_size
+              tag-value: 1028 # 0x0404
+              comment: The source range goes past the end of the source buffer account.
+            - name: srcbuf_invalid_state
+              tag-value: 1031 # 0x0407
+              comment: The source buffer account is compressed or deleted, or its contents do not match the hash in the instruction.
+            - name: invalid_abi_meta
+              tag-value: 1280 # 0x0500
+              comment: The ABI metadata account is malformed, is at the wrong address, or does not match this ABI.
+            - name: abi_meta_invalid_account_idx
+              tag-value: 1281 # 0x0501
+              comment: The ABI metadata account index is outside the account list of the transaction.
+            - name: abi_meta_account_not_writable
+              tag-value: 1283 # 0x0503
+              comment: The ABI metadata account to create is not writable in this transaction.
+            - name: abi_meta_account_already_exists
+              tag-value: 1288 # 0x0508
+              comment: The ABI metadata account to create already exists.
+            - name: invalid_abi_meta_kind
+              tag-value: 1536 # 0x0600
+              comment: The ABI metadata account is of the wrong kind for this instruction.
 
 # ── ABI Meta Account types ──
 
@@ -100,6 +189,7 @@ types:
       packed: true
       fields:
       - name: account_type
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -128,14 +218,24 @@ types:
   kind:
     struct:
       packed: true
+      display-name: ABI metadata
       fields:
+      - name: kind_name
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if kind == 0 { "Official" } else if kind == 1 { "External" } else { `Unknown (${kind})` }'
+        display-name: Kind
+        user-display: true
       - name: kind
+        user-display: false
         field-type:
           primitive: u8
       - name: flags
+        user-display: false
         field-type:
           primitive: u16
       - name: body
+        user-display: false
         field-type:
           type-ref:
             name: AbiMetaBody
@@ -148,22 +248,34 @@ types:
   kind:
     struct:
       packed: true
+      display-name: ABI
       fields:
       - name: abi_meta_acc
+        display-name: ABI metadata
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: revision
+        display-name: Revision
         field-type:
           primitive: u64
       - name: state
+        user-display: false
         field-type:
           primitive: u8
+      - name: state_name
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if state == 0 { "Open" } else if state == 1 { "Finalized" } else { `Unknown (${state})` }'
+        display-name: State
+        user-display: true
       - name: content_sz
+        display-name: Size (bytes)
         field-type:
           primitive: u32
       - name: contents
+        user-display: false
         field-type:
           array:
             size:
@@ -179,17 +291,40 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Create official ABI metadata
       fields:
+      - name: abi_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_meta_account_idx)'
+        display-name: ABI metadata
+        user-display: true
+      - name: program_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(program_meta_account_idx)'
+        display-name: Program metadata
+        user-display: true
+      - name: authority_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Program authority
+        user-display: true
       - name: abi_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: program_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: state_proof
+        user-display: false
         field-type:
           type-ref:
             name: StateProof
@@ -200,14 +335,36 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Create ephemeral official ABI metadata
       fields:
+      - name: abi_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_meta_account_idx)'
+        display-name: ABI metadata
+        user-display: true
+      - name: program_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(program_meta_account_idx)'
+        display-name: Program metadata
+        user-display: true
+      - name: authority_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Program authority
+        user-display: true
       - name: abi_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: program_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
 
@@ -216,23 +373,41 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Create external ABI metadata
       fields:
+      - name: abi_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_meta_account_idx)'
+        display-name: ABI metadata
+        user-display: true
+      - name: publisher_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Publisher
+        user-display: true
       - name: abi_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: target_program
+        display-name: Target program
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: seed
+        user-display: false
         field-type:
           type-ref:
             name: Seed32
       - name: state_proof
+        user-display: false
         field-type:
           type-ref:
             name: StateProof
@@ -243,19 +418,36 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Create ephemeral external ABI metadata
       fields:
+      - name: abi_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_meta_account_idx)'
+        display-name: ABI metadata
+        user-display: true
+      - name: publisher_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Publisher
+        user-display: true
       - name: abi_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: target_program
+        display-name: Target program
         field-type:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
       - name: seed
+        user-display: false
         field-type:
           type-ref:
             name: Seed32
@@ -265,35 +457,75 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Publish official ABI
       fields:
+      - name: abi_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_account_idx)'
+        display-name: ABI
+        user-display: true
+      - name: abi_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_meta_account_idx)'
+        display-name: ABI metadata
+        user-display: true
+      - name: program_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(program_meta_account_idx)'
+        display-name: Program metadata
+        user-display: true
+      - name: authority_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Program authority
+        user-display: true
+      - name: source_buffer
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(srcbuf_account_idx)'
+        display-name: Source buffer
+        user-display: true
       - name: abi_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: program_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: abi_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: srcbuf_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: srcbuf_offset
+        user-display: false
         field-type:
           primitive: u32
       - name: srcbuf_size
+        display-name: Size (bytes)
         field-type:
           primitive: u32
       # SHA-256 of exactly srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size);
       # official Public-wire contents must match it.
       - name: srcbuf_sha256
+        user-display: false
         field-type:
           type-ref:
             name: Seed32
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: state_proof
+        user-display: false
         field-type:
           type-ref:
             name: StateProof
@@ -304,32 +536,71 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Publish ephemeral official ABI
       fields:
+      - name: abi_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_account_idx)'
+        display-name: ABI
+        user-display: true
+      - name: abi_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_meta_account_idx)'
+        display-name: ABI metadata
+        user-display: true
+      - name: program_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(program_meta_account_idx)'
+        display-name: Program metadata
+        user-display: true
+      - name: authority_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Program authority
+        user-display: true
+      - name: source_buffer
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(srcbuf_account_idx)'
+        display-name: Source buffer
+        user-display: true
       - name: abi_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: program_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: abi_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: srcbuf_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: srcbuf_offset
+        user-display: false
         field-type:
           primitive: u32
       - name: srcbuf_size
+        display-name: Size (bytes)
         field-type:
           primitive: u32
       # SHA-256 of exactly srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size);
       # official Public-wire contents must match it.
       - name: srcbuf_sha256
+        user-display: false
         field-type:
           type-ref:
             name: Seed32
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
 
@@ -338,32 +609,65 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Publish external ABI
       fields:
+      - name: abi_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_account_idx)'
+        display-name: ABI
+        user-display: true
+      - name: abi_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_meta_account_idx)'
+        display-name: ABI metadata
+        user-display: true
+      - name: publisher_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Publisher
+        user-display: true
+      - name: source_buffer
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(srcbuf_account_idx)'
+        display-name: Source buffer
+        user-display: true
       - name: abi_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: abi_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: srcbuf_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: srcbuf_offset
+        user-display: false
         field-type:
           primitive: u32
       - name: srcbuf_size
+        display-name: Size (bytes)
         field-type:
           primitive: u32
       # SHA-256 of exactly srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size);
       # the external ABI contents must match it.
       - name: srcbuf_sha256
+        user-display: false
         field-type:
           type-ref:
             name: Seed32
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: state_proof
+        user-display: false
         field-type:
           type-ref:
             name: StateProof
@@ -374,29 +678,61 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Publish ephemeral external ABI
       fields:
+      - name: abi_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_account_idx)'
+        display-name: ABI
+        user-display: true
+      - name: abi_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_meta_account_idx)'
+        display-name: ABI metadata
+        user-display: true
+      - name: publisher_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Publisher
+        user-display: true
+      - name: source_buffer
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(srcbuf_account_idx)'
+        display-name: Source buffer
+        user-display: true
       - name: abi_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: abi_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: srcbuf_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: srcbuf_offset
+        user-display: false
         field-type:
           primitive: u32
       - name: srcbuf_size
+        display-name: Size (bytes)
         field-type:
           primitive: u32
       # SHA-256 of exactly srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size);
       # the external ABI contents must match it.
       - name: srcbuf_sha256
+        user-display: false
         field-type:
           type-ref:
             name: Seed32
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
 
@@ -405,32 +741,71 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Upgrade official ABI
       fields:
+      - name: abi_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_account_idx)'
+        display-name: ABI
+        user-display: true
+      - name: abi_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_meta_account_idx)'
+        display-name: ABI metadata
+        user-display: true
+      - name: program_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(program_meta_account_idx)'
+        display-name: Program metadata
+        user-display: true
+      - name: authority_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Program authority
+        user-display: true
+      - name: source_buffer
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(srcbuf_account_idx)'
+        display-name: Source buffer
+        user-display: true
       - name: abi_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: program_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: abi_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: srcbuf_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: srcbuf_offset
+        user-display: false
         field-type:
           primitive: u32
       - name: srcbuf_size
+        display-name: Size (bytes)
         field-type:
           primitive: u32
       # SHA-256 of exactly srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size);
       # official Public-wire contents must match it.
       - name: srcbuf_sha256
+        user-display: false
         field-type:
           type-ref:
             name: Seed32
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
 
@@ -439,29 +814,61 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Upgrade external ABI
       fields:
+      - name: abi_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_account_idx)'
+        display-name: ABI
+        user-display: true
+      - name: abi_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_meta_account_idx)'
+        display-name: ABI metadata
+        user-display: true
+      - name: publisher_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Publisher
+        user-display: true
+      - name: source_buffer
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(srcbuf_account_idx)'
+        display-name: Source buffer
+        user-display: true
       - name: abi_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: abi_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: srcbuf_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: srcbuf_offset
+        user-display: false
         field-type:
           primitive: u32
       - name: srcbuf_size
+        display-name: Size (bytes)
         field-type:
           primitive: u32
       # SHA-256 of exactly srcbuf[srcbuf_offset, srcbuf_offset + srcbuf_size);
       # the external ABI contents must match it.
       - name: srcbuf_sha256
+        user-display: false
         field-type:
           type-ref:
             name: Seed32
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
 
@@ -470,17 +877,46 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Close official ABI
       fields:
+      - name: abi_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_account_idx)'
+        display-name: ABI
+        user-display: true
+      - name: abi_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_meta_account_idx)'
+        display-name: ABI metadata
+        user-display: true
+      - name: program_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(program_meta_account_idx)'
+        display-name: Program metadata
+        user-display: true
+      - name: authority_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Program authority
+        user-display: true
       - name: abi_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: program_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: abi_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
 
@@ -489,14 +925,36 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Close external ABI
       fields:
+      - name: abi_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_account_idx)'
+        display-name: ABI
+        user-display: true
+      - name: abi_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_meta_account_idx)'
+        display-name: ABI metadata
+        user-display: true
+      - name: publisher_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Publisher
+        user-display: true
       - name: abi_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: abi_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
 
@@ -505,17 +963,46 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Finalize official ABI
       fields:
+      - name: abi_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_account_idx)'
+        display-name: ABI
+        user-display: true
+      - name: abi_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_meta_account_idx)'
+        display-name: ABI metadata
+        user-display: true
+      - name: program_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(program_meta_account_idx)'
+        display-name: Program metadata
+        user-display: true
+      - name: authority_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Program authority
+        user-display: true
       - name: abi_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: program_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: abi_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
 
@@ -524,14 +1011,36 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Finalize external ABI
       fields:
+      - name: abi_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_account_idx)'
+        display-name: ABI
+        user-display: true
+      - name: abi_meta_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(abi_meta_account_idx)'
+        display-name: ABI metadata
+        user-display: true
+      - name: publisher_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Publisher
+        user-display: true
       - name: abi_meta_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: abi_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
 
@@ -620,6 +1129,7 @@ types:
       packed: true
       fields:
       - name: discriminant
+        user-display: false
         field-type:
           primitive: u8
       - name: payload

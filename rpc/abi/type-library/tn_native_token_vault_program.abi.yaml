@@ -32,38 +32,90 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Withdraw THRU
       comment: >-
         Moves amount native balance from the canonical receiver PDA to destination. The authority account must equal config.authority and be authorized (signer, or invoke-auth from its owner such as a Multisig request).
       fields:
       - name: receiver_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: receiver
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(receiver_account_idx)'
+        display-name: Vault
+        user-display: true
       - name: config_account_idx
+        user-display: false
         field-type:
           primitive: u16
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: authority
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Authority
+        user-display: true
       - name: destination_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: destination
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(destination_account_idx)'
+        display-name: Destination
+        user-display: true
       - name: amount
+        display-name: Amount (base units)
         field-type:
           primitive: u64
+      - name: amount_thru
+        display-name: Amount
+        user-display: true
+        type: synthetic
+        return-type: { type-ref: { name: Decimal } }
+        expression: 'toDecimal(amount, 9)'
+      - name: summary
+        display-name: Summary
+        user-display: true
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: '`Withdraw ${amount_thru} THRU to ${destination}`'
 - name: ProposeAuthorityArgs
   kind:
     struct:
       packed: true
+      display-name: Propose new authority
       comment: >-
         The current authority proposes a nonzero candidate (not the vault program, not itself).
       fields:
       - name: config_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: config
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(config_account_idx)'
+        display-name: Vault config
+        user-display: true
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: authority
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Authority
+        user-display: true
       - name: candidate
+        display-name: Proposed authority
         field-type:
           type-ref:
             name: Pubkey
@@ -71,32 +123,63 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Accept authority
       comment: >-
         The pending candidate, authorized, becomes the authority.
       fields:
       - name: config_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: config
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(config_account_idx)'
+        display-name: Vault config
+        user-display: true
       - name: candidate_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: candidate
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(candidate_account_idx)'
+        display-name: Proposed authority
+        user-display: true
 - name: CancelProposalArgs
   kind:
     struct:
       packed: true
+      display-name: Cancel authority proposal
       fields:
       - name: config_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: config
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(config_account_idx)'
+        display-name: Vault config
+        user-display: true
       - name: authority_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: authority
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(authority_account_idx)'
+        display-name: Authority
+        user-display: true
 - name: NativeTokenVaultInstruction
   kind:
     struct:
       packed: true
       fields:
       - name: tag
+        user-display: false
         field-type:
           primitive: u32
       - name: payload
@@ -137,6 +220,7 @@ types:
       packed: true
       fields:
       - name: account_type
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -157,15 +241,18 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Vault config
       comment: >-
         Config PDA(vault, "native-token-vault-config:v1") after account_type 1, written at genesis only.
         pending_authority is zero when nothing is proposed.
       fields:
       - name: authority
+        display-name: Authority
         field-type:
           type-ref:
             name: Pubkey
       - name: pending_authority
+        display-name: Proposed authority
         field-type:
           type-ref:
             name: Pubkey
@@ -177,3 +264,50 @@ types:
       - name: code
         field-type:
           primitive: u64
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: invalid_instruction
+              tag-value: 1
+              comment: Instruction data is the wrong size or not a known vault instruction.
+            - name: invalid_account_idx
+              tag-value: 2
+              comment: An account index in the instruction is outside the account list of the transaction.
+            - name: invalid_receiver
+              tag-value: 3
+              comment: The receiver account is not the receiver account of the vault.
+            - name: invalid_config
+              tag-value: 4
+              comment: The config account is not the config account of the vault.
+            - name: wrong_authority
+              tag-value: 5
+              comment: The authority account is not the authority the vault expects.
+            - name: unauthorized
+              tag-value: 6
+              comment: The vault authority did not authorize this transaction.
+            - name: invalid_amount
+              tag-value: 7
+              comment: The amount is zero.
+            - name: invalid_destination
+              tag-value: 8
+              comment: The destination is the receiver or config account of the vault itself.
+            - name: invalid_candidate
+              tag-value: 9
+              comment: The proposed authority is empty, is the vault program, or is already the authority.
+            - name: no_pending
+              tag-value: 10
+              comment: There is no pending authority change.
+            - name: transfer_failed
+              tag-value: 11
+              comment: The transfer out of the vault failed.
+            - name: write_failed
+              tag-value: 12
+              comment: The config account could not be opened for writing.
+            - name: reentrant
+              tag-value: 13
+              comment: The vault program was called again while it was already running.

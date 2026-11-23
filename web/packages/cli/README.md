@@ -38,9 +38,9 @@ Replace `ta...` with an existing UUSD token-account address. Your Developers acc
 | macOS    | arm64 | `thru-darwin-arm64` |
 | Windows  | x64   | `thru-win32-x64`    |
 
-The Linux binaries require glibc >= 2.17, which every mainstream distro
-since CentOS 7 satisfies (Ubuntu, Debian, RHEL/Rocky/Alma, Amazon Linux,
-Fedora, SUSE). Alpine/musl is not supported.
+The Linux binaries are statically linked against musl, so they have no glibc
+or other shared-library requirement. They need Linux kernel 3.2 or newer, the
+minimum for Rust's musl targets.
 
 ## Install without npm (Linux packages)
 

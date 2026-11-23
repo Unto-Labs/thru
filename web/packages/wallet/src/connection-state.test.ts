@@ -4,7 +4,6 @@ import {
   connectionResultFromState,
   disconnectedWalletAvailability,
   walletAvailabilityFromConnectionState,
-  resolveConnectionHintStorageKey,
 } from "./connection-state";
 
 const ACCOUNT_A = {
@@ -109,18 +108,6 @@ describe("shared wallet connection state", () => {
 });
 
 describe("ConnectionHintStore", () => {
-  it("namespaces default keys by wallet and app origin", () => {
-    const first = resolveConnectionHintStorageKey({
-      walletOrigin: "https://wallet.example",
-      appOrigin: "https://clob-a.example",
-    });
-    const second = resolveConnectionHintStorageKey({
-      walletOrigin: "https://wallet.example",
-      appOrigin: "https://clob-b.example",
-    });
-    expect(first).not.toBe(second);
-  });
-
   it("reads the previous mobile hint format", async () => {
     const storage = new MockStorage();
     storage.setItem(

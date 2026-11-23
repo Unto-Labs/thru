@@ -159,7 +159,7 @@ function ActivityKit({
           { label: 'Date & time', value: 'Oct 2, 2026 · 2:14:05 PM' },
           { label: 'From', value: 'ta7Q…x2Lp', copy: true, copyLabel: 'Copy address' },
           { label: 'To', value: 'You' },
-          { label: 'Network', value: 'thru-alphanet' },
+          { label: 'Network', value: 'thru-betanet' },
           { label: 'Signature', value: '3nVq…8Hd2', copy: true },
         ]}
         onCopy={() => undefined}
@@ -259,7 +259,7 @@ function ActivityKit({
           { label: 'Date & time', value: 'Oct 2, 2026 · 2:14:05 PM' },
           { label: 'From', value: 'ta7Q…x2Lp', copy: true, copyLabel: 'Copy address' },
           { label: 'To', value: 'You' },
-          { label: 'Network', value: 'thru-alphanet' },
+          { label: 'Network', value: 'thru-betanet' },
           { label: 'Signature', value: '3nVq…8Hd2', copy: true },
         ]}
         onCopy={() => undefined}

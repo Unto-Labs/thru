@@ -3,11 +3,12 @@ import { Avatar } from "@base-ui/react/avatar";
 import { cn } from "../../../utils";
 import "./Disc.css";
 
-export type DiscSize = "small" | "medium" | "large" | number;
+export type DiscSize = "sm" | "md" | "lg" | number;
 
-const DISC_PX = { small: 16, medium: 24, large: 38 } as const;
+const DISC_PX = { sm: 16, md: 24, lg: 38 } as const;
 
-const toPx = (s: DiscSize): number => (typeof s === "number" ? s : DISC_PX[s]);
+/** Pixel diameter for a named or numeric Disc size. */
+export const toPx = (s: DiscSize): number => (typeof s === "number" ? s : DISC_PX[s]);
 
 const borderPx = (px: number, border: boolean | number): number =>
   border === true ? (px <= 16 ? 1 : px <= 20 ? 2 : 3) : Number(border) || 0;
@@ -35,7 +36,7 @@ export interface DiscProps {
  * Disc — the circular avatar primitive that underpins ChainIcon and TokenIcon.
  */
 export const Disc = React.forwardRef<HTMLSpanElement, DiscProps>(function Disc(
-  { size = "medium", border = false, title, color, glyph, src, fallback, className, style },
+  { size = "md", border = false, title, color, glyph, src, fallback, className, style },
   ref,
 ) {
   const px = toPx(size);

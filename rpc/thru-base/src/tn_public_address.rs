@@ -73,10 +73,10 @@ pub fn tn_public_address_decode(out: &mut [u8; 32], input: &[u8]) -> Result<(), 
     }
 
     while in_sz >= 4 {
-        let a = invlut[input[in_idx + 0] as usize] as i32;
-        let b = invlut[input[in_idx + 1] as usize] as i32;
-        let c = invlut[input[in_idx + 2] as usize] as i32;
-        let d = invlut[input[in_idx + 3] as usize] as i32;
+        let a = invlut[input[in_idx + 0] as usize] as i8 as i32;
+        let b = invlut[input[in_idx + 1] as usize] as i8 as i32;
+        let c = invlut[input[in_idx + 2] as usize] as i8 as i32;
+        let d = invlut[input[in_idx + 3] as usize] as i8 as i32;
         if a < 0 || b < 0 || c < 0 || d < 0 {
             return Err(-3);
         }
@@ -96,10 +96,10 @@ pub fn tn_public_address_decode(out: &mut [u8; 32], input: &[u8]) -> Result<(), 
         in_idx += 4;
         in_sz -= 4;
     }
-    let a = invlut[input[in_idx + 0] as usize] as i32;
-    let b = invlut[input[in_idx + 1] as usize] as i32;
-    let c = invlut[input[in_idx + 2] as usize] as i32;
-    let d = invlut[input[in_idx + 3] as usize] as i32;
+    let a = invlut[input[in_idx + 0] as usize] as i8 as i32;
+    let b = invlut[input[in_idx + 1] as usize] as i8 as i32;
+    let c = invlut[input[in_idx + 2] as usize] as i8 as i32;
+    let d = invlut[input[in_idx + 3] as usize] as i8 as i32;
     if a < 0 || b < 0 || c < 0 || d < 0 {
         return Err(-4);
     }
@@ -221,6 +221,28 @@ mod tests {
         };
         let res = tn_public_address_decode(&mut decoded_pub_key, encoded_slice);
         assert_eq!(res, Err(-5), "corrupt checksum should fail with -5");
+    }
+
+    /// A character outside the base64url alphabet must be rejected with -3/-4
+    /// (as C's `(schar)invlut[...]` check does), not decoded as if it were
+    /// the value 0xFF.  With `bytes[2] == 0xFF` the 4th character of the first
+    /// group is '_' (63) and the 3rd character's low two bits are already set,
+    /// so decoding '!' as 0xFF used to yield the same bytes and checksum and
+    /// the corrupted address was accepted.
+    #[test]
+    fn test_public_address_decode_rejects_bad_character() {
+        let mut pub_key = [0u8; 32];
+        pub_key[2] = 0xFF;
+        let mut encoded = [0u8; 46];
+        tn_public_address_encode(&mut encoded, &pub_key);
+        assert_eq!(encoded[5], b'_');
+        let mut decoded = [0u8; 32];
+        assert_eq!(tn_public_address_decode(&mut decoded, &encoded), Ok(()));
+        encoded[5] = b'!';
+        assert_eq!(tn_public_address_decode(&mut decoded, &encoded), Err(-3));
+        encoded[5] = b'_';
+        encoded[43] = b'+';
+        assert_eq!(tn_public_address_decode(&mut decoded, &encoded), Err(-4));
     }
 
     #[test]

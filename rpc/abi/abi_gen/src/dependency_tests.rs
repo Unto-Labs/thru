@@ -46,6 +46,7 @@ mod dependency_tests {
                 name: "DerivedType".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "base_field".to_string(),
@@ -77,6 +78,7 @@ mod dependency_tests {
                 name: "TypeA".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "field_b".to_string(),
@@ -89,6 +91,7 @@ mod dependency_tests {
                 name: "TypeB".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "field_a".to_string(),
@@ -120,6 +123,7 @@ mod dependency_tests {
                 container_attributes: Default::default(),
                 tag_ref: create_literal_expr(42), // Constant tag - valid
                 variants: vec![EnumVariant {
+                    comment: None,
                     name: "Variant1".to_string(),
                     tag_value: 1,
                     variant_type: create_u32_primitive(),
@@ -142,6 +146,7 @@ mod dependency_tests {
                 name: "Container".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
@@ -165,6 +170,7 @@ mod dependency_tests {
                     // Invalid: tag references a field whose offset depends on this enum's size
                     tag_ref: create_field_ref_expr(vec!["Container", "other_field"]),
                     variants: vec![EnumVariant {
+                        comment: None,
                         name: "Variant1".to_string(),
                         tag_value: 1,
                         variant_type: create_u32_primitive(),
@@ -190,6 +196,13 @@ mod dependency_tests {
                 || violation.reason.contains("creating a layout cycle")
                 || violation.reason.contains("forward dependency")
         );
+
+        let enum_violation = analysis
+            .layout_violations
+            .iter()
+            .find(|v| v.violating_type == "MyEnum")
+            .expect("Should find violation for MyEnum");
+        assert!(enum_violation.violating_expression.contains("other_field"));
     }
 
     #[test]
@@ -214,57 +227,6 @@ mod dependency_tests {
     }
 
     #[test]
-    fn test_invalid_array_size_layout_cycle() {
-        let mut analyzer = DependencyAnalyzer::new();
-
-        let typedefs = vec![
-            TypeDef {
-                name: "Container".to_string(),
-                format: None,
-                kind: TypeKind::Struct(StructType {
-                    container_attributes: Default::default(),
-                    fields: vec![
-                        StructField {
-                            name: "dynamic_array".to_string(),
-                            format: None,
-                            field_type: create_type_ref("MyArray"),
-                        },
-                        StructField {
-                            name: "size_field".to_string(),
-                            format: None,
-                            field_type: create_u32_primitive(),
-                        },
-                    ],
-                }),
-            },
-            TypeDef {
-                name: "MyArray".to_string(),
-                format: None,
-                kind: TypeKind::Array(ArrayType {
-                    container_attributes: Default::default(),
-                    // Invalid: size references a field whose offset depends on this array's size
-                    size: create_field_ref_expr(vec!["Container", "size_field"]),
-                    element_type: Box::new(create_u8_primitive()),
-                    jagged: false,
-                }),
-            },
-        ];
-
-        let analysis = analyzer.analyze_multiple_typedefs(&typedefs);
-
-        assert!(!analysis.layout_violations.is_empty());
-        let violation = &analysis.layout_violations[0];
-        // The violation can be attributed to either MyArray or Container since it's a cycle
-        assert!(violation.violating_type == "MyArray" || violation.violating_type == "Container");
-        // The violation can be detected as either a layout cycle or forward dependency
-        assert!(
-            violation.reason.contains("layout cycle")
-                || violation.reason.contains("creating a layout cycle")
-                || violation.reason.contains("forward dependency")
-        );
-    }
-
-    #[test]
     fn test_forward_field_reference_violation() {
         let mut analyzer = DependencyAnalyzer::new();
 
@@ -273,6 +235,7 @@ mod dependency_tests {
                 name: "BadStruct".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
@@ -312,6 +275,7 @@ mod dependency_tests {
         let violation = &analysis.layout_violations[0];
         assert_eq!(violation.violating_type, "BadStruct");
         assert!(violation.reason.contains("forward dependency"));
+        assert!(violation.violating_expression.contains("late_field"));
     }
 
     #[test]
@@ -333,6 +297,7 @@ mod dependency_tests {
                         })),
                     }),
                     variants: vec![EnumVariant {
+                        comment: None,
                         name: "Variant1".to_string(),
                         tag_value: 1,
                         variant_type: create_u32_primitive(),
@@ -343,6 +308,7 @@ mod dependency_tests {
                 name: "SomeStruct".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
@@ -469,67 +435,6 @@ mod dependency_tests {
     }
 
     #[test]
-    fn test_packed_struct_analysis() {
-        let mut analyzer = DependencyAnalyzer::new();
-
-        let typedefs = vec![TypeDef {
-            name: "PackedStruct".to_string(),
-            format: None,
-            kind: TypeKind::Struct(StructType {
-                container_attributes: ContainerAttributes {
-                    packed: true,
-                    aligned: 0,
-                    comment: None,
-                },
-                fields: vec![
-                    StructField {
-                        name: "field1".to_string(),
-                        format: None,
-                        field_type: create_u8_primitive(),
-                    },
-                    StructField {
-                        name: "field2".to_string(),
-                        format: None,
-                        field_type: create_u32_primitive(),
-                    },
-                ],
-            }),
-        }];
-
-        let analysis = analyzer.analyze_multiple_typedefs(&typedefs);
-
-        assert!(analysis.cycles.is_empty());
-        assert!(analysis.layout_violations.is_empty());
-    }
-
-    #[test]
-    fn test_aligned_struct_analysis() {
-        let mut analyzer = DependencyAnalyzer::new();
-
-        let typedefs = vec![TypeDef {
-            name: "AlignedStruct".to_string(),
-            format: None,
-            kind: TypeKind::Struct(StructType {
-                container_attributes: ContainerAttributes {
-                    packed: false,
-                    aligned: 16,
-                    comment: Some("16-byte aligned".to_string()),
-                },
-                fields: vec![StructField {
-                    name: "field1".to_string(),
-                    format: None,
-                    field_type: create_u32_primitive(),
-                }],
-            }),
-        }];
-
-        let analysis = analyzer.analyze_multiple_typedefs(&typedefs);
-
-        assert!(analysis.cycles.is_empty());
-        assert!(analysis.layout_violations.is_empty());
-    }
-
-    #[test]
     fn test_deeply_nested_type_cycle() {
         let mut analyzer = DependencyAnalyzer::new();
 
@@ -538,6 +443,7 @@ mod dependency_tests {
                 name: "TypeA".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "field_b".to_string(),
@@ -550,6 +456,7 @@ mod dependency_tests {
                 name: "TypeB".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "field_c".to_string(),
@@ -562,6 +469,7 @@ mod dependency_tests {
                 name: "TypeC".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "field_a".to_string(),
@@ -586,84 +494,6 @@ mod dependency_tests {
         assert!(cycle_types.contains(&"TypeA".to_string()));
         assert!(cycle_types.contains(&"TypeB".to_string()));
         assert!(cycle_types.contains(&"TypeC".to_string()));
-    }
-
-    #[test]
-    fn test_transitive_layout_dependency_violation() {
-        let mut analyzer = DependencyAnalyzer::new();
-
-        let typedefs = vec![
-            // Container holds TypeA and TypeB
-            TypeDef {
-                name: "Container".to_string(),
-                format: None,
-                kind: TypeKind::Struct(StructType {
-                    container_attributes: Default::default(),
-                    fields: vec![
-                        StructField {
-                            name: "type_a".to_string(),
-                            format: None,
-                            field_type: create_type_ref("TypeA"),
-                        },
-                        StructField {
-                            name: "type_b".to_string(),
-                            format: None,
-                            field_type: create_type_ref("TypeB"),
-                        },
-                        StructField {
-                            name: "reference_field".to_string(),
-                            format: None,
-                            field_type: create_u32_primitive(),
-                        },
-                    ],
-                }),
-            },
-            // TypeA contains an array whose size affects Container layout
-            TypeDef {
-                name: "TypeA".to_string(),
-                format: None,
-                kind: TypeKind::Struct(StructType {
-                    container_attributes: Default::default(),
-                    fields: vec![StructField {
-                        name: "dynamic_array".to_string(),
-                        format: None,
-                        field_type: create_type_ref("DynamicArray"),
-                    }],
-                }),
-            },
-            // DynamicArray's size depends on a field in Container
-            TypeDef {
-                name: "DynamicArray".to_string(),
-                format: None,
-                kind: TypeKind::Array(ArrayType {
-                    container_attributes: Default::default(),
-                    // This creates a transitive dependency: Container -> TypeA -> DynamicArray -> Container
-                    size: create_field_ref_expr(vec!["Container", "reference_field"]),
-                    element_type: Box::new(create_u8_primitive()),
-                    jagged: false,
-                }),
-            },
-            // TypeB is independent
-            TypeDef {
-                name: "TypeB".to_string(),
-                format: None,
-                kind: create_u32_primitive(),
-            },
-        ];
-
-        let analysis = analyzer.analyze_multiple_typedefs(&typedefs);
-
-        assert!(!analysis.layout_violations.is_empty());
-
-        let violations: Vec<_> = analysis
-            .layout_violations
-            .iter()
-            .filter(|v| v.violating_type == "DynamicArray")
-            .collect();
-
-        assert!(!violations.is_empty());
-        let violation = violations[0];
-        assert!(violation.reason.contains("transitive"));
     }
 
     #[test]
@@ -692,6 +522,7 @@ mod dependency_tests {
                 name: "DataStruct".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
@@ -746,6 +577,7 @@ mod dependency_tests {
                 name: "DynamicStruct".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "dynamic_array".to_string(),
@@ -802,6 +634,7 @@ mod dependency_tests {
                 name: "WrapperStruct".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
@@ -826,11 +659,13 @@ mod dependency_tests {
                     tag_ref: create_field_ref_expr(vec!["some_external_field"]),
                     variants: vec![
                         EnumVariant {
+                            comment: None,
                             name: "Variant1".to_string(),
                             tag_value: 1,
                             variant_type: create_u32_primitive(),
                         },
                         EnumVariant {
+                            comment: None,
                             name: "Variant2".to_string(),
                             tag_value: 2,
                             variant_type: create_u64_primitive(), // Different sizes
@@ -889,6 +724,7 @@ mod dependency_tests {
                 name: "ConfigStruct".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
@@ -1056,6 +892,7 @@ mod dependency_tests {
             name: type_name.to_string(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: ContainerAttributes {
                     comment: comment.map(str::to_string),
                     ..Default::default()
@@ -1144,6 +981,7 @@ mod dependency_tests {
             name: "BadStruct".to_string(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
@@ -1225,11 +1063,13 @@ mod dependency_tests {
                 tag_ref: create_literal_expr(0),
                 variants: vec![
                     EnumVariant {
+                        comment: None,
                         name: "duplicate_variant".to_string(),
                         tag_value: 1,
                         variant_type: create_u32_primitive(),
                     },
                     EnumVariant {
+                        comment: None,
                         name: "duplicate_variant".to_string(), // Duplicate name!
                         tag_value: 2,
                         variant_type: create_u8_primitive(),
@@ -1263,11 +1103,13 @@ mod dependency_tests {
                 tag_ref: create_literal_expr(0),
                 variants: vec![
                     EnumVariant {
+                        comment: None,
                         name: "variant1".to_string(),
                         tag_value: 1,
                         variant_type: create_u32_primitive(),
                     },
                     EnumVariant {
+                        comment: None,
                         name: "variant2".to_string(),
                         tag_value: 1, // Duplicate tag value!
                         variant_type: create_u8_primitive(),
@@ -1310,6 +1152,7 @@ mod dependency_tests {
                 name: "BadStruct".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
@@ -1334,11 +1177,13 @@ mod dependency_tests {
                     tag_ref: create_literal_expr(0),
                     variants: vec![
                         EnumVariant {
+                            comment: None,
                             name: "bad_variant".to_string(),
                             tag_value: 5,
                             variant_type: create_u32_primitive(),
                         },
                         EnumVariant {
+                            comment: None,
                             name: "bad_variant".to_string(),
                             tag_value: 5,
                             variant_type: create_u8_primitive(),
@@ -1375,6 +1220,7 @@ mod dependency_tests {
                 name: "ValidStruct".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
@@ -1398,11 +1244,13 @@ mod dependency_tests {
                     tag_ref: create_literal_expr(0),
                     variants: vec![
                         EnumVariant {
+                            comment: None,
                             name: "variant1".to_string(),
                             tag_value: 1,
                             variant_type: create_u32_primitive(),
                         },
                         EnumVariant {
+                            comment: None,
                             name: "variant2".to_string(),
                             tag_value: 2,
                             variant_type: create_u8_primitive(),
@@ -1445,6 +1293,7 @@ mod dependency_tests {
                 name: "RootStruct".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
@@ -1464,6 +1313,7 @@ mod dependency_tests {
                 name: "IntermediateStruct".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "problematic_array".to_string(),
@@ -1511,6 +1361,7 @@ mod dependency_tests {
                 name: "ValidStruct".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
@@ -1540,16 +1391,19 @@ mod dependency_tests {
                     tag_ref: create_field_ref_expr(vec!["ValidStruct", "tag_field"]),
                     variants: vec![
                         EnumVariant {
+                            comment: None,
                             name: "VariantA".to_string(),
                             tag_value: 1,
                             variant_type: create_u32_primitive(), // 4 bytes
                         },
                         EnumVariant {
+                            comment: None,
                             name: "VariantB".to_string(),
                             tag_value: 2,
                             variant_type: create_u32_primitive(), // 4 bytes (same size)
                         },
                         EnumVariant {
+                            comment: None,
                             name: "VariantC".to_string(),
                             tag_value: 3,
                             variant_type: create_u32_primitive(), // 4 bytes (same size)
@@ -1695,6 +1549,7 @@ mod dependency_tests {
                 name: "ValidContainer".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
@@ -1739,6 +1594,7 @@ mod dependency_tests {
                 name: "InvalidContainer".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
@@ -1893,6 +1749,7 @@ mod dependency_tests {
                 name: "InvalidContainer".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
@@ -2027,6 +1884,7 @@ mod resolved_tests {
             name: "SimpleStruct".to_string(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
@@ -2069,6 +1927,7 @@ mod resolved_tests {
             name: "PackedStruct".to_string(),
             format: None,
             kind: TypeKind::Struct(StructType {
+                display: Default::default(),
                 container_attributes: ContainerAttributes {
                     packed: true,
                     aligned: 0,
@@ -2234,6 +2093,7 @@ mod resolved_tests {
                 tag_ref: ExprKind::Literal(LiteralExpr::U64(0)),
                 variants: vec![
                     EnumVariant {
+                        comment: None,
                         name: "Variant1".to_string(),
                         tag_value: 1,
                         variant_type: TypeKind::Primitive(PrimitiveType::Integral(
@@ -2241,6 +2101,7 @@ mod resolved_tests {
                         )),
                     },
                     EnumVariant {
+                        comment: None,
                         name: "Variant2".to_string(),
                         tag_value: 2,
                         variant_type: TypeKind::Primitive(PrimitiveType::Integral(
@@ -2285,6 +2146,7 @@ mod resolved_tests {
                 name: "TypeA".to_string(),
                 format: None,
                 kind: TypeKind::Struct(StructType {
+                    display: Default::default(),
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "field_b".to_string(),

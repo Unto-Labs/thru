@@ -104,15 +104,11 @@ export interface CopyButtonProps {
   copyIcon?: React.ReactNode;
   /** Icon shown briefly after a copy. */
   copiedIcon?: React.ReactNode;
-  /** Render the inline link-style text variant instead of a Button. */
-  text?: boolean;
-  /** Render a bare, icon-only button (no Button chrome) — for inline copy next
-   *  to an address/value. Takes precedence over `text`. */
-  icon?: boolean;
   /** Accessible label for the icon-only variant. */
   "aria-label"?: string;
-  /** Forwarded to the underlying Button (ignored for the text/icon variants). */
-  variant?: ButtonProps["variant"];
+  /** A Button variant, or `text` (inline link-style) or `icon` (bare icon-only
+   *  button for inline copy next to an address or value). */
+  variant?: ButtonProps["variant"] | "text" | "icon";
   size?: ButtonProps["size"];
   className?: string;
   /** Called once the value is on the clipboard. */
@@ -131,8 +127,6 @@ export function CopyButton({
   label,
   copyIcon,
   copiedIcon,
-  text = false,
-  icon = false,
   variant = "ghost",
   size = "sm",
   className,
@@ -149,7 +143,7 @@ export function CopyButton({
     ? (copiedIcon ?? <CheckIcon width={14} height={14} />)
     : (copyIcon ?? <CopyIcon width={14} height={14} />);
 
-  if (icon) {
+  if (variant === "icon") {
     return (
       <button
         type="button"
@@ -166,7 +160,7 @@ export function CopyButton({
     );
   }
 
-  if (text) {
+  if (variant === "text") {
     return (
       <button
         type="button"

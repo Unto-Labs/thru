@@ -12,7 +12,11 @@ use crate::config::Config;
 use crate::error::CliError;
 use crate::keys::LoadedKey;
 use crate::output;
+use crate::signing::{ResolvedSigner, resolve_signer, resolve_signer_reusing_ledger};
 use crate::utils::format_vm_error;
+use thru_base::signer::{EoaAuthKind, sign_eoa_auth_with};
+use thru_base::txn_lib::Transaction;
+use thru_base::txn_tools::EOA_PROGRAM;
 use thru_client::{Client, ClientBuilder};
 
 /// Helper function to resolve fee payer and target account
@@ -38,6 +42,29 @@ pub async fn handle_account_command(
     match subcommand {
         AccountCommands::Create { key_name } => {
             create_account(config, key_name.as_deref(), json_format).await
+        }
+        AccountCommands::CreateEoa {
+            account,
+            ledger,
+            fee_payer,
+        } => {
+            let (name, require_ledger) = match (account, ledger) {
+                (Some(a), None) => (a, false),
+                (None, Some(l)) => (l, true),
+                _ => {
+                    return Err(CliError::Validation(
+                        "Pass the account key either as an argument or with --ledger".into(),
+                    ));
+                }
+            };
+            create_eoa(
+                config,
+                &name,
+                require_ledger,
+                fee_payer.as_deref(),
+                json_format,
+            )
+            .await
         }
         AccountCommands::Info { key_name } => {
             get_account_info(config, key_name.as_deref(), json_format).await
@@ -104,10 +131,10 @@ async fn create_account(
         output::print_info("Creating account with fee payer proof...");
     }
 
-    // Resolve the key to use
+    // Resolve the key to use (local key, Ledger key, or `ledger://` URI)
     let key_name = key_name.unwrap_or("default");
-    let keypair = config.keys.load_key(key_name)?;
-    let account_pubkey = &keypair.address_string;
+    let signer = resolve_signer(config, key_name)?;
+    let account_pubkey = &signer.address;
 
     if !json_format {
         output::print_info(&format!("Account public key: {}", account_pubkey));
@@ -116,7 +143,7 @@ async fn create_account(
     // Create RPC client
     let client = create_rpc_client(config)?;
 
-    // Get current finalized slot
+    // Get current locally executed slot (the transaction start-slot clock)
     let block_height = client.get_block_height().await.map_err(|e| {
         CliError::TransactionSubmission(format!("Failed to get current slot: {}", e))
     })?;
@@ -126,7 +153,7 @@ async fn create_account(
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
 
-    let current_slot = block_height.finalized_height;
+    let current_slot = block_height.locally_executed_height;
 
     if !json_format {
         output::print_info(&format!("Using slot: {}", current_slot));
@@ -162,7 +189,7 @@ async fn create_account(
 
     // Build transaction using TransactionBuilder::build_create_with_fee_payer_proof
     let transaction = TransactionBuilder::build_create_with_fee_payer_proof(
-        keypair.public_key,
+        signer.public_key,
         current_slot,
         &state_proof,
     )
@@ -174,16 +201,15 @@ async fn create_account(
 
     // Set chain ID and sign the transaction
     let mut transaction = transaction.with_chain_id(chain_info.chain_id);
-    transaction.sign(&keypair.private_key).map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to sign transaction: {}", e))
+    let transaction_bytes = crate::signing::sign_transaction_for(&mut transaction, &signer, |e| {
+        CliError::TransactionSubmission(format!("Failed to sign transaction: {e}"))
     })?;
 
     if !json_format {
         output::print_info("Submitting transaction...");
     }
 
-    // Submit the transaction
-    let transaction_bytes = transaction.to_wire();
+    // Submit exactly the signed bytes
     let timeout = Duration::from_secs(config.timeout_seconds);
     let transaction_details = client
         .execute_transaction(&transaction_bytes, timeout)
@@ -205,6 +231,7 @@ async fn create_account(
             transaction_details.signature.as_str(),
             "failed",
         );
+        let response = signer.add_ledger_preview(response, "account_create");
         output::print_output(response, json_format);
 
         return Err(CliError::TransactionSubmission(error_msg));
@@ -217,6 +244,7 @@ async fn create_account(
         transaction_details.signature.as_str(),
         "success",
     );
+    let response = signer.add_ledger_preview(response, "account_create");
     output::print_output(response, json_format);
 
     if !json_format {
@@ -388,11 +416,9 @@ async fn compress_account(
     }
 
     // Sign the transaction with fee payer's private key
-    transaction
-        .sign(&fee_payer_keypair.private_key)
-        .map_err(|e| {
-            CliError::TransactionSubmission(format!("Failed to sign transaction: {}", e))
-        })?;
+    crate::signing::sign_transaction(&mut transaction, &fee_payer_keypair).map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to sign transaction: {}", e))
+    })?;
 
     if !json_format {
         output::print_info("Executing transaction...");
@@ -658,11 +684,9 @@ async fn decompress_direct(
 
     // Set chain ID and sign the transaction with fee payer's private key
     let mut transaction = transaction.with_chain_id(chain_id);
-    transaction
-        .sign(&fee_payer_keypair.private_key)
-        .map_err(|e| {
-            CliError::TransactionSubmission(format!("Failed to sign transaction: {}", e))
-        })?;
+    crate::signing::sign_transaction(&mut transaction, fee_payer_keypair).map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to sign transaction: {}", e))
+    })?;
 
     if !json_format {
         output::print_info("Executing transaction...");
@@ -851,11 +875,9 @@ async fn decompress_with_uploader(
 
     // Set chain ID and sign
     transaction = transaction.with_chain_id(chain_info.chain_id);
-    transaction
-        .sign(&fee_payer_keypair.private_key)
-        .map_err(|e| {
-            CliError::TransactionSubmission(format!("Failed to sign transaction: {}", e))
-        })?;
+    crate::signing::sign_transaction(&mut transaction, fee_payer_keypair).map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to sign transaction: {}", e))
+    })?;
 
     let transaction_bytes = transaction.to_wire();
     let timeout = Duration::from_secs(config.timeout_seconds);
@@ -1121,11 +1143,9 @@ async fn decompress_with_uploader_huge(
 
     // Set chain ID and sign
     transaction = transaction.with_chain_id(chain_info.chain_id);
-    transaction
-        .sign(&fee_payer_keypair.private_key)
-        .map_err(|e| {
-            CliError::TransactionSubmission(format!("Failed to sign transaction: {}", e))
-        })?;
+    crate::signing::sign_transaction(&mut transaction, fee_payer_keypair).map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to sign transaction: {}", e))
+    })?;
 
     let transaction_bytes = transaction.to_wire();
     let timeout = Duration::from_secs(60); // Increased timeout for huge data
@@ -1288,6 +1308,222 @@ async fn prepare_account_decompression(
     Ok(())
 }
 
+/// EOA program CREATE_ACCOUNT discriminant (`tn_eoa_program.h`).
+const EOA_INSTRUCTION_CREATE_ACCOUNT: u32 = 0;
+
+/// Build the EOA program CREATE_ACCOUNT instruction:
+/// `[discriminant u32][proof_size u64][eoa_account_idx u16][signature 64][proof]`
+/// (`tn_eoa_create_account_args_t`, little-endian).
+pub fn build_eoa_create_instruction(
+    eoa_account_idx: u16,
+    signature: &[u8; 64],
+    proof: &[u8],
+) -> Vec<u8> {
+    let mut data = Vec::with_capacity(4 + 8 + 2 + 64 + proof.len());
+    data.extend_from_slice(&EOA_INSTRUCTION_CREATE_ACCOUNT.to_le_bytes());
+    data.extend_from_slice(&(proof.len() as u64).to_le_bytes());
+    data.extend_from_slice(&eoa_account_idx.to_le_bytes());
+    data.extend_from_slice(signature);
+    data.extend_from_slice(proof);
+    data
+}
+
+/// Build the EOA-creation transaction: `fee_payer` pays, the EOA program
+/// creates `account` (the only read-write account, index 2) after the runtime
+/// verifies `signature` (the account key's `tn_eoa_create_v1` authorization).
+pub fn build_eoa_create_transaction(
+    fee_payer: [u8; 32],
+    account: [u8; 32],
+    signature: &[u8; 64],
+    proof: &[u8],
+    nonce: u64,
+    start_slot: u64,
+    chain_id: u16,
+) -> Transaction {
+    Transaction::new(fee_payer, EOA_PROGRAM, 1, nonce)
+        .with_start_slot(start_slot)
+        .with_chain_id(chain_id)
+        .add_rw_account(account)
+        .with_instructions(build_eoa_create_instruction(2, signature, proof))
+        .with_expiry_after(100)
+        .with_compute_units(1_000_000)
+        .with_memory_units(10_000)
+        .with_state_units(1)
+}
+
+fn sign_eoa_authorization(
+    signer: &ResolvedSigner,
+    chain_id: u16,
+    fee_payer: &[u8; 32],
+) -> Result<[u8; 64], CliError> {
+    if let Some(ledger) = &signer.ledger {
+        return ledger
+            .try_sign_eoa_auth(EoaAuthKind::Create, chain_id, fee_payer, &signer.public_key)
+            .map_err(crate::signing::ledger_error);
+    }
+    sign_eoa_auth_with(
+        signer.signer.as_ref(),
+        EoaAuthKind::Create,
+        chain_id,
+        fee_payer,
+        &signer.public_key,
+    )
+    .map_err(|e| CliError::Crypto(format!("Failed to sign EOA authorization: {e}")))
+}
+
+/// `thru account create-eoa`: create an EOA for `account` (typically a Ledger
+/// key) with the fee paid by another key.  The account key signs the EOA
+/// create authorization (SIGN_EOA_AUTH on a Ledger); the fee payer signs the
+/// transaction.
+pub async fn create_eoa(
+    config: &Config,
+    account: &str,
+    require_ledger: bool,
+    fee_payer: Option<&str>,
+    json_format: bool,
+) -> Result<(), CliError> {
+    let fee_payer_name = fee_payer.unwrap_or("default");
+    let account_ledger = config.keys.ledger_source(account)?;
+    if require_ledger && account_ledger.is_none() {
+        return Err(CliError::Validation(format!(
+            "Key '{}' is not a Ledger key; add one with 'thru keys add-ledger' or drop --ledger",
+            account
+        )));
+    }
+    // Refuse the same key before contacting a device: the same Ledger path, or
+    // the same registered (or explicitly selected) local key.
+    let fee_payer_ledger = config.keys.ledger_source(fee_payer_name)?;
+    let same_key = match (&account_ledger, &fee_payer_ledger) {
+        (Some((account_path, _)), Some((fee_payer_path, _))) => account_path == fee_payer_path,
+        (None, None) => {
+            config.keys.public_key(account)? == config.keys.public_key(fee_payer_name)?
+        }
+        _ => false,
+    };
+    if same_key {
+        return Err(CliError::Validation(
+            "The new account cannot pay for its own EOA creation; pass --fee-payer <funded key> \
+             (or use 'thru account create' for a fee-payer-proof self creation)"
+                .to_string(),
+        ));
+    }
+
+    // Both paths on one Ledger must use one HID connection and device lock.
+    let account_signer = resolve_signer(config, account)?;
+    let fee_payer_signer =
+        resolve_signer_reusing_ledger(config, fee_payer_name, account_signer.ledger.as_deref())?;
+    if account_signer.public_key == fee_payer_signer.public_key {
+        return Err(CliError::Validation(
+            "The fee payer and the new account are the same key".to_string(),
+        ));
+    }
+
+    if !json_format {
+        output::print_info(&format!(
+            "Creating EOA {} (fee payer {})",
+            account_signer.address, fee_payer_signer.address
+        ));
+    }
+
+    let client = create_rpc_client(config)?;
+
+    if let Some(existing) = client
+        .get_account_info(&account_signer.address, None, None)
+        .await
+        .map_err(|e| {
+            CliError::TransactionSubmission(format!("Failed to get account info: {}", e))
+        })?
+        && !existing.is_new
+    {
+        return Err(CliError::Validation(format!(
+            "Account {} already exists",
+            account_signer.address
+        )));
+    }
+
+    let nonce = client
+        .get_account_info(&fee_payer_signer.address, None, None)
+        .await
+        .map_err(|e| CliError::NonceManagement(format!("Failed to get fee payer info: {}", e)))?
+        .map(|a| a.nonce)
+        .ok_or_else(|| {
+            CliError::AccountNotFound(format!(
+                "Fee payer account {} not found",
+                fee_payer_signer.address
+            ))
+        })?;
+    let block_height = client.get_block_height().await.map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to get current slot: {}", e))
+    })?;
+    let chain_id = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?
+        .chain_id;
+
+    let proof = crate::commands::state_proof::make_state_proof(
+        &client,
+        &account_signer.address,
+        ProofType::Creating,
+        None,
+    )
+    .await?;
+
+    let authorization =
+        sign_eoa_authorization(&account_signer, chain_id, &fee_payer_signer.public_key)?;
+
+    let mut transaction = build_eoa_create_transaction(
+        fee_payer_signer.public_key,
+        account_signer.public_key,
+        &authorization,
+        &proof,
+        nonce,
+        block_height.locally_executed_height,
+        chain_id,
+    );
+    let wire = crate::signing::sign_transaction_for(&mut transaction, &fee_payer_signer, |e| {
+        CliError::TransactionSubmission(format!("Failed to sign transaction: {e}"))
+    })?;
+
+    let timeout = Duration::from_secs(config.timeout_seconds);
+    let details = client
+        .execute_transaction(&wire, timeout)
+        .await
+        .map_err(CliError::from)?;
+    let failed = details.execution_result != 0 || details.vm_error != 0;
+    let response = serde_json::json!({
+        "account_create_eoa": {
+            "account": account,
+            "public_key": account_signer.address.as_str(),
+            "fee_payer": fee_payer_signer.address.as_str(),
+            "ledger": account_signer.is_ledger(),
+            "signature": details.signature.as_str(),
+            "status": if failed { "failed" } else { "success" },
+            // The EOA authorization reviewed on the account's Ledger, and the
+            // transaction reviewed on the fee payer's Ledger (null for
+            // local keys).
+            "ledger_preview": account_signer.ledger_preview_json(),
+            "fee_payer_ledger_preview": fee_payer_signer.ledger_preview_json(),
+        }
+    });
+    output::print_output(response, json_format);
+    if failed {
+        let (vm_error_msg, _) = vm_error_strings(details.vm_error);
+        return Err(CliError::TransactionSubmission(format!(
+            "EOA creation failed with execution result: {}{}",
+            details.execution_result as i64, vm_error_msg
+        )));
+    }
+    if !json_format {
+        output::print_success(&format!(
+            "EOA {} created. Signature: {}",
+            account_signer.address,
+            details.signature.as_str()
+        ));
+    }
+    Ok(())
+}
+
 /// Create an RPC client from configuration
 fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
     let rpc_url = config.get_grpc_url()?;
@@ -1356,5 +1592,166 @@ mod tests {
         let config = Config::default();
         let client = create_rpc_client(&config);
         assert!(client.is_ok());
+    }
+
+    /// The EOA creation transaction built for a Ledger account: the device
+    /// signs the 82-byte authorization (SIGN_EOA_AUTH), a local fee payer
+    /// signs the transaction, and the layout matches tn_eoa_create_account_args_t.
+    #[test]
+    fn eoa_create_with_ledger_authorization() {
+        use std::sync::Arc;
+        use thru_base::signer::Signer;
+        use thru_ledger::DerivationPath;
+        use thru_ledger::mock::{Review, SoftDevice};
+
+        let dev = Arc::new(SoftDevice::abandon());
+        let ledger =
+            crate::signing::connect_ledger_with(dev.clone(), DerivationPath::new(0).unwrap(), None)
+                .unwrap();
+        let fee_payer = crate::crypto::keypair_from_hex(&"11".repeat(32)).unwrap();
+        let proof = vec![0xABu8; 40];
+        let auth = sign_eoa_auth_with(
+            &ledger,
+            EoaAuthKind::Create,
+            1,
+            &fee_payer.public_key,
+            &ledger.public_key(),
+        )
+        .unwrap();
+        assert!(matches!(
+            dev.reviews().last(),
+            Some(Review::EoaAuth {
+                kind: 0,
+                chain_id: 1,
+                ..
+            })
+        ));
+
+        let ix = build_eoa_create_instruction(2, &auth, &proof);
+        assert_eq!(ix.len(), 78 + proof.len());
+        assert_eq!(&ix[0..4], &0u32.to_le_bytes());
+        assert_eq!(&ix[4..12], &(proof.len() as u64).to_le_bytes());
+        assert_eq!(&ix[12..14], &2u16.to_le_bytes());
+        assert_eq!(&ix[14..78], &auth);
+
+        let mut tx = build_eoa_create_transaction(
+            fee_payer.public_key,
+            ledger.public_key(),
+            &auth,
+            &proof,
+            7,
+            100,
+            1,
+        );
+        crate::signing::sign_transaction(&mut tx, &fee_payer).unwrap();
+        assert!(tx.verify());
+        assert_eq!(tx.rw_accs.as_deref(), Some(&[ledger.public_key()][..]));
+    }
+
+    #[test]
+    fn eoa_creation_with_two_paths_on_one_ledger() {
+        use std::sync::Arc;
+        use thru_ledger::DerivationPath;
+        use thru_ledger::mock::{Review, SoftDevice};
+
+        let device = Arc::new(SoftDevice::abandon());
+        let account_path = DerivationPath::new(0).unwrap();
+        let fee_path = DerivationPath::new(1).unwrap();
+        let ledger =
+            crate::signing::connect_ledger_with(device.clone(), account_path, None).unwrap();
+        let account = ResolvedSigner::from_ledger("account", account_path, ledger);
+        let fee_entry = |public_key: String| crate::keys::KeyEntry {
+            public_key,
+            source: crate::keys::KeySource::Ledger { path: fee_path },
+        };
+        let mut config = Config::default();
+
+        // A key registered from a different device or passphrase is still rejected.
+        config
+            .keys
+            .insert_entry("fee", fee_entry(account.address.to_string()), false)
+            .unwrap();
+        let error = resolve_signer_reusing_ledger(&config, "fee", account.ledger.as_deref())
+            .err()
+            .expect("wrong registered key must fail");
+        assert!(matches!(error, CliError::Ledger { ref code, .. } if code == "key_mismatch"));
+        config
+            .keys
+            .insert_entry(
+                "fee",
+                fee_entry(crate::signing::address_string(&device.pubkey(&fee_path))),
+                true,
+            )
+            .unwrap();
+
+        let fee = resolve_signer_reusing_ledger(&config, "fee", account.ledger.as_deref()).unwrap();
+        assert_ne!(account.public_key, fee.public_key);
+        let authorization = sign_eoa_authorization(&account, 1, &fee.public_key).unwrap();
+        let mut transaction = build_eoa_create_transaction(
+            fee.public_key,
+            account.public_key,
+            &authorization,
+            &[0xAB; 40],
+            7,
+            100,
+            1,
+        );
+        crate::signing::sign_transaction_for(&mut transaction, &fee, |e| {
+            CliError::TransactionSubmission(e.to_string())
+        })
+        .unwrap();
+        assert!(transaction.verify());
+        assert!(matches!(
+            device.reviews().as_slice(),
+            [Review::EoaAuth { .. }, Review::Transaction { .. }]
+        ));
+        assert!(matches!(
+            account.ledger_preview(),
+            Some(thru_ledger::Preview::EoaAuth(_))
+        ));
+        assert!(matches!(
+            fee.ledger_preview(),
+            Some(thru_ledger::Preview::Transaction(_))
+        ));
+    }
+
+    #[test]
+    fn eoa_authorization_preserves_ledger_rejection() {
+        use std::sync::Arc;
+        use thru_ledger::DerivationPath;
+        use thru_ledger::mock::SoftDevice;
+
+        let device = Arc::new(SoftDevice::abandon());
+        let path = DerivationPath::new(0).unwrap();
+        let ledger = crate::signing::connect_ledger_with(device.clone(), path, None).unwrap();
+        let account = ResolvedSigner::from_ledger("account", path, ledger);
+        device.set_approver(|_| false);
+        let error = sign_eoa_authorization(&account, 1, &[42; 32]).unwrap_err();
+        assert!(matches!(
+            error,
+            CliError::Ledger { ref code, status_word: Some(0x6985), .. } if code == "user_rejected"
+        ));
+    }
+
+    #[test]
+    fn eoa_authorization_with_local_account() {
+        let (_directory, keys) = crate::keys::KeyManager::test_fixture(&[("default", [1; 32])]);
+        let config = Config {
+            keys,
+            ..Config::default()
+        };
+        let account = resolve_signer(&config, "default").unwrap();
+        let fee_payer = [42; 32];
+        let signature = sign_eoa_authorization(&account, 1, &fee_payer).unwrap();
+        let message = thru_base::signer::build_eoa_auth_message(
+            EoaAuthKind::Create,
+            1,
+            &fee_payer,
+            &account.public_key,
+        );
+        assert!(
+            thru_base::tn_signature::verify_message(&message, &signature, &account.public_key)
+                .is_ok()
+        );
     }
 }

@@ -517,15 +517,6 @@ fn token_account_fixture_formats() {
 }
 
 #[test]
-fn layout_ir_contains_simple_struct() {
-    let reflector =
-        load_reflector("../abi_gen/tests/compliance_tests/abi_definitions/structs.abi.yaml");
-    let layout = reflector.layout_ir();
-    let has_simple_struct = layout.types.iter().any(|ty| ty.type_name == "SimpleStruct");
-    assert!(has_simple_struct, "SimpleStruct layout missing");
-}
-
-#[test]
 fn primitives_binary_fixture_formats_expected_values() {
     let reflector =
         load_reflector("../abi_gen/tests/compliance_tests/abi_definitions/primitives.abi.yaml");

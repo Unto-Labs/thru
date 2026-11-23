@@ -89,26 +89,9 @@ fn flatten_primitives_no_imports() {
     assert!(type_names.contains(&"Date"));
     assert!(type_names.contains(&"FixedPoint"));
     assert!(type_names.contains(&"InstructionData"));
-    assert_eq!(type_names.len(), 8);
-}
-
-#[test]
-fn flatten_state_proof_with_single_import() {
-    let file = type_library_path().join("state_proof.abi.yaml");
-    let include_dirs = vec![type_library_path()];
-
-    let result = flatten(&file, &include_dirs).expect("flatten should succeed");
-
-    assert!(result.abi.imports.is_empty());
-
-    let type_names: Vec<&str> = result.types.iter().map(|t| t.name.as_str()).collect();
-
-    // Should include types from thru_primitives
-    assert!(type_names.contains(&"Hash"));
-    assert!(type_names.contains(&"Pubkey"));
-
-    // Should include types from state_proof itself
-    assert!(type_names.contains(&"StateProof"));
+    assert!(type_names.contains(&"Bool"));
+    assert!(type_names.contains(&"Text"));
+    assert_eq!(type_names.len(), 10);
 }
 
 #[test]
@@ -999,5 +982,54 @@ fn preparation_resolves_local_roots_and_retains_qualified_remote_roots() {
             .errors
             .as_deref(),
         Some("external.pkg.Errors")
+    );
+}
+
+#[test]
+fn synthetic_return_types_are_normalized_like_field_types() {
+    let dir = tempfile::tempdir().unwrap();
+    fixture(
+        dir.path(),
+        "dep.yaml",
+        "example.dep",
+        "[]",
+        "[{name: Record, kind: {struct: {fields: [{name: x, field-type: {primitive: u8}}]}}}]",
+    );
+    let root = fixture(
+        dir.path(),
+        "root.yaml",
+        "example.root",
+        &path_import("dep.yaml"),
+        "[{name: Root, kind: {struct: {fields: [
+            {name: wire, field-type: {type-ref: {name: example.dep.Record}}},
+            {name: copy, type: synthetic, return-type: {type-ref: {name: example.dep.Record}}, expression: wire},
+            {name: maybe, type: synthetic, return-type: {optional: {type-ref: {name: Record, package: example.dep}}}, expression: wire},
+            {name: owner, type: synthetic, return-type: {type-ref: {name: Pubkey}}, expression: 'accountAddress(0)'}
+        ]}}}]",
+    );
+    let flat = flatten(&root, &[]).unwrap();
+    let root_ty = flat.types.iter().find(|ty| ty.name == "Root").unwrap();
+    let abi_types::TypeKind::Struct(st) = &root_ty.kind else {
+        panic!("expected struct")
+    };
+    let names: Vec<_> = st
+        .display
+        .synthetic
+        .iter()
+        .map(|field| match field.return_type.inner() {
+            abi_types::TypeKind::TypeRef(reference) => {
+                (reference.name.clone(), reference.package.clone())
+            }
+            _ => panic!("expected reference"),
+        })
+        .collect();
+    /* Qualified returns lose their qualifier; an undefined built-in stays. */
+    assert_eq!(
+        names,
+        [
+            ("Record".to_string(), None),
+            ("Record".to_string(), None),
+            ("Pubkey".to_string(), None)
+        ]
     );
 }

@@ -17,7 +17,7 @@
 //!     .build()?;
 //!
 //! let height = client.get_block_height().await?;
-//! println!("Current height: {}", height.finalized_height);
+//! println!("Current height: {}", height.locally_executed_height);
 //! # Ok(())
 //! # }
 //! ```
@@ -1006,6 +1006,9 @@ impl Client {
                 seconds: timeout.as_secs() as i64,
                 nanos: timeout.subsec_nanos() as i32,
             }),
+            /* Unset: the server closes at the first execution result, which
+            carries its own consensus level (usually INCLUDED). */
+            min_consensus: None,
         };
 
         let mut grpc_request = Request::new(request);
@@ -1021,13 +1024,10 @@ impl Client {
 
             match next {
                 Ok(Ok(Some(message))) => {
-                    if let Some(execution) = &message.execution_result {
-                        if execution.execution_result != 0 || execution.vm_error != 0 {
-                            return Ok(message);
-                        }
-                    }
-
-                    if is_confirmed(message.consensus_status) {
+                    /* Complete on any execution result, success or failure. The
+                    result's level (usually INCLUDED) says nothing about whether
+                    it is final; a status without a result is not completion. */
+                    if message.execution_result.is_some() {
                         return Ok(message);
                     }
                 }
@@ -1773,15 +1773,6 @@ pub fn slot_seq_version_context(slot: u64, seq: u64) -> commonv1::VersionContext
     }
 }
 
-fn is_confirmed(consensus_status: i32) -> bool {
-    match commonv1::ConsensusStatus::try_from(consensus_status) {
-        Ok(commonv1::ConsensusStatus::LocallyExecuted)
-        | Ok(commonv1::ConsensusStatus::ClusterExecuted)
-        | Ok(commonv1::ConsensusStatus::Finalized) => true,
-        _ => false,
-    }
-}
-
 fn is_track_transaction_timeout(err: &ClientError) -> bool {
     match err {
         ClientError::Rpc(msg) => msg.contains("track transaction timeout"),
@@ -2033,8 +2024,8 @@ fn confirmation_from_transaction(tx: &corev1::Transaction) -> Option<Confirmatio
     a slot and signature but no execution result yet; those must NOT be
     collapsed into a `(vm_error, execution_result) == (0, 0)` success, which
     `Confirmation` documents as executed-successfully. Treat the absent result
-    like the not-yet-includable case above and keep reading — the executed
-    copy (consensus CLUSTER_EXECUTED) carries the real outcome. */
+    like the not-yet-includable case above and keep reading — the copy that
+    carries an execution result (at any level) holds the real outcome. */
     let result = tx.execution_result.as_ref()?;
     let (vm_error, execution_result) = (result.vm_error, result.execution_result);
     Some(Confirmation {
@@ -2168,6 +2159,9 @@ pub struct Account {
     pub is_ephemeral: bool,
     pub is_deleted: bool,
     pub is_privileged: bool,
+    pub is_uncompressable: bool,
+    /// Raw native-receipt opt-in bit; EOAs can receive without it.
+    pub is_native_receiver: bool,
     pub slot: Option<u64>,
     pub block_timestamp: Option<std::time::SystemTime>,
     /// Per-account sequence number of the version resolved by the query's
@@ -2202,6 +2196,14 @@ impl Account {
             .flags
             .as_ref()
             .map_or(false, |flags| flags.is_privileged);
+        let is_uncompressable = meta
+            .flags
+            .as_ref()
+            .map_or(false, |flags| flags.is_uncompressable);
+        let is_native_receiver = meta
+            .flags
+            .as_ref()
+            .map_or(false, |flags| flags.is_native_receiver);
         let flags = meta.flags.as_ref().map_or(0, |f| {
             u8::from(f.is_program)
                 | (u8::from(f.is_privileged) << 1)
@@ -2245,6 +2247,8 @@ impl Account {
             is_ephemeral,
             is_deleted,
             is_privileged,
+            is_uncompressable,
+            is_native_receiver,
             slot,
             block_timestamp,
             version_seq,
@@ -2584,7 +2588,7 @@ mod tests {
         assert!(confirmation_from_transaction(&tx).is_none());
     }
 
-    /// The executed copy (consensus CLUSTER_EXECUTED) carries the real result and
+    /// The executed copy (carrying an execution result) carries the real result and
     /// converts to a `Confirmation` reflecting that outcome.
     #[test]
     fn confirmation_present_execution_result_converts() {
@@ -2918,7 +2922,10 @@ mod tests {
                 is_compressed: bits & 64 != 0,
                 is_native_receiver: bits & 128 != 0,
             });
-            assert_eq!(Account::from_proto(proto).unwrap().flags, bits);
+            let account = Account::from_proto(proto).unwrap();
+            assert_eq!(account.flags, bits);
+            assert_eq!(account.is_uncompressable, bits & 4 != 0);
+            assert_eq!(account.is_native_receiver, bits & 128 != 0);
         }
     }
 }

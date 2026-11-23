@@ -66,8 +66,18 @@ message SendAndTrackTxnRequest {
   bytes transaction = 1 [(google.api.field_behavior) = REQUIRED];
 
   // Optional timeout for tracking the transaction execution.
-  // If not specified, the stream will remain open until the transaction is executed or the client cancels.
+  // If not specified, the stream will remain open until the transaction reaches
+  // the requested min_consensus (by default, until it is executed) or the client cancels.
   google.protobuf.Duration timeout = 2;
+
+  // Level at which tracking closes. Absent, UNSPECIFIED, OBSERVED and
+  // INCLUDED close at the first execution result (the default). FINALIZED and
+  // LOCALLY_EXECUTED close at the first message that carries a result and a
+  // level of at least this minimum. CLUSTER_EXECUTED and values outside the
+  // enum fail with INVALID_ARGUMENT before submission. FAILED_PRECONDITION is
+  // returned when the connected node does not report finality.
+  optional thru.common.v1.ConsensusStatus min_consensus = 3
+      [(google.api.field_behavior) = OPTIONAL];
 }
 
 // SendAndTrackTxnResponse streams transaction status updates.
@@ -78,7 +88,7 @@ message SendAndTrackTxnResponse {
   // Transaction signature (populated for tracking messages).
   thru.common.v1.Signature signature = 2;
 
-  // Consensus status (populated for tracking messages).
+  // Consensus level of this message (populated for tracking messages).
   thru.common.v1.ConsensusStatus consensus_status = 3;
 
   // Execution result (populated for tracking messages when execution completes).
@@ -110,7 +120,10 @@ service CommandService {
 
   // Submit a transaction and track its execution status.
   // Returns a stream of status updates starting with RECEIVED, then ACCEPTED,
-  // followed by consensus and execution updates, closing after the transaction is executed.
+  // followed by consensus and execution updates. The stream closes at the first
+  // message that carries an execution result and a consensus level of at least
+  // min_consensus (absent, UNSPECIFIED, OBSERVED or INCLUDED: the first
+  // execution result).
   rpc SendAndTrackTxn(SendAndTrackTxnRequest)
       returns (stream SendAndTrackTxnResponse) {
     option (google.api.http) = {

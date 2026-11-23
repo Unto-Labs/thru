@@ -12,7 +12,9 @@ pub mod limits;
 pub mod nested_instruction_data;
 pub mod params;
 pub mod parser;
+pub mod program_error;
 pub mod reflect;
+pub mod synthetic;
 pub mod types;
 pub mod value;
 pub mod well_known;
@@ -20,8 +22,8 @@ pub mod well_known;
 pub use abi_gen::abi::file::RootTypes;
 pub use errors::{ReflectError, ReflectResult};
 pub use formatter::{
-    format_reflection, format_reflection_with_options, ByteRange, FormatOptions,
-    FormattedReflection,
+    format_reflection, format_reflection_with_options, ByteRange, DisplayCard, DisplayRow,
+    FormatOptions, FormattedReflection,
 };
 pub use ir::{IrInterpreter, IrValidationResult, ParamMap};
 pub use nested_instruction_data::{
@@ -29,6 +31,7 @@ pub use nested_instruction_data::{
     NestedInstructionDecodeOptions, MAX_NESTED_INSTRUCTION_DECODES, MAX_NESTED_INSTRUCTION_DEPTH,
 };
 pub use parser::Parser;
+pub use program_error::{error_variants, reflect_error, validate_errors_root, ReflectedError};
 pub use reflect::{Reflector, ReflectorConfig};
 pub use types::*;
 pub use value::{ReflectedValue, Value, ValueOnly};

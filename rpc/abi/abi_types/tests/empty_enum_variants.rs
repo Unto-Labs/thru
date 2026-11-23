@@ -29,6 +29,7 @@ fn omitted_enum_payload_matches_an_explicit_empty_struct() {
     assert_eq!(
         enum_type.variants[0].variant_type,
         TypeKind::Struct(StructType {
+            display: Default::default(),
             container_attributes: ContainerAttributes::default(),
             fields: vec![],
         })

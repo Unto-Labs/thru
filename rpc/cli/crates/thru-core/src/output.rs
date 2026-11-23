@@ -232,6 +232,31 @@ fn print_account_info(data: &Value) {
             );
         }
 
+        if let Some(is_uncompressable) = account_data.get("isUncompressable") {
+            let is_uncompressable = is_uncompressable.as_bool().unwrap_or(false);
+            println!(
+                "  {}: {}",
+                "Is Uncompressable".cyan(),
+                if is_uncompressable {
+                    "Yes".green()
+                } else {
+                    "No".red()
+                }
+            );
+        }
+        if let Some(is_native_receiver) = account_data.get("isNativeReceiver") {
+            let is_native_receiver = is_native_receiver.as_bool().unwrap_or(false);
+            println!(
+                "  {}: {}",
+                "Is Native Receiver".cyan(),
+                if is_native_receiver {
+                    "Yes".green()
+                } else {
+                    "No".red()
+                }
+            );
+        }
+
         if let Some(slot) = account_data.get("slot") {
             println!("  {}: {}", "Slot".cyan(), format_value(slot));
         }
@@ -764,6 +789,9 @@ fn print_key_entry(entry: &Value) {
     }
     if let Some(reference) = entry.get("reference") {
         println!("    Key reference: {}", format_value(reference));
+    }
+    if let Some(path) = entry.get("derivation_path") {
+        println!("    Derivation path: {}", format_value(path));
     }
 }
 

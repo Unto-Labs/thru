@@ -53,7 +53,6 @@ const EDITABLE_SELECTOR = "input, textarea, select, [contenteditable]:not([conte
 export interface SheetLayout {
   /** Drawn as a centred dialog rather than a bottom sheet. */
   dialog: boolean;
-  /** The on-screen keyboard is up. */
   keyboardOpen: boolean;
 }
 
@@ -67,7 +66,6 @@ export function useSheetLayout(): SheetLayout {
   return useContext(SheetLayoutContext);
 }
 
-/** Whether a sheet with these settings is a dialog at this window width. */
 export function isSheetDialog(
   width: number,
   presentation: "sheet" | "adaptive",

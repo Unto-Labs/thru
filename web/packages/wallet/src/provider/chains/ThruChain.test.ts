@@ -85,6 +85,35 @@ describe("EmbeddedThruChain signing-session refresh", () => {
     );
   });
 
+  it("forwards the fee payer the app built against", async () => {
+    vi.stubGlobal("window", {
+      location: { origin: "https://app.example" },
+    });
+    const sendMessage = vi.fn(async () => ({
+      result: { signedTransaction: "signed" },
+    }));
+    const chain = new EmbeddedThruChain(
+      { sendMessage, show: vi.fn(), hide: vi.fn(), getNetworkGeneration: () => 0 } as never,
+      {
+        isConnected: () => true,
+        getSelectedAccount: () => ({ address: "thru_test_address" }),
+      } as never,
+    );
+
+    await chain.signTransaction({
+      programAddress: "thru_program",
+      instructionData: "AQID",
+      feePayerPublicKey: "thru_fee_payer",
+    });
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION,
+        payload: expect.objectContaining({ feePayerPublicKey: "thru_fee_payer" }),
+      }),
+    );
+  });
+
   it("renews and broadcasts a signing session while disconnected", async () => {
     vi.stubGlobal("window", {
       location: { origin: "https://app.example" },
@@ -242,5 +271,65 @@ describe("EmbeddedThruChain signing-session refresh", () => {
     expect(show).toHaveBeenCalledOnce();
     expect(hide).toHaveBeenCalledOnce();
     await expect(chain.getSigningSession("session-active")).resolves.toBeNull();
+  });
+
+  it("auto-selects an active session only when the stated fee payer is its key", async () => {
+    vi.stubGlobal("window", { location: { origin: "https://app.example" } });
+    const signingSessions = new SigningSessionDescriptorStore(
+      new MemoryStorage(),
+      "sessions",
+    );
+    await signingSessions.save({
+      id: "session-active",
+      walletAddress: "wallet-a",
+      publicKey: "session-public-key",
+      authIdx: 2,
+      expiresAt: Math.floor(Date.now() / 1000) + 600,
+      createdAt: Math.floor(Date.now() / 1000),
+    });
+    const show = vi.fn();
+    const hide = vi.fn();
+    const sendMessage = vi.fn(async () => ({
+      result: { signedTransaction: "signed" },
+    }));
+    const chain = new EmbeddedThruChain(
+      { sendMessage, show, hide, getNetworkGeneration: () => 0 } as never,
+      {
+        isConnected: () => true,
+        getSelectedAccount: () => ({ address: "wallet-a" }),
+      } as never,
+      signingSessions,
+    );
+
+    await chain.signTransaction({
+      programAddress: "program",
+      instructionData: "AQID",
+      feePayerPublicKey: "managed-fee-payer",
+    });
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        payload: expect.not.objectContaining({
+          signingSessionId: expect.anything(),
+        }),
+      }),
+    );
+    expect(show).toHaveBeenCalledOnce();
+
+    await chain.signTransaction({
+      programAddress: "program",
+      instructionData: "AQID",
+      feePayerPublicKey: "session-public-key",
+    });
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          signingSessionId: "session-active",
+        }),
+      }),
+    );
+    expect(show).toHaveBeenCalledOnce();
+    await expect(
+      chain.getSigningSession("session-active"),
+    ).resolves.not.toBeNull();
   });
 });

@@ -84,7 +84,6 @@ function ChromeToolbar({ url = 'example.com' }) {
       display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px',
     }}>
       {iconDot}
-      {/* url bar */}
       <div style={{
         flex: 1, height: 30, borderRadius: 15, background: CHROME_C.urlBg,
         display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px',

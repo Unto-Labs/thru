@@ -33,7 +33,7 @@ interface RunnerConfig {
 }
 
 const DEFAULT_RUNNER_CONFIG: RunnerConfig = {
-  baseUrl: "https://rpc.alphanet.thru.org",
+  baseUrl: "https://rpc.betanet.thru.org",
   apiKey: undefined,
   userAgent: undefined,
   block: {

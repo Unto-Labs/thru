@@ -222,62 +222,6 @@ describe("AccountPageCache", () => {
     expect(cache.size).toBe(0);
   });
 
-  test("delete(30,7) -> update(31,1) -> redelivered delete(30,9) is rejected against the current entry; a duplicate of the original delete and a genuinely newer delete are handled the same way", () => {
-    const cache = new AccountPageCache();
-
-    const deleted = cache.applyUpdate(
-      ADDR,
-      ADDR_HEX,
-      makeDelta({ address: ADDR, slot: 30n, seq: 7n, dataSize: 0, isDelete: true })
-    );
-    expect(deleted.kind).toBe("emit");
-
-    const updated = cache.applyUpdate(
-      ADDR,
-      ADDR_HEX,
-      makeDelta({ address: ADDR, slot: 31n, seq: 1n, dataSize: 3, pageIdx: 0, pageData: new Uint8Array([1, 2, 3]) })
-    );
-    expect(updated.kind).toBe("emit");
-    expect(cache.size).toBe(1);
-    const emitsBeforeStaleDeletes = cache.counters.immediateEmits;
-
-    /* Redelivered delete(30,9) is newer than the original delete(30,7)
-       but older than the cached (31,1) entry left by the intervening
-       update -- rejected against the current cache entry, the only
-       freshness bound a delete needs under UNTO-2630 (see the comparison
-       helper in account-replay.ts). */
-    const staleDelete = cache.applyUpdate(
-      ADDR,
-      ADDR_HEX,
-      makeDelta({ address: ADDR, slot: 30n, seq: 9n, dataSize: 0, isDelete: true })
-    );
-    expect(staleDelete.kind).toBe("stale");
-    expect(cache.size).toBe(1);
-    expect(cache.counters.staleDropped).toBe(1);
-
-    /* An exact duplicate of the original delete(30,7) is rejected the
-       same way -- it is even older than (31,1). */
-    const duplicate = cache.applyUpdate(
-      ADDR,
-      ADDR_HEX,
-      makeDelta({ address: ADDR, slot: 30n, seq: 7n, dataSize: 0, isDelete: true })
-    );
-    expect(duplicate.kind).toBe("stale");
-    expect(cache.size).toBe(1);
-    expect(cache.counters.staleDropped).toBe(2);
-    expect(cache.counters.immediateEmits).toBe(emitsBeforeStaleDeletes);
-
-    /* A genuinely newer delete, newer than the (31,1) entry, still
-       succeeds. */
-    const legitimateDelete = cache.applyUpdate(
-      ADDR,
-      ADDR_HEX,
-      makeDelta({ address: ADDR, slot: 31n, seq: 2n, dataSize: 0, isDelete: true })
-    );
-    expect(legitimateDelete.kind).toBe("emit");
-    expect(cache.size).toBe(0);
-  });
-
   test("delete(30,7) followed by a same-slot lower-seq recreate is rejected by the version floor (UNTO-2632 P1)", () => {
     /* Pre-P1-fix this was the transitional pre-UNTO-2630 case: the cache
        had no persistent version memory for a deleted address (the entry

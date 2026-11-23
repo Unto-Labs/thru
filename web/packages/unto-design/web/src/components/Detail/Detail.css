@@ -11,8 +11,8 @@
 }
 
 .uds-detail__label {
-  font-family: var(--font-mono);
-  font-size: var(--type-ui-4-size, 0.875rem);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
   color: var(--color-text-secondary);
 }
 
@@ -28,7 +28,7 @@
 }
 
 .uds-detail--summary .uds-detail__value {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
   font-weight: var(--fw-semibold);
 }

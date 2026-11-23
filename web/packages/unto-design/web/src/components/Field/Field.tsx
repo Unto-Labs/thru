@@ -9,7 +9,7 @@ import "./Field.css";
  *
  *   <Field.Root>
  *     <Field.Label>RPC endpoint</Field.Label>
- *     <Field.Control placeholder="https://rpc.thru.org" />
+ *     <Field.Control placeholder="https://rpc.unto.org" />
  *     <Field.Description>Used for read calls only.</Field.Description>
  *     <Field.Error />
  *   </Field.Root>

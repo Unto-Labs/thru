@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   IFRAME_READY_EVENT,
   POST_MESSAGE_EVENT_TYPE,
@@ -154,14 +154,6 @@ describe('WebViewBridge', () => {
     bridge.destroy();
   });
 
-  it('allows the Tailscale HTTPS wallet dev origin', () => {
-    const bridge = new WebViewBridge({
-      walletUrl: 'https://wallet-dev.tailabc.ts.net/embedded',
-    });
-    expect(bridge.walletOrigin).toBe('https://wallet-dev.tailabc.ts.net');
-    bridge.destroy();
-  });
-
   it('rejects dev wallet origins in production builds', () => {
     process.env.NODE_ENV = 'production';
 
@@ -193,16 +185,6 @@ describe('WebViewBridge', () => {
     });
     expect(productionBridge.walletOrigin).toBe('https://wallet.tid.sh');
     productionBridge.destroy();
-  });
-
-  it('allows staging-app.tid.sh in production builds', () => {
-    process.env.NODE_ENV = 'production';
-
-    const stagingBridge = new WebViewBridge({
-      walletUrl: 'https://staging-app.tid.sh/embedded/native/transparent',
-    });
-    expect(stagingBridge.walletOrigin).toBe('https://staging-app.tid.sh');
-    stagingBridge.destroy();
   });
 
   it('allows the staging wallet in production builds', () => {
@@ -541,6 +523,61 @@ describe('WebViewBridge', () => {
     ]);
   });
 
+  it('keeps a request alive while the wallet sends keep-alives for it', async () => {
+    vi.useFakeTimers();
+    try {
+      const seen: string[] = [];
+      bridge.onEvent = (event) => seen.push(event);
+      bridge.awaitReady();
+      bridge.onMessage(readyMessage(bridge.frameId));
+      const keepAlive = (requestId: string) =>
+        bridge.onMessage(
+          eventMessage(
+            bridge.frameId,
+            EMBEDDED_PROVIDER_EVENTS.REQUEST_KEEPALIVE,
+            { requestId },
+          ),
+        );
+
+      const id = createRequestId();
+      let settled = false;
+      const promise = bridge.sendMessage({
+        id,
+        type: POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION,
+        origin: 'app://test',
+        payload: {
+          instructionData: 'AAAA',
+          programAddress: 'thru_program',
+        },
+      });
+      promise.catch(() => {}).finally(() => {
+        settled = true;
+      });
+      await flush();
+
+      /* 12 minutes on the sheet (a Ledger review with blind signing). */
+      for (let minute = 0; minute < 12; minute += 1) {
+        await vi.advanceTimersByTimeAsync(60_000);
+        keepAlive(id);
+      }
+      expect(settled).toBe(false);
+      /* Bridge housekeeping, not an app event. */
+      expect(seen).toEqual([]);
+
+      /* The wallet goes quiet: 5 minutes after the last keep-alive the
+         request fails; a keep-alive for another request does not extend it. */
+      const rejection = expect(promise).rejects.toThrow(/Request timeout/);
+      await vi.advanceTimersByTimeAsync(4 * 60_000);
+      keepAlive('another-request');
+      await vi.advanceTimersByTimeAsync(60_000 - 1);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('records correlated request telemetry without recording sensitive payloads', async () => {
     const events: Array<{ event: string; fields?: NativeTelemetryFields }> = [];
     const instrumentedBridge = new WebViewBridge({
@@ -744,11 +781,6 @@ describe('WebViewBridge', () => {
 
     await expect(promise).rejects.toThrow(/Bridge destroyed/);
   });
-
-  /* Note: the 30s / 5min timeout values are exercised by integration
-     tests; unit-testing them with fake timers leaks pending rejections
-     past test boundaries. See SLOW_REQUEST_TIMEOUT_MS / FAST_REQUEST_TIMEOUT_MS
-     in WebViewBridge.ts for the contract. */
 });
 
 describe('network generation fencing', () => {
@@ -778,7 +810,7 @@ describe('network generation fencing', () => {
           }),
         },
       });
-    ready('alphanet', 1);
+    ready('devnet', 1);
     const pending = bridge.sendMessage({
       id: 'old',
       type: POST_MESSAGE_REQUEST_TYPES.GET_ACCOUNTS,

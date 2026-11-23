@@ -5,8 +5,10 @@
 //! any file I/O or code generation logic.
 
 pub mod expr;
+pub mod synthetic;
 pub mod types;
 
 // Re-export commonly used types at the crate root
 pub use expr::*;
+pub use synthetic::{FieldDisplay, StructDisplay, SyntheticField, SyntheticType};
 pub use types::*;

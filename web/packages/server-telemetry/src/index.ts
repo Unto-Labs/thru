@@ -59,7 +59,7 @@ export class ServiceMetrics {
         'service.version': env.K_REVISION || 'unknown',
         'deployment.environment.name': bounded(env.APPS_TELEMETRY_ENVIRONMENT, ['prod', 'staging', 'production']),
         component: bounded(env.APPS_TELEMETRY_COMPONENT, ['api', 'indexer', 'web', 'worker', 'producer', 'admin']),
-        network: bounded(env.APPS_TELEMETRY_NETWORK, ['alphanet', 'betanet', 'devnet', 'mainnet']),
+        network: bounded(env.APPS_TELEMETRY_NETWORK, ['betanet', 'devnet', 'mainnet']),
       }), readers: [this.reader],
       views: [
         { instrumentName: 'apps.*.duration', aggregation: { type: AggregationType.EXPLICIT_BUCKET_HISTOGRAM, options: { boundaries: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60] } }, aggregationCardinalityLimit: 2048 },
@@ -89,7 +89,7 @@ export class ServiceMetrics {
     if (name.startsWith('apps.indexer.')) return { stream: bounded(input.stream, this.options.streams ?? []), kind: bounded(input.kind, ['event', 'account']) };
     if (name.startsWith('apps.stream.')) return { operation: bounded(input.operation, ['sse', 'notify', 'chain', 'poll']) };
     if (name.startsWith('apps.wallet.')) return { state: bounded(input.state, ['received', 'minting', 'failed']) };
-    if (name.startsWith('apps.faucet.')) return { network: bounded(input.network, ['alphanet', 'betanet']) };
+    if (name.startsWith('apps.faucet.')) return { network: bounded(input.network, ['betanet']) };
     return {
       operation: bounded(input.operation, ['metrics_export', 'query', 'commit', 'checkpoint', 'chain_head', ...(this.options.operations ?? [])]),
       ...(name.startsWith('apps.dependency.') ? { dependency: bounded(input.dependency, ['db', 'rpc', 'stream', 'pubsub', 'auth', 'external']) } : {}),

@@ -1111,8 +1111,579 @@ const __tn_ir_AbiManagerError = {
   root: { op: "const", value: 2n }
 } as const;
 
+export class AbiManagerError_error_invalid_account_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_invalid_account_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_invalid_account_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_invalid_account_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_account_not_found_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_account_not_found_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_account_not_found_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_account_not_found_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_account_not_writable_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_account_not_writable_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_account_not_writable_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_account_not_writable_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_invalid_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_invalid_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_invalid_size_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_invalid_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_invalid_owner_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_invalid_owner_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_invalid_owner_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_invalid_owner_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_invalid_authority_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_invalid_authority_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_invalid_authority_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_invalid_authority_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_invalid_state_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_invalid_state_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_invalid_state_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_invalid_state_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_invalid_instruction_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_invalid_instruction_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_invalid_instruction_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_invalid_instruction_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_instruction_invalid_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_instruction_invalid_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_instruction_invalid_size_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_instruction_invalid_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_invalid_program_meta_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_invalid_program_meta_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_invalid_program_meta_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_invalid_program_meta_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_program_meta_account_not_found_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_program_meta_account_not_found_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_program_meta_account_not_found_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_program_meta_account_not_found_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_program_meta_invalid_owner_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_program_meta_invalid_owner_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_program_meta_invalid_owner_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_program_meta_invalid_owner_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_program_meta_invalid_authority_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_program_meta_invalid_authority_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_program_meta_invalid_authority_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_program_meta_invalid_authority_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_invalid_abi_account_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_invalid_abi_account_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_invalid_abi_account_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_invalid_abi_account_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_abi_account_invalid_account_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_abi_account_invalid_account_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_abi_account_invalid_account_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_abi_account_invalid_account_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_abi_account_account_not_writable_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_abi_account_account_not_writable_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_abi_account_account_not_writable_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_abi_account_account_not_writable_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_abi_account_account_already_exists_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_abi_account_account_already_exists_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_abi_account_account_already_exists_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_abi_account_account_already_exists_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_invalid_srcbuf_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_invalid_srcbuf_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_invalid_srcbuf_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_invalid_srcbuf_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_srcbuf_invalid_account_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_srcbuf_invalid_account_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_srcbuf_invalid_account_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_srcbuf_invalid_account_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_srcbuf_account_not_found_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_srcbuf_account_not_found_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_srcbuf_account_not_found_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_srcbuf_account_not_found_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_srcbuf_invalid_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_srcbuf_invalid_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_srcbuf_invalid_size_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_srcbuf_invalid_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_srcbuf_invalid_state_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_srcbuf_invalid_state_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_srcbuf_invalid_state_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_srcbuf_invalid_state_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_invalid_abi_meta_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_invalid_abi_meta_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_invalid_abi_meta_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_invalid_abi_meta_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_abi_meta_invalid_account_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_abi_meta_invalid_account_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_abi_meta_invalid_account_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_abi_meta_invalid_account_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_abi_meta_account_not_writable_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_abi_meta_account_not_writable_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_abi_meta_account_not_writable_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_abi_meta_account_not_writable_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_abi_meta_account_already_exists_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_abi_meta_account_already_exists_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_abi_meta_account_already_exists_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_abi_meta_account_already_exists_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_invalid_abi_meta_kind_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_invalid_abi_meta_kind_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AbiManagerError_error_invalid_abi_meta_kind_Inner.__tnCreateView requires a Uint8Array");
+    return new AbiManagerError_error_invalid_abi_meta_kind_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AbiManagerError_error_Inner {
+  private view: DataView;
+  private __tnFieldContext: Record<string, number | bigint> | null = null;
+  private constructor(private buffer: Uint8Array, private descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    this.__tnFieldContext = fieldContext ?? null;
+  }
+
+  static __tnCreate(payload: Uint8Array, descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>): AbiManagerError_error_Inner {
+    return new AbiManagerError_error_Inner(new Uint8Array(payload), descriptor, fieldContext);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AbiManagerError_error_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["code"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 1)) descriptor = { name: "invalid_account_idx", tag: 1, payloadSize: 0 };
+      if (__tnTagEquals(tag, 2)) descriptor = { name: "account_not_found", tag: 2, payloadSize: 0 };
+      if (__tnTagEquals(tag, 3)) descriptor = { name: "account_not_writable", tag: 3, payloadSize: 0 };
+      if (__tnTagEquals(tag, 4)) descriptor = { name: "invalid_size", tag: 4, payloadSize: 0 };
+      if (__tnTagEquals(tag, 5)) descriptor = { name: "invalid_owner", tag: 5, payloadSize: 0 };
+      if (__tnTagEquals(tag, 6)) descriptor = { name: "invalid_authority", tag: 6, payloadSize: 0 };
+      if (__tnTagEquals(tag, 7)) descriptor = { name: "invalid_state", tag: 7, payloadSize: 0 };
+      if (__tnTagEquals(tag, 256)) descriptor = { name: "invalid_instruction", tag: 256, payloadSize: 0 };
+      if (__tnTagEquals(tag, 260)) descriptor = { name: "instruction_invalid_size", tag: 260, payloadSize: 0 };
+      if (__tnTagEquals(tag, 512)) descriptor = { name: "invalid_program_meta", tag: 512, payloadSize: 0 };
+      if (__tnTagEquals(tag, 514)) descriptor = { name: "program_meta_account_not_found", tag: 514, payloadSize: 0 };
+      if (__tnTagEquals(tag, 517)) descriptor = { name: "program_meta_invalid_owner", tag: 517, payloadSize: 0 };
+      if (__tnTagEquals(tag, 518)) descriptor = { name: "program_meta_invalid_authority", tag: 518, payloadSize: 0 };
+      if (__tnTagEquals(tag, 768)) descriptor = { name: "invalid_abi_account", tag: 768, payloadSize: 0 };
+      if (__tnTagEquals(tag, 769)) descriptor = { name: "abi_account_invalid_account_idx", tag: 769, payloadSize: 0 };
+      if (__tnTagEquals(tag, 771)) descriptor = { name: "abi_account_account_not_writable", tag: 771, payloadSize: 0 };
+      if (__tnTagEquals(tag, 776)) descriptor = { name: "abi_account_account_already_exists", tag: 776, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1024)) descriptor = { name: "invalid_srcbuf", tag: 1024, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1025)) descriptor = { name: "srcbuf_invalid_account_idx", tag: 1025, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1026)) descriptor = { name: "srcbuf_account_not_found", tag: 1026, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1028)) descriptor = { name: "srcbuf_invalid_size", tag: 1028, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1031)) descriptor = { name: "srcbuf_invalid_state", tag: 1031, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1280)) descriptor = { name: "invalid_abi_meta", tag: 1280, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1281)) descriptor = { name: "abi_meta_invalid_account_idx", tag: 1281, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1283)) descriptor = { name: "abi_meta_account_not_writable", tag: 1283, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1288)) descriptor = { name: "abi_meta_account_already_exists", tag: 1288, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1536)) descriptor = { name: "invalid_abi_meta_kind", tag: 1536, payloadSize: 0 };
+    }
+    return new AbiManagerError_error_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
+  bytes(): Uint8Array {
+    return new Uint8Array(this.buffer);
+  }
+
+  variant(): __TnVariantDescriptor | null {
+    return this.descriptor;
+  }
+
+  asInvalidAccountIdx(): AbiManagerError_error_invalid_account_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1)) return null;
+    return AbiManagerError_error_invalid_account_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAccountNotFound(): AbiManagerError_error_account_not_found_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2)) return null;
+    return AbiManagerError_error_account_not_found_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAccountNotWritable(): AbiManagerError_error_account_not_writable_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 3)) return null;
+    return AbiManagerError_error_account_not_writable_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidSize(): AbiManagerError_error_invalid_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4)) return null;
+    return AbiManagerError_error_invalid_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidOwner(): AbiManagerError_error_invalid_owner_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 5)) return null;
+    return AbiManagerError_error_invalid_owner_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidAuthority(): AbiManagerError_error_invalid_authority_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 6)) return null;
+    return AbiManagerError_error_invalid_authority_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidState(): AbiManagerError_error_invalid_state_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 7)) return null;
+    return AbiManagerError_error_invalid_state_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidInstruction(): AbiManagerError_error_invalid_instruction_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 256)) return null;
+    return AbiManagerError_error_invalid_instruction_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInstructionInvalidSize(): AbiManagerError_error_instruction_invalid_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 260)) return null;
+    return AbiManagerError_error_instruction_invalid_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidProgramMeta(): AbiManagerError_error_invalid_program_meta_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 512)) return null;
+    return AbiManagerError_error_invalid_program_meta_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asProgramMetaAccountNotFound(): AbiManagerError_error_program_meta_account_not_found_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 514)) return null;
+    return AbiManagerError_error_program_meta_account_not_found_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asProgramMetaInvalidOwner(): AbiManagerError_error_program_meta_invalid_owner_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 517)) return null;
+    return AbiManagerError_error_program_meta_invalid_owner_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asProgramMetaInvalidAuthority(): AbiManagerError_error_program_meta_invalid_authority_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 518)) return null;
+    return AbiManagerError_error_program_meta_invalid_authority_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidAbiAccount(): AbiManagerError_error_invalid_abi_account_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 768)) return null;
+    return AbiManagerError_error_invalid_abi_account_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAbiAccountInvalidAccountIdx(): AbiManagerError_error_abi_account_invalid_account_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 769)) return null;
+    return AbiManagerError_error_abi_account_invalid_account_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAbiAccountAccountNotWritable(): AbiManagerError_error_abi_account_account_not_writable_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 771)) return null;
+    return AbiManagerError_error_abi_account_account_not_writable_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAbiAccountAccountAlreadyExists(): AbiManagerError_error_abi_account_account_already_exists_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 776)) return null;
+    return AbiManagerError_error_abi_account_account_already_exists_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidSrcbuf(): AbiManagerError_error_invalid_srcbuf_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1024)) return null;
+    return AbiManagerError_error_invalid_srcbuf_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSrcbufInvalidAccountIdx(): AbiManagerError_error_srcbuf_invalid_account_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1025)) return null;
+    return AbiManagerError_error_srcbuf_invalid_account_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSrcbufAccountNotFound(): AbiManagerError_error_srcbuf_account_not_found_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1026)) return null;
+    return AbiManagerError_error_srcbuf_account_not_found_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSrcbufInvalidSize(): AbiManagerError_error_srcbuf_invalid_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1028)) return null;
+    return AbiManagerError_error_srcbuf_invalid_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSrcbufInvalidState(): AbiManagerError_error_srcbuf_invalid_state_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1031)) return null;
+    return AbiManagerError_error_srcbuf_invalid_state_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidAbiMeta(): AbiManagerError_error_invalid_abi_meta_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1280)) return null;
+    return AbiManagerError_error_invalid_abi_meta_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAbiMetaInvalidAccountIdx(): AbiManagerError_error_abi_meta_invalid_account_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1281)) return null;
+    return AbiManagerError_error_abi_meta_invalid_account_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAbiMetaAccountNotWritable(): AbiManagerError_error_abi_meta_account_not_writable_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1283)) return null;
+    return AbiManagerError_error_abi_meta_account_not_writable_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAbiMetaAccountAlreadyExists(): AbiManagerError_error_abi_meta_account_already_exists_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1288)) return null;
+    return AbiManagerError_error_abi_meta_account_already_exists_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidAbiMetaKind(): AbiManagerError_error_invalid_abi_meta_kind_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1536)) return null;
+    return AbiManagerError_error_invalid_abi_meta_kind_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+}
+
 export class AbiManagerError {
   private view: DataView;
+  private static readonly __tnFieldOffset_error = 2;
 
   private constructor(private buffer: Uint8Array) {
     this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
@@ -1132,6 +1703,198 @@ export class AbiManagerError {
     return AbiManagerError.from_array(buffer);
   }
 
+  static readonly errorVariantDescriptors = Object.freeze([
+    {
+      name: "invalid_account_idx",
+      tag: 1,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::invalid_account_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "account_not_found",
+      tag: 2,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::account_not_found",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "account_not_writable",
+      tag: 3,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::account_not_writable",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_size",
+      tag: 4,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::invalid_size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_owner",
+      tag: 5,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::invalid_owner",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_authority",
+      tag: 6,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::invalid_authority",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_state",
+      tag: 7,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::invalid_state",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_instruction",
+      tag: 256,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::invalid_instruction",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "instruction_invalid_size",
+      tag: 260,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::instruction_invalid_size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_program_meta",
+      tag: 512,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::invalid_program_meta",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "program_meta_account_not_found",
+      tag: 514,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::program_meta_account_not_found",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "program_meta_invalid_owner",
+      tag: 517,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::program_meta_invalid_owner",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "program_meta_invalid_authority",
+      tag: 518,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::program_meta_invalid_authority",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_abi_account",
+      tag: 768,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::invalid_abi_account",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "abi_account_invalid_account_idx",
+      tag: 769,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::abi_account_invalid_account_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "abi_account_account_not_writable",
+      tag: 771,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::abi_account_account_not_writable",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "abi_account_account_already_exists",
+      tag: 776,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::abi_account_account_already_exists",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_srcbuf",
+      tag: 1024,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::invalid_srcbuf",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "srcbuf_invalid_account_idx",
+      tag: 1025,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::srcbuf_invalid_account_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "srcbuf_account_not_found",
+      tag: 1026,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::srcbuf_account_not_found",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "srcbuf_invalid_size",
+      tag: 1028,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::srcbuf_invalid_size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "srcbuf_invalid_state",
+      tag: 1031,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::srcbuf_invalid_state",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_abi_meta",
+      tag: 1280,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::invalid_abi_meta",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "abi_meta_invalid_account_idx",
+      tag: 1281,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::abi_meta_invalid_account_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "abi_meta_account_not_writable",
+      tag: 1283,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::abi_meta_account_not_writable",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "abi_meta_account_already_exists",
+      tag: 1288,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::abi_meta_account_already_exists",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_abi_meta_kind",
+      tag: 1536,
+      payloadSize: 0,
+      payloadType: "AbiManagerError::error::invalid_abi_meta_kind",
+      createPayloadBuilder: () => null,
+    },
+  ] as const);
+
   get_code(): number {
     const offset = 0;
     return this.view.getUint16(offset, true); /* little-endian */
@@ -1148,6 +1911,22 @@ export class AbiManagerError {
 
   set code(value: number) {
     this.set_code(value);
+  }
+
+  errorVariant(): typeof AbiManagerError.errorVariantDescriptors[number] | null {
+    const tag: number | bigint | null = this.get_code();
+    return AbiManagerError.errorVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
+  }
+
+  error(): AbiManagerError_error_Inner {
+    const descriptor = this.errorVariant();
+    if (!descriptor) throw new Error("AbiManagerError: unknown error variant");
+    const offset = AbiManagerError.__tnFieldOffset_error;
+    const remaining = this.buffer.length - offset;
+    const payloadLength = descriptor.payloadSize ?? remaining;
+    if (payloadLength < 0 || offset + payloadLength > this.buffer.length) throw new Error("AbiManagerError: payload exceeds buffer bounds");
+    const slice = this.buffer.subarray(offset, offset + payloadLength);
+    return AbiManagerError_error_Inner.__tnCreate(slice, descriptor, undefined);
   }
 
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
@@ -1181,17 +1960,49 @@ export class AbiManagerError {
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
     if (buffer.length < 2) return { ok: false, code: "tn.buffer_too_small", consumed: 2 };
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed: 2 };
   }
 
-  static new(code: number): AbiManagerError {
-    const buffer = new Uint8Array(2);
-    const view = new DataView(buffer.buffer);
-
-    let offset = 0;
-    view.setUint16(0, code, true); /* code (little-endian) */
-
-    return new AbiManagerError(buffer);
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 2 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 1n: t3 = 0; break;
+  case 2n: t3 = 0; break;
+  case 3n: t3 = 0; break;
+  case 4n: t3 = 0; break;
+  case 5n: t3 = 0; break;
+  case 6n: t3 = 0; break;
+  case 7n: t3 = 0; break;
+  case 256n: t3 = 0; break;
+  case 260n: t3 = 0; break;
+  case 512n: t3 = 0; break;
+  case 514n: t3 = 0; break;
+  case 517n: t3 = 0; break;
+  case 518n: t3 = 0; break;
+  case 768n: t3 = 0; break;
+  case 769n: t3 = 0; break;
+  case 771n: t3 = 0; break;
+  case 776n: t3 = 0; break;
+  case 1024n: t3 = 0; break;
+  case 1025n: t3 = 0; break;
+  case 1026n: t3 = 0; break;
+  case 1028n: t3 = 0; break;
+  case 1031n: t3 = 0; break;
+  case 1280n: t3 = 0; break;
+  case 1281n: t3 = 0; break;
+  case 1283n: t3 = 0; break;
+  case 1288n: t3 = 0; break;
+  case 1536n: t3 = 0; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array): AbiManagerError | null {
@@ -1209,34 +2020,245 @@ export class AbiManagerError {
 }
 
 export class AbiManagerErrorBuilder {
-  private buffer: Uint8Array;
-  private view: DataView;
+  private tag: number | null = null;
+  private payload: Uint8Array | null = null;
 
-  constructor() {
-    this.buffer = new Uint8Array(2);
-    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  constructor() {}
+
+  select_invalid_account_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_account_idx expects 0 bytes");
+    this.tag = 1;
+    this.payload = new Uint8Array(bytes);
+    return this;
   }
 
-  set_code(value: number): this {
-    this.view.setUint16(0, value, true);
+  select_account_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_account_not_found expects 0 bytes");
+    this.tag = 2;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_account_not_writable(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_account_not_writable expects 0 bytes");
+    this.tag = 3;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_size expects 0 bytes");
+    this.tag = 4;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_owner(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_owner expects 0 bytes");
+    this.tag = 5;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_authority(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_authority expects 0 bytes");
+    this.tag = 6;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_state(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_state expects 0 bytes");
+    this.tag = 7;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_instruction(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_instruction expects 0 bytes");
+    this.tag = 256;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_instruction_invalid_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_instruction_invalid_size expects 0 bytes");
+    this.tag = 260;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_program_meta(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_program_meta expects 0 bytes");
+    this.tag = 512;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_program_meta_account_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_program_meta_account_not_found expects 0 bytes");
+    this.tag = 514;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_program_meta_invalid_owner(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_program_meta_invalid_owner expects 0 bytes");
+    this.tag = 517;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_program_meta_invalid_authority(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_program_meta_invalid_authority expects 0 bytes");
+    this.tag = 518;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_abi_account(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_abi_account expects 0 bytes");
+    this.tag = 768;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_abi_account_invalid_account_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_abi_account_invalid_account_idx expects 0 bytes");
+    this.tag = 769;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_abi_account_account_not_writable(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_abi_account_account_not_writable expects 0 bytes");
+    this.tag = 771;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_abi_account_account_already_exists(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_abi_account_account_already_exists expects 0 bytes");
+    this.tag = 776;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_srcbuf(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_srcbuf expects 0 bytes");
+    this.tag = 1024;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_srcbuf_invalid_account_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_srcbuf_invalid_account_idx expects 0 bytes");
+    this.tag = 1025;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_srcbuf_account_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_srcbuf_account_not_found expects 0 bytes");
+    this.tag = 1026;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_srcbuf_invalid_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_srcbuf_invalid_size expects 0 bytes");
+    this.tag = 1028;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_srcbuf_invalid_state(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_srcbuf_invalid_state expects 0 bytes");
+    this.tag = 1031;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_abi_meta(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_abi_meta expects 0 bytes");
+    this.tag = 1280;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_abi_meta_invalid_account_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_abi_meta_invalid_account_idx expects 0 bytes");
+    this.tag = 1281;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_abi_meta_account_not_writable(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_abi_meta_account_not_writable expects 0 bytes");
+    this.tag = 1283;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_abi_meta_account_already_exists(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_abi_meta_account_already_exists expects 0 bytes");
+    this.tag = 1288;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_abi_meta_kind(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_abi_meta_kind expects 0 bytes");
+    this.tag = 1536;
+    this.payload = new Uint8Array(bytes);
     return this;
   }
 
   build(): Uint8Array {
-    const buffer = this.buffer.slice();
+    if (this.tag === null || !this.payload) throw new Error("AbiManagerError builder missing variant");
+    const buffer = new Uint8Array(1 + this.payload.length);
+    buffer[0] = this.tag;
+    buffer.set(this.payload, 1);
     __tnBuilderValidateOrThrow("AbiManagerError", AbiManagerError.validate(buffer));
     return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
-    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
-    __tnBuilderValidateOrThrow("AbiManagerError", AbiManagerError.validate(this.buffer));
-    target.set(this.buffer, offset);
+    const bytes = this.build();
+    if (target.length - offset < bytes.length) throw new Error("target buffer too small");
+    target.set(bytes, offset);
     return target;
   }
 
   finish(): AbiManagerError {
-    const view = AbiManagerError.from_array(this.buffer.slice());
+    const view = AbiManagerError.from_array(this.build());
     if (!view) throw new Error("failed to build AbiManagerError");
     return view;
   }
@@ -3304,6 +4326,7 @@ export class AbiAccountBuilder {
       this.__tnFamWriter_contents = __tnCreateFamWriter(this, "contents", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("AbiAccountBuilder: contents has more than 4294967295 elements");
         this.__tnFam_contents = bytes;
         this.__tnFam_contentsCount = elementCount;
         this.set_content_sz(elementCount);
@@ -3313,7 +4336,12 @@ export class AbiAccountBuilder {
     return this.__tnFamWriter_contents!;
   }
 
+  private __tnSyncLengths(): void {
+    if (this.__tnFam_contentsCount !== null) this.set_content_sz(this.__tnFam_contentsCount);
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = AbiAccount.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -3323,6 +4351,7 @@ export class AbiAccountBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = AbiAccount.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("AbiAccountBuilder: target buffer too small");
@@ -5654,7 +6683,11 @@ export class CreateAbiExternalPermanentArgsBuilder {
     return this;
   }
 
+  private __tnSyncLengths(): void {
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = CreateAbiExternalPermanentArgs.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -5664,6 +6697,7 @@ export class CreateAbiExternalPermanentArgsBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = CreateAbiExternalPermanentArgs.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("CreateAbiExternalPermanentArgsBuilder: target buffer too small");
@@ -6296,7 +7330,11 @@ export class CreateAbiOfficialPermanentArgsBuilder {
     return this;
   }
 
+  private __tnSyncLengths(): void {
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = CreateAbiOfficialPermanentArgs.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -6306,6 +7344,7 @@ export class CreateAbiOfficialPermanentArgsBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = CreateAbiOfficialPermanentArgs.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("CreateAbiOfficialPermanentArgsBuilder: target buffer too small");
@@ -6822,7 +7861,11 @@ export class CreateMetaExternalPermanentArgsBuilder {
     return this;
   }
 
+  private __tnSyncLengths(): void {
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = CreateMetaExternalPermanentArgs.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -6832,6 +7875,7 @@ export class CreateMetaExternalPermanentArgsBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = CreateMetaExternalPermanentArgs.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("CreateMetaExternalPermanentArgsBuilder: target buffer too small");
@@ -7313,7 +8357,11 @@ export class CreateMetaOfficialPermanentArgsBuilder {
     return this;
   }
 
+  private __tnSyncLengths(): void {
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = CreateMetaOfficialPermanentArgs.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -7323,6 +8371,7 @@ export class CreateMetaOfficialPermanentArgsBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = CreateMetaOfficialPermanentArgs.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("CreateMetaOfficialPermanentArgsBuilder: target buffer too small");
@@ -7798,7 +8847,11 @@ export class GovernedAbiCreatePermanentArgsBuilder {
     return this;
   }
 
+  private __tnSyncLengths(): void {
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = GovernedAbiCreatePermanentArgs.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -7808,6 +8861,7 @@ export class GovernedAbiCreatePermanentArgsBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = GovernedAbiCreatePermanentArgs.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("GovernedAbiCreatePermanentArgsBuilder: target buffer too small");

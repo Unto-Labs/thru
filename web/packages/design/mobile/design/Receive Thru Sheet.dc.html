@@ -47,7 +47,7 @@ a:hover{text-decoration:underline;text-underline-offset:3px;}
   <div style="height:{{ bottomPad }};flex:none"></div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:620},&quot;ticker&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;COOL&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;network&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Alphanet&quot;,&quot;options&quot;:[&quot;Alphanet&quot;,&quot;Betanet&quot;],&quot;tsType&quot;:&quot;'Alphanet' | 'Betanet'&quot;},&quot;copied&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;layout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;sheet&quot;,&quot;options&quot;:[&quot;sheet&quot;,&quot;dialog&quot;],&quot;tsType&quot;:&quot;'sheet' | 'dialog'&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:620},&quot;ticker&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;COOL&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;network&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Betanet&quot;,&quot;options&quot;:[&quot;Betanet&quot;],&quot;tsType&quot;:&quot;'Betanet'&quot;},&quot;copied&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;layout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;sheet&quot;,&quot;options&quot;:[&quot;sheet&quot;,&quot;dialog&quot;],&quot;tsType&quot;:&quot;'sheet' | 'dialog'&quot;}}">
 const ADDRESS = 'ta1kqVmN4pQ7rT1vW9xZ3bC6eF0hJ5kL2nP8qR4tV7sD9fq2';
 function qrGrid(seed) {
   const n = 15, out = []; let s = seed;
@@ -67,7 +67,7 @@ class Component extends DCLogic {
   componentWillUnmount() { clearTimeout(this.t); }
   renderVals() {
     const p = this.props;
-    const ticker = p.ticker ?? 'COOL', network = p.network ?? 'Alphanet';
+    const ticker = p.ticker ?? 'COOL', network = p.network ?? 'Betanet';
     const dialog = (p.layout ?? 'sheet') === 'dialog';
     const copied = this.state.copied ?? !!p.copied;
     return {

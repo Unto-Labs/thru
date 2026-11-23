@@ -22,17 +22,28 @@ types:
     kind:
       struct:
         packed: true
+        display-name: Create account
         fields:
           - name: proof_size
+            user-display: false
             field-type: { primitive: u64 }
           - name: eoa_account_idx
+            user-display: false
             field-type: { primitive: u16 }
+          - name: eoa_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(eoa_account_idx)'
+            display-name: Account
+            user-display: true
           - name: signature
+            user-display: false
             field-type:
               type-ref:
                 name: Signature
                 package: "thru.common.primitives"
           - name: proof
+            user-display: false
             field-type:
               array:
                 size: { field-ref: { path: [proof_size] } }
@@ -41,21 +52,58 @@ types:
     kind:
       struct:
         packed: true
+        display-name: Transfer native balance
         fields:
+          - name: from_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(from_account_idx)'
+            display-name: Source account
+            user-display: true
+          - name: to_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(to_account_idx)'
+            display-name: Destination account
+            user-display: true
           - name: amount
+            display-name: Amount (base units)
             field-type: { primitive: u64 }
+          - name: amount_thru
+            display-name: Amount
+            user-display: true
+            type: synthetic
+            return-type: { type-ref: { name: Decimal } }
+            expression: 'toDecimal(amount, 9)'
+          - name: summary
+            display-name: Summary
+            user-display: true
+            type: synthetic
+            return-type: { type-ref: { name: Text } }
+            expression: '`Send ${amount_thru} THRU to ${to_account}`'
           - name: from_account_idx
+            user-display: false
             field-type: { primitive: u16 }
           - name: to_account_idx
+            user-display: false
             field-type: { primitive: u16 }
   - name: DeleteAccountArgs
     kind:
       struct:
         packed: true
+        display-name: Delete account
         fields:
           - name: eoa_account_idx
+            user-display: false
             field-type: { primitive: u16 }
+          - name: eoa_account
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(eoa_account_idx)'
+            display-name: Account
+            user-display: true
           - name: signature
+            user-display: false
             field-type:
               type-ref:
                 name: Signature
@@ -66,6 +114,7 @@ types:
         packed: true
         fields:
           - name: tag
+            user-display: false
             field-type: { primitive: u32 }
           - name: payload
             field-type:
@@ -93,3 +142,23 @@ types:
         fields:
           - name: code
             field-type: { primitive: u64 }
+          - name: error
+            field-type:
+              enum:
+                tag-ref: { field-ref: { path: [code] } }
+                variants:
+                  - name: invalid_instruction_data_size
+                    tag-value: 1
+                    comment: Instruction data is too short or the wrong size for this instruction.
+                  - name: invalid_instruction
+                    tag-value: 2
+                    comment: Instruction is not a known EOA instruction.
+                  - name: invalid_account_idx
+                    tag-value: 3
+                    comment: An account index in the instruction is outside the account list of the transaction.
+                  - name: unauthorized_operation
+                    tag-value: 4
+                    comment: The sending account did not authorize this transfer.
+                  - name: account_create_failed
+                    tag-value: 5
+                    comment: The account could not be created.

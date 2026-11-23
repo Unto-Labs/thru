@@ -17,8 +17,10 @@ pub mod crypto;
 pub mod error;
 pub mod feature_gate_account;
 pub mod feature_gate_registry;
+pub mod hd;
 pub mod keys;
 pub mod output;
+pub mod signing;
 pub mod utils;
 pub mod version_check;
 
@@ -204,9 +206,10 @@ pub async fn run() -> anyhow::Result<()> {
             dst,
             value,
             build_only,
+            fee,
         } => {
             commands::transfer::handle_transfer_command(
-                &config, &src, &dst, value, build_only, cli.json,
+                &config, &src, &dst, value, fee, build_only, cli.json,
             )
             .await
         }
@@ -258,6 +261,9 @@ pub async fn run() -> anyhow::Result<()> {
         }
         Commands::Keys { subcommand } => {
             commands::keys::handle_keys_command(&config, subcommand, cli.json).await
+        }
+        Commands::Message { subcommand } => {
+            commands::message::handle_message_command(&config, subcommand, cli.json).await
         }
         Commands::Account { subcommand } => {
             commands::account::handle_account_command(&config, subcommand, cli.json).await
@@ -561,6 +567,20 @@ pub fn format_error_json(err: &CliError) -> Value {
             "error": {
                 "type": "meta_account_closed",
                 "message": message,
+            }
+        }),
+        CliError::Ledger {
+            code,
+            message,
+            status_word,
+            reason,
+        } => json!({
+            "error": {
+                "type": "ledger",
+                "code": code,
+                "message": message,
+                "status_word": status_word.map(|sw| format!("0x{sw:04X}")),
+                "reason": reason,
             }
         }),
         CliError::Generic { message } => json!({

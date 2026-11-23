@@ -36,6 +36,13 @@ pub trait WellKnownType: Send + Sync {
     /* Process the value and return enrichment or replacement */
     fn process(&self, ctx: &WellKnownContext) -> WellKnownResult;
 
+    /* How people read this type in one line: a display kind (address, time,
+     * decimal, ...) and the enrichment key that holds its text. None leaves
+     * the value to the generic view. */
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        None
+    }
+
     /* Category for grouping (e.g., "thru", "google", "system") */
     fn category(&self) -> &'static str {
         "thru"

@@ -132,9 +132,9 @@ export * from './abi/thru/program/perp/types';
    unrealized PnL of a cross seat counts toward initial margin less the
    market's cross_upnl_haircut_bps.  A transaction that needs a cross seat's
    account carries a margin record naming every link
-   (createPerpMarginRecordInstruction).  The demo deployment on
-   Alphanet is not a bootstrap program: it is managed by the deployer's key
-   under PERP_PROGRAM_SEED. */
+   (createPerpMarginRecordInstruction).  The perps deployment is not a
+   bootstrap program: it is managed by the deployer's key under
+   PERP_PROGRAM_SEED. */
 
 export const PERP_PROGRAM_SEED = 'perps-demo';
 export const PERP_PROGRAM_ADDRESSES = deriveManagedProgramAddresses(PERP_PROGRAM_SEED);

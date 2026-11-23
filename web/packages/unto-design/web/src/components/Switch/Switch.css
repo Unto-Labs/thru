@@ -5,7 +5,7 @@
   align-items: center;
   gap: var(--space-2);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--text-ui);
   color: var(--color-text-primary);
   cursor: pointer;
   user-select: none;
@@ -18,20 +18,20 @@
   width: 40px;
   height: 22px;
   flex: none;
-  background: var(--color-border-secondary);
+  background: var(--color-border-strong);
   border: none;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-box);
   padding: 0;
   cursor: pointer;
   transition: background var(--duration-fast) var(--ease-standard);
 }
 
 .uds-switch[data-checked] {
-  background: var(--brick-400);
+  background: var(--color-surface-accent);
 }
 
 .uds-switch:focus-visible {
-  outline: 2px solid var(--brick-400);
+  outline: 2px solid var(--color-border-brand);
   outline-offset: 2px;
 }
 
@@ -44,8 +44,8 @@
   display: block;
   width: 18px;
   height: 18px;
-  background: var(--color-surface-higher);
-  border-radius: var(--radius-pill);
+  background: #ffffff;
+  border-radius: var(--radius-box);
   box-shadow: var(--shadow-sm);
   transform: translateX(2px);
   transition: transform var(--duration-fast) var(--ease-standard);

@@ -6,14 +6,15 @@
   display: inline-grid;
   place-items: center;
   flex: none;
-  width: 36.75px;
-  height: 36.75px;
+  box-sizing: border-box;
+  width: var(--control-md);
+  height: var(--control-md);
   padding: 0;
   margin: 0;
   color: var(--color-text-secondary);
   background: var(--color-surface-higher);
   border: 1px solid var(--color-border-secondary);
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
   cursor: pointer;
   transition:
     background-color var(--duration-fast) var(--ease-standard),
@@ -58,50 +59,8 @@
   }
 }
 
-/* `gif-mask` reveals the new theme through the wing GIF mask via the View
-   Transition API; `retokenize` is the no-VT fallback. Surfaces extend the
-   retokenize selector list below with their own app-local classes. */
-html[data-theme-transition="gif-mask"]::view-transition-old(root),
-html[data-theme-transition="gif-mask"]::view-transition-new(root) {
-  animation-duration: 1180ms;
-  animation-fill-mode: both;
-  animation-timing-function: var(--ease-standard);
-  mix-blend-mode: normal;
-  pointer-events: none;
-}
-
-html[data-theme-transition="gif-mask"]::view-transition,
-html[data-theme-transition="gif-mask"]::view-transition-group(root),
-html[data-theme-transition="gif-mask"]::view-transition-image-pair(root) {
-  pointer-events: none;
-}
-
-html[data-theme-transition="gif-mask"]::view-transition-old(root) {
-  animation-name: tn-theme-mask-hold;
-  z-index: 0;
-}
-
-html[data-theme-transition="gif-mask"]::view-transition-new(root) {
-  animation-name: tn-theme-mask-hold;
-  mask-image: var(--theme-transition-mask-image);
-  mask-mode: alpha;
-  mask-repeat: no-repeat;
-  mask-position: center center;
-  mask-size: max(120vw, 120vh);
-  -webkit-mask-image: var(--theme-transition-mask-image);
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-position: center center;
-  -webkit-mask-size: max(120vw, 120vh);
-  z-index: 1;
-}
-
-@keyframes tn-theme-mask-hold {
-  from,
-  to {
-    opacity: 1;
-  }
-}
-
+/* `retokenize` re-paints the theme in stages. Surfaces extend the selector
+   list below with their own app-local classes. */
 html[data-theme-transition="retokenize"] body,
 html[data-theme-transition="retokenize"] .uds-navbar,
 html[data-theme-transition="retokenize"] .uds-navbar__tag,

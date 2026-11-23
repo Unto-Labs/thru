@@ -294,11 +294,8 @@ async function main(): Promise<void> {
                     if (update.signature?.value) {
                         submittedSignature = Signature.from(update.signature.value).toThruFmt();
                     }
-                    if (
-                        update.executionResult ||
-                        update.consensusStatus === ConsensusStatus.FINALIZED ||
-                        update.consensusStatus === ConsensusStatus.CLUSTER_EXECUTED
-                    ) {
+                    // Stop on an execution result; a consensus status alone does not mean it executed.
+                    if (update.executionResult) {
                         finalized = true;
                         break;
                     }

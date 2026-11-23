@@ -8,6 +8,7 @@ use thru_base::txn_tools::TransactionBuilder;
 use crate::config::Config;
 use crate::error::CliError;
 use crate::output;
+use crate::signing::resolve_signer;
 use crate::utils::format_vm_error;
 use thru_client::{Client, ClientBuilder};
 
@@ -17,6 +18,7 @@ pub async fn handle_transfer_command(
     src: &str,
     dst: &str,
     value: u64,
+    transfer_fee: u64,
     build_only: bool,
     json_format: bool,
 ) -> Result<(), CliError> {
@@ -27,18 +29,18 @@ pub async fn handle_transfer_command(
         ));
     }
 
-    // Load the signing source without falling back on explicit-source errors.
-    let src_keypair = config.keys.load_key(src)?;
-
     // Resolve destination public key
     let dst_pubkey = resolve_destination_key(config, dst)?;
+
+    // Resolve the signer last: for a Ledger this connects to the device.
+    let src_signer = resolve_signer(config, src)?;
 
     // Create RPC client
     let client = create_rpc_client(config)?;
 
     // Get current nonce and balance for the source account
     let src_account_info = client
-        .get_account_info(&src_keypair.address_string, None, None)
+        .get_account_info(&src_signer.address, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get source account info: {}", e))
@@ -54,8 +56,11 @@ pub async fn handle_transfer_command(
     };
 
     // Balance check
-    let transfer_fee: u64 = 1; // note currently fixed as 1
-    let total_required = value + transfer_fee;
+    let total_required = value.checked_add(transfer_fee).ok_or_else(|| {
+        CliError::Validation(format!(
+            "Transfer amount plus fee overflows: {value} + {transfer_fee}"
+        ))
+    })?;
     if balance < total_required {
         return Err(CliError::Validation(format!(
             "Insufficient balance. Required: {} (transfer: {} + fee: {}), Available: {}",
@@ -76,22 +81,22 @@ pub async fn handle_transfer_command(
 
     // Build transfer transaction
     let mut transaction = TransactionBuilder::build_transfer(
-        src_keypair.public_key, // fee_payer
+        src_signer.public_key, // fee_payer
         EOA_PROGRAM,
         dst_pubkey,                    // to_account
         value,                         // amount
-        transfer_fee,                  // fee (fixed for now)
+        transfer_fee,                  // fee
         nonce,                         // nonce (increment by 1)
-        block_height.finalized_height, // start_slot
+        block_height.locally_executed_height, // start_slot
     )
     .map_err(|e| {
         CliError::TransactionSubmission(format!("Failed to build transfer transaction: {}", e))
     })?
     .with_chain_id(chain_info.chain_id);
 
-    // Sign the transaction
-    transaction.sign(&src_keypair.private_key).map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to sign transaction: {}", e))
+    // Sign the transaction; `wire` is exactly the signed body plus signature.
+    let wire = crate::signing::sign_transaction_for(&mut transaction, &src_signer, |e| {
+        CliError::TransactionSubmission(format!("Failed to sign transaction: {e}"))
     })?;
 
     // Build-only: emit the signed txn as base64 and skip submit. Used to embed a
@@ -99,7 +104,6 @@ pub async fn handle_transfer_command(
     // send-block fee-distribution e2e).
     if build_only {
         use base64::{Engine, engine::general_purpose};
-        let wire = transaction.to_wire();
         let base64_transaction = general_purpose::STANDARD.encode(&wire);
         if json_format {
             let response = serde_json::json!({
@@ -110,6 +114,7 @@ pub async fn handle_transfer_command(
                     "size_bytes": wire.len(),
                 }
             });
+            let response = src_signer.add_ledger_preview(response, "transfer");
             output::print_output(response, json_format);
         } else {
             println!("{}", base64_transaction);
@@ -118,7 +123,7 @@ pub async fn handle_transfer_command(
     }
 
     // Submit the transaction
-    let transaction_bytes = transaction.to_wire();
+    let transaction_bytes = wire;
     let timeout = Duration::from_secs(config.timeout_seconds);
     let transaction_details = client
         .execute_transaction(&transaction_bytes, timeout)
@@ -150,6 +155,7 @@ pub async fn handle_transfer_command(
             transaction_details.signature.as_str(),
             "failed",
         );
+        let response = src_signer.add_ledger_preview(response, "transfer");
         output::print_output(response, json_format);
 
         return Err(CliError::TransactionSubmission(error_msg));
@@ -163,6 +169,7 @@ pub async fn handle_transfer_command(
         transaction_details.signature.as_str(),
         "success",
     );
+    let response = src_signer.add_ledger_preview(response, "transfer");
     output::print_output(response, json_format);
 
     if !json_format {

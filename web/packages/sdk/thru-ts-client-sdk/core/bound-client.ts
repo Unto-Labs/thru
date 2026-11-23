@@ -5,6 +5,7 @@ import { Pubkey, Signature, type PubkeyInput, type SignatureInput } from "../dom
 import * as accountsModule from "../modules/accounts";
 import * as blocksModule from "../modules/blocks";
 import * as consensusModule from "../modules/consensus";
+import * as debugModule from "../modules/debug";
 import * as eventsModule from "../modules/events";
 import * as heightModule from "../modules/height";
 import {
@@ -98,6 +99,11 @@ interface BoundVersion {
     get: BoundFunction<typeof versionModule.getVersion>;
 }
 
+interface BoundDebug {
+    reExecute: BoundFunction<typeof debugModule.reExecuteTransaction>;
+    callStack: typeof debugModule.callStack;
+}
+
 interface BoundSlots {
     getMetrics: BoundFunction<typeof slotsModule.getSlotMetrics>;
     listMetrics: BoundFunction<typeof slotsModule.listSlotMetrics>;
@@ -145,6 +151,7 @@ export interface Thru {
     keys: BoundKeys;
     version: BoundVersion;
     consensus: BoundConsensus;
+    debug: BoundDebug;
     nonce: BoundNonce;
     node: BoundNode;
     chain: BoundChain;
@@ -226,6 +233,10 @@ export function createBoundThruClient(ctx: ThruClientContext): Thru {
         },
         version: {
             get: bind(ctx, versionModule.getVersion),
+        },
+        debug: {
+            reExecute: bind(ctx, debugModule.reExecuteTransaction),
+            callStack: debugModule.callStack,
         },
         consensus: {
             statusToString: consensusModule.consensusStatusToString,

@@ -263,7 +263,7 @@ fn default_multicall_program_public_key() -> String {
 /// configure for that network: the environment key (`THRU_API_KEY` /
 /// `THRU_DEVELOPERS_API_KEY`) or the key `thru auth login` provisioned.
 /// Matching is exact: no wildcards, no subdomains.
-pub const OFFICIAL_RPC_HOSTS: &[&str] = &["rpc.alphanet.thru.org", "rpc.betanet.thru.org"];
+pub const OFFICIAL_RPC_HOSTS: &[&str] = &["rpc.betanet.thru.org"];
 
 /// Whether `rpc_base_url` is an official Thru RPC endpoint reached over HTTPS:
 /// scheme `https`, host exactly one of [`OFFICIAL_RPC_HOSTS`], default port
@@ -369,7 +369,7 @@ pub struct NetworkConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
-    /// Endpoint for gRPC requests (e.g. http://127.0.0.1:8472 or https://rpc.alphanet.thru.org)
+    /// Endpoint for gRPC requests (e.g. http://127.0.0.1:8472 or https://rpc.betanet.thru.org)
     pub rpc_base_url: String,
 
     /// Key management
@@ -399,11 +399,16 @@ pub struct Config {
     /// Consensus attestor table public key
     pub consensus_attestor_table_public_key: String,
 
-    /// Consensus converted vault public key
-    pub consensus_converted_vault_public_key: String,
+    /// Optional assertion of the consensus converted (stake) vault.  Consensus
+    /// commands read the vault from the attestor table header; a value set
+    /// here must equal it.  Unset by default and never written when unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub consensus_converted_vault_public_key: Option<String>,
 
-    /// Consensus unclaimed vault public key
-    pub consensus_unclaimed_vault_public_key: String,
+    /// Optional assertion of the consensus unclaimed (reward) vault; see
+    /// `consensus_converted_vault_public_key`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub consensus_unclaimed_vault_public_key: Option<String>,
 
     /// WTHRU program public key
     pub wthru_program_public_key: String,
@@ -450,7 +455,7 @@ pub struct Config {
     /// GitHub repository for SDK and toolchain downloads (format: "owner/repo")
     pub github_repo: Option<String>,
 
-    /// Named network profiles (e.g. "local", "alphanet")
+    /// Named network profiles (e.g. "local", "betanet")
     #[serde(default)]
     pub networks: HashMap<String, NetworkConfig>,
 
@@ -486,7 +491,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            rpc_base_url: "https://rpc.alphanet.thru.org".to_string(),
+            rpc_base_url: "https://rpc.betanet.thru.org".to_string(),
             keys: KeyManager::new(),
             uploader_program_public_key: programs::UPLOADER_PROGRAM_ADDRESS.to_string(),
             manager_program_public_key: programs::MANAGER_PROGRAM_ADDRESS.to_string(),
@@ -496,8 +501,8 @@ impl Default for Config {
             consensus_validator_program_public_key: programs::CONSENSUS_VALIDATOR_PROGRAM_ADDRESS
                 .to_string(),
             consensus_attestor_table_public_key: programs::ATTESTOR_TABLE_ADDRESS.to_string(),
-            consensus_converted_vault_public_key: programs::CONVERTED_VAULT_ADDRESS.to_string(),
-            consensus_unclaimed_vault_public_key: programs::UNCLAIMED_VAULT_ADDRESS.to_string(),
+            consensus_converted_vault_public_key: None,
+            consensus_unclaimed_vault_public_key: None,
             wthru_program_public_key: programs::WTHRU_PROGRAM_ADDRESS.to_string(),
             bp_program_public_key: default_bp_program_public_key(),
             multisig_program_public_key: default_multisig_program_public_key(),
@@ -778,6 +783,10 @@ impl Config {
                 "consensus_attestor_table_public_key",
                 &self.consensus_attestor_table_public_key,
             ),
+        ] {
+            Pubkey::new(value.clone()).map_err(|_| invalid(field))?;
+        }
+        for (field, value) in [
             (
                 "consensus_converted_vault_public_key",
                 &self.consensus_converted_vault_public_key,
@@ -787,7 +796,9 @@ impl Config {
                 &self.consensus_unclaimed_vault_public_key,
             ),
         ] {
-            Pubkey::new(value.clone()).map_err(|_| invalid(field))?;
+            if let Some(value) = value {
+                Pubkey::new(value.clone()).map_err(|_| invalid(field))?;
+            }
         }
 
         Ok(())
@@ -805,16 +816,56 @@ impl Config {
             .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
     }
 
-    /// Get the consensus converted vault public key
-    pub fn get_consensus_converted_vault_pubkey(&self) -> Result<Pubkey, CliError> {
-        Pubkey::new(self.consensus_converted_vault_public_key.clone())
-            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
+    /// The converted vault this config asserts, if any; see
+    /// [`Config::consensus_vault_assertion`].
+    pub fn get_consensus_converted_vault_assertion(&self) -> Result<Option<[u8; 32]>, CliError> {
+        self.consensus_vault_assertion(
+            self.consensus_converted_vault_public_key.as_deref(),
+            thru_base::txn_tools::CONSENSUS_CONVERTED_VAULT_SEED,
+        )
     }
 
-    /// Get the consensus unclaimed vault public key
-    pub fn get_consensus_unclaimed_vault_pubkey(&self) -> Result<Pubkey, CliError> {
-        Pubkey::new(self.consensus_unclaimed_vault_public_key.clone())
-            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
+    /// The unclaimed vault this config asserts, if any; see
+    /// [`Config::consensus_vault_assertion`].
+    pub fn get_consensus_unclaimed_vault_assertion(&self) -> Result<Option<[u8; 32]>, CliError> {
+        self.consensus_vault_assertion(
+            self.consensus_unclaimed_vault_public_key.as_deref(),
+            thru_base::txn_tools::CONSENSUS_UNCLAIMED_VAULT_SEED,
+        )
+    }
+
+    /// A configured consensus vault, which only asserts the attestor table
+    /// header's vault.  Earlier CLIs wrote PDA(consensus program, seed) into
+    /// every config as the default vault (for the canonical program), an
+    /// address Init never creates; that retired default is not a user choice
+    /// and asserts nothing.
+    fn consensus_vault_assertion(
+        &self,
+        value: Option<&str>,
+        seed: &[u8],
+    ) -> Result<Option<[u8; 32]>, CliError> {
+        let Some(value) = value else {
+            return Ok(None);
+        };
+        let to_bytes = |value: &str| -> Result<[u8; 32], CliError> {
+            Pubkey::new(value.to_string())
+                .and_then(|pubkey| pubkey.to_bytes())
+                .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
+        };
+        let vault = to_bytes(value)?;
+        let mut padded = [0u8; 32];
+        padded[..seed.len()].copy_from_slice(seed);
+        let retired = |program: &[u8; 32]| {
+            thru_base::tn_public_address::create_program_defined_account_address(
+                program,
+                false,
+                &padded,
+            )
+        };
+        let configured = to_bytes(self.consensus_validator_program_public_key.as_str())?;
+        let is_retired = vault == retired(&programs::CONSENSUS_VALIDATOR_PROGRAM_BYTES)
+            || vault == retired(&configured);
+        Ok((!is_retired).then_some(vault))
     }
 
     /// Resolve the configured WTHRU program public key or return a helpful error
@@ -1397,38 +1448,76 @@ mod tests {
         assert_eq!(loaded.rpc_base_url, config.rpc_base_url);
     }
 
+    /// Configs written by earlier CLIs carry the retired default vaults
+    /// PDA(consensus program, seed).  They keep loading, and those values
+    /// assert nothing; a new config does not write the keys at all.
+    #[test]
+    fn retired_consensus_vault_keys_keep_loading() {
+        let config = Config::default();
+        let saved = Config::generate_config_template(&config);
+        assert!(!saved.contains("consensus_converted_vault_public_key"), "{saved}");
+        assert!(!saved.contains("consensus_unclaimed_vault_public_key"), "{saved}");
+        assert_eq!(config.get_consensus_converted_vault_assertion().unwrap(), None);
+        assert_eq!(config.get_consensus_unclaimed_vault_assertion().unwrap(), None);
+
+        let mut old = serde_yaml::to_value(&config).unwrap();
+        old["consensus_converted_vault_public_key"] =
+            "taWKTXGDi6u6kWh68xb6sTTcsyVXH--TCywHXKeJh7aS_2".into();
+        old["consensus_unclaimed_vault_public_key"] =
+            "taQuYXMCzLi7tRXte3Kz4Lz0e4E3UlQtxNGSYFouqxcAs_".into();
+        let loaded: Config = serde_yaml::from_value(old).unwrap();
+        assert!(loaded.validate().is_ok());
+        assert_eq!(loaded.get_consensus_converted_vault_assertion().unwrap(), None);
+        assert_eq!(loaded.get_consensus_unclaimed_vault_assertion().unwrap(), None);
+
+        // A value the user chose is kept and asserted.
+        let mut explicit = loaded.clone();
+        explicit.consensus_converted_vault_public_key =
+            Some("tau1YuXs3QDzkjPJXXHACa-5QetQacxoB2Sx1UYAz8yhrL".into());
+        assert_eq!(
+            explicit.get_consensus_converted_vault_assertion().unwrap(),
+            Some(
+                Pubkey::new("tau1YuXs3QDzkjPJXXHACa-5QetQacxoB2Sx1UYAz8yhrL".into())
+                    .unwrap()
+                    .to_bytes()
+                    .unwrap()
+            )
+        );
+        explicit.consensus_unclaimed_vault_public_key = Some("invalid".into());
+        assert!(explicit.validate().is_err());
+    }
+
     #[test]
     fn official_rpc_endpoint_predicate() {
         for url in [
-            "https://rpc.alphanet.thru.org",
-            "https://rpc.alphanet.thru.org/",
-            "https://rpc.alphanet.thru.org:443",
-            "https://RPC.Betanet.Thru.Org",
             "https://rpc.betanet.thru.org",
+            "https://rpc.betanet.thru.org/",
+            "https://rpc.betanet.thru.org:443",
+            "https://RPC.Betanet.Thru.Org",
         ] {
             assert!(is_official_rpc_endpoint(url), "{url} should be trusted");
         }
         for url in [
-            "http://rpc.alphanet.thru.org",
+            "http://rpc.betanet.thru.org",
             "http://rpc.betanet.thru.org:443",
-            "https://rpc.alphanet.thru.org:8443",
+            "https://rpc.betanet.thru.org:8443",
             "https://other.example",
             "https://thru.org",
             "https://dev.thru.org",
             "https://evil.thru.org",
-            "https://x.rpc.alphanet.thru.org",
-            "https://rpc.alphanet.thru.org.evil.com",
-            "https://rpc.alphanet.thru.org.",
-            "https://rpc-alphanet.thru.org",
-            "https://rpc.alphanet.thru.org@evil.com",
-            "https://user@rpc.alphanet.thru.org",
-            "https://user:pass@rpc.alphanet.thru.org",
-            "https://evil.com#@rpc.alphanet.thru.org",
-            "https://evil.com\\@rpc.alphanet.thru.org",
+            "https://x.rpc.betanet.thru.org",
+            "https://rpc.betanet.thru.org.evil.com",
+            "https://rpc.betanet.thru.org.",
+            "https://rpc-betanet.thru.org",
+            "https://rpc.betanet.thru.org@evil.com",
+            "https://user@rpc.betanet.thru.org",
+            "https://user:pass@rpc.betanet.thru.org",
+            "https://evil.com#@rpc.betanet.thru.org",
+            "https://evil.com\\@rpc.betanet.thru.org",
             "https://127.0.0.1",
             "https://[::1]",
             "https://34.120.0.1:443",
-            "rpc.alphanet.thru.org",
+            "rpc.betanet.thru.org",
             "not a url",
             "",
         ] {
@@ -1439,7 +1528,7 @@ mod tests {
     #[test]
     fn rpc_auth_token_precedence() {
         let no_key = || None;
-        let official = "https://rpc.alphanet.thru.org";
+        let official = "https://rpc.betanet.thru.org";
         let other = "https://other.example";
         // Configured token wins for any endpoint, even with an env key present.
         for url in [official, other, "http://localhost:8472"] {
@@ -1467,7 +1556,7 @@ mod tests {
                 None,
                 Some("env"),
                 no_key,
-                "http://rpc.alphanet.thru.org",
+                "http://rpc.betanet.thru.org",
                 false
             ),
             None
@@ -1500,7 +1589,7 @@ mod tests {
     #[test]
     fn saving_never_writes_env_api_key() {
         let config = Config {
-            rpc_base_url: "https://rpc.alphanet.thru.org".into(),
+            rpc_base_url: "https://rpc.betanet.thru.org".into(),
             env_api_key: Some("tk_env_secret_value".into()),
             ..Config::default()
         };
@@ -1557,7 +1646,7 @@ mod tests {
 
     #[test]
     fn provisioned_key_precedence() {
-        let official = "https://rpc.alphanet.thru.org";
+        let official = "https://rpc.betanet.thru.org";
         let provisioned = || Some("thru_provisioned".to_string());
         // Configured token > env key > provisioned key, for an official endpoint.
         assert_eq!(
@@ -1582,8 +1671,8 @@ mod tests {
         // Never to an untrusted, plain-HTTP, non-443 or --insecure endpoint.
         for (url, insecure) in [
             ("https://other.example", false),
-            ("http://rpc.alphanet.thru.org", false),
-            ("https://rpc.alphanet.thru.org:8443", false),
+            ("http://rpc.betanet.thru.org", false),
+            ("https://rpc.betanet.thru.org:8443", false),
             ("http://localhost:8472", false),
             (official, true),
         ] {
@@ -1625,9 +1714,9 @@ mod tests {
         // Untrusted endpoints never read the secret, but report it withheld.
         for (url, insecure) in [
             ("https://other.example", false),
-            ("http://rpc.alphanet.thru.org", false),
+            ("http://rpc.betanet.thru.org", false),
             ("https://rpc.betanet.thru.org:8443", false),
-            ("https://rpc.alphanet.thru.org", true),
+            ("https://rpc.betanet.thru.org", true),
         ] {
             let (source, mut config) = with_provisioned(Some("thru_provisioned"));
             config.rpc_base_url = url.into();
@@ -1835,7 +1924,7 @@ mod tests {
     #[test]
     fn test_grpc_url_https_default_port() {
         let mut config = Config::default();
-        config.rpc_base_url = "https://rpc.alphanet.thru.org".to_string();
+        config.rpc_base_url = "https://rpc.betanet.thru.org".to_string();
         let grpc_url = config.get_grpc_url().unwrap();
         assert_eq!(grpc_url.port_or_known_default(), Some(443));
     }
@@ -1843,7 +1932,7 @@ mod tests {
     #[test]
     fn test_grpc_url_explicit_port_443() {
         let mut config = Config::default();
-        config.rpc_base_url = "https://rpc.alphanet.thru.org:443".to_string();
+        config.rpc_base_url = "https://rpc.betanet.thru.org:443".to_string();
         let grpc_url = config.get_grpc_url().unwrap();
         assert_eq!(grpc_url.port_or_known_default(), Some(443));
     }
@@ -1851,7 +1940,7 @@ mod tests {
     #[test]
     fn test_grpc_url_explicit_port_8443() {
         let mut config = Config::default();
-        config.rpc_base_url = "https://rpc.alphanet.thru.org:8443".to_string();
+        config.rpc_base_url = "https://rpc.betanet.thru.org:8443".to_string();
         let grpc_url = config.get_grpc_url().unwrap();
         assert_eq!(grpc_url.port(), Some(8443));
     }

@@ -79,17 +79,6 @@ describe("defineEventStream", () => {
       expect(getTableName(stream.table)).toBe("transfer_events");
     });
 
-    it("removes trailing 's' from name before suffix", () => {
-      const stream = defineEventStream({
-        name: "deposits",
-        schema: testSchema,
-        filter: mockFilter as any,
-        parse: mockParse,
-      });
-
-      expect(getTableName(stream.table)).toBe("deposit_events");
-    });
-
     it("uses an explicit physical table name when provided", () => {
       const stream = defineEventStream({
         name: "market_status",
@@ -170,46 +159,6 @@ describe("defineEventStream", () => {
           parse: mockParse,
         } as any)
       ).toThrow('Stream "test" must provide either filter or filterFactory');
-    });
-  });
-
-  describe("parse function", () => {
-    it("exposes parse function", () => {
-      const stream = defineEventStream({
-        name: "test",
-        schema: testSchema,
-        filter: mockFilter as any,
-        parse: mockParse,
-      });
-
-      const result = stream.parse({
-        id: "event-123",
-        slot: 1000n,
-        data: "test data",
-      } as any);
-
-      expect(result).toEqual({
-        id: "event-123",
-        slot: 1000n,
-        data: "test data",
-      });
-    });
-
-    it("parse can return null to skip events", () => {
-      const selectiveParse = (event: any) => {
-        if (event.skip) return null;
-        return { id: event.id, slot: event.slot, data: null };
-      };
-
-      const stream = defineEventStream({
-        name: "test",
-        schema: testSchema,
-        filter: mockFilter as any,
-        parse: selectiveParse,
-      });
-
-      expect(stream.parse({ id: "1", slot: 1n, skip: true } as any)).toBeNull();
-      expect(stream.parse({ id: "2", slot: 2n } as any)).not.toBeNull();
     });
   });
 

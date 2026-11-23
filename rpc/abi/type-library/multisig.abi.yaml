@@ -26,20 +26,38 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Create multisig
       fields:
       - name: multisig_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: multisig
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(multisig_account_idx)'
+        display-name: Multisig
+        user-display: true
       - name: creator_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: creator
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(creator_account_idx)'
+        display-name: Creator
+        user-display: true
       - name: member_cnt
+        display-name: Members
         field-type:
           primitive: u16
       - name: threshold_m
+        display-name: Approvals required
         field-type:
           primitive: u16
       - name: seed
+        user-display: false
         field-type:
           array:
             size:
@@ -48,9 +66,11 @@ types:
             element-type:
               primitive: u8
       - name: proof_sz
+        user-display: false
         field-type:
           primitive: u64
       - name: members
+        user-display: false
         field-type:
           array:
             size:
@@ -62,6 +82,7 @@ types:
                 name: Pubkey
                 package: thru.common.primitives
       - name: proof
+        user-display: false
         field-type:
           array:
             size:
@@ -74,23 +95,54 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Propose multisig request
       fields:
       - name: multisig_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: multisig
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(multisig_account_idx)'
+        display-name: Multisig
+        user-display: true
       - name: request_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: request
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(request_account_idx)'
+        display-name: Request
+        user-display: true
       - name: proposer_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: proposer
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(proposer_account_idx)'
+        display-name: Proposer
+        user-display: true
       - name: request_kind
+        user-display: false
         field-type:
           primitive: u8
+      - name: request_type
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if request_kind == 0 { "Call a program" } else if request_kind == 1 { "Change approvals required" } else if request_kind == 2 { "Change members" } else if request_kind == 3 { "Delete multisig" } else { "Unknown" }'
+        display-name: Request type
+        user-display: true
       - name: reserved0
+        user-display: false
         field-type:
           primitive: u8
       - name: seed
+        user-display: false
         field-type:
           array:
             size:
@@ -99,12 +151,15 @@ types:
             element-type:
               primitive: u8
       - name: request_data_sz
+        user-display: false
         field-type:
           primitive: u64
       - name: proof_sz
+        user-display: false
         field-type:
           primitive: u64
       - name: request_data
+        user-display: false
         field-type:
           array:
             size:
@@ -114,6 +169,7 @@ types:
             element-type:
               primitive: u8
       - name: proof
+        user-display: false
         field-type:
           array:
             size:
@@ -126,20 +182,44 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Approve multisig request
       fields:
       - name: multisig_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: multisig
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(multisig_account_idx)'
+        display-name: Multisig
+        user-display: true
       - name: request_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: request
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(request_account_idx)'
+        display-name: Request
+        user-display: true
       - name: approver_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: approver
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(approver_account_idx)'
+        display-name: Approver
+        user-display: true
       - name: expected_request_id
+        display-name: Request ID
         field-type:
           primitive: u64
       - name: expected_request_hash
+        user-display: false
         field-type:
           type-ref:
             name: Hash
@@ -148,33 +228,71 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Execute multisig request
       fields:
       - name: multisig_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: multisig
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(multisig_account_idx)'
+        display-name: Multisig
+        user-display: true
       - name: request_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: request
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(request_account_idx)'
+        display-name: Request
+        user-display: true
 - name: DeleteRequestArgs
   kind:
     struct:
       packed: true
+      display-name: Delete multisig request
       fields:
       - name: multisig_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: multisig
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(multisig_account_idx)'
+        display-name: Multisig
+        user-display: true
       - name: request_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: request
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(request_account_idx)'
+        display-name: Request
+        user-display: true
       - name: requester_account_idx
+        user-display: false
         field-type:
           primitive: u16
+      - name: requester
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'accountAddress(requester_account_idx)'
+        display-name: Requested by
+        user-display: true
 - name: MultisigInstruction
   kind:
     struct:
       packed: true
       fields:
       - name: tag
+        user-display: false
         field-type:
           primitive: u32
       - name: payload
@@ -219,6 +337,7 @@ types:
       packed: true
       fields:
       - name: account_type
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -245,26 +364,34 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Multisig
       fields:
       - name: flags
+        user-display: false
         field-type:
           primitive: u8
       - name: member_cnt
+        display-name: Member count
         field-type:
           primitive: u16
       - name: threshold_m
+        display-name: Approvals required
         field-type:
           primitive: u16
       - name: live_request_cnt
+        display-name: Outstanding requests
         field-type:
           primitive: u16
       - name: config_epoch
+        user-display: false
         field-type:
           primitive: u64
       - name: next_request_id
+        user-display: false
         field-type:
           primitive: u64
       - name: members
+        user-display: false
         field-type:
           array:
             size:
@@ -279,45 +406,64 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Multisig request
       fields:
       - name: kind
+        user-display: false
         field-type:
           primitive: u8
+      - name: request_type
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if kind == 0 { "Call a program" } else if kind == 1 { "Change approvals required" } else if kind == 2 { "Change members" } else if kind == 3 { "Delete multisig" } else { "Unknown" }'
+        display-name: Request type
+        user-display: true
       - name: status
+        user-display: false
         field-type:
           primitive: u8
       - name: reserved0
+        user-display: false
         field-type:
           primitive: u8
       - name: member_cnt_snapshot
+        user-display: false
         field-type:
           primitive: u16
       - name: required_approvals
+        display-name: Approvals required
         field-type:
           primitive: u16
       - name: request_id
+        display-name: Request ID
         field-type:
           primitive: u64
       - name: config_epoch_snapshot
+        user-display: false
         field-type:
           primitive: u64
       - name: approval_bitmap
+        user-display: false
         field-type:
           primitive: u64
       - name: request_data_sz
+        user-display: false
         field-type:
           primitive: u64
       - name: multisig_pubkey
+        display-name: Multisig
         field-type:
           type-ref:
             name: Pubkey
             package: thru.common.primitives
       - name: proposer_pubkey
+        display-name: Proposer
         field-type:
           type-ref:
             name: Pubkey
             package: thru.common.primitives
       - name: request_data
+        user-display: false
         field-type:
           array:
             size:
@@ -420,3 +566,80 @@ types:
       - name: code
         field-type:
           primitive: u64
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: invalid_instruction
+              tag-value: 1
+              comment: Instruction data is too short, the wrong size, or not a known multisig instruction.
+            - name: invalid_account
+              tag-value: 2
+              comment: An account index is outside the account list of the transaction, or the account is missing.
+            - name: invalid_state
+              tag-value: 3
+              comment: The account is not a valid multisig or request account for this instruction.
+            - name: unauthorized
+              tag-value: 4
+              comment: The member did not authorize this transaction.
+            - name: account_create_failed
+              tag-value: 5
+              comment: The multisig or request account could not be created.
+            - name: account_resize_failed
+              tag-value: 6
+              comment: The multisig or request account could not be resized.
+            - name: account_write_failed
+              tag-value: 7
+              comment: The multisig or request account could not be opened for writing.
+            - name: invalid_member_count
+              tag-value: 8
+              comment: The number of members is below 2 or above the maximum.
+            - name: invalid_threshold
+              tag-value: 9
+              comment: The approval threshold is below 1 or above the number of members.
+            - name: duplicate_member
+              tag-value: 10
+              comment: The member list contains the same member twice.
+            - name: not_a_member
+              tag-value: 11
+              comment: The signer is not a member of this multisig.
+            - name: duplicate_approval
+              tag-value: 12
+              comment: This member has already approved the request.
+            - name: request_stale
+              tag-value: 13
+              comment: The multisig members or settings changed after the request was created.
+            - name: request_not_open
+              tag-value: 14
+              comment: The request is no longer open.
+            - name: request_not_approved
+              tag-value: 15
+              comment: The request does not have enough approvals yet.
+            - name: invalid_request_kind
+              tag-value: 16
+              comment: The request kind is not known.
+            - name: invalid_request_data
+              tag-value: 17
+              comment: The request data is malformed or does not belong to this multisig.
+            - name: request_too_large
+              tag-value: 18
+              comment: The request data is larger than the maximum allowed.
+            - name: cpi_failed
+              tag-value: 19
+              comment: The program call made by the approved request failed.
+            - name: request_not_deletable
+              tag-value: 20
+              comment: The request already has approvals, or the signer is not the member who proposed it.
+            - name: outstanding_requests
+              tag-value: 21
+              comment: The multisig still has other open requests.
+            - name: too_many_requests
+              tag-value: 22
+              comment: The multisig already has the maximum number of open requests.
+            - name: request_mismatch
+              tag-value: 23
+              comment: The request is not the one the member reviewed, because its id or content differs.

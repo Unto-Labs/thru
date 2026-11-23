@@ -90,7 +90,7 @@ export function DepositBankDetails({
                     <span className={cn("uds-dep__receipt-value", row.mono && "uds-dep__list-mono")}>{row.value}</span>
                   </div>
                   <CopyButton
-                    icon
+                    variant="icon"
                     value={row.value}
                     aria-label={row.copyLabel}
                     className="uds-dep__list-copy"

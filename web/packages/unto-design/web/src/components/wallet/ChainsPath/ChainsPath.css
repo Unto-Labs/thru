@@ -2,7 +2,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: 14px;
+  font-size: var(--text-body);
   font-weight: var(--fw-medium);
   color: var(--color-text-primary);
 }
@@ -16,7 +16,7 @@
   flex: none;
   background: var(--color-surface-primary);
   color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 9px;
   font-weight: var(--fw-semibold);
 }
@@ -35,7 +35,7 @@
 .uds-chains-path__arrow {
   width: 16px;
   height: 16px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-box);
   background: var(--color-surface-primary);
   display: grid;
   place-items: center;

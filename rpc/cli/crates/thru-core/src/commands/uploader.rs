@@ -254,18 +254,18 @@ impl UploaderManager {
 
     /// Get current slot
     ///
-    /// Queries the blockchain to get the current finalized slot number.
+    /// Queries the blockchain to get the current locally executed slot number.
     /// This is used as the start_slot parameter for transactions.
     ///
     /// # Returns
-    /// - `Ok(u64)` - The current finalized slot number
+    /// - `Ok(u64)` - The current locally executed slot number
     /// - `Err(CliError::TransactionSubmission)` - If the RPC call fails
     async fn get_current_slot(&self) -> Result<u64, CliError> {
-        // Get current finalized slot from the blockchain
+        // Get the current locally executed slot (the transaction start-slot clock)
         let block_height = self.rpc_client.get_block_height().await.map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get current slot: {}", e))
         })?;
-        Ok(block_height.finalized_height)
+        Ok(block_height.locally_executed_height)
     }
 
     /// Check for existing upload state
@@ -614,8 +614,7 @@ impl UploaderManager {
 
         // Set chain ID and sign transaction
         let mut transaction = transaction.with_chain_id(self.chain_id);
-        transaction
-            .sign(&self.fee_payer_keypair.private_key)
+        crate::signing::sign_transaction(&mut transaction, &self.fee_payer_keypair)
             .map_err(|e| CliError::Crypto(e.to_string()))?;
 
         // Execute transaction and wait for completion
@@ -755,8 +754,7 @@ impl UploaderManager {
             )
             .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
             let mut transaction = transaction.with_chain_id(self.chain_id);
-            transaction
-                .sign(&self.fee_payer_keypair.private_key)
+            crate::signing::sign_transaction(&mut transaction, &self.fee_payer_keypair)
                 .map_err(|e| CliError::Crypto(e.to_string()))?;
             Ok(transaction.to_wire())
         };
@@ -1071,8 +1069,7 @@ impl UploaderManager {
 
         // Set chain ID and sign transaction
         let mut transaction = transaction.with_chain_id(self.chain_id);
-        transaction
-            .sign(&self.fee_payer_keypair.private_key)
+        crate::signing::sign_transaction(&mut transaction, &self.fee_payer_keypair)
             .map_err(|e| CliError::Crypto(e.to_string()))?;
 
         // Execute transaction and wait for completion
@@ -1417,8 +1414,7 @@ impl UploaderManager {
 
         // Set chain ID and sign transaction
         let mut transaction = transaction.with_chain_id(self.chain_id);
-        transaction
-            .sign(&self.fee_payer_keypair.private_key)
+        crate::signing::sign_transaction(&mut transaction, &self.fee_payer_keypair)
             .map_err(|e| CliError::Crypto(e.to_string()))?;
 
         // Execute transaction and wait for completion

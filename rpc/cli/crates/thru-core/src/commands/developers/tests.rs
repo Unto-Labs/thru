@@ -331,12 +331,12 @@ fn origins_are_strict_and_credentials_cannot_select_a_custom_chain() {
         assert!(Developers::new(origin).is_ok());
     }
     let mut config = Config::default();
-    assert_eq!(selected_network(&config).unwrap(), "alphanet");
+    assert_eq!(selected_network(&config).unwrap(), "betanet");
     config.rpc_base_url = "https://rpc.betanet.thru.org:443".into();
     assert_eq!(selected_network(&config).unwrap(), "betanet");
     for url in [
         "http://127.0.0.1:8472",
-        "https://rpc.alphanet.thru.org:8443",
+        "https://rpc.betanet.thru.org:8443",
         "https://custom.example",
         "https://rpc.betanet.thru.org/path",
     ] {
@@ -940,7 +940,7 @@ async fn funding_401_never_refreshes_or_retries_and_redirects_never_leak_bearer(
             .mount(&server)
             .await;
         assert!(
-            submit_fund(&developers, "secret-access", "alphanet", "ta-existing", "1")
+            submit_fund(&developers, "secret-access", "betanet", "ta-existing", "1")
                 .await
                 .is_err()
         );
@@ -955,7 +955,7 @@ async fn transport_and_confirmation_errors_report_unknown_results_and_known_sign
     let developers = Developers::new(&server.uri()).unwrap();
     Mock::given(method("POST")).and(path("/api/faucet/fund"))
         .respond_with(ResponseTemplate::new(504).set_body_json(json!({"transactionSignature":"known-signature","error":{"code":"FUNDING_STATUS_UNKNOWN"}}))).expect(1).mount(&server).await;
-    let error = submit_fund(&developers, "access", "alphanet", "ta-existing", "1")
+    let error = submit_fund(&developers, "access", "betanet", "ta-existing", "1")
         .await
         .unwrap_err();
     assert!(
@@ -965,7 +965,7 @@ async fn transport_and_confirmation_errors_report_unknown_results_and_known_sign
     let (_listener, developers) = unavailable_target();
     assert_eq!(
         code(
-            &submit_fund(&developers, "access", "alphanet", "ta-existing", "1")
+            &submit_fund(&developers, "access", "betanet", "ta-existing", "1")
                 .await
                 .unwrap_err()
         ),
@@ -998,7 +998,7 @@ async fn funding_only_emits_confirmed_public_transaction_fields() {
             .expect(1)
             .mount(&server)
             .await;
-        let result = submit_fund(&developers, "secret", "alphanet", "ta-existing", "1").await;
+        let result = submit_fund(&developers, "secret", "betanet", "ta-existing", "1").await;
         if succeeds {
             assert_eq!(
                 result.unwrap(),
@@ -2492,7 +2492,7 @@ async fn status_reports_the_organization_limits_and_rpc_key_use() {
     )
     .await;
     let rpc = Config {
-        rpc_base_url: "https://rpc.alphanet.thru.org".into(),
+        rpc_base_url: "https://rpc.betanet.thru.org".into(),
         env_api_key: Some("thru_env".into()),
         ..Config::default()
     };
@@ -2508,7 +2508,7 @@ async fn status_reports_the_organization_limits_and_rpc_key_use() {
         auth["organization_limits"],
         json!({"weighted_rps":50,"bytes_per_sec":1000000})
     );
-    assert_eq!(auth["rpc_endpoint"], "https://rpc.alphanet.thru.org");
+    assert_eq!(auth["rpc_endpoint"], "https://rpc.betanet.thru.org");
     assert_eq!(auth["rpc_api_key_used"], true);
     assert!(auth.get("note").is_none());
     assert!(auth.get("keys").is_none());

@@ -560,19 +560,21 @@ emit_slot_advancement_transfers() {
   log "Completed ${transfers} slot advancement transfers"
 }
 
-get_finalized_slot() {
+get_executed_slot() {
   local payload
-  payload=$(run_cli_json "getheight (finalized slot lookup)" getheight)
-  printf '%s' "$payload" | jq -er '.getheight.finalized'
+  payload=$(run_cli_json "getheight (executed slot lookup)" getheight)
+  # The current-slot clock is locally_executed; finalized is a finality height
+  # that can trail execution (UNTO-3383).
+  printf '%s' "$payload" | jq -er '.getheight.locally_executed'
 }
 
 ensure_slot_ready_for_compression() {
   local slot
-  slot=$(get_finalized_slot)
+  slot=$(get_executed_slot)
   if (( slot < 256 )); then
     emit_slot_advancement_transfers "Warm-up before compression (current slot=$slot)"
   else
-    log "Current finalized slot ($slot) already >= 256"
+    log "Current executed slot ($slot) already >= 256"
   fi
 }
 
@@ -715,8 +717,6 @@ abi_manager_program_public_key: "$BOOTSTRAP_ABI_MANAGER_PROGRAM_ADDRESS"
 token_program_public_key: "$BOOTSTRAP_TOKEN_PROGRAM_ADDRESS"
 consensus_validator_program_public_key: "$BOOTSTRAP_CONSENSUS_VALIDATOR_PROGRAM_ADDRESS"
 consensus_attestor_table_public_key: "$BOOTSTRAP_ATTESTOR_TABLE_ADDRESS"
-consensus_converted_vault_public_key: "$BOOTSTRAP_CONVERTED_VAULT_ADDRESS"
-consensus_unclaimed_vault_public_key: "$BOOTSTRAP_UNCLAIMED_VAULT_ADDRESS"
 wthru_program_public_key: "$BOOTSTRAP_WTHRU_PROGRAM_ADDRESS"
 bp_program_public_key: "$BOOTSTRAP_BLOCK_PRODUCER_PROGRAM_ADDRESS"
 name_service_program_public_key: "$BOOTSTRAP_NAME_SERVICE_PROGRAM_ADDRESS"
@@ -831,7 +831,7 @@ scenario_accounts() {
   baseline=$(printf '%s' "$params_json" | jq -er '.feature_gates.entries[] | select(.name == "compress_baseline_units") | .current_value | tonumber')
   step=$(printf '%s' "$params_json" | jq -er '.feature_gates.entries[] | select(.name == "compress_halving_step_units") | .current_value | tonumber')
   (( step > 0 )) || die "Invalid compression halving-step chain parameter: $step"
-  slot=$(get_finalized_slot)
+  slot=$(get_executed_slot)
   metrics_json=$(run_cli_json_retry "compression settled load at slot $slot" getslotmetrics "$slot")
   activated=$(printf '%s' "$metrics_json" | jq -er '.getslotmetrics.global_activated_state_counter')
   deactivated=$(printf '%s' "$metrics_json" | jq -er '.getslotmetrics.global_deactivated_state_counter')
@@ -1873,9 +1873,9 @@ scenario_claimfees() {
   bp_addr=$(printf '%s' "$bp_json" | jq -er '.keys.public_key')
   log "claimfees: producer = node validator identity $bp_addr"
 
-  # Each block carries two unrelated fee-paying transfers.  The transfer fee is a
-  # fixed 1 (rpc/cli/crates/thru-core/src/commands/transfer.rs), so each block
-  # collects exactly 2.
+  # Each block carries two unrelated fee-paying transfers.  The scenario sets
+  # `--fee 1` explicitly on each (the CLI default is 0), so each block collects
+  # exactly 2.
   local EXPECT=2
 
   # account_balance <addr> -> native balance, or 0 if the account does not exist.
@@ -1892,8 +1892,8 @@ scenario_claimfees() {
   # two unrelated fee transfers (acc_1->acc_2, acc_3->acc_2), produced by bp.
   inject_two_tx_block() {
     local label="$1" t1 t2
-    t1=$(run_cli_raw "claimfees: $label build tx1" transfer acc_1 acc_2 1 --build-only)
-    t2=$(run_cli_raw "claimfees: $label build tx2" transfer acc_3 acc_2 1 --build-only)
+    t1=$(run_cli_raw "claimfees: $label build tx1" transfer acc_1 acc_2 1 --fee 1 --build-only)
+    t2=$(run_cli_raw "claimfees: $label build tx2" transfer acc_3 acc_2 1 --fee 1 --build-only)
     local slot
     slot=$(run_cli_json "claimfees: $label height" getheight \
       | jq '([.getheight.finalized, .getheight.locally_executed, .getheight.cluster_executed] | max) + 1')
@@ -2079,7 +2079,7 @@ scenario_bond_part1() {
   bp_native_0=$(run_cli_json "§B: bp balance before block" getbalance "$bp_addr" | jq -er '.balance.balance')
 
   local fee_b64
-  fee_b64=$(run_cli_raw "§B: build FEE_TX" transfer acc_1 acc_2 1 --build-only)
+  fee_b64=$(run_cli_raw "§B: build FEE_TX" transfer acc_1 acc_2 1 --fee 1 --build-only)
 
   # same height definition send-block uses: max(finalized, locally, cluster)+1
   local slot

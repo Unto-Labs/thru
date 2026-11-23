@@ -7,7 +7,7 @@
   cursor: pointer;
   color: var(--color-text-brand);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-caption);
   padding: 0;
 }
 .uds-copy-text:hover {
@@ -30,4 +30,10 @@
 }
 .uds-copy-icon:hover {
   color: var(--color-text-primary);
+}
+
+.uds-copy-text:focus-visible,
+.uds-copy-icon:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
 }

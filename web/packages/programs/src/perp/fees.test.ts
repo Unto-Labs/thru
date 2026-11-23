@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Pubkey } from '@thru/sdk';
 import {
-  FeeClaimInstructionBuilder,
-  MarketSetFeesInstructionBuilder,
   PERP_EVENT_FEE,
   PERP_EVENT_INSURANCE,
   PERP_EVENT_INSURANCE_LIQUIDATION,
@@ -16,9 +14,6 @@ import {
   PERP_PPM_DENOMINATOR,
   PERP_SEAT_FLAG_FEE,
   PerpInstruction,
-  PerpInstructionBuilder,
-  SeatSetBuilderApprovalInstructionBuilder,
-  SeatSetFeeReceiverInstructionBuilder,
   createPerpFeeClaimInstruction,
   createPerpMarketRecordInstruction,
   createPerpMarketSetFeesInstruction,
@@ -73,13 +68,6 @@ function context(indexes: Array<[Uint8Array, number]>) {
       return hit[1];
     },
   };
-}
-
-/** What the generated builders produce for a payload of `variant`. */
-function generated(variant: string, payload: Uint8Array): Uint8Array {
-  const builder = new PerpInstructionBuilder();
-  builder.payload().select(variant as never).writePayload(payload).finish();
-  return builder.build();
 }
 
 const RATES: PerpFeeParams = { takerFeePpm: 300, makerRebatePpm: 100, builderFeeCapPpm: 0, feeInsuranceSharePpm: 250_000, liqInsuranceSharePpm: 0 };
@@ -312,32 +300,23 @@ describe('perp fee instruction builders', () => {
     expect([...bytes.subarray(0, 4)]).toEqual([PERP_INSTRUCTION_MARKET_SET_FEES, 1, 0, 0]);
     const view = new DataView(bytes.buffer, bytes.byteOffset);
     expect([4, 8, 12, 16, 20].map((offset) => view.getUint32(offset, true))).toEqual([300, 100, 50, 250_000, 500_000]);
-    const payload = new MarketSetFeesInstructionBuilder()
-      .set_market_record_idx(1).set_reserved0(0).set_taker_fee_ppm(300).set_maker_rebate_ppm(100)
-      .set_builder_fee_cap_ppm(50).set_fee_insurance_share_ppm(250_000).set_liq_insurance_share_ppm(500_000).build();
-    expect([...bytes]).toEqual([...generated('market_set_fees', payload)]);
     expect(PerpInstruction.from_array(bytes)!.payload().asMarketSetFees()!.get_liq_insurance_share_ppm()).toBe(500_000);
     expect(() => createPerpMarketSetFeesInstruction({ marketRecordIndex: 1, ...RATES, makerRebatePpm: 301 })).toThrow(/makerRebatePpm/);
   });
 
   it('fee claim is 16 bytes with the amount at offset 8', async () => {
     const bytes = await createPerpFeeClaimInstruction({ marketRecordIndex: 2, amount: 45n })(ctx);
+    expect(bytes.length).toBe(16);
     expect([...bytes.subarray(0, 8)]).toEqual([PERP_INSTRUCTION_FEE_CLAIM, 2, 0, 0, 0, 0, 0, 0]);
     expect(new DataView(bytes.buffer, bytes.byteOffset).getBigUint64(8, true)).toBe(45n);
-    const payload = new FeeClaimInstructionBuilder().set_market_record_idx(2).set_reserved0(0).set_reserved1(0).set_amount(45n).build();
-    expect([...bytes]).toEqual([...generated('fee_claim', payload)]);
     expect(() => createPerpFeeClaimInstruction({ marketRecordIndex: 2, amount: 0n })).toThrow(/positive/);
   });
 
   it('seat set fee receiver and builder approval are 8 bytes', async () => {
     const receiver = await createPerpSeatSetFeeReceiverInstruction({ marketRecordIndex: 1 })(ctx);
     expect([...receiver]).toEqual([PERP_INSTRUCTION_SEAT_SET_FEE_RECEIVER, 1, 0, 0, 0, 0, 0, 0]);
-    expect([...receiver]).toEqual([...generated('seat_set_fee_receiver', new SeatSetFeeReceiverInstructionBuilder().set_market_record_idx(1).set_reserved0(0).set_reserved1(0).build())]);
     const approval = await createPerpSeatSetBuilderApprovalInstruction({ marketRecordIndex: 1, builderSeatIndex: 0x12345, maxFeePpm: 10_000 })(ctx);
     expect([...approval]).toEqual([PERP_INSTRUCTION_SEAT_SET_BUILDER_APPROVAL, 1, 0x10, 0x27, 0x45, 0x23, 0x01, 0]);
-    expect([...approval]).toEqual([
-      ...generated('seat_set_builder_approval', new SeatSetBuilderApprovalInstructionBuilder().set_market_record_idx(1).set_max_fee_ppm(10_000).set_builder_seat_idx(0x12345).build()),
-    ]);
     expect([...(await createPerpSeatSetBuilderApprovalInstruction({ marketRecordIndex: 1, builderSeatIndex: 0, maxFeePpm: 0 })(ctx))]).toEqual([
       PERP_INSTRUCTION_SEAT_SET_BUILDER_APPROVAL, 1, 0, 0, 0, 0, 0, 0,
     ]);

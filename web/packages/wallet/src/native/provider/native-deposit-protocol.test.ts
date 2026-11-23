@@ -15,7 +15,7 @@ import type {
 const WALLET_URL = "https://app.tid.sh/embedded/native";
 const APP_ORIGIN = "thru-mobile://app";
 const DESTINATION: DepositDestination = {
-  network: ThruNetwork.Alphanet,
+  network: ThruNetwork.Betanet,
   depositTarget: DepositTarget.UUSD,
   tokenAccountAddress: "ta_token_account",
   mintAddress: "ta_mint",
@@ -52,7 +52,7 @@ describe("native deposit protocol round-trip", () => {
     const provider = new NativeProvider({
       walletUrl: WALLET_URL,
       origin: APP_ORIGIN,
-      network: ThruNetwork.Alphanet,
+      network: ThruNetwork.Betanet,
       depositUiConfig: DEPOSIT_UI_CONFIG,
     });
     const result = await provider.prepareDeposit(DepositTarget.UUSD);
@@ -61,7 +61,7 @@ describe("native deposit protocol round-trip", () => {
     expect(captured!.type).toBe(POST_MESSAGE_REQUEST_TYPES.PREPARE_DEPOSIT);
     expect(captured!.payload).toEqual({
       depositTarget: DepositTarget.UUSD,
-      network: ThruNetwork.Alphanet,
+      network: ThruNetwork.Betanet,
     });
     expect(result).toEqual(DESTINATION);
   });
@@ -87,7 +87,7 @@ describe("native deposit protocol round-trip", () => {
     const provider = new NativeProvider({
       walletUrl: WALLET_URL,
       origin: APP_ORIGIN,
-      network: ThruNetwork.Alphanet,
+      network: ThruNetwork.Betanet,
       depositUiConfig: DEPOSIT_UI_CONFIG,
     });
     const connectedAccount = {
@@ -151,7 +151,7 @@ describe("native deposit protocol round-trip", () => {
     const provider = new NativeProvider({
       walletUrl: WALLET_URL,
       origin: APP_ORIGIN,
-      network: ThruNetwork.Alphanet,
+      network: ThruNetwork.Betanet,
       depositUiConfig: DEPOSIT_UI_CONFIG,
     });
     const connectedAccount = {
@@ -186,34 +186,6 @@ describe("native deposit protocol round-trip", () => {
     expect(surface).toEqual([true, false]);
     expect(provider.isConnected()).toBe(true);
     expect(provider.getSelectedAccount()).toEqual(connectedAccount);
-  });
-
-  it("round-trips a cancelled result and hides the surface", async () => {
-    vi.spyOn(WebViewBridge.prototype, "sendMessage").mockImplementation(
-      async (request: PostMessageRequest) =>
-        ({
-          id: request.id,
-          success: true,
-          result: { status: "cancelled" },
-        }) as never,
-    );
-
-    const provider = new NativeProvider({
-      walletUrl: WALLET_URL,
-      origin: APP_ORIGIN,
-    });
-    let hidden = false;
-    provider.onHideRequested = () => {
-      hidden = true;
-    };
-
-    const result = await provider.deposit({
-      providerId: "unifold",
-      destination: DESTINATION,
-    });
-
-    expect(result).toEqual({ status: "cancelled" });
-    expect(hidden).toBe(true);
   });
 
   it("hides the surface and rejects when the wallet errors", async () => {

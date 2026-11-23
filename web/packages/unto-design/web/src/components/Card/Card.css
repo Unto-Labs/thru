@@ -2,7 +2,7 @@
   padding: var(--space-5);
   background: var(--color-surface-card);
   color: var(--color-text-primary);
-  border-radius: var(--radius-none);
+  border-radius: var(--radius-box);
 }
 
 .uds-card--default {

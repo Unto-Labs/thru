@@ -23,13 +23,13 @@ import {
 } from '../src';
 
 const PHASE_BOOT = 'Starting Thru';
-const PHASE_CONNECT = 'Connecting to alphanet';
+const PHASE_CONNECT = 'Connecting to betanet';
 const PHASE_WALLET = 'Opening the wallet bridge';
 const PHASE_RETRY = 'Retrying the wallet bridge';
 const PHASE_READY = 'Ready';
 const PHASE_FAILED = 'Wallet bridge did not answer';
 
-const ENDPOINT = 'rpc-alphanet-01.iad.thru.network:8899';
+const ENDPOINT = 'rpc-betanet-01.iad.thru.network:8899';
 
 /* Fixed samples keep the demo deterministic while still looking live. */
 const RPC_SAMPLES = ['238ms', '244ms', '231ms', '252ms', '240ms', '236ms'];

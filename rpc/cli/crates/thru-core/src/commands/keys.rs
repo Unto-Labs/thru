@@ -4,17 +4,23 @@ use crate::{
     cli::KeysCommands,
     config::{Config, MutationLock, lock_config, write_config_atomic},
     error::CliError,
+    hd::{self, HdPath},
     keys::{
         KeyEntry, KeyManager, KeySource, KeyStorage, LoadedKey, StagedSecret, delete_source,
-        generate_seed, load_source, read_seed, stage_secret,
+        generate_seed, load_source, open_key_file, read_seed, stage_secret,
     },
     output,
 };
 use serde_json::{Value, json};
 use std::{
+    io::Write,
     path::{Path, PathBuf},
     sync::Arc,
 };
+
+use crate::signing::{connect_ledger, ledger_error, ledger_is_emulator};
+use thru_base::tn_tools::Pubkey;
+use thru_ledger::{DerivationPath, LedgerSigner};
 
 const REMOVE_DEFAULT_ERROR: &str = "Removing 'default' requires --force; commands with an omitted signer will need a new default key";
 
@@ -58,14 +64,35 @@ pub async fn handle_keys_command(
             name,
             file,
             stdin,
+            mnemonic,
+            account,
+            path,
             store,
             legacy_seed: _,
-        } => add_key(&name, file, stdin, store, overwrite, json_format).await,
+        } => {
+            let derivation = derivation_path(mnemonic, account, path)?;
+            add_key(
+                &name,
+                file,
+                stdin,
+                derivation,
+                store,
+                overwrite,
+                json_format,
+            )
+            .await
+        }
         KeysCommands::Generate {
             overwrite,
             name,
+            mnemonic,
+            account,
+            path,
             store,
-        } => generate_key(&name, store, overwrite, json_format).await,
+        } => {
+            let derivation = derivation_path(mnemonic, account, path)?;
+            generate_key(&name, derivation, store, overwrite, json_format).await
+        }
         KeysCommands::Remove {
             force,
             name,
@@ -76,7 +103,201 @@ pub async fn handle_keys_command(
         }
         KeysCommands::Migrate { store } => migrate_keys(store, json_format).await,
         KeysCommands::Move { name, all, to } => move_keys(name, all, to, json_format).await,
+        KeysCommands::AddLedger {
+            overwrite,
+            name,
+            account,
+            no_verify,
+        } => add_ledger_key(&name, account, overwrite, no_verify, json_format).await,
+        KeysCommands::Show { name, verify } => show_key(config, &name, verify, json_format).await,
     }
+}
+
+/// `thru keys add-ledger <name> [--account N]`: read the Ledger key at
+/// `m/44'/8478'/N'/0'`, have the user confirm the address on the device
+/// (unless `--no-verify`), then register its path and address.
+async fn add_ledger_key(
+    name: &str,
+    account: u32,
+    overwrite: bool,
+    no_verify: bool,
+    json_format: bool,
+) -> Result<(), CliError> {
+    let path = DerivationPath::new(account)
+        .map_err(|e| CliError::Validation(format!("Invalid Ledger account index: {e}")))?;
+    KeyManager::validate_name(name)?;
+    let config_path = Config::get_config_path()?;
+    // Fail before prompting on the device.
+    precheck_alias(&config_path, name, overwrite).await?;
+    let signer = connect_ledger(path, None)?;
+    let verified = !no_verify;
+    if verified {
+        signer.verify_address_on_device().map_err(ledger_error)?;
+    }
+    // An approval on the Speculos emulator is not an approval on a hardware
+    // wallet, and is never reported as one (audit A-018).
+    let emulator = ledger_is_emulator();
+    let registered = register_entry(
+        &config_path,
+        name,
+        ledger_entry(&signer),
+        None,
+        overwrite,
+        "add-ledger",
+    )
+    .await?;
+
+    let mut response = json!({
+        "ledger_key": {
+            "operation": "add-ledger",
+            "name": name.to_lowercase(),
+            "source": path.to_uri(),
+            "path": path.to_string(),
+            "public_key": signer.address(),
+            "verified_on_device": verified && !emulator,
+            "verified_on_emulator": verified && emulator,
+            "transport": if emulator { "speculos" } else { "usb" },
+            "status": "success",
+        }
+    });
+    if let Some(secret) = registered.get("secret") {
+        // The overwritten registration's prior source and what became of it.
+        response["ledger_key"]["secret"] = secret.clone();
+    }
+    if json_format {
+        output::print_output(response, true);
+    } else {
+        output::print_success(&format!(
+            "Ledger key '{}' added: {} ({}){}",
+            name.to_lowercase(),
+            signer.address(),
+            path,
+            match (verified, emulator) {
+                (true, false) => ", address confirmed on the device",
+                (true, true) =>
+                    ", address confirmed on the Speculos EMULATOR (not a hardware device)",
+                (false, _) => "",
+            }
+        ));
+    }
+    Ok(())
+}
+
+/// The registration of a connected Ledger signer: its path and the address
+/// the device reported.
+fn ledger_entry(signer: &LedgerSigner) -> KeyEntry {
+    KeyEntry {
+        public_key: signer.address(),
+        source: KeySource::Ledger {
+            path: *signer.path(),
+        },
+    }
+}
+
+/// Register a connected Ledger signer's path and address under `name` in
+/// `config` (in memory; `keys add-ledger` commits under the config lock).
+pub fn record_ledger_key(
+    config: &mut Config,
+    name: &str,
+    signer: &LedgerSigner,
+    overwrite: bool,
+) -> Result<(), CliError> {
+    config
+        .keys
+        .insert_entry(name, ledger_entry(signer), overwrite)
+}
+
+/// Describe a key without revealing secrets: type, address and, for Ledger
+/// keys, the path.  A `ledger://` URI that no registered key uses is read
+/// from the device (silently).
+pub fn describe_key(config: &Config, name: &str) -> Result<Value, CliError> {
+    describe_key_with(config, name, &config.keys.public_key(name)?)
+}
+
+/// [`describe_key`] for a key whose public key the caller already read.
+fn describe_key_with(
+    config: &Config,
+    name: &str,
+    public_key: &[u8; 32],
+) -> Result<Value, CliError> {
+    let ledger = config.keys.ledger_source(name)?;
+    let public_key = Pubkey::from_bytes(public_key).to_string();
+    let name = name.strip_prefix("alias:").unwrap_or(name).to_lowercase();
+    Ok(match ledger {
+        None => json!({
+            "name": name,
+            "type": "local",
+            "public_key": public_key,
+        }),
+        Some((path, registered)) => json!({
+            "name": name,
+            "type": "ledger",
+            "source": path.to_uri(),
+            "path": path.to_string(),
+            "public_key": public_key,
+            "cached": registered.is_some(),
+        }),
+    })
+}
+
+/// `thru keys show <name> [--verify]`: print a key's address (never the
+/// private key).  With `--verify`, a Ledger key's address and path are shown
+/// on the device for the user to compare and confirm.
+async fn show_key(
+    config: &Config,
+    name: &str,
+    verify: bool,
+    json_format: bool,
+) -> Result<(), CliError> {
+    let public_key = config.keys.public_key(name)?;
+    let mut info = describe_key_with(config, name, &public_key)?;
+    if verify {
+        let Some((path, _)) = config.keys.ledger_source(name)? else {
+            return Err(CliError::Validation(format!(
+                "--verify needs a Ledger key; '{}' is a local key",
+                name
+            )));
+        };
+        if !json_format {
+            println!(
+                "Address: {}",
+                info["public_key"].as_str().unwrap_or_default()
+            );
+        }
+        // Expect the reported key: the registered one, or, for an unregistered
+        // `ledger://` URI, the one read above over an earlier connection, so a
+        // device or seed swapped in between fails instead of being confirmed.
+        let signer = connect_ledger(path, Some(public_key))?;
+        signer.verify_address_on_device().map_err(ledger_error)?;
+        let emulator = ledger_is_emulator();
+        info["verified_on_device"] = json!(!emulator);
+        info["verified_on_emulator"] = json!(emulator);
+    }
+    if json_format {
+        output::print_output(json!({ "key": info }), true);
+    } else {
+        println!(
+            "Key '{}' ({})",
+            info["name"].as_str().unwrap_or_default(),
+            info["type"].as_str().unwrap_or("?")
+        );
+        println!(
+            "  Address: {}",
+            info["public_key"].as_str().unwrap_or_default()
+        );
+        if let Some(path) = info["path"].as_str() {
+            println!("  Path:    {}", path);
+            println!("  Source:  {}", info["source"].as_str().unwrap_or_default());
+        }
+        if verify && ledger_is_emulator() {
+            output::print_warning(
+                "Address confirmed on the Speculos EMULATOR, not on a hardware device",
+            );
+        } else if verify {
+            output::print_success("Address confirmed on the Ledger");
+        }
+    }
+    Ok(())
 }
 
 fn entry_output(manager: &KeyManager, name: &str) -> Result<Value, CliError> {
@@ -193,12 +414,26 @@ async fn commit_config_cleanups(
 async fn register(
     config_path: &Path,
     name: &str,
-    mut entry: KeyEntry,
+    entry: KeyEntry,
     staged: Option<StagedSecret>,
     overwrite: bool,
     operation: &str,
     json_format: bool,
 ) -> Result<(), CliError> {
+    let response = register_entry(config_path, name, entry, staged, overwrite, operation).await?;
+    output::print_output(json!({"keys": response}), json_format);
+    Ok(())
+}
+
+/// Commit `entry` under `name` and return the public `keys` response.
+async fn register_entry(
+    config_path: &Path,
+    name: &str,
+    mut entry: KeyEntry,
+    staged: Option<StagedSecret>,
+    overwrite: bool,
+    operation: &str,
+) -> Result<Value, CliError> {
     // Staged secrets are parameters, so the local lock is dropped before their
     // rollback on every error path (including a potentially prompted Keychain delete).
     let lock = lock_config(config_path).await?;
@@ -242,14 +477,31 @@ async fn register(
     }
     response["operation"] = json!(operation);
     response["status"] = json!("success");
-    output::print_output(json!({"keys": response}), json_format);
-    Ok(())
+    Ok(response)
+}
+
+/// The path a recovery-phrase key is derived at: `--path`, else
+/// `m/44'/8478'/<--account>'/0'`. `None` without `--mnemonic` (clap rejects
+/// `--account`/`--path` without it).
+fn derivation_path(
+    mnemonic: bool,
+    account: Option<u32>,
+    path: Option<HdPath>,
+) -> Result<Option<HdPath>, CliError> {
+    if !mnemonic {
+        return Ok(None);
+    }
+    match path {
+        Some(path) => Ok(Some(path)),
+        None => HdPath::for_account(account.unwrap_or(0)).map(Some),
+    }
 }
 
 async fn add_key(
     name: &str,
     file: Option<PathBuf>,
     stdin: bool,
+    derivation: Option<HdPath>,
     store: KeyStorage,
     overwrite: bool,
     json_format: bool,
@@ -265,15 +517,27 @@ async fn add_key(
     let input = file
         .map(|file| std::env::current_dir().map(|cwd| cwd.join(file)))
         .transpose()?;
-    let (key, source) = blocking(move || match input {
-        Some(path) => {
+    let (key, source) = blocking(move || match (input, derivation) {
+        // A recovery phrase is never a key source: only the derived key is
+        // stored, as a new secret.
+        (input, Some(derivation)) => {
+            let phrase = match input {
+                Some(path) => hd::read_phrase(open_key_file(&path)?)?,
+                None => hd::read_phrase_from_stdin()?,
+            };
+            Ok((
+                LoadedKey::from_seed(hd::derive_key(&phrase, derivation)?),
+                None,
+            ))
+        }
+        (Some(path), None) => {
             let source = KeySource::File {
                 path,
                 managed: false,
             };
             Ok((load_source(&source)?, Some(source)))
         }
-        None => Ok((
+        (None, None) => Ok((
             LoadedKey::from_seed(read_seed(std::io::stdin().lock())?),
             None,
         )),
@@ -289,20 +553,25 @@ async fn add_key(
         }
     }
     let staged = stage(store, path.parent().unwrap().join("keys"), key).await?;
-    register(
+    let mut response = register_entry(
         &path,
         name,
         staged.entry.clone(),
         Some(staged),
         overwrite,
         "add",
-        json_format,
     )
-    .await
+    .await?;
+    if let Some(derivation) = derivation {
+        response["derivation_path"] = json!(derivation.to_string());
+    }
+    output::print_output(json!({"keys": response}), json_format);
+    Ok(())
 }
 
 async fn generate_key(
     name: &str,
+    derivation: Option<HdPath>,
     store: KeyStorage,
     overwrite: bool,
     json_format: bool,
@@ -310,18 +579,71 @@ async fn generate_key(
     KeyManager::validate_name(name)?;
     let path = Config::get_config_path()?;
     precheck_alias(&path, name, overwrite).await?;
-    let key = LoadedKey::from_seed(generate_seed()?);
+    let (key, phrase) = match derivation {
+        Some(derivation) => {
+            let phrase = hd::generate_phrase()?;
+            let key = LoadedKey::from_seed(hd::derive_key(&phrase, derivation)?);
+            (key, Some(phrase))
+        }
+        None => (LoadedKey::from_seed(generate_seed()?), None),
+    };
     let staged = stage(store, path.parent().unwrap().join("keys"), key).await?;
-    register(
+    let mut response = register_entry(
         &path,
         name,
         staged.entry.clone(),
         Some(staged),
         overwrite,
         "generate",
-        json_format,
     )
-    .await
+    .await?;
+    if let Some(derivation) = derivation {
+        response["derivation_path"] = json!(derivation.to_string());
+    }
+    // The phrase is shown once, after the key is registered, and never stored:
+    // this is the user's only chance to back it up.
+    match phrase {
+        Some(phrase) if json_format => print_generated_json(&response, &phrase)?,
+        Some(phrase) => {
+            output::print_output(json!({"keys": response}), false);
+            println!("Recovery phrase (shown once, not stored):");
+            println!("  {}", phrase.as_str());
+            output::print_warning(
+                "Write the recovery phrase down and keep it offline. Anyone who has it controls this key.",
+            );
+        }
+        None => output::print_output(json!({"keys": response}), json_format),
+    }
+    Ok(())
+}
+
+/// Print `{"keys": {...response, "mnemonic": phrase}}` as `print_output`
+/// would, serializing the phrase straight from its zeroizing buffer so that
+/// no owned JSON value or intermediate string holds a copy.
+fn print_generated_json(response: &Value, phrase: &str) -> Result<(), CliError> {
+    #[derive(serde::Serialize)]
+    struct Keys<'a> {
+        #[serde(flatten)]
+        response: &'a Value,
+        mnemonic: &'a str,
+    }
+    #[derive(serde::Serialize)]
+    struct Generated<'a> {
+        keys: Keys<'a>,
+    }
+    let mut stdout = std::io::stdout().lock();
+    serde_json::to_writer_pretty(
+        &mut stdout,
+        &Generated {
+            keys: Keys {
+                response,
+                mnemonic: phrase,
+            },
+        },
+    )
+    .map_err(std::io::Error::from)?;
+    writeln!(stdout)?;
+    Ok(())
 }
 
 fn remove_key_from_config(
@@ -349,6 +671,12 @@ async fn remove_key(
         let mut snapshot = Config::load_for_update(&path).await?;
         let manager = snapshot.keys.clone();
         let entry = remove_key_from_config(&mut snapshot, name, force)?;
+        if entry.source.is_ledger() {
+            return Err(CliError::Validation(
+                "A Ledger key's secret stays on the device; remove it without --delete-secret"
+                    .into(),
+            ));
+        }
         let read = (entry.public_key.clone(), manager.resolved_source(&entry));
         // Fail before any secret read (and prompt) when deletion is refused.
         if source_referenced(&snapshot, &read.1)? {
@@ -690,6 +1018,16 @@ async fn move_at(
     for name in names {
         let entry = snapshot.keys.get_entry(&name)?;
         let source = snapshot.keys.resolved_source(entry);
+        if source.is_ledger() {
+            // A Ledger key's secret stays on the device; only --all skips it.
+            if !all {
+                return Err(CliError::Validation(format!(
+                    "Signing key alias {name:?} is a Ledger key; its secret stays on the device and cannot be moved"
+                )));
+            }
+            unchanged.push(name);
+            continue;
+        }
         if in_storage(&source, to) {
             unchanged.push(name);
             continue;
@@ -1318,6 +1656,61 @@ mod tests {
             std::fs::read_to_string(original_path).unwrap(),
             original_yaml
         );
+    }
+
+    #[test]
+    fn test_ledger_key_record_describe_remove() {
+        use std::sync::Arc;
+        use thru_ledger::mock::SoftDevice;
+        let dev = Arc::new(SoftDevice::abandon());
+        let path = DerivationPath::new(0).unwrap();
+        let signer = crate::signing::connect_ledger_with(dev.clone(), path, None).unwrap();
+        signer.verify_address_on_device().unwrap();
+
+        let (_directory, keys) = KeyManager::test_fixture(&[("default", [5; 32])]);
+        let mut config = Config {
+            keys,
+            ..Config::default()
+        };
+        record_ledger_key(&mut config, "HW", &signer, false).unwrap();
+        let entry = config.keys.get_entry("hw").unwrap();
+        assert_eq!(entry.source, KeySource::Ledger { path });
+        assert_eq!(entry.reference(), path.to_uri());
+        assert_eq!(entry.public_key, signer.address());
+        let info = describe_key(&config, "hw").unwrap();
+        assert_eq!(info["type"], "ledger");
+        assert_eq!(info["public_key"], signer.address());
+        assert_eq!(info["path"], path.to_string());
+        assert_eq!(info["source"], path.to_uri());
+        assert_eq!(info["cached"], true);
+        // The raw path finds the registered address without the device.
+        let before = dev.apdu_log().len();
+        assert_eq!(
+            describe_key(&config, &path.to_uri()).unwrap()["public_key"],
+            signer.address()
+        );
+        assert_eq!(dev.apdu_log().len(), before);
+        // No overwrite without the flag.
+        assert!(record_ledger_key(&mut config, "hw", &signer, false).is_err());
+        // Local keys never expose the private key.
+        let local = describe_key(&config, "default").unwrap();
+        assert_eq!(local["type"], "local");
+        assert!(local.get("value").is_none());
+        // The registration survives a config round trip as a reference.
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        assert!(yaml.contains("type: ledger"), "{yaml}");
+        let (back, _) = Config::parse_document(&yaml).unwrap();
+        assert_eq!(
+            back.keys.get_entry("hw").unwrap().source,
+            KeySource::Ledger { path }
+        );
+
+        // Removal unregisters it; there is no secret to read or delete.
+        let removed = remove_key_from_config(&mut config, "hw", false).unwrap();
+        assert!(removed.source.is_ledger());
+        assert!(!config.keys.has_key("hw"));
+        assert!(load_source(&removed.source).is_err());
+        assert!(delete_source(&removed.source).is_err());
     }
 
     #[tokio::test]

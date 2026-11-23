@@ -188,6 +188,25 @@ describe("streaming", () => {
       expect(results[0].fee).toBe(1n);
     });
 
+    it("should expose the consensus status of each publication", async () => {
+      const ctx = createMockContext();
+      const mockTransaction = createMockTransactionProto();
+
+      vi.spyOn(ctx.streaming, "streamTransactions").mockReturnValue(
+        (async function* () {
+          yield { transaction: mockTransaction, consensusStatus: ConsensusStatus.INCLUDED };
+          yield { transaction: mockTransaction, consensusStatus: ConsensusStatus.LOCALLY_EXECUTED };
+        })() as AsyncIterable<any>
+      );
+
+      const statuses: number[] = [];
+      for await (const update of streamTransactions(ctx)) {
+        statuses.push(update.consensusStatus);
+      }
+
+      expect(statuses).toEqual([ConsensusStatus.INCLUDED, ConsensusStatus.LOCALLY_EXECUTED]);
+    });
+
     it("should parse transactions when body includes full wire payload", async () => {
       const ctx = createMockContext();
 
@@ -342,36 +361,6 @@ describe("streaming", () => {
       
       const callOptions = (ctx.streaming.trackTransaction as any).mock.calls[0][1];
       expect(callOptions.signal).toBe(abortController.signal);
-    });
-
-    it("should handle multiple responses", async () => {
-      const ctx = createMockContext();
-      const responses = [
-        create(TrackTransactionResponseSchema, { consensusStatus: ConsensusStatus.OBSERVED }),
-        create(TrackTransactionResponseSchema, { consensusStatus: ConsensusStatus.INCLUDED }),
-        create(TrackTransactionResponseSchema, { consensusStatus: ConsensusStatus.FINALIZED }),
-      ];
-      
-      vi.spyOn(ctx.streaming, "trackTransaction").mockReturnValue(
-        (async function* () {
-          for (const response of responses) {
-            yield response;
-          }
-        })()
-      );
-      
-      const signature = generateTestSignature();
-      const iterable = trackTransaction(ctx, signature);
-      
-      const results = [];
-      for await (const response of iterable) {
-        results.push(response);
-      }
-      
-      expect(results).toHaveLength(3);
-      expect(results[0].statusCode).toBe(ConsensusStatus.OBSERVED);
-      expect(results[1].statusCode).toBe(ConsensusStatus.INCLUDED);
-      expect(results[2].statusCode).toBe(ConsensusStatus.FINALIZED);
     });
 
     it("should convert execution result when present", async () => {

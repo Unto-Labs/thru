@@ -10,10 +10,20 @@ keywords = ["thru", "cli", "blockchain", "rpc"]
 categories = ["command-line-utilities", "cryptography::cryptocurrencies"]
 include = ["Cargo.toml", "build.rs", "src/**", "registry/**", "templates/**", "abi/tn_token_program.abi.yaml"]
 
+[features]
+default = []
+# Test-only: let THRU_LEDGER_SPECULOS=host:port point Ledger keys at a Speculos
+# emulator (ledger/sim, rpc/cli/tests/thru_cli_ledger_e2e.sh). Never enable it
+# in release builds: any TCP endpoint could then impersonate the Ledger.
+ledger-speculos = ["thru-ledger/speculos"]
+
 [dependencies]
 # Thru dependencies
 thru-client = { version = "0.1.0", path = "../../../thru-client" }
 thru-base = { version = "0.1.0", path = "../../../thru-base" }
+# Ledger hardware-wallet signer (USB HID). The Speculos emulator transport is
+# compiled in only with the `ledger-speculos` feature below (test builds).
+thru-ledger = { version = "0.1.0", path = "../../../thru-ledger" }
 abi_gen = { package = "thru-abi-gen", version = "0.1.0", path = "../../../abi/abi_gen" }
 abi_loader = { package = "thru-abi-loader", version = "0.1.0", path = "../../../abi/abi_loader" }
 abi_reflect = { package = "thru-abi-reflect", version = "0.1.0", path = "../../../abi/abi_reflect" }
@@ -50,6 +60,9 @@ base64 = "0.22"
 blst = "0.3"
 ed25519-dalek = "2.2"
 zeroize = "1.8"
+# Recovery phrases (BIP-39) and SLIP-0010 derivation (src/hd.rs)
+bip39 = { version = "3.0", features = ["zeroize"] }
+hmac = "0.13"
 
 # System utilities
 dirs = "6.0"
@@ -96,6 +109,7 @@ vergen = "=9.1.0"
 vergen-lib = "=9.1.0"
 
 [dev-dependencies]
+thru-ledger = { version = "0.1.0", path = "../../../thru-ledger", features = ["speculos", "mock"] }
 tokio-test = "0.4"
 tempfile = "3.8"
 wiremock = "0.6"

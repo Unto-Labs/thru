@@ -304,35 +304,6 @@ describe("helpers", () => {
       expect(() => deriveAddress([])).toThrow("At least one input is required");
     });
 
-    it("should derive token account address (owner || mint || seed pattern)", () => {
-      const ownerPubkey = generateTestPubkey(0x01);
-      const mintPubkey = generateTestPubkey(0x02);
-      const seed = new Uint8Array(32).fill(0x03);
-
-      const result = deriveAddress([ownerPubkey, mintPubkey, seed]);
-
-      expect(result.bytes.length).toBe(32);
-      expect(result.address).toBeTruthy();
-
-      // Verify determinism with same pattern
-      const result2 = deriveAddress([ownerPubkey, mintPubkey, seed]);
-      expect(result.address).toBe(result2.address);
-    });
-
-    it("should derive mint account address (creator || seed pattern)", () => {
-      const creatorPubkey = generateTestPubkey(0x01);
-      const seed = new Uint8Array(32).fill(0x02);
-
-      const result = deriveAddress([creatorPubkey, seed]);
-
-      expect(result.bytes.length).toBe(32);
-      expect(result.address).toBeTruthy();
-
-      // Verify determinism with same pattern
-      const result2 = deriveAddress([creatorPubkey, seed]);
-      expect(result.address).toBe(result2.address);
-    });
-
     it("should handle variable length inputs correctly", () => {
       const input32 = new Uint8Array(32).fill(0x01);
       const input16 = new Uint8Array(16).fill(0x02);

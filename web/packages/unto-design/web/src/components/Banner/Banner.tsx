@@ -5,13 +5,14 @@ import "./Banner.css";
 export interface BannerProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Bar height in px (default 24; use ~6 for a thin "hat"). */
   height?: number;
-  /** Width of the diagonal "wing" slant on the right end, in px. */
+  /** Horizontal run of the slant at each end, in px. */
   slant?: number;
 }
 
 /**
- * Banner — the Thru "wing" bar: a full-width brick strip whose right end is
- * sheared into the diagonal wing. Decorative; pass children to overlay content.
+ * Banner — the wing bar: a full-width accent parallelogram, both ends cut at
+ * the same angle. The system's one angled shape, so keep it decorative; pass
+ * children to overlay content.
  */
 export const Banner = React.forwardRef<HTMLDivElement, BannerProps>(function Banner(
   { height = 24, slant = 20, className, style, children, ...rest },
@@ -23,7 +24,7 @@ export const Banner = React.forwardRef<HTMLDivElement, BannerProps>(function Ban
       className={cn("uds-banner", className)}
       style={{
         height,
-        clipPath: `polygon(0 0, calc(100% - ${slant}px) 0, 100% 100%, 0 100%)`,
+        clipPath: `polygon(${slant}px 0, 100% 0, calc(100% - ${slant}px) 100%, 0 100%)`,
         ...style,
       }}
       {...rest}

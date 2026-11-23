@@ -17,6 +17,6 @@
 
 .uds-coll__inner {
   padding: var(--space-3) 0 0;
-  font-size: 13px;
+  font-size: var(--text-ui);
   color: var(--color-text-tertiary);
 }

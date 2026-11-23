@@ -53,6 +53,17 @@ mkdir -p "$HOME/.thru/sdk/c"
 make BASEDIR="$HOME/.thru/sdk/c" all lib include
 ```
 
+## Building In-Repository C Programs
+
+From the repository root:
+
+```bash
+gmake -j4 BASEDIR=../../build -C programs/c all
+```
+
+The program build installs SDK headers before generating dependencies or compiling.
+Missing exported headers are installed even when the SDK build stamp is current.
+
 ## Environment Variables
 
 - `THRU_DIR` - Base directory for installation (default: `$HOME`)

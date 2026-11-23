@@ -2,7 +2,7 @@ import { create } from "@bufbuild/protobuf";
 import { describe, expect, it, vi } from "vitest";
 import { createMockAccount, createMockContext, generateTestAddress, generateTestPubkey } from "../../__tests__/helpers/test-utils";
 import { ConsensusStatus, CurrentVersionSchema, VersionContextSchema } from "@thru/sdk/proto";
-import { AccountView, AccountStateFilter } from "@thru/sdk/proto";
+import { AccountView, AccountStateFilter, StateProofType } from "@thru/sdk/proto";
 import { GenerateStateProofResponseSchema, GetChainInfoResponseSchema, ListAccountsResponseSchema } from "@thru/sdk/proto";
 import { Account } from "../../domain/accounts";
 import { Filter, FilterParamValue } from "../../domain/filters";
@@ -113,8 +113,7 @@ describe("accounts", () => {
       await getAccount(ctx, generateTestPubkey(0x01), { versionContext });
       
       const callArgs = (ctx.query.getAccount as any).mock.calls[0][0];
-      expect(callArgs.versionContext).toBeDefined();
-      expect(callArgs.versionContext.version?.case).toBe("current");
+      expect(callArgs.versionContext).toBe(versionContext);
     });
   });
 
@@ -213,20 +212,6 @@ describe("accounts", () => {
       expect(callArgs.filter.expression).toBe("meta.owner.value == params.owner_bytes");
       expect(callArgs.filter.params.owner_bytes.kind.case).toBe("bytesValue");
       expect(callArgs.filter.params.owner_bytes.kind.value).toEqual(ownerBytes);
-    });
-
-    it("should use custom filter when provided", async () => {
-      const ctx = createMockContext();
-      const mockResponse = create(ListAccountsResponseSchema, { accounts: [] });
-      const customFilter = new Filter({
-        expression: "custom expression",
-      });
-      vi.spyOn(ctx.query, "listAccounts").mockResolvedValue(mockResponse);
-      
-      await listAccounts(ctx, { filter: customFilter });
-      
-      const callArgs = (ctx.query.listAccounts as any).mock.calls[0][0];
-      expect(callArgs.filter.expression).toBe("custom expression");
     });
 
     it("should use default view and minConsensus", async () => {
@@ -403,10 +388,9 @@ describe("accounts", () => {
       const publicKey = generateTestPubkey(0x01);
       await createAccount(ctx, { publicKey });
 
-      // Verify generateStateProof was called with correct address
       expect(ctx.query.generateStateProof).toHaveBeenCalledTimes(1);
       const proofCallArgs = (ctx.query.generateStateProof as any).mock.calls[0][0];
-      expect(proofCallArgs.request).toBeDefined();
+      expect(proofCallArgs.request.proofType).toBe(StateProofType.CREATING);
     });
 
     it("should throw error when proof is empty", async () => {

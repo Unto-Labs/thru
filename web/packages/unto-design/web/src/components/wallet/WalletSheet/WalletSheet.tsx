@@ -8,11 +8,11 @@ import { Steps, type StepItem } from "../Steps/Steps";
 import { Checklist } from "../Checklist/Checklist";
 import { Details } from "../Details/Details";
 import { Disc } from "../Disc/Disc";
-import { ThruDisc, PoweredBy } from "../Brand/Brand";
+import { PoweredBy } from "../Brand/Brand";
 import { ErrorBox } from "../ErrorBox/ErrorBox";
 import { TxTree } from "../TxTree/TxTree";
 import { Collapsible } from "@base-ui/react/collapsible";
-import { useWaitStages, WaitHero, WALLET_SHEET_SLOW_MS, WALLET_SHEET_ESCALATE_MS } from "./wait";
+import { useWaitStages, WaitHero, WALLET_SHEET_ESCALATE_MS } from "./wait";
 import { DepositScreens } from "./DepositScreens";
 import { DepositKyc } from "./DepositKyc";
 import { DepositBankDetails, DepositActivity } from "./DepositBank";
@@ -66,7 +66,7 @@ export interface WalletSheetDetail {
   value: React.ReactNode;
 }
 
-export { WALLET_SHEET_SLOW_MS, WALLET_SHEET_ESCALATE_MS } from "./wait";
+export { WALLET_SHEET_ESCALATE_MS } from "./wait";
 
 export type WalletSheetRootProps = FrameProps;
 
@@ -101,8 +101,7 @@ function SignIn({
     <>
       <Screen>
         <Screen.Header
-          tone="plain"
-          icon={<ThruDisc size={38} title="Thru Wallet" />}
+          icon={false}
           title={<>Sign in to {appName}</>}
           content={description}
         />
@@ -127,7 +126,6 @@ export interface WalletSheetLoadingProps {
   description?: React.ReactNode;
   /** Override the default three-step ladder. */
   steps?: StepItem[];
-  slowAfterMs?: number;
   escalateAfterMs?: number;
   escalationMessage?: React.ReactNode;
   onRetry?: () => void;
@@ -143,7 +141,6 @@ function Loading({
   title,
   description,
   steps,
-  slowAfterMs = WALLET_SHEET_SLOW_MS,
   escalateAfterMs = WALLET_SHEET_ESCALATE_MS,
   escalationMessage = "Still waiting. Look for a passkey prompt from your browser.",
   onRetry,
@@ -153,7 +150,7 @@ function Loading({
   poweredBy = true,
 }: WalletSheetLoadingProps) {
   const signup = flow === "signup";
-  const { slow, escalated } = useWaitStages(flow, slowAfterMs, escalateAfterMs, !!(onRetry || onCancel));
+  const { escalated } = useWaitStages(flow, escalateAfterMs, !!(onRetry || onCancel));
   const items: StepItem[] = steps ?? [
     { label: signup ? "Passkey created" : "Passkey verified", status: "done" },
     { label: signup ? "Setting up account" : "Restoring account", status: "active" },
@@ -163,7 +160,6 @@ function Loading({
     <>
       <Screen>
         <WaitHero
-          slow={slow}
           title={title ?? (signup ? "Creating your account" : "Waiting for passkey")}
           content={
             description ??
@@ -262,7 +258,7 @@ export interface WalletSheetConnectedProps {
   appName: React.ReactNode;
   address: string;
   balance?: React.ReactNode;
-  /** Second line under the address (default "Passkey · Thru"). */
+  /** Second line under the address (default "Passkey · Unto"). */
   authLabel?: React.ReactNode;
   avatar?: React.ReactNode;
   title?: React.ReactNode;
@@ -275,7 +271,7 @@ function Connected({
   appName,
   address,
   balance,
-  authLabel = "Passkey · Thru",
+  authLabel = "Passkey · Unto",
   avatar,
   title = "Connected",
   description,
@@ -299,7 +295,7 @@ function Connected({
         content={description ?? <>You&rsquo;re signed in to {appName}.</>}
       />
       <div className="uds-wsheet__account">
-        {avatar ?? <Disc size={20} color="var(--sky-400)" />}
+        {avatar ?? <Disc size={20} color="var(--info-400)" />}
         <div className="uds-wsheet__account-main">
           <Address value={address} leading={6} trailing={4} className="uds-wsheet__account-addr" />
           <div className="uds-wsheet__account-sub">{authLabel}</div>
@@ -617,7 +613,6 @@ export interface WalletSheetTxPendingProps {
   title?: React.ReactNode;
   description?: React.ReactNode;
   steps?: StepItem[];
-  slowAfterMs?: number;
   poweredBy?: boolean;
 }
 
@@ -625,19 +620,17 @@ function TxPending({
   title = "Signing transaction",
   description = "Confirm with your passkey to sign.",
   steps,
-  slowAfterMs = WALLET_SHEET_SLOW_MS,
   poweredBy = true,
 }: WalletSheetTxPendingProps) {
-  const { slow } = useWaitStages(undefined, slowAfterMs, 0, false);
   const items: StepItem[] = steps ?? [
     { label: "Signed with passkey", status: "done" },
-    { label: "Submitting to Thru", status: "active" },
+    { label: "Submitting to Unto", status: "active" },
     { label: "Waiting for confirmation", status: "pending" },
   ];
   return (
     <>
       <Screen>
-        <WaitHero slow={slow} title={title} content={description} />
+        <WaitHero title={title} content={description} />
         <Steps items={items} />
       </Screen>
       {poweredBy && <PoweredBy />}
@@ -679,7 +672,7 @@ function TxDone({
         tone="success"
         icon={<Check width={18} height={18} />}
         title={title}
-        content={description ?? <>{appName} will update once Thru confirms.</>}
+        content={description ?? <>{appName} will update once Unto confirms.</>}
       />
       <div className="uds-wsheet__sigrow">
         <span className="uds-wsheet__siglabel">Signature</span>

@@ -3,7 +3,7 @@
 }
 .uds-errbox__msg {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-label);
   line-height: 1.5;
   color: var(--color-text-secondary);
   display: -webkit-box;

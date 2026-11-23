@@ -41,7 +41,7 @@ import {
 } from "@thru/sdk";
 
 const thru = createThruClient({
-  baseUrl: "https://rpc.alphanet.thru.org",
+  baseUrl: "https://rpc.betanet.thru.org",
 });
 
 // Fetch the latest finalized block
@@ -67,11 +67,10 @@ for await (const update of thru.transactions.sendAndTrack(rawTransaction, {
   timeoutMs: 60_000,
 })) {
   console.log(update.status, update.executionResult?.consumedComputeUnits);
-  if (
-    update.executionResult ||
-    update.consensusStatus === ConsensusStatus.FINALIZED ||
-    update.consensusStatus === ConsensusStatus.CLUSTER_EXECUTED
-  ) {
+  // Stop on an execution result. A consensus status alone does not mean the
+  // transaction executed. Pass `minConsensus` (FINALIZED or LOCALLY_EXECUTED)
+  // to also require a level on the message that carries the result.
+  if (update.executionResult) {
     break;
   }
 }
@@ -83,7 +82,7 @@ for await (const update of thru.transactions.sendAndTrack(rawTransaction, {
 
 ```ts
 const thru = createThruClient({
-  baseUrl: "https://rpc.alphanet.thru.org",
+  baseUrl: "https://rpc.betanet.thru.org",
   transportOptions: {
     useBinaryFormat: false,
     defaultTimeoutMs: 10_000,
@@ -105,7 +104,7 @@ const thru = createThruClient({
 import { createThruClient, resolveThruApiKey } from "@thru/sdk";
 
 const thru = createThruClient({
-  baseUrl: "https://rpc.alphanet.thru.org",
+  baseUrl: "https://rpc.betanet.thru.org",
   apiKey: resolveThruApiKey(process.env),
 });
 ```

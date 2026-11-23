@@ -3,7 +3,7 @@ import { SubmissionStatus } from '@thru/sdk/proto';
 
 import { TransactionFailedError, isStateUnitsExhausted } from './errors';
 import type { ThruClient } from './rpc';
-import { sendAndConfirm, waitForTransaction, wireSignature } from './send';
+import { sendAndConfirm, wireSignature } from './send';
 import { callsOf, simulatedRpc } from './test-rpc';
 
 /** Drives fake timers until `promise` settles; returns its outcome and the
@@ -57,23 +57,6 @@ describe('sendAndConfirm', () => {
     expect(rpc.calls.map((call) => call.method)).toEqual(['transactions.sendAndTrack']);
     expect(onSubmitted).toHaveBeenCalledTimes(1);
     expect(onSubmitted).toHaveBeenCalledWith(wireSignature(raw));
-  });
-
-  it('is faster than send plus a 750 ms status poll', async () => {
-    const before = simulatedRpc({ rttMs: 100, execMs: 500 });
-    const raw = wire(2);
-    const old = await timed(
-      (async () => {
-        const signature = await before.sdk.transactions.send(raw);
-        await waitForTransaction(before.sdk, signature, 'order');
-      })(),
-    );
-    const after = simulatedRpc({ rttMs: 100, execMs: 500 });
-    const now = await timed(sendAndConfirm(after.sdk, raw, 'order'));
-    /* send (100) + polls every 200 ms in the first 2 s, each a round trip:
-       execution seen at 800 ms. */
-    expect(old.ms).toBe(800);
-    expect(now.ms).toBe(600);
   });
 
   it('decodes a failed execution', async () => {

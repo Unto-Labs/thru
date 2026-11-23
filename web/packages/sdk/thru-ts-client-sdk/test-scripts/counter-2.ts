@@ -40,11 +40,8 @@ async function sendAndTrackRawTransaction(
             const statusKey = ConsensusStatus[update.consensusStatus];
             console.log("Track update:", statusKey, "consumed CU:", consumed);
 
-            if (
-                update.executionResult ||
-                update.consensusStatus === ConsensusStatus.FINALIZED ||
-                update.consensusStatus === ConsensusStatus.CLUSTER_EXECUTED
-            ) {
+            // Stop on an execution result; a consensus status alone does not mean it executed.
+            if (update.executionResult) {
                 finalized = true;
                 break;
             }

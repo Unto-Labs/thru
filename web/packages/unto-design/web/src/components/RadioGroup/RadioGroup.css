@@ -11,7 +11,7 @@
   align-items: center;
   gap: var(--space-2);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--text-ui);
   color: var(--color-text-primary);
   cursor: pointer;
   user-select: none;
@@ -32,11 +32,11 @@
 }
 
 .uds-radio__circle[data-checked] {
-  border-color: var(--brick-400);
+  border-color: var(--color-border-brand);
 }
 
 .uds-radio__circle:focus-visible {
-  outline: 2px solid var(--brick-400);
+  outline: 2px solid var(--color-border-brand);
   outline-offset: 2px;
 }
 
@@ -50,7 +50,7 @@
   width: 9px;
   height: 9px;
   border-radius: var(--radius-pill);
-  background: var(--brick-400);
+  background: var(--color-surface-accent);
   transform: scale(0);
   transition: transform var(--duration-fast) var(--ease-standard);
 }

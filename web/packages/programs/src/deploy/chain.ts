@@ -125,6 +125,7 @@ export async function submitTransaction(
       if (update.status === SubmissionStatus.ACCEPTED) accepted = true;
       if (
         update.consensusStatus === ConsensusStatus.FINALIZED ||
+        update.consensusStatus === ConsensusStatus.LOCALLY_EXECUTED ||
         update.consensusStatus === ConsensusStatus.CLUSTER_EXECUTED
       ) {
         finalized = true;

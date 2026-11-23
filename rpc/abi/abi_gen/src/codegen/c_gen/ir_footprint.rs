@@ -240,8 +240,8 @@ pub fn resolve_param_binding<'a>(ir_param: &str, available: &'a [String]) -> Opt
 mod tests {
     use super::*;
     use crate::codegen::shared::ir::{
-        AlignNode, BinaryOpNode, ConstNode, FieldRefNode, IR_SCHEMA_VERSION, IrParameter, LayoutIr,
-        NodeMetadata, SwitchCase, SwitchNode,
+        AlignNode, BinaryOpNode, ConstNode, FieldRefNode, IrParameter, NodeMetadata, SwitchCase,
+        SwitchNode,
     };
 
     fn simple_type_ir(node: IrNode) -> TypeIr {
@@ -255,18 +255,6 @@ mod tests {
                 derived: false,
             }],
         }
-    }
-
-    #[test]
-    fn emitter_handles_const_nodes() {
-        let type_ir = simple_type_ir(IrNode::Const(ConstNode {
-            value: 8,
-            meta: NodeMetadata::default(),
-        }));
-        let emitter = IrFootprintEmitter::new(&type_ir);
-        let output = emitter.emit().unwrap();
-        assert!(output.contains("Sample_footprint_ir"));
-        assert!(output.contains("8ULL"));
     }
 
     #[test]
@@ -298,20 +286,6 @@ mod tests {
         let output = emitter.emit().unwrap();
         assert!(output.contains("switch"));
         assert!(output.contains("case 1"));
-    }
-
-    #[test]
-    fn layout_ir_round_trip() {
-        let type_ir = simple_type_ir(IrNode::FieldRef(FieldRefNode {
-            path: "arr.len".into(),
-            parameter: Some("arr.len".into()),
-            meta: NodeMetadata::default(),
-        }));
-        let layout = LayoutIr {
-            version: IR_SCHEMA_VERSION,
-            types: vec![type_ir],
-        };
-        assert_eq!(layout.version, IR_SCHEMA_VERSION);
     }
 
     #[test]

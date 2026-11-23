@@ -1,16 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { dobToIso, formatDob, parseDob, validateDob } from "./dob";
+import { dobToIso, parseDob, validateDob } from "./dob";
 
 describe("date of birth helpers", () => {
   it.each([
-    ["", ""], ["0", "0"], ["070", "07/0"], ["0704", "07/04"],
-    ["07041990", "07/04/1990"], ["07/04/199012", "07/04/1990"],
-    ["7/4/1990", "74/19/90"], ["a07b04c1990", "07/04/1990"],
-  ])("formats %s as %s", (text, expected) => {
-    expect(formatDob(text)).toBe(expected);
-  });
-
-  it.each(["02/30/2024", "02/29/2023", "02/29/1900", "00/01/1990", "13/01/1990", "01/00/1990", "04/31/1990", "7/4/1990", "01/01/0000", "01/01/19900"])("rejects invalid date %s", (text) => {
+    "02/30/2024",
+    "02/29/2023",
+    "02/29/1900",
+    "00/01/1990",
+    "13/01/1990",
+    "01/00/1990",
+    "04/31/1990",
+    "01/01/0000",
+    "01/01/19900",
+    "01/01/990",
+    "7/4/90",
+    "123/4/1990",
+    "7//1990",
+    "",
+    "07041990",
+  ])("rejects invalid date %j", (text) => {
     expect(parseDob(text)).toBeNull();
     expect(dobToIso(text)).toBeNull();
   });
@@ -21,13 +29,31 @@ describe("date of birth helpers", () => {
     expect(dobToIso("07/04/1990")).toBe("1990-07-04");
   });
 
+  it("reads month, day and year with or without leading zeros", () => {
+    expect(dobToIso("7/4/1990")).toBe("1990-07-04");
+    expect(dobToIso("07/4/1990")).toBe("1990-07-04");
+    expect(dobToIso("7/04/1990")).toBe("1990-07-04");
+    expect(dobToIso("01/02/1990")).toBe("1990-01-02");
+    expect(dobToIso("1/23/1990")).toBe("1990-01-23");
+  });
+
   it.each([
-    ["", null], ["07/04/19", "Enter the full date as MM/DD/YYYY"],
-    ["02/30/2024", "Enter a real date"], ["12/31/1899", "Enter a real date"],
+    ["", null],
+    ["7//", "Enter the month, day and year"],
+    ["7/4/", "Enter the month, day and year"],
+    ["/4/1990", "Enter the month, day and year"],
+    ["7//1990", "Enter the month, day and year"],
+    ["//1990", "Enter the month, day and year"],
+    ["02/30/2024", "Enter a real date"],
+    ["12/31/1899", "Enter a real date"],
+    ["7/4/199", "Enter a real date"],
     ["07/05/2024", "Date of birth can't be in the future"],
     ["01/01/2025", "Date of birth can't be in the future"],
-    ["07/04/2024", null], ["01/01/1900", null], ["07/04/1990", null],
-  ])("validates %s", (text, expected) => {
+    ["07/04/2024", null],
+    ["01/01/1900", null],
+    ["07/04/1990", null],
+    ["7/4/1990", null],
+  ])("validates %j", (text, expected) => {
     expect(validateDob(text, new Date(2024, 6, 4))).toBe(expected);
   });
 });

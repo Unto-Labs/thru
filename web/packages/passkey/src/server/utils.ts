@@ -9,6 +9,7 @@ import type {
 const feePayerQueueSymbol = Symbol.for('thru.sharedFeePayerQueues');
 const SUBMISSION_STATUS_ACCEPTED = 2;
 const CONSENSUS_STATUS_FINALIZED = 3;
+const CONSENSUS_STATUS_LOCALLY_EXECUTED = 4;
 const CONSENSUS_STATUS_CLUSTER_EXECUTED = 5;
 
 function getFeePayerQueues(): Map<string, Promise<void>> {
@@ -185,7 +186,11 @@ function executionResultToTransactionResult(
 }
 
 function isFinalConsensusStatus(status?: number): boolean {
-  return status === CONSENSUS_STATUS_FINALIZED || status === CONSENSUS_STATUS_CLUSTER_EXECUTED;
+  return (
+    status === CONSENSUS_STATUS_FINALIZED ||
+    status === CONSENSUS_STATUS_LOCALLY_EXECUTED ||
+    status === CONSENSUS_STATUS_CLUSTER_EXECUTED
+  );
 }
 
 function signatureFromRawTransaction(rawTransaction: Uint8Array): string {

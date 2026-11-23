@@ -131,6 +131,10 @@ export type GetTransactionRequest = Message<"thru.services.v1.GetTransactionRequ
   versionContext?: VersionContext | undefined;
 
   /**
+   * Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+   * INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+   * which is LOCALLY_EXECUTED.
+   *
    * @generated from field: optional thru.common.v1.ConsensusStatus min_consensus = 4;
    */
   minConsensus?: ConsensusStatus | undefined;
@@ -160,6 +164,10 @@ export type GetRawTransactionRequest = Message<"thru.services.v1.GetRawTransacti
   versionContext?: VersionContext | undefined;
 
   /**
+   * Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+   * INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+   * which is LOCALLY_EXECUTED.
+   *
    * @generated from field: optional thru.common.v1.ConsensusStatus min_consensus = 3;
    */
   minConsensus?: ConsensusStatus | undefined;
@@ -239,6 +247,10 @@ export type GetBlockRequest = Message<"thru.services.v1.GetBlockRequest"> & {
   view?: BlockView | undefined;
 
   /**
+   * Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+   * INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+   * which is LOCALLY_EXECUTED.
+   *
    * @generated from field: optional thru.common.v1.ConsensusStatus min_consensus = 4;
    */
   minConsensus?: ConsensusStatus | undefined;
@@ -275,6 +287,10 @@ export type GetRawBlockRequest = Message<"thru.services.v1.GetRawBlockRequest"> 
   } | { case: undefined; value?: undefined };
 
   /**
+   * Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+   * INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+   * which is LOCALLY_EXECUTED.
+   *
    * @generated from field: optional thru.common.v1.ConsensusStatus min_consensus = 3;
    */
   minConsensus?: ConsensusStatus | undefined;
@@ -434,6 +450,10 @@ export type ListAccountsRequest = Message<"thru.services.v1.ListAccountsRequest"
   page?: PageRequest | undefined;
 
   /**
+   * Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+   * INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+   * which is LOCALLY_EXECUTED.
+   *
    * @generated from field: optional thru.common.v1.ConsensusStatus min_consensus = 5;
    */
   minConsensus?: ConsensusStatus | undefined;
@@ -513,7 +533,7 @@ export const ListAccountsResponseSchema: GenMessage<ListAccountsResponse> = /*@_
  *   - block.footer.attestor_payment (uint64): Payment to attestors for block validation
  *
  * Consensus status:
- *   - block.consensus_status (int32): Consensus status (always CONSENSUS_STATUS_INCLUDED for persisted blocks)
+ *   - block.consensus_status (int32): Consensus status (stored blocks report CONSENSUS_STATUS_LOCALLY_EXECUTED)
  *
  * Available CEL functions:
  *   - has(field): Check if optional field exists
@@ -657,6 +677,10 @@ export type ListBlocksRequest = Message<"thru.services.v1.ListBlocksRequest"> & 
   view?: BlockView | undefined;
 
   /**
+   * Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+   * INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+   * which is LOCALLY_EXECUTED.
+   *
    * @generated from field: optional thru.common.v1.ConsensusStatus min_consensus = 4;
    */
   minConsensus?: ConsensusStatus | undefined;
@@ -1219,6 +1243,10 @@ export type ListEventsRequest = Message<"thru.services.v1.ListEventsRequest"> & 
   versionContext?: VersionContext | undefined;
 
   /**
+   * Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+   * INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+   * which is LOCALLY_EXECUTED.
+   *
    * @generated from field: optional thru.common.v1.ConsensusStatus min_consensus = 4;
    */
   minConsensus?: ConsensusStatus | undefined;
@@ -1405,6 +1433,10 @@ export type ListTransactionsRequest = Message<"thru.services.v1.ListTransactions
   versionContext?: VersionContext | undefined;
 
   /**
+   * Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+   * INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+   * which is LOCALLY_EXECUTED.
+   *
    * @generated from field: optional thru.common.v1.ConsensusStatus min_consensus = 5;
    */
   minConsensus?: ConsensusStatus | undefined;
@@ -1509,16 +1541,27 @@ export const GetHeightRequestSchema: GenMessage<GetHeightRequest> = /*@__PURE__*
  */
 export type GetHeightResponse = Message<"thru.services.v1.GetHeightResponse"> & {
   /**
+   * Highest slot known to be finalized, capped by the newest block this
+   * thrud has seen. This is a finality height, NOT a current-slot clock; use
+   * locally_executed for the current slot.
+   *
    * @generated from field: uint64 finalized = 1;
    */
   finalized: bigint;
 
   /**
+   * Highest slot known to have finished executing on this node. A lifetime
+   * watermark: it never goes backwards (also across reconnects), and the query
+   * service seeds it at boot from its durable cursor, so it can be ahead of the
+   * attached node's current replay position until live execution overtakes it.
+   *
    * @generated from field: uint64 locally_executed = 2;
    */
   locallyExecuted: bigint;
 
   /**
+   * Always 0 until UNTO-3677.
+   *
    * @generated from field: uint64 cluster_executed = 3;
    */
   clusterExecuted: bigint;
@@ -1970,14 +2013,16 @@ export type GetNodeStatusResponse = Message<"thru.services.v1.GetNodeStatusRespo
   repair?: NodeRepairStatus | undefined;
 
   /**
-   * Latest finalized slot.
+   * Highest finalized slot; same meaning as GetHeightResponse.finalized (a
+   * finality height, not a current-slot clock).
    *
    * @generated from field: uint64 finalized_slot = 4;
    */
   finalizedSlot: bigint;
 
   /**
-   * Latest locally executed slot.
+   * Same meaning as GetHeightResponse.locally_executed (a lifetime watermark
+   * seeded from the durable cursor at boot).
    *
    * @generated from field: uint64 locally_executed_slot = 5;
    */
@@ -2081,6 +2126,10 @@ export type BatchGetRawAccountsRequest = Message<"thru.services.v1.BatchGetRawAc
   versionContext?: VersionContext | undefined;
 
   /**
+   * Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+   * INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+   * which is LOCALLY_EXECUTED.
+   *
    * @generated from field: optional thru.common.v1.ConsensusStatus min_consensus = 3;
    */
   minConsensus?: ConsensusStatus | undefined;
@@ -2173,6 +2222,10 @@ export type BatchGetTransactionsRequest = Message<"thru.services.v1.BatchGetTran
   versionContext?: VersionContext | undefined;
 
   /**
+   * Values outside the enum and CLUSTER_EXECUTED (not supported yet) fail with
+   * INVALID_ARGUMENT. Any other value is already satisfied by stored data,
+   * which is LOCALLY_EXECUTED.
+   *
    * @generated from field: optional thru.common.v1.ConsensusStatus min_consensus = 3;
    */
   minConsensus?: ConsensusStatus | undefined;

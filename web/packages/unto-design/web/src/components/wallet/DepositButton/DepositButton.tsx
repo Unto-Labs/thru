@@ -1,5 +1,7 @@
 import * as React from "react";
 import { cn } from "../../../utils";
+import { Button, type ButtonProps } from "../../Button/Button";
+import { Spinner } from "../../Spinner/Spinner";
 import "./DepositButton.css";
 
 const PlusCircle = (p: React.SVGProps<SVGSVGElement>) => (
@@ -11,12 +13,12 @@ const PlusCircle = (p: React.SVGProps<SVGSVGElement>) => (
 
 export type DepositButtonState = "idle" | "loading";
 export type DepositButtonSize = "md" | "sm" | "xs";
-export type DepositButtonVariant = "primary" | "outline" | "brick" | "ghost";
+export type DepositButtonVariant = "primary" | "outline" | "accent" | "ghost";
 
 const ICON_PX: Record<DepositButtonSize, number> = { md: 16, sm: 14, xs: 12 };
 
 export interface DepositButtonProps
-  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "onClick"> {
+  extends Omit<ButtonProps, "variant" | "size" | "children" | "onClick"> {
   /** Idle shows the plus disc; loading spins it and swaps the label. */
   state?: DepositButtonState;
   size?: DepositButtonSize;
@@ -28,16 +30,16 @@ export interface DepositButtonProps
   balance?: React.ReactNode;
   /** Show the balance segment (hidden while loading). */
   showBalance?: boolean;
-  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onClick?: (event: React.MouseEvent<HTMLElement>) => void;
 }
 
 /**
  * DepositButton — the funding entry point a host app drops next to its
- * ConnectButton (or inline, as `ghost`, next to a balance). Metrics mirror
- * ConnectButton / Button per size; the reference caller is
- * `thru.deposit({ to: account })`.
+ * ConnectButton (or inline, as `ghost`, next to a balance). It is a Button
+ * with a plus icon and an optional balance segment; the reference caller is
+ * `unto.deposit({ to: account })`.
  */
-export const DepositButton = React.forwardRef<HTMLButtonElement, DepositButtonProps>(
+export const DepositButton = React.forwardRef<HTMLElement, DepositButtonProps>(
   function DepositButton(
     {
       state = "idle",
@@ -48,8 +50,6 @@ export const DepositButton = React.forwardRef<HTMLButtonElement, DepositButtonPr
       showBalance = true,
       onClick,
       className,
-      disabled,
-      type = "button",
       ...rest
     },
     ref,
@@ -58,28 +58,17 @@ export const DepositButton = React.forwardRef<HTMLButtonElement, DepositButtonPr
     const iconPx = ICON_PX[size];
     const text = label ?? (loading ? "Adding funds…" : "Add funds");
     return (
-      <button
+      <Button
         ref={ref}
-        type={type}
-        className={cn(
-          "uds-deposit-btn",
-          `uds-deposit-btn--${size}`,
-          `uds-deposit-btn--${variant}`,
-          loading && "uds-deposit-btn--loading",
-          className,
-        )}
+        variant={variant}
+        size={size}
+        className={cn("uds-deposit-btn", loading && "uds-deposit-btn--loading", className)}
         onClick={loading ? undefined : onClick}
         aria-busy={loading || undefined}
-        disabled={disabled}
         {...rest}
       >
         {loading ? (
-          <span
-            className="uds-deposit-btn__spin"
-            role="status"
-            aria-label="Loading"
-            style={{ width: iconPx, height: iconPx }}
-          />
+          <Spinner tone="inherit" style={{ width: iconPx, height: iconPx }} />
         ) : (
           <PlusCircle width={iconPx} height={iconPx} />
         )}
@@ -90,7 +79,7 @@ export const DepositButton = React.forwardRef<HTMLButtonElement, DepositButtonPr
             <span className="uds-deposit-btn__bal">{balance}</span>
           </>
         )}
-      </button>
+      </Button>
     );
   },
 );

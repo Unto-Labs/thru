@@ -82,6 +82,35 @@ impl fmt::Display for TnSignatureError {
 
 impl std::error::Error for TnSignatureError {}
 
+/// Largest raw context C's `tn_signature_assemble_msg` accepts for the
+/// large-context domains (`Gossip`, `Msg`, `NodeRecord`): the sign-tile request
+/// MTU, `TN_SIGNATURE_CTX_MAX` in `src/thru/util/tn_signature.c`.
+pub const TN_SIGNATURE_CTX_MAX: usize = 32768;
+
+/// Largest raw context C accepts for the remaining non-transaction domains
+/// (`BlockHeader`, `Block`, `EoaCreate`, `EoaDelete`):
+/// `TN_SIGNATURE_COMMON_CTX_MAX` in `src/thru/util/tn_signature.c`.
+pub const TN_SIGNATURE_COMMON_CTX_MAX: usize = 256;
+
+/// Whether `ctx_len` exceeds what C's `tn_signature_sign` /
+/// `tn_signature_verify` accept for `domain`.  C fails both closed in that
+/// case (it never assembles `M`), so Rust must too: otherwise Rust would sign
+/// and, worse, *verify* messages the node refuses.  The transaction domain is
+/// unbounded here because its context is hashed to 32 bytes first.
+fn ctx_too_large(domain: SignatureDomain, ctx_len: usize) -> bool {
+    let cap = match domain {
+        SignatureDomain::Transaction => return false,
+        SignatureDomain::Gossip | SignatureDomain::Msg | SignatureDomain::NodeRecord => {
+            TN_SIGNATURE_CTX_MAX
+        }
+        SignatureDomain::BlockHeader
+        | SignatureDomain::Block
+        | SignatureDomain::EoaCreate
+        | SignatureDomain::EoaDelete => TN_SIGNATURE_COMMON_CTX_MAX,
+    };
+    ctx_len > cap
+}
+
 /// `M = DST_domain ‖ context`.  For the transaction domain the context is
 /// `SHA-256(msg)`; for the others it is `msg` verbatim.
 fn build_msg(domain: SignatureDomain, msg: &[u8]) -> Vec<u8> {
@@ -115,6 +144,11 @@ pub fn sign(
     public_key: &[u8; 32],
     private_key: &[u8; 32],
 ) -> Result<[u8; 64], TnSignatureError> {
+    // Same order and error as C: an oversize context is refused before the
+    // key check (`tn_signature_assemble_msg` returns 0 -> FD_ED25519_ERR_SIG).
+    if ctx_too_large(domain, msg.len()) {
+        return Err(TnSignatureError::InvalidSignature);
+    }
     let signing_key = SigningKey::from_bytes(private_key);
     // Require the supplied public key equals the one derived from the seed, then
     // sign with the derived key (byte-identical across langs; mismatch = error).
@@ -135,6 +169,9 @@ pub fn verify(
     sig: &[u8; 64],
     public_key: &[u8; 32],
 ) -> Result<(), TnSignatureError> {
+    if ctx_too_large(domain, msg.len()) {
+        return Err(TnSignatureError::InvalidSignature);
+    }
     if !enc_is_canonical(public_key) {
         return Err(TnSignatureError::InvalidPublicKey);
     }
@@ -265,6 +302,53 @@ mod tests {
         let sig = sign(SignatureDomain::Transaction, body, &pk_expected, &seed).unwrap();
         assert_eq!(sig.to_vec(), hex_decode(sig_expected), "Rust txn sig must match C golden");
         assert!(verify(SignatureDomain::Transaction, body, &sig, &pk_expected).is_ok());
+    }
+
+    /// Context limits match C `tn_signature_sign` / `tn_signature_verify`:
+    /// 32768 bytes for Msg / Gossip / NodeRecord, 256 for the other raw
+    /// domains, unbounded for Transaction (hashed).  Over the limit both sign
+    /// and verify fail, even for a cryptographically valid signature over
+    /// `DST ‖ context`.
+    #[test]
+    fn context_limits_match_c() {
+        let seed = [0x5Au8; 32];
+        let sk = SigningKey::from_bytes(&seed);
+        let pk = sk.verifying_key().to_bytes();
+        let cases = [
+            (SignatureDomain::Msg, TN_SIGNATURE_CTX_MAX),
+            (SignatureDomain::Gossip, TN_SIGNATURE_CTX_MAX),
+            (SignatureDomain::NodeRecord, TN_SIGNATURE_CTX_MAX),
+            (SignatureDomain::BlockHeader, TN_SIGNATURE_COMMON_CTX_MAX),
+            (SignatureDomain::Block, TN_SIGNATURE_COMMON_CTX_MAX),
+            (SignatureDomain::EoaCreate, TN_SIGNATURE_COMMON_CTX_MAX),
+            (SignatureDomain::EoaDelete, TN_SIGNATURE_COMMON_CTX_MAX),
+        ];
+        for (domain, cap) in cases {
+            let at = vec![0x42u8; cap];
+            let sig = sign(domain, &at, &pk, &seed).unwrap();
+            assert!(verify(domain, &at, &sig, &pk).is_ok(), "{domain:?} at cap");
+
+            let over = vec![0x42u8; cap + 1];
+            assert!(
+                sign(domain, &over, &pk, &seed).is_err(),
+                "{domain:?} sign over cap"
+            );
+            let raw: Signature = sk.sign(&build_msg(domain, &over));
+            let raw = raw.to_bytes();
+            assert!(verify_message(&build_msg(domain, &over), &raw, &pk).is_ok());
+            assert!(
+                verify(domain, &over, &raw, &pk).is_err(),
+                "{domain:?} verify over cap"
+            );
+        }
+        // Transaction context is hashed, so it has no cap here.
+        let big = vec![0x42u8; TN_SIGNATURE_CTX_MAX + 1];
+        let sig = sign_transaction(&big, &pk, &seed).unwrap();
+        assert!(verify_transaction(&big, &sig, &pk).is_ok());
+        // The wallet-message wrappers inherit the Msg cap.
+        assert!(sign_message(&big, &pk, &seed).is_err());
+        let raw = sk.sign(&build_msg(SignatureDomain::Msg, &big)).to_bytes();
+        assert!(verify_wallet_message(&big, &raw, &pk).is_err());
     }
 
     #[test]

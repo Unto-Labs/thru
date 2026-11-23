@@ -14,6 +14,8 @@ fn account(bytes: &[u8], flags: u8) -> thru_client::Account {
         is_ephemeral: flags & 8 != 0,
         is_deleted: flags & 16 != 0,
         is_privileged: flags & 2 != 0,
+        is_uncompressable: flags & 4 != 0,
+        is_native_receiver: flags & 128 != 0,
         slot: None,
         block_timestamp: None,
         version_seq: None,

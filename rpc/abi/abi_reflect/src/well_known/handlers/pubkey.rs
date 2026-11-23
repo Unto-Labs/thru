@@ -15,6 +15,10 @@ impl WellKnownType for PubkeyHandler {
         "Pubkey"
     }
 
+    fn display_key(&self) -> Option<(&'static str, &'static str)> {
+        Some(("address", "address"))
+    }
+
     fn process(&self, ctx: &WellKnownContext) -> WellKnownResult {
         let Some(fields) = ctx.fields else {
             return WellKnownResult::None;
@@ -30,6 +34,30 @@ impl WellKnownType for PubkeyHandler {
 
         WellKnownResult::None
     }
+}
+
+/* Decode a Thru address (ta... format) to its 32 bytes, checking the
+ * checksum by encoding them again. */
+pub fn decode_thru_address(address: &str) -> Option<[u8; 32]> {
+    let body = address.strip_prefix("ta")?;
+    if body.len() != 44 {
+        return None;
+    }
+    let mut out = Vec::with_capacity(33);
+    let mut accumulator: u32 = 0;
+    let mut bits: u32 = 0;
+    for c in body.bytes() {
+        let index = BASE64_URL_ALPHABET.iter().position(|&a| a == c)? as u32;
+        accumulator = (accumulator << 6) | index;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((accumulator >> bits) as u8);
+            accumulator &= mask_for_bits(bits);
+        }
+    }
+    let key: [u8; 32] = out.get(..32)?.try_into().ok()?;
+    (encode_thru_address(&key)? == address).then_some(key)
 }
 
 /* Encode 32 bytes as a Thru address (ta... format) */
@@ -124,6 +152,17 @@ mod tests {
             hex_to_bytes("ace7124bd312557a711a15c92d38a2d7e0d2fbf6ede3092df4a543d0a00122ae");
         let address = encode_thru_address(&bytes).expect("should encode");
         assert_eq!(address, "tarOcSS9MSVXpxGhXJLTii1-DS-_bt4wkt9KVD0KABIq6x");
+    }
+
+    #[test]
+    fn decode_inverts_encode() {
+        let bytes: Vec<u8> = (0u8..32).collect();
+        let address = encode_thru_address(&bytes).unwrap();
+        assert_eq!(decode_thru_address(&address).unwrap().to_vec(), bytes);
+        let mut tampered = address.clone().into_bytes();
+        tampered[10] = if tampered[10] == b'A' { b'B' } else { b'A' };
+        assert!(decode_thru_address(&String::from_utf8(tampered).unwrap()).is_none());
+        assert!(decode_thru_address("tashort").is_none());
     }
 
     #[test]

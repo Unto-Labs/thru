@@ -38,9 +38,21 @@ export const ThruTransactionEncoding = {
 export type ThruTransactionEncoding =
   (typeof ThruTransactionEncoding)[keyof typeof ThruTransactionEncoding];
 
+/**
+ * How the wallet signs:
+ * - `managed_fee_payer`: the wallet's own fee-payer key pays, and the user's
+ *   passkey (or a signing session) authorizes the wallet account.
+ * - `ledger`: the user chose a Ledger hardware wallet; the Ledger key is the
+ *   fee payer and signs every transaction on the device.
+ *
+ * Intents are the same in both modes. Treat unknown future values like
+ * `managed_fee_payer`: read `feePayerPublicKey` instead of assuming it.
+ */
+export type ThruSigningMode = "managed_fee_payer" | "ledger";
+
 export interface ThruSigningContext {
   network?: ResolvedWalletNetwork;
-  mode: "managed_fee_payer";
+  mode: ThruSigningMode;
   selectedAccountPublicKey: string | null;
   feePayerPublicKey: string;
   signerPublicKey: string;

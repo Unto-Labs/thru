@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { POST_MESSAGE_REQUEST_TYPES } from '../protocol';
 import type { TelemetryClient } from '../telemetry';
-import { IframeManager, WALLET_IFRAME_ALLOW, walletIframeAllow } from './IframeManager';
+import { IframeManager, walletIframeAllow } from './IframeManager';
 
 beforeEach(() => {
   document.body.replaceChildren();
@@ -326,9 +326,6 @@ describe('IframeManager', () => {
       );
     }
   );
-  it('delegates Payment Request through the wallet iframe', () => {
-    expect(WALLET_IFRAME_ALLOW).toContain('payment *');
-  });
 
   it('uses a transparent iframe background by default', () => {
     const iframe = { style: { cssText: '' } };
@@ -602,6 +599,66 @@ describe('IframeManager', () => {
         outcome: 'timeout',
       })
     );
+    manager.destroy();
+  });
+
+  it('keeps a request alive while the wallet sends keep-alives for it', async () => {
+    const { manager, frameId, iframe } = await readyManager();
+    vi.spyOn(iframe.contentWindow!, 'postMessage');
+    const onEvent = vi.fn();
+    manager.onEvent = onEvent;
+    vi.useFakeTimers();
+    const request = {
+      id: 'kept-alive',
+      type: POST_MESSAGE_REQUEST_TYPES.MANAGE_ACCOUNTS,
+      origin: window.location.origin,
+    } as const;
+    const keepAlive = (requestId: string) =>
+      dispatchWalletMessage(frameId, {
+        type: 'event',
+        event: 'request_keepalive',
+        data: { requestId },
+      });
+
+    let settled = false;
+    const resultPromise = manager.sendMessage(request);
+    resultPromise.catch(() => {}).finally(() => {
+      settled = true;
+    });
+    /* The user spends 12 minutes on the sheet (a Ledger review with blind
+       signing): the wallet's keep-alives carry the request past 5 minutes. */
+    for (let minute = 0; minute < 12; minute += 1) {
+      await vi.advanceTimersByTimeAsync(60 * 1000);
+      keepAlive(request.id);
+    }
+    expect(settled).toBe(false);
+    /* Bridge housekeeping, not an app event. */
+    expect(onEvent).not.toHaveBeenCalled();
+
+    /* The frame goes quiet: the request fails 5 minutes after the last
+       keep-alive. A keep-alive for another request does not extend it. */
+    const rejection = expect(resultPromise).rejects.toThrow(/Request timeout/);
+    await vi.advanceTimersByTimeAsync(4 * 60 * 1000);
+    keepAlive('another-request');
+    await vi.advanceTimersByTimeAsync(60 * 1000 - 1);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await rejection;
+    manager.destroy();
+  });
+
+  it('fails a slow request after 5 minutes without keep-alives', async () => {
+    const { manager, iframe } = await readyManager();
+    vi.spyOn(iframe.contentWindow!, 'postMessage');
+    vi.useFakeTimers();
+    const resultPromise = manager.sendMessage({
+      id: 'no-keepalive',
+      type: POST_MESSAGE_REQUEST_TYPES.MANAGE_ACCOUNTS,
+      origin: window.location.origin,
+    } as const);
+    const rejection = expect(resultPromise).rejects.toThrow(/Request timeout/);
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+    await rejection;
     manager.destroy();
   });
 

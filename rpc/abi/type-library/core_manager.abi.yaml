@@ -62,16 +62,34 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Create ephemeral program
       fields:
       - name: config
+        user-display: false
         field-type: *id002
       - name: admin
+        user-display: false
         field-type: *id002
       - name: metadata
+        user-display: false
         field-type: *id002
       - name: program
+        user-display: false
         field-type: *id002
+      - name: program_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'program.address'
+        display-name: Program
+        user-display: true
+      - name: metadata_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'metadata.address'
+        display-name: Program metadata
+        user-display: true
       - name: seed
+        user-display: false
         field-type: &id005
           array:
             size:
@@ -79,165 +97,508 @@ types:
                 u64: 32
             element-type: *id003
       - name: image
+        user-display: false
         field-type: &id006
           type-ref:
             name: ImageCommitment
+      - name: source_buffer
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'image.source.address'
+        display-name: Source buffer
+        user-display: true
+      - name: program_size
+        type: synthetic
+        return-type: { primitive: u32 }
+        expression: 'image.length'
+        display-name: Program size (bytes)
+        user-display: true
       - name: application_authority
+        display-name: Application authority
         field-type: *id004
       - name: pin
+        user-display: false
         field-type: *id003
+      - name: pinned
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if pin == 1 { "Yes" } else if pin == 0 { "No" } else { `Invalid (${pin})` }'
+        display-name: Pinned
+        user-display: true
+      - name: admin_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'admin.address'
+        display-name: Admin
+        user-display: true
+      - name: config_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'config.address'
+        display-name: Config
+        user-display: true
 - name: CreatePermanentArgs
   kind:
     struct:
       packed: true
+      display-name: Create program
       fields:
       - name: config
+        user-display: false
         field-type: *id002
       - name: admin
+        user-display: false
         field-type: *id002
       - name: metadata
+        user-display: false
         field-type: *id002
       - name: program
+        user-display: false
         field-type: *id002
+      - name: program_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'program.address'
+        display-name: Program
+        user-display: true
+      - name: metadata_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'metadata.address'
+        display-name: Program metadata
+        user-display: true
       - name: seed
+        user-display: false
         field-type: *id005
       - name: image
+        user-display: false
         field-type: *id006
+      - name: source_buffer
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'image.source.address'
+        display-name: Source buffer
+        user-display: true
+      - name: program_size
+        type: synthetic
+        return-type: { primitive: u32 }
+        expression: 'image.length'
+        display-name: Program size (bytes)
+        user-display: true
       - name: application_authority
+        display-name: Application authority
         field-type: *id004
       - name: pin
+        user-display: false
         field-type: *id003
+      - name: pinned
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if pin == 1 { "Yes" } else if pin == 0 { "No" } else { `Invalid (${pin})` }'
+        display-name: Pinned
+        user-display: true
       - name: slot
+        user-display: false
         field-type: *id002
       - name: slot_seed
+        user-display: false
         field-type:
           array:
             size:
               literal:
                 u64: 32
             element-type: *id003
+      - name: admin_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'admin.address'
+        display-name: Admin
+        user-display: true
+      - name: config_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'config.address'
+        display-name: Config
+        user-display: true
 - name: UpgradeArgs
   kind:
     struct:
       packed: true
+      display-name: Upgrade program
       fields:
       - name: config
+        user-display: false
         field-type: *id002
       - name: admin
+        user-display: false
         field-type: *id002
       - name: metadata
+        user-display: false
         field-type: *id002
       - name: program
+        user-display: false
         field-type: *id002
       - name: image
+        user-display: false
         field-type: *id006
+      - name: program_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'program.address'
+        display-name: Program
+        user-display: true
+      - name: metadata_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'metadata.address'
+        display-name: Program metadata
+        user-display: true
+      - name: source_buffer
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'image.source.address'
+        display-name: Source buffer
+        user-display: true
+      - name: program_size
+        type: synthetic
+        return-type: { primitive: u32 }
+        expression: 'image.length'
+        display-name: Program size (bytes)
+        user-display: true
+      - name: admin_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'admin.address'
+        display-name: Admin
+        user-display: true
+      - name: config_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'config.address'
+        display-name: Config
+        user-display: true
 - name: UpgradePeerArgs
   kind:
     struct:
       packed: true
+      display-name: Upgrade peer Core program
       fields:
       - name: config
+        user-display: false
         field-type: *id002
       - name: admin
+        user-display: false
         field-type: *id002
       - name: peer
+        user-display: false
         field-type: *id002
       - name: image
+        user-display: false
         field-type: *id006
+      - name: peer_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'peer.address'
+        display-name: Peer Core program
+        user-display: true
+      - name: source_buffer
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'image.source.address'
+        display-name: Source buffer
+        user-display: true
+      - name: program_size
+        type: synthetic
+        return-type: { primitive: u32 }
+        expression: 'image.length'
+        display-name: Program size (bytes)
+        user-display: true
+      - name: admin_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'admin.address'
+        display-name: Admin
+        user-display: true
+      - name: config_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'config.address'
+        display-name: Config
+        user-display: true
 - name: SetPauseArgs
   kind:
     struct:
       packed: true
+      display-name: Pause or unpause program
       fields:
+      - name: action
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if paused == 1 { "Pause" } else if paused == 0 { "Unpause" } else { `Invalid (${paused})` }'
+        display-name: Action
+        user-display: true
       - name: config
+        user-display: false
         field-type: *id002
       - name: admin
+        user-display: false
         field-type: *id002
       - name: metadata
+        user-display: false
         field-type: *id002
       - name: program
+        user-display: false
         field-type: *id002
       - name: paused
+        user-display: false
         field-type: *id003
+      - name: program_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'program.address'
+        display-name: Program
+        user-display: true
+      - name: metadata_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'metadata.address'
+        display-name: Program metadata
+        user-display: true
+      - name: admin_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'admin.address'
+        display-name: Admin
+        user-display: true
+      - name: config_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'config.address'
+        display-name: Config
+        user-display: true
 - name: PairArgs
   kind:
     struct:
       packed: true
       fields:
       - name: config
+        user-display: false
         field-type: *id002
       - name: admin
+        user-display: false
         field-type: *id002
       - name: metadata
+        user-display: false
         field-type: *id002
       - name: program
+        user-display: false
         field-type: *id002
+      - name: program_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'program.address'
+        display-name: Program
+        user-display: true
+      - name: metadata_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'metadata.address'
+        display-name: Program metadata
+        user-display: true
+      - name: admin_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'admin.address'
+        display-name: Admin
+        user-display: true
+      - name: config_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'config.address'
+        display-name: Config
+        user-display: true
 - name: SetApplicationAuthorityArgs
   kind:
     struct:
       packed: true
+      display-name: Set application authority
       fields:
       - name: config
+        user-display: false
         field-type: *id002
       - name: admin
+        user-display: false
         field-type: *id002
       - name: metadata
+        user-display: false
         field-type: *id002
       - name: program
+        user-display: false
         field-type: *id002
+      - name: program_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'program.address'
+        display-name: Program
+        user-display: true
+      - name: metadata_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'metadata.address'
+        display-name: Program metadata
+        user-display: true
       - name: application_authority
+        display-name: New application authority
         field-type: *id004
+      - name: admin_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'admin.address'
+        display-name: Admin
+        user-display: true
+      - name: config_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'config.address'
+        display-name: Config
+        user-display: true
 - name: SetPinArgs
   kind:
     struct:
       packed: true
+      display-name: Pin or unpin account
       fields:
+      - name: action
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if pin == 1 { "Pin" } else if pin == 0 { "Unpin" } else { `Invalid (${pin})` }'
+        display-name: Action
+        user-display: true
+      - name: target_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'target.address'
+        display-name: Account
+        user-display: true
       - name: config
+        user-display: false
         field-type: *id002
       - name: admin
+        user-display: false
         field-type: *id002
       - name: target
+        user-display: false
         field-type: *id002
       - name: pin
+        user-display: false
         field-type: *id003
+      - name: admin_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'admin.address'
+        display-name: Admin
+        user-display: true
+      - name: config_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'config.address'
+        display-name: Config
+        user-display: true
 - name: ProposeAdminArgs
   kind:
     struct:
       packed: true
+      display-name: Propose Core admin
       fields:
+      - name: candidate_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'candidate.address'
+        display-name: Candidate admin
+        user-display: true
+      - name: candidate_kind_name
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if candidate_kind == 1 { "EOA" } else if candidate_kind == 2 { "Multisig" } else { `Unknown (${candidate_kind})` }'
+        display-name: Candidate kind
+        user-display: true
       - name: config
+        user-display: false
         field-type: *id002
       - name: admin
+        user-display: false
         field-type: *id002
       - name: candidate
+        user-display: false
         field-type: *id002
       - name: candidate_kind
+        user-display: false
         field-type: *id003
       - name: peer_program
+        user-display: false
         field-type: *id002
       - name: peer_config
+        user-display: false
         field-type: *id002
+      - name: admin_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'admin.address'
+        display-name: Admin
+        user-display: true
+      - name: config_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'config.address'
+        display-name: Config
+        user-display: true
 - name: AcceptAdminArgs
   kind:
     struct:
       packed: true
+      display-name: Accept Core admin
       fields:
       - name: config
+        user-display: false
         field-type: *id002
       - name: admin
+        user-display: false
         field-type: *id002
       - name: peer_program
+        user-display: false
         field-type: *id002
       - name: peer_config
+        user-display: false
         field-type: *id002
+      - name: admin_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'admin.address'
+        display-name: New admin
+        user-display: true
+      - name: config_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'config.address'
+        display-name: Config
+        user-display: true
 - name: WriteProofSlotArgs
   kind:
     struct:
       packed: true
+      display-name: Write proof slot
       fields:
       - name: slot
+        user-display: false
         field-type: *id002
+      - name: slot_address
+        type: synthetic
+        return-type: { type-ref: { name: Pubkey } }
+        expression: 'slot.address'
+        display-name: Proof slot
+        user-display: true
       - name: seed
+        user-display: false
         field-type:
           array:
             size:
@@ -245,10 +606,13 @@ types:
                 u64: 32
             element-type: *id003
       - name: metadata_proof_size
+        display-name: Metadata proof size (bytes)
         field-type: *id001
       - name: program_proof_size
+        display-name: Program proof size (bytes)
         field-type: *id001
       - name: metadata_proof
+        user-display: false
         field-type:
           array:
             size:
@@ -257,6 +621,7 @@ types:
                 - metadata_proof_size
             element-type: *id003
       - name: program_proof
+        user-display: false
         field-type:
           array:
             size:
@@ -270,6 +635,7 @@ types:
       packed: true
       fields:
       - name: tag
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -351,6 +717,7 @@ types:
       packed: true
       fields:
       - name: account_type
+        user-display: false
         field-type:
           primitive: u8
       - name: payload
@@ -382,14 +749,19 @@ types:
   kind:
     struct:
       packed: true
+      display-name: Core config
       fields:
       - name: admin_kind
+        user-display: false
         field-type: *id003
       - name: pending_admin_kind
+        user-display: false
         field-type: *id003
       - name: pending_present
+        user-display: false
         field-type: *id003
       - name: reserved
+        user-display: false
         field-type:
           array:
             size:
@@ -397,31 +769,64 @@ types:
                 u64: 4
             element-type: *id003
       - name: admin
+        display-name: Admin
         field-type: *id004
+      - name: admin_kind_name
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if admin_kind == 1 { "EOA" } else if admin_kind == 2 { "Multisig" } else { `Unknown (${admin_kind})` }'
+        display-name: Admin kind
+        user-display: true
       - name: pending_admin
+        user-display: false
         field-type: *id004
+      - name: pending_admin_or_none
+        type: synthetic
+        return-type: { optional: { type-ref: { name: Pubkey } } }
+        expression: 'if pending_present == 1 { pending_admin } else { none }'
+        display-name: Pending admin
+        user-display: true
+      - name: pending_admin_kind_name
+        type: synthetic
+        return-type: { optional: { type-ref: { name: Text } } }
+        expression: 'if pending_present == 1 { if pending_admin_kind == 1 { "EOA" } else if pending_admin_kind == 2 { "Multisig" } else { `Unknown (${pending_admin_kind})` } } else { none }'
+        display-name: Pending admin kind
+        user-display: true
 # Managed program metadata payload (73 bytes after account_type).
 - name: ManagedProgramMetadata
   kind:
     struct:
       packed: true
+      display-name: Program metadata
       fields:
       - name: authority
+        display-name: Application authority
         field-type: *id004
       - name: authority_candidate
+        user-display: false
         field-type: *id004
       - name: version
+        display-name: Version
         field-type: &id007
           primitive: u64
       - name: state
+        user-display: false
         field-type: *id003
+      - name: state_name
+        type: synthetic
+        return-type: { type-ref: { name: Text } }
+        expression: 'if state == 0 { "Open" } else if state == 1 { "Paused" } else if state == 2 { "Finalized" } else { `Unknown (${state})` }'
+        display-name: State
+        user-display: true
 # Proof slot payload (after account_type).
 - name: ProofSlot
   kind:
     struct:
       packed: true
+      display-name: Proof slot
       fields:
       - name: reserved
+        user-display: false
         field-type:
           array:
             size:
@@ -429,10 +834,13 @@ types:
                 u64: 3
             element-type: *id003
       - name: metadata_proof_size
+        display-name: Metadata proof size (bytes)
         field-type: *id001
       - name: program_proof_size
+        display-name: Program proof size (bytes)
         field-type: *id001
       - name: metadata_proof
+        user-display: false
         field-type:
           array:
             size:
@@ -441,6 +849,7 @@ types:
                 - metadata_proof_size
             element-type: *id003
       - name: program_proof
+        user-display: false
         field-type:
           array:
             size:
@@ -455,3 +864,44 @@ types:
       fields:
       - name: code
         field-type: *id007
+      - name: error
+        field-type:
+          enum:
+            tag-ref:
+              field-ref:
+                path:
+                - code
+            variants:
+            - name: instruction
+              tag-value: 4097 # 0x1001
+              comment: Instruction data is the wrong size, is not a known instruction, or has a field that is not allowed.
+            - name: binding
+              tag-value: 4098 # 0x1002
+              comment: An account index and the address given for it do not match.
+            - name: config
+              tag-value: 4099 # 0x1003
+              comment: The core config account is not valid.
+            - name: admin
+              tag-value: 4100 # 0x1004
+              comment: The proposed admin account is not a valid admin.
+            - name: authorization
+              tag-value: 4101 # 0x1005
+              comment: The core admin did not authorize this transaction.
+            - name: account
+              tag-value: 4102 # 0x1006
+              comment: A required account is missing or is not writable in this transaction.
+            - name: state
+              tag-value: 4103 # 0x1007
+              comment: The program or its metadata account is not in the state this instruction requires.
+            - name: protected
+              tag-value: 4104 # 0x1008
+              comment: The target is a protected core account that this instruction may not change.
+            - name: image
+              tag-value: 4105 # 0x1009
+              comment: The program image in the source account is missing, out of range or not a valid image.
+            - name: proof
+              tag-value: 4106 # 0x100a
+              comment: The state proof is malformed or the wrong size.
+            - name: namespace
+              tag-value: 4107 # 0x100b
+              comment: The seed is in a reserved range, or is not a proof slot seed where one is required.

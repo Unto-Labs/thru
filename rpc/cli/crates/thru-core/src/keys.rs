@@ -16,7 +16,12 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
-use thru_base::{key_file, tn_tools::Pubkey};
+use thru_base::{
+    key_file,
+    signer::{LocalSigner, SignError, Signer, SigningMessage},
+    tn_tools::Pubkey,
+};
+use thru_ledger::DerivationPath;
 use zeroize::Zeroizing;
 
 #[cfg(target_os = "macos")]
@@ -44,6 +49,32 @@ pub enum KeySource {
     },
     #[serde(rename = "macos-keychain")]
     MacosKeychain { id: String },
+    /// A key on a Ledger device at a policy-checked derivation path. The seed
+    /// never leaves the device; the entry's `public_key` is the address the
+    /// device reported when the key was registered.
+    #[serde(rename = "ledger")]
+    Ledger {
+        #[serde(with = "ledger_path")]
+        path: DerivationPath,
+    },
+}
+
+/// A Ledger path in config as `44'/8478'/0'/0'`; parsing applies the device
+/// path policy, so an invalid path never deserializes.
+mod ledger_path {
+    use serde::{Deserialize, Deserializer, Serializer, de};
+    use thru_ledger::{DerivationPath, LEDGER_URI_SCHEME};
+
+    pub fn serialize<S: Serializer>(path: &DerivationPath, s: S) -> Result<S::Ok, S::Error> {
+        let uri = path.to_uri();
+        s.serialize_str(uri.strip_prefix(LEDGER_URI_SCHEME).unwrap_or(&uri))
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<DerivationPath, D::Error> {
+        String::deserialize(d)?
+            .parse()
+            .map_err(|_| de::Error::custom("Invalid Ledger derivation path"))
+    }
 }
 
 impl KeySource {
@@ -67,8 +98,23 @@ impl KeySource {
         match self {
             Self::File { path, .. } => format!("file:{}", path.display()),
             Self::MacosKeychain { id } => format!("keychain:{id}"),
+            Self::Ledger { path } => path.to_uri(),
         }
     }
+
+    pub fn is_ledger(&self) -> bool {
+        matches!(self, Self::Ledger { .. })
+    }
+}
+
+/// Refusal for commands that need a local secret but were given a Ledger key.
+fn ledger_unsupported(path: &DerivationPath) -> CliError {
+    CliError::Validation(format!(
+        "this key is a Ledger key ({}) and this command does not support Ledger signing yet; \
+         Ledger keys work with: {}",
+        path.to_uri(),
+        crate::crypto::LEDGER_CAPABLE_COMMANDS
+    ))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,6 +161,37 @@ impl LoadedKey {
             public_key,
             address_string: Pubkey::from_bytes(&public_key),
         }
+    }
+
+    fn local_signer(&self) -> LocalSigner {
+        LocalSigner::from_seed(*self.private_key)
+    }
+}
+
+/// A loaded local key signs through the same [`Signer`] path as a Ledger key;
+/// every operation delegates to a [`LocalSigner`] over the same seed.
+impl Signer for LoadedKey {
+    fn public_key(&self) -> [u8; 32] {
+        self.public_key
+    }
+    fn sign(&self, msg: &SigningMessage) -> Result<[u8; 64], SignError> {
+        self.local_signer().sign(msg)
+    }
+    fn sign_message(&self, message: &[u8]) -> Result<[u8; 64], SignError> {
+        self.local_signer().sign_message(message)
+    }
+    fn sign_eoa_auth(
+        &self,
+        kind: thru_base::signer::EoaAuthKind,
+        chain_id: u16,
+        fee_payer: &[u8; 32],
+        account: &[u8; 32],
+    ) -> Result<[u8; 64], SignError> {
+        self.local_signer()
+            .sign_eoa_auth(kind, chain_id, fee_payer, account)
+    }
+    fn supports_legacy_scheme(&self) -> bool {
+        self.local_signer().supports_legacy_scheme()
     }
 }
 
@@ -411,6 +488,7 @@ impl KeyManager {
             return load_source(source).map(Arc::new);
         };
         let identity = match source {
+            KeySource::Ledger { path } => return Err(ledger_unsupported(path)),
             KeySource::File { path, .. } => {
                 let absolute = if path.is_absolute() {
                     path.clone()
@@ -481,7 +559,7 @@ impl KeyManager {
             ));
         }
         if let Some(source) = explicit_source(reference)? {
-            return self.load_resolved_source(&source).map(|key| key.public_key);
+            return self.source_public_key(&source);
         }
         parse_stored_public_key(&self.get_entry(reference)?.public_key)
     }
@@ -491,7 +569,7 @@ impl KeyManager {
             return parse_stored_public_key(&self.get_entry(alias)?.public_key);
         }
         if let Some(source) = explicit_source(input)? {
-            return self.load_resolved_source(&source).map(|key| key.public_key);
+            return self.source_public_key(&source);
         }
         // Address-shaped legacy aliases need an explicit alias selector; never
         // silently reinterpret an address as a different registered identity.
@@ -509,6 +587,85 @@ impl KeyManager {
             ));
         }
         Err(self.not_found(input))
+    }
+
+    /// Public key of an explicit (unregistered) source. A `ledger://` path uses
+    /// the address registered for that path when there is one, and otherwise
+    /// asks the device (no on-device confirmation).
+    fn source_public_key(&self, source: &KeySource) -> Result<[u8; 32], CliError> {
+        if let KeySource::Ledger { path } = source {
+            if let Some(public_key) = self.registered_ledger_public_key(path)? {
+                return Ok(public_key);
+            }
+            return Ok(crate::signing::connect_ledger(*path, None)?.pubkey());
+        }
+        self.load_resolved_source(source).map(|key| key.public_key)
+    }
+
+    /// The Ledger path and expected public key when `reference` selects a
+    /// Ledger key: a registered Ledger alias (expecting its registered public
+    /// key) or an explicit `ledger://…` source (expecting the public key
+    /// registered for that path, if any). `None` for every other reference;
+    /// [`Self::load_key`] reports their errors.
+    pub fn ledger_source(
+        &self,
+        reference: &str,
+    ) -> Result<Option<(DerivationPath, Option<[u8; 32]>)>, CliError> {
+        let entry = match reference.strip_prefix("alias:") {
+            Some(alias) => self.keys.get(&alias.to_lowercase()),
+            None if parse_public_key(reference).is_ok() => return Ok(None),
+            None => match explicit_source(reference)? {
+                Some(KeySource::Ledger { path }) => {
+                    return Ok(Some((path, self.registered_ledger_public_key(&path)?)));
+                }
+                Some(_) => return Ok(None),
+                None => self.keys.get(&reference.to_lowercase()),
+            },
+        };
+        match entry {
+            Some(KeyEntry {
+                public_key,
+                source: KeySource::Ledger { path },
+            }) => Ok(Some((*path, Some(parse_stored_public_key(public_key)?)))),
+            _ => Ok(None),
+        }
+    }
+
+    /// The public key registered for a Ledger path, looked up in alias order.
+    /// Aliases of one path that record different public keys (keys registered
+    /// from two devices or passphrases) make a raw `ledger://` reference
+    /// ambiguous, which is an error naming them rather than an arbitrary pick
+    /// (audit A-040 / A-041).
+    fn registered_ledger_public_key(
+        &self,
+        path: &DerivationPath,
+    ) -> Result<Option<[u8; 32]>, CliError> {
+        let matches: Vec<(&String, &String)> = self
+            .keys
+            .iter()
+            .filter(
+                |(_, entry)| matches!(&entry.source, KeySource::Ledger { path: p } if p == path),
+            )
+            .map(|(name, entry)| (name, &entry.public_key))
+            .collect();
+        let mut distinct: Vec<&String> = matches.iter().map(|(_, key)| *key).collect();
+        distinct.sort();
+        distinct.dedup();
+        if distinct.len() > 1 {
+            let names: Vec<String> = matches
+                .iter()
+                .map(|(name, key)| format!("'{name}' ({key})"))
+                .collect();
+            return Err(invalid(&format!(
+                "Ledger key source '{}' matches several registered keys with different public keys: {}. Use the key alias instead of the ledger:// URI.",
+                path.to_uri(),
+                names.join(", ")
+            )));
+        }
+        distinct
+            .first()
+            .map(|key| parse_stored_public_key(key))
+            .transpose()
     }
 
     #[cfg(test)]
@@ -534,7 +691,15 @@ impl KeyManager {
 }
 
 fn explicit_source(reference: &str) -> Result<Option<KeySource>, CliError> {
-    let source = if let Some(id) = reference.strip_prefix("keychain:") {
+    let source = if thru_ledger::is_ledger_uri(reference) {
+        let path = DerivationPath::from_uri(reference).map_err(|error| {
+            invalid(&format!(
+                "Invalid Ledger key source '{}': {error}",
+                reference.trim()
+            ))
+        })?;
+        Some(KeySource::Ledger { path })
+    } else if let Some(id) = reference.strip_prefix("keychain:") {
         Some(KeySource::MacosKeychain { id: id.to_owned() })
     } else if let Some(path) = reference.strip_prefix("file:") {
         Some(KeySource::File {
@@ -635,6 +800,7 @@ pub(crate) fn load_source(source: &KeySource) -> Result<LoadedKey, CliError> {
             key_file::read_seed(open_key_file(path)?).map_err(|error| file_error(path, error))?
         }
         KeySource::MacosKeychain { id } => keychain_read(id)?,
+        KeySource::Ledger { path } => return Err(ledger_unsupported(path)),
     };
     Ok(LoadedKey::from_seed(seed))
 }
@@ -780,6 +946,9 @@ pub(crate) fn delete_source(source: &KeySource) -> Result<(), CliError> {
             Ok(())
         }
         KeySource::MacosKeychain { id } => keychain_delete(id),
+        KeySource::Ledger { .. } => Err(invalid(
+            "A Ledger key's secret stays on the device; there is nothing to delete",
+        )),
     }
 }
 
@@ -1628,5 +1797,131 @@ mod tests {
         assert!(stage_secret(KeyStorage::Keychain, directory.path(), &key).is_err());
         assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 0);
         assert!(KeyManager::new().load_key("keychain:test").is_err());
+    }
+
+    fn ledger_entry(public_key: &str, account: u32) -> KeyEntry {
+        KeyEntry {
+            public_key: public_key.to_owned(),
+            source: KeySource::Ledger {
+                path: DerivationPath::new(account).unwrap(),
+            },
+        }
+    }
+
+    /// A Ledger key registers as a reference like any other key, `ledger://`
+    /// selects a path directly, and commands that need a local secret refuse
+    /// it clearly.
+    #[test]
+    fn ledger_sources_register_select_and_refuse_local_use() {
+        let path = DerivationPath::new(0).unwrap();
+        let uri = path.to_uri();
+        let address = Pubkey::from_bytes(&[9; 32]).to_string();
+        let mut manager = KeyManager::new();
+        manager
+            .insert_entry("hw", ledger_entry(&address, 0), false)
+            .unwrap();
+        manager.validate_all_keys().unwrap();
+        assert_eq!(manager.get_entry("HW").unwrap().reference(), uri);
+
+        // Round trip; paths outside the device policy never load.
+        let yaml = serde_yaml::to_string(&manager).unwrap();
+        let back: KeyManager = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(
+            back.get_entry("hw").unwrap().source,
+            KeySource::Ledger { path }
+        );
+        let bad_uri = uri.replace("/0'/0'", "/0'/1'");
+        // Includes the pre-registration coin type 9999.
+        for bad in [
+            bad_uri.as_str(),
+            "ledger://44'/9999'/0'/0'",
+            "ledger://44'/60'/0'/0'",
+        ] {
+            let stored = bad.strip_prefix("ledger://").unwrap();
+            let yaml = format!(
+                "hw:\n  public_key: {address}\n  source:\n    type: ledger\n    path: \"{stored}\"\n"
+            );
+            assert!(serde_yaml::from_str::<KeyManager>(&yaml).is_err(), "{bad}");
+            let error = manager.ledger_source(bad).unwrap_err().to_string();
+            assert!(error.contains("Invalid Ledger key source"), "{error}");
+        }
+
+        // A registered alias and its raw path select the same key and expect
+        // the registered address; public lookups never contact the device.
+        let expected = Some((path, Some([9; 32])));
+        assert_eq!(manager.ledger_source("hw").unwrap(), expected);
+        assert_eq!(manager.ledger_source("alias:HW").unwrap(), expected);
+        assert_eq!(
+            manager
+                .ledger_source(&uri.replacen("ledger://", "LEDGER://m/", 1))
+                .unwrap(),
+            expected
+        );
+        assert_eq!(manager.public_key("hw").unwrap(), [9; 32]);
+        assert_eq!(manager.public_key(&uri).unwrap(), [9; 32]);
+        assert_eq!(manager.resolve_public_key(&uri).unwrap(), [9; 32]);
+        let other = DerivationPath::new(1).unwrap();
+        assert_eq!(
+            manager.ledger_source(&other.to_uri()).unwrap(),
+            Some((other, None))
+        );
+
+        // Commands without Ledger support refuse a Ledger key clearly.
+        for reference in ["hw", uri.as_str()] {
+            let error = manager.load_key(reference).unwrap_err().to_string();
+            assert!(error.contains("does not support Ledger signing"), "{error}");
+        }
+        // A URI is a selector, never an alias.
+        assert!(KeyManager::validate_name(&uri).is_err());
+
+        // Local keys and unknown references are not Ledger sources.
+        let (_directory, local) = KeyManager::test_fixture(&[("k", [2; 32])]);
+        assert_eq!(local.ledger_source("k").unwrap(), None);
+        assert_eq!(local.ledger_source("missing").unwrap(), None);
+        let public = Pubkey::from_bytes(&[2; 32]).to_string();
+        assert_eq!(local.ledger_source(&public).unwrap(), None);
+    }
+
+    /// Audit A-040 / A-041: a raw `ledger://` URI shared by several aliases
+    /// resolves deterministically: one registered address is used, and
+    /// different addresses are an ambiguity error naming them (never whichever
+    /// alias comes first).
+    #[test]
+    fn ledger_uri_lookup_is_deterministic() {
+        let addr_a = Pubkey::from_bytes(&[5; 32]).to_string();
+        let addr_b = Pubkey::from_bytes(&[7; 32]).to_string();
+        let path = DerivationPath::new(0).unwrap();
+        let uri = path.to_uri();
+        let mut manager = KeyManager::new();
+        manager
+            .insert_entry("hw_a", ledger_entry(&addr_a, 0), false)
+            .unwrap();
+        manager
+            .insert_entry("hw_c", ledger_entry(&addr_a, 0), false)
+            .unwrap();
+        assert_eq!(manager.public_key(&uri).unwrap(), [5; 32]);
+
+        manager
+            .insert_entry("hw_b", ledger_entry(&addr_b, 0), false)
+            .unwrap();
+        for _ in 0..16 {
+            let error = manager.ledger_source(&uri).unwrap_err().to_string();
+            assert!(error.contains("several registered keys"), "{error}");
+            assert!(
+                error.contains("'hw_a'") && error.contains("'hw_b'"),
+                "{error}"
+            );
+            assert!(manager.clone().public_key(&uri).is_err());
+        }
+        // Aliases stay unambiguous; another path is unaffected.
+        assert_eq!(
+            manager.ledger_source("hw_b").unwrap(),
+            Some((path, Some([7; 32])))
+        );
+        let other = DerivationPath::new(1).unwrap();
+        assert_eq!(
+            manager.ledger_source(&other.to_uri()).unwrap(),
+            Some((other, None))
+        );
     }
 }

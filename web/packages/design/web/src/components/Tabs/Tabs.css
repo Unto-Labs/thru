@@ -24,9 +24,14 @@
   border-radius: var(--radius-none);
   color: var(--color-text-secondary);
   cursor: pointer;
+  /* Not the bottom border: an inactive tab has none, so its color starts as
+     the text color, and fading it to the active tab's surface color flashed
+     a light line under a newly selected tab. */
   transition:
     color var(--duration-fast) var(--ease-standard),
-    border-color var(--duration-fast) var(--ease-standard);
+    border-top-color var(--duration-fast) var(--ease-standard),
+    border-left-color var(--duration-fast) var(--ease-standard),
+    border-right-color var(--duration-fast) var(--ease-standard);
 }
 .tds-tabs__tab:hover {
   color: var(--color-text-primary);

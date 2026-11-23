@@ -18,11 +18,20 @@ types:
     kind:
       struct:
         packed: true
+        display-name: Compress account
         fields:
+          - name: account_address
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(account_idx)'
+            display-name: Account
+            user-display: true
           - name: account_idx
+            user-display: false
             field-type:
               primitive: u16
           - name: proof
+            user-display: false
             field-type:
               type-ref:
                 name: StateProof
@@ -31,14 +40,24 @@ types:
     kind:
       struct:
         packed: true
+        display-name: Decompress account
         fields:
+          - name: account_address
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(account_idx)'
+            display-name: Account
+            user-display: true
           - name: account_idx
+            user-display: false
             field-type:
               primitive: u16
           - name: account_data_sz
+            display-name: Data size (bytes)
             field-type:
               primitive: u64
           - name: account_meta
+            user-display: false
             field-type:
               array:
                 size:
@@ -47,6 +66,7 @@ types:
                 element-type:
                   primitive: u8
           - name: account_data
+            user-display: false
             field-type:
               array:
                 size:
@@ -56,6 +76,7 @@ types:
                 element-type:
                   primitive: u8
           - name: proof
+            user-display: false
             field-type:
               type-ref:
                 name: StateProof
@@ -64,37 +85,60 @@ types:
     kind:
       struct:
         packed: true
+        display-name: Compress account
         fields:
+          - name: account_address
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(account_idx)'
+            display-name: Account
+            user-display: true
           - name: account_idx
+            user-display: false
             field-type:
               primitive: u16
           - name: proof_address
+            user-display: false
             field-type:
               primitive: u64
           - name: proof_sz
+            user-display: false
             field-type:
               primitive: u64
   - name: DecompressFromPointerArgs
     kind:
       struct:
         packed: true
+        display-name: Decompress account
         fields:
+          - name: account_address
+            type: synthetic
+            return-type: { type-ref: { name: Pubkey } }
+            expression: 'accountAddress(account_idx)'
+            display-name: Account
+            user-display: true
           - name: account_idx
+            user-display: false
             field-type:
               primitive: u16
           - name: account_data_sz
+            display-name: Data size (bytes)
             field-type:
               primitive: u64
           - name: account_meta_address
+            user-display: false
             field-type:
               primitive: u64
           - name: account_data_address
+            user-display: false
             field-type:
               primitive: u64
           - name: proof_address
+            user-display: false
             field-type:
               primitive: u64
           - name: proof_sz
+            user-display: false
             field-type:
               primitive: u64
   - name: CompressionError
@@ -105,12 +149,27 @@ types:
           - name: code
             field-type:
               primitive: u64
+          - name: error
+            field-type:
+              enum:
+                tag-ref:
+                  field-ref:
+                    path:
+                      - code
+                variants:
+                  - name: invalid_instruction
+                    tag-value: 1
+                    comment: Instruction data is too short or is not a known compression instruction.
+                  - name: invalid_instruction_data_size
+                    tag-value: 2
+                    comment: Instruction data is too short or the wrong size for this instruction.
   - name: CompressionInstruction
     kind:
       struct:
         packed: true
         fields:
           - name: discriminant
+            user-display: false
             field-type:
               primitive: u32
           - name: payload

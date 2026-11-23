@@ -26,11 +26,6 @@ export const DEFAULT_WALLET_NETWORKS: readonly WalletNetworkPreset[] = [
     displayName: "Betanet",
     rpc: "https://rpc.betanet.thru.org",
   },
-  {
-    slug: "alphanet",
-    displayName: "Alphanet",
-    rpc: "https://rpc.alphanet.thru.org",
-  },
 ];
 export const NETWORK_SELECTION_PARAM = "tn_wallet_network";
 export const NETWORK_CAPABILITY_PARAM = "tn_network_switching";
