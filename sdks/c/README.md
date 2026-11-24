@@ -21,7 +21,7 @@ This is the C SDK for developing Thru programs.
 
 ## Building Your First Program
 
-Follow the [Developing a C Program](https://docs.thru.org/program-development/building-a-c-program) guide in the Thru docs to get started developing your first program.
+Follow the [Developing a C Program](https://thru.org/docs/program-development/building-a-c-program/) guide in the Thru docs to get started developing your first program.
 
 ## Custom Installation
 
