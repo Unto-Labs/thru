@@ -115,6 +115,7 @@ pub async fn handle_transfer_command(
                 }
             });
             let response = src_signer.add_ledger_preview(response, "transfer");
+            let response = src_signer.add_trezor_preview(response, "transfer");
             output::print_output(response, json_format);
         } else {
             println!("{}", base64_transaction);
@@ -156,6 +157,7 @@ pub async fn handle_transfer_command(
             "failed",
         );
         let response = src_signer.add_ledger_preview(response, "transfer");
+        let response = src_signer.add_trezor_preview(response, "transfer");
         output::print_output(response, json_format);
 
         return Err(CliError::TransactionSubmission(error_msg));
@@ -170,6 +172,7 @@ pub async fn handle_transfer_command(
         "success",
     );
     let response = src_signer.add_ledger_preview(response, "transfer");
+    let response = src_signer.add_trezor_preview(response, "transfer");
     output::print_output(response, json_format);
 
     if !json_format {

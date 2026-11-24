@@ -5,21 +5,23 @@ class Source extends EventTarget {
   onerror: (() => void) | null = null;
   onopen: (() => void) | null = null;
   closed = false;
+  readyState = 0;
   constructor(readonly url: URL) { super(); Source.all.push(this); }
-  close() { this.closed = true; }
-  batch(seq: string, messages: { operation: string }[] = [], generation = '1') {
-    this.dispatchEvent(new MessageEvent('batch', { lastEventId: cursor(seq, generation), data: JSON.stringify({
-      namespace: 'n', sourceGeneration: '1', projectionGeneration: generation, messages,
+  close() { this.closed = true; this.readyState = 2; }
+  /** The server answered with another status than 200: the source closes before it opens. */
+  refuse() { this.readyState = 2; this.onerror?.(); }
+  batch(seq: string, messages: { operation: string }[] = [], epoch = '1') {
+    this.dispatchEvent(new MessageEvent('batch', { lastEventId: cursor(seq, epoch), data: JSON.stringify({
+      epoch, messages,
     }) }));
   }
 }
-const cursor = (seq: string, generation = '1') => encodeIndexerCursor({ namespace: 'n', sourceGeneration: '1',
-  projectionGeneration: generation, filter: 'market', cuts: { market: seq, owner: '20' } });
+const cursor = (seq: string, epoch = '1') => encodeIndexerCursor({ epoch, filter: 'market', cuts: { market: seq, owner: '20' } });
 const schema = { parse: (v: unknown) => v as IndexerBatch };
 const connections: {close(): void}[] = [];
-function connect(applyBatch = vi.fn(), onResync = vi.fn()) {
+function connect(applyBatch = vi.fn(), onResync = vi.fn(), onError?: (e: unknown) => void) {
   const c = connectIndexer({ url: 'https://app.example/api/perps/v1/stream', scope: {topics: ['market', 'owner']},
-    resume: cursor('10'), schema, applyBatch, onResync });
+    resume: cursor('10'), schema, applyBatch, onResync, onError });
   connections.push(c);
   return c;
 }
@@ -66,7 +68,7 @@ it('does not advance an obsolete connection after a scope change or disconnect',
   expect(next.resume).toBe(cursor('10'));
   expect(Source.all).toHaveLength(2);
 });
-it('requires a new bootstrap for generation changes and expired history', async () => {
+it('requires a new bootstrap for an epoch change (reset) and expired history', async () => {
   const reset = vi.fn(), apply = vi.fn();
   const c = connect(apply, reset);
   Source.all[0].batch('11', [], '2');
@@ -115,4 +117,51 @@ it('ignores queued events from a closed source after reconnection', async () => 
   c.close();
   old.dispatchEvent(new Event('heartbeat'));
   expect(vi.getTimerCount()).toBe(0);
+});
+/* F-E2: a resume cursor of another scope is a client error (400
+   CURSOR_SCOPE_MISMATCH), not a reset (409 EPOCH_CHANGED). EventSource hides
+   the status; the transport reads it once and reports a 400 instead of
+   reconnecting into a resync. */
+const answer = (status: number, body: unknown) => vi.fn(async () => Response.json(body, { status }));
+it('reports a stream refused with 400 as a client error: no resync, no retry', async () => {
+  const fetch = answer(400, { error: { code: 'CURSOR_SCOPE_MISMATCH', message: 'The resume cursor was issued for another stream scope' } });
+  vi.stubGlobal('fetch', fetch);
+  const reset = vi.fn(), error = vi.fn();
+  const c = connect(vi.fn(), reset, error);
+  Source.all[0].refuse();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(String((fetch.mock.calls[0] as unknown[])[0])).toBe(String(Source.all[0].url));
+  expect(error).toHaveBeenCalledWith({ status: 400, code: 'CURSOR_SCOPE_MISMATCH', message: 'The resume cursor was issued for another stream scope' });
+  await vi.advanceTimersByTimeAsync(60000);
+  expect(reset).not.toHaveBeenCalled();
+  expect(Source.all).toHaveLength(1);
+  expect(c.resume).toBe(cursor('10'));
+});
+it('reconnects as before when a refused stream is not a client error', async () => {
+  vi.stubGlobal('fetch', answer(503, { error: { code: 'NOT_READY', message: 'No ready epoch' } }));
+  const reset = vi.fn(), error = vi.fn();
+  connect(vi.fn(), reset, error);
+  for (let i = 0; i < 3; i++) {
+    Source.all[i].refuse();
+    await vi.advanceTimersByTimeAsync(10000);
+  }
+  expect(error).not.toHaveBeenCalled();
+  expect(Source.all).toHaveLength(3);
+  expect(reset).toHaveBeenCalledTimes(1);
+});
+it('does not probe without an error handler, nor for a stream that had opened', async () => {
+  const fetch = answer(400, { error: { code: 'CURSOR_SCOPE_MISMATCH', message: 'x' } });
+  vi.stubGlobal('fetch', fetch);
+  connect();
+  Source.all[0].refuse();
+  await vi.advanceTimersByTimeAsync(1000);
+  const error = vi.fn();
+  connect(vi.fn(), vi.fn(), error);
+  const opened = Source.all.at(-1)!;
+  opened.onopen!();
+  opened.refuse();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(fetch).not.toHaveBeenCalled();
+  expect(error).not.toHaveBeenCalled();
+  expect(Source.all).toHaveLength(4);
 });

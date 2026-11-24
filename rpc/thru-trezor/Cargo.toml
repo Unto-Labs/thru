@@ -1,0 +1,47 @@
+[package]
+name = "thru-trezor"
+version = "0.1.0"
+edition = "2024"
+description = "Trezor hardware-wallet signer for the Thru blockchain: Trezor Host Protocol link, app loading and the Thru app protocol"
+license = "Apache-2.0"
+repository = "https://github.com/Unto-Labs/thru"
+keywords = ["thru", "trezor", "hardware-wallet", "signer"]
+categories = ["cryptography::cryptocurrencies", "hardware-support"]
+
+[features]
+default = ["usb"]
+# USB transport for physical devices (nusb, pure Rust: no libusb or libudev at
+# build or run time).
+usb = ["dep:nusb"]
+# UDP transport for the Trezor emulator, and pairing without a code, which only
+# a debug firmware build offers. A network endpoint must never be able to stand
+# in for a device in a release build: never enable it there.
+emulator = []
+
+[dependencies]
+thru-base = { version = "0.1.0", path = "../thru-base" }
+# The protocol state machine, without I/O. Pinned: the crate is young and its
+# API is what src/thp.rs is written against.
+trezor-thp = { version = "=0.1.1", features = ["use_std"] }
+trezor-noise-rust-crypto = { version = "0.6.2", default-features = false, features = ["use-x25519", "use-aes-256-gcm", "use-sha2"] }
+base64 = "0.22.1"
+getrandom = "0.3.3"
+hex = "0.4.3"
+log = "0.4"
+prost = { version = "0.14", default-features = false, features = ["derive", "std"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.11.0"
+subtle = "2.6"
+thiserror = "2.0.18"
+x25519-dalek = "2.0"
+zeroize = "1.8"
+
+nusb = { version = "0.2", optional = true }
+
+[dev-dependencies]
+thru-trezor = { path = ".", features = ["emulator"] }
+
+[[example]]
+name = "trezor_check"
+required-features = ["emulator"]

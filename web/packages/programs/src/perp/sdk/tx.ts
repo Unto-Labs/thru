@@ -15,6 +15,7 @@ import {
   type PerpOrderEntry,
   type PerpOrderSide,
   type PerpOrderType,
+  type PerpRiskParams,
 } from '../index';
 import { bytesToHex, encodePerpInstructions, type PerpInstructionSpec } from './instructions';
 import { readAccount, type ReadAccountOptions, type ThruClient } from './rpc';
@@ -760,6 +761,61 @@ export function seatSetBuilderApprovalTx(
     [
       marketRecordSpec(ref, authority, seatIndex, false),
       { ix: 'seat_set_builder_approval', marketRecordIndex: PERP_DEFAULT_MARKET_RECORD_INDEX, builderSeatIndex: approval.builderSeatIndex, maxFeePpm: approval.maxFeePpm },
+    ],
+    marketAccountAddresses(ref.market),
+    marketReadOnlyAddresses(ref),
+  );
+}
+
+/* Loss waterfall ****************************************************************/
+
+/** The seat moves `amount` quote atoms of its free collateral into the
+    market's insurance balance (INSURANCE event).  The program settles the
+    seat's funding first and moves only what a withdrawal could take:
+    INSUFFICIENT_FUNDS_QUOTE (-401) beyond it.  A cross seat needs
+    `{ margin }`.  Allowed while the market is frozen for bad debt. */
+export function insuranceDepositTx(ref: MarketRef, authority: string, seatIndex: number, amount: bigint, options: PerpTxOptions = {}): PerpTransaction {
+  return crossAware(
+    perpTransaction(
+      `deposit ${amount} into insurance`,
+      [marketRecordSpec(ref, authority, seatIndex, false), { ix: 'insurance_deposit', marketRecordIndex: PERP_DEFAULT_MARKET_RECORD_INDEX, amount: amount.toString() }],
+      marketAccountAddresses(ref.market),
+      marketReadOnlyAddresses(ref),
+    ),
+    ref,
+    options,
+  );
+}
+
+/** Permissionless: runs the market's bad debt through the loss waterfall
+    (fees, insurance, then a per-lot charge on open positions priced at the
+    oracle mark; a stale feed resolves from fees and insurance alone).  The
+    record names no seat.  Fails with NOTHING_RESOLVED (-229) unless the
+    bad debt falls (perpResolveBadDebtProblem). */
+export function resolveBadDebtTx(ref: MarketRef, options: PerpTxOptions = {}): PerpTransaction {
+  return perpTransaction(
+    options.label ?? 'resolve bad debt',
+    [fundingRecord(ref), { ix: 'resolve_bad_debt', marketRecordIndex: PERP_DEFAULT_MARKET_RECORD_INDEX }],
+    marketAccountAddresses(ref.market),
+    marketReadOnlyAddresses(ref),
+  );
+}
+
+/** Market authority: sets the loss waterfall parameters (bps).  Rejected
+    with RISK_PARAM_INVALID (-230) outside the market's limits
+    (perpRiskParamsProblem). */
+export function marketSetRiskParamsTx(ref: MarketRef, marketAuthority: string, params: PerpRiskParams, options: PerpTxOptions = {}): PerpTransaction {
+  return perpTransaction(
+    options.label ?? 'set risk params',
+    [
+      fundingRecord(ref, marketAuthority),
+      {
+        ix: 'market_set_risk_params',
+        marketRecordIndex: PERP_DEFAULT_MARKET_RECORD_INDEX,
+        socializeCapBps: params.socializeCapBps,
+        ifEpochBudgetBps: params.ifEpochBudgetBps,
+        bankruptLiqRewardBps: params.bankruptLiqRewardBps,
+      },
     ],
     marketAccountAddresses(ref.market),
     marketReadOnlyAddresses(ref),

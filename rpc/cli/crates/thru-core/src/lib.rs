@@ -21,6 +21,7 @@ pub mod hd;
 pub mod keys;
 pub mod output;
 pub mod signing;
+pub mod trezor_preview;
 pub mod utils;
 pub mod version_check;
 
@@ -580,6 +581,18 @@ pub fn format_error_json(err: &CliError) -> Value {
                 "code": code,
                 "message": message,
                 "status_word": status_word.map(|sw| format!("0x{sw:04X}")),
+                "reason": reason,
+            }
+        }),
+        CliError::Trezor {
+            code,
+            message,
+            reason,
+        } => json!({
+            "error": {
+                "type": "trezor",
+                "code": code,
+                "message": message,
                 "reason": reason,
             }
         }),

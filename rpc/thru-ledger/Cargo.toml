@@ -1,0 +1,39 @@
+[package]
+name = "thru-ledger"
+version = "0.1.0"
+edition = "2024"
+description = "Ledger hardware-wallet signer for the Thru blockchain: APDU protocol, HID and Speculos transports, and a thru-base Signer implementation."
+license = "Apache-2.0"
+repository = "https://github.com/Unto-Labs/thru"
+keywords = ["thru", "ledger", "hardware-wallet", "signer", "apdu"]
+categories = ["cryptography::cryptocurrencies", "hardware-support"]
+
+[features]
+default = ["hid"]
+# USB HID transport for physical devices (hidapi). On Linux this uses hidapi's
+# pure-Rust backend: no libudev at build or run time.
+hid = ["dep:hidapi"]
+# Raw APDU-over-TCP transport for the Speculos emulator (no extra deps).
+speculos = []
+# Scripted mock transport and a software emulator of the Thru device app, for
+# tests in this crate and in downstream crates (CLI).
+mock = ["dep:hmac", "dep:sha2-10"]
+
+[dependencies]
+thru-base = { version = "0.1.0", path = "../thru-base" }
+ed25519-dalek = "2.2.0"
+hex = "0.4.3"
+sha2 = "0.11.0"
+thiserror = "2.0.18"
+
+# The backend feature only affects Linux. It must stay the only Linux backend
+# enabled: hidapi's build script rejects more than one, and the C backends need
+# libudev, which breaks the cross-compiled release CLI (specs/ledger/cli-release-hid.md).
+hidapi = { version = "2.6.7", optional = true, default-features = false, features = ["linux-native-basic-udev"] }
+hmac = { version = "0.12", optional = true }
+sha2-10 = { package = "sha2", version = "0.10", optional = true }
+
+[dev-dependencies]
+# Enable the mock feature for this crate's own integration tests.
+thru-ledger = { path = ".", features = ["mock", "speculos"] }
+serde_json = "1.0"

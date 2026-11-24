@@ -22,6 +22,7 @@ use thru_base::{
     tn_tools::Pubkey,
 };
 use thru_ledger::DerivationPath;
+use thru_trezor::DerivationPath as TrezorPath;
 use zeroize::Zeroizing;
 
 #[cfg(target_os = "macos")]
@@ -57,6 +58,20 @@ pub enum KeySource {
         #[serde(with = "ledger_path")]
         path: DerivationPath,
     },
+    /// A key on a Trezor running the Thru app at a policy-checked derivation
+    /// path. The seed never leaves the device; the entry's `public_key` is the
+    /// address the device reported when the key was registered. With
+    /// `passphrase` the key belongs to a passphrase (hidden) wallet whose
+    /// passphrase the person types on the device at every connection; the flag
+    /// is written only when set, so an entry of the standard wallet is
+    /// unchanged and a CLI that does not know the flag refuses the entry.
+    #[serde(rename = "trezor")]
+    Trezor {
+        #[serde(with = "trezor_path")]
+        path: TrezorPath,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        passphrase: bool,
+    },
 }
 
 /// A Ledger path in config as `44'/8478'/0'/0'`; parsing applies the device
@@ -77,6 +92,24 @@ mod ledger_path {
     }
 }
 
+/// A Trezor path in config as `44'/8478'/0'/0'`; parsing applies the app's
+/// path policy, so an invalid path never deserializes.
+mod trezor_path {
+    use serde::{Deserialize, Deserializer, Serializer, de};
+    use thru_trezor::{DerivationPath, TREZOR_URI_SCHEME};
+
+    pub fn serialize<S: Serializer>(path: &DerivationPath, s: S) -> Result<S::Ok, S::Error> {
+        let uri = path.to_uri();
+        s.serialize_str(uri.strip_prefix(TREZOR_URI_SCHEME).unwrap_or(&uri))
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<DerivationPath, D::Error> {
+        String::deserialize(d)?
+            .parse()
+            .map_err(|_| de::Error::custom("Invalid Trezor derivation path"))
+    }
+}
+
 impl KeySource {
     fn validate(&self) -> Result<(), CliError> {
         match self {
@@ -94,16 +127,102 @@ impl KeySource {
         }
     }
 
+    /// The reference of the source alone. For a Trezor key of a passphrase
+    /// wallet this is the URI of its path, which selects the standard wallet,
+    /// so nothing that is shown to a person may use it for such a key: use
+    /// [`registration_reference`].
     pub fn reference(&self) -> String {
         match self {
             Self::File { path, .. } => format!("file:{}", path.display()),
             Self::MacosKeychain { id } => format!("keychain:{id}"),
             Self::Ledger { path } => path.to_uri(),
+            Self::Trezor { path, .. } => path.to_uri(),
         }
+    }
+
+    /// Whether this is a Trezor key of a passphrase wallet.
+    pub fn is_passphrase(&self) -> bool {
+        matches!(
+            self,
+            Self::Trezor {
+                passphrase: true,
+                ..
+            }
+        )
     }
 
     pub fn is_ledger(&self) -> bool {
         matches!(self, Self::Ledger { .. })
+    }
+
+    pub fn is_trezor(&self) -> bool {
+        matches!(self, Self::Trezor { .. })
+    }
+}
+
+/// The reference a person can pass back as a key for the registration `alias`
+/// holds with `source`. A key of a passphrase wallet is reachable by its alias
+/// only (a `trezor://` URI always means the standard wallet), so it is
+/// `alias:NAME`; every other key is the reference of its source.
+pub fn registration_reference(alias: &str, source: &KeySource) -> String {
+    if source.is_passphrase() {
+        format!("alias:{}", alias.to_lowercase())
+    } else {
+        source.reference()
+    }
+}
+
+/// Where a Trezor key is and what the connection must find there: the path,
+/// whether the key belongs to a passphrase wallet, and the public key the key
+/// is expected to have. The three travel together, so a connection to a
+/// passphrase wallet cannot be opened without saying so, and the expected key
+/// of a registration cannot be dropped on the way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TrezorTarget {
+    path: TrezorPath,
+    passphrase: bool,
+    expected: Option<[u8; 32]>,
+}
+
+impl TrezorTarget {
+    /// A key that is not registered (yet): the connection reads its public key.
+    pub fn unregistered(path: TrezorPath, passphrase: bool) -> Self {
+        Self {
+            path,
+            passphrase,
+            expected: None,
+        }
+    }
+
+    /// A registered key: the connection must find `public_key`.
+    pub fn registered(path: TrezorPath, passphrase: bool, public_key: [u8; 32]) -> Self {
+        Self {
+            path,
+            passphrase,
+            expected: Some(public_key),
+        }
+    }
+
+    pub fn path(&self) -> TrezorPath {
+        self.path
+    }
+
+    /// Whether the key belongs to a passphrase wallet.
+    pub fn passphrase(&self) -> bool {
+        self.passphrase
+    }
+
+    /// The public key the connection must find, if one is registered.
+    pub fn expected(&self) -> Option<[u8; 32]> {
+        self.expected
+    }
+
+    /// The source a registration of this key stores.
+    pub fn source(&self) -> KeySource {
+        KeySource::Trezor {
+            path: self.path,
+            passphrase: self.passphrase,
+        }
     }
 }
 
@@ -114,6 +233,28 @@ fn ledger_unsupported(path: &DerivationPath) -> CliError {
          Ledger keys work with: {}",
         path.to_uri(),
         crate::crypto::LEDGER_CAPABLE_COMMANDS
+    ))
+}
+
+/// Refusal for commands that need a local secret but were given a Trezor key.
+fn trezor_unsupported(path: &TrezorPath, passphrase: bool) -> CliError {
+    let which = if passphrase {
+        format!("a Trezor key of a passphrase wallet ({path})")
+    } else {
+        format!("a Trezor key ({})", path.to_uri())
+    };
+    CliError::Validation(format!(
+        "this key is {which} and this command does not support Trezor signing; \
+         Trezor keys work with: {}",
+        crate::crypto::TREZOR_CAPABLE_COMMANDS
+    ))
+}
+
+/// The refusal for an operation the Thru app on the Trezor does not offer
+/// (`what` completes "the Thru app on the Trezor does not support ...").
+pub(crate) fn trezor_app_cannot(what: &str) -> CliError {
+    CliError::Validation(format!(
+        "the Thru app on the Trezor does not support {what}; use a local or a Ledger key for it"
     ))
 }
 
@@ -489,6 +630,9 @@ impl KeyManager {
         };
         let identity = match source {
             KeySource::Ledger { path } => return Err(ledger_unsupported(path)),
+            KeySource::Trezor { path, passphrase } => {
+                return Err(trezor_unsupported(path, *passphrase));
+            }
             KeySource::File { path, .. } => {
                 let absolute = if path.is_absolute() {
                     path.clone()
@@ -599,6 +743,15 @@ impl KeyManager {
             }
             return Ok(crate::signing::connect_ledger(*path, None)?.pubkey());
         }
+        if let KeySource::Trezor { path, .. } = source {
+            // A URI is the standard wallet, whatever flag the source carries.
+            if let Some(public_key) = self.registered_trezor_public_key(path)? {
+                return Ok(public_key);
+            }
+            return Ok(
+                crate::signing::connect_trezor(TrezorTarget::unregistered(*path, false))?.pubkey(),
+            );
+        }
         self.load_resolved_source(source).map(|key| key.public_key)
     }
 
@@ -629,6 +782,80 @@ impl KeyManager {
             }) => Ok(Some((*path, Some(parse_stored_public_key(public_key)?)))),
             _ => Ok(None),
         }
+    }
+
+    /// The Trezor key `reference` selects: a registered Trezor alias (expecting
+    /// its registered public key, and carrying its passphrase flag) or an
+    /// explicit `trezor://…` source (the standard wallet, expecting the public
+    /// key registered for that path, if any). `None` for every other
+    /// reference.
+    pub fn trezor_source(&self, reference: &str) -> Result<Option<TrezorTarget>, CliError> {
+        let entry = match reference.strip_prefix("alias:") {
+            Some(alias) => self.keys.get(&alias.to_lowercase()),
+            None if parse_public_key(reference).is_ok() => return Ok(None),
+            None => match explicit_source(reference)? {
+                Some(KeySource::Trezor { path, .. }) => {
+                    return Ok(Some(match self.registered_trezor_public_key(&path)? {
+                        Some(public_key) => TrezorTarget::registered(path, false, public_key),
+                        None => TrezorTarget::unregistered(path, false),
+                    }));
+                }
+                Some(_) => return Ok(None),
+                None => self.keys.get(&reference.to_lowercase()),
+            },
+        };
+        match entry {
+            Some(KeyEntry {
+                public_key,
+                source: KeySource::Trezor { path, passphrase },
+            }) => Ok(Some(TrezorTarget::registered(
+                *path,
+                *passphrase,
+                parse_stored_public_key(public_key)?,
+            ))),
+            _ => Ok(None),
+        }
+    }
+
+    /// The public key registered for a Trezor path of the standard wallet; as
+    /// for Ledger paths, aliases of one path that record different public keys
+    /// make a raw `trezor://` reference ambiguous, which is an error naming
+    /// them. Keys of passphrase wallets are not looked at: a URI never means
+    /// one of them, and with only such keys on the path it is as if nothing
+    /// were registered for it.
+    fn registered_trezor_public_key(
+        &self,
+        path: &TrezorPath,
+    ) -> Result<Option<[u8; 32]>, CliError> {
+        let matches: Vec<(&String, &String)> = self
+            .keys
+            .iter()
+            .filter(|(_, entry)| {
+                matches!(
+                    &entry.source,
+                    KeySource::Trezor { path: p, passphrase: false } if p == path
+                )
+            })
+            .map(|(name, entry)| (name, &entry.public_key))
+            .collect();
+        let mut distinct: Vec<&String> = matches.iter().map(|(_, key)| *key).collect();
+        distinct.sort();
+        distinct.dedup();
+        if distinct.len() > 1 {
+            let names: Vec<String> = matches
+                .iter()
+                .map(|(name, key)| format!("'{name}' ({key})"))
+                .collect();
+            return Err(invalid(&format!(
+                "Trezor key source '{}' matches several registered keys with different public keys: {}. Use the key alias instead of the trezor:// URI.",
+                path.to_uri(),
+                names.join(", ")
+            )));
+        }
+        distinct
+            .first()
+            .map(|key| parse_stored_public_key(key))
+            .transpose()
     }
 
     /// The public key registered for a Ledger path, looked up in alias order.
@@ -699,6 +926,17 @@ fn explicit_source(reference: &str) -> Result<Option<KeySource>, CliError> {
             ))
         })?;
         Some(KeySource::Ledger { path })
+    } else if thru_trezor::is_trezor_uri(reference) {
+        let path = TrezorPath::from_uri(reference).map_err(|error| {
+            invalid(&format!(
+                "Invalid Trezor key source '{}': {error}",
+                reference.trim()
+            ))
+        })?;
+        Some(KeySource::Trezor {
+            path,
+            passphrase: false,
+        })
     } else if let Some(id) = reference.strip_prefix("keychain:") {
         Some(KeySource::MacosKeychain { id: id.to_owned() })
     } else if let Some(path) = reference.strip_prefix("file:") {
@@ -801,6 +1039,9 @@ pub(crate) fn load_source(source: &KeySource) -> Result<LoadedKey, CliError> {
         }
         KeySource::MacosKeychain { id } => keychain_read(id)?,
         KeySource::Ledger { path } => return Err(ledger_unsupported(path)),
+        KeySource::Trezor { path, passphrase } => {
+            return Err(trezor_unsupported(path, *passphrase));
+        }
     };
     Ok(LoadedKey::from_seed(seed))
 }
@@ -948,6 +1189,9 @@ pub(crate) fn delete_source(source: &KeySource) -> Result<(), CliError> {
         KeySource::MacosKeychain { id } => keychain_delete(id),
         KeySource::Ledger { .. } => Err(invalid(
             "A Ledger key's secret stays on the device; there is nothing to delete",
+        )),
+        KeySource::Trezor { .. } => Err(invalid(
+            "A Trezor key's secret stays on the device; there is nothing to delete",
         )),
     }
 }
@@ -1923,5 +2167,365 @@ mod tests {
             manager.ledger_source(&other.to_uri()).unwrap(),
             Some((other, None))
         );
+    }
+
+    fn trezor_entry(public_key: &str, account: u32) -> KeyEntry {
+        KeyEntry {
+            public_key: public_key.to_owned(),
+            source: KeySource::Trezor {
+                path: TrezorPath::new(account).unwrap(),
+                passphrase: false,
+            },
+        }
+    }
+
+    /// A Trezor key registers as a reference like any other key, `trezor://`
+    /// selects a path directly, it is never mistaken for a Ledger or a local
+    /// key, and commands that need a local secret refuse it clearly.
+    #[test]
+    fn trezor_sources_register_select_and_refuse_local_use() {
+        let path = TrezorPath::new(0).unwrap();
+        let uri = path.to_uri();
+        assert_eq!(uri, "trezor://44'/8478'/0'/0'");
+        let address = Pubkey::from_bytes(&[9; 32]).to_string();
+        let mut manager = KeyManager::new();
+        manager
+            .insert_entry("tz", trezor_entry(&address, 0), false)
+            .unwrap();
+        manager.validate_all_keys().unwrap();
+        assert_eq!(manager.get_entry("TZ").unwrap().reference(), uri);
+        assert!(manager.get_entry("tz").unwrap().source.is_trezor());
+        assert!(!manager.get_entry("tz").unwrap().source.is_ledger());
+
+        // Serialized like the Ledger path: no scheme, tag "trezor"; paths
+        // outside the policy never load.
+        let yaml = serde_yaml::to_string(&manager).unwrap();
+        assert!(yaml.contains("type: trezor"), "{yaml}");
+        assert!(yaml.contains("path: 44'/8478'/0'/0'"), "{yaml}");
+        let back: KeyManager = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(
+            back.get_entry("tz").unwrap().source,
+            KeySource::Trezor {
+                path,
+                passphrase: false
+            }
+        );
+        for bad in [
+            "trezor://44'/8478'/0'/1'",
+            "trezor://44'/9999'/0'/0'",
+            "trezor://44'/8478'/0/0'",
+            "trezor://garbage",
+        ] {
+            let stored = bad.strip_prefix("trezor://").unwrap();
+            let yaml = format!(
+                "tz:\n  public_key: {address}\n  source:\n    type: trezor\n    path: \"{stored}\"\n"
+            );
+            assert!(serde_yaml::from_str::<KeyManager>(&yaml).is_err(), "{bad}");
+            let error = manager.trezor_source(bad).unwrap_err().to_string();
+            assert!(error.contains("Invalid Trezor key source"), "{error}");
+        }
+
+        // A registered alias and its raw path select the same key and expect
+        // the registered address; public lookups never contact the device.
+        let expected = Some(TrezorTarget::registered(path, false, [9; 32]));
+        assert_eq!(manager.trezor_source("tz").unwrap(), expected);
+        assert_eq!(manager.trezor_source("alias:TZ").unwrap(), expected);
+        assert_eq!(
+            manager
+                .trezor_source(&uri.replacen("trezor://", "TREZOR://m/", 1))
+                .unwrap(),
+            expected
+        );
+        assert_eq!(manager.public_key("tz").unwrap(), [9; 32]);
+        assert_eq!(manager.public_key(&uri).unwrap(), [9; 32]);
+        assert_eq!(manager.resolve_public_key(&uri).unwrap(), [9; 32]);
+        let other = TrezorPath::new(1).unwrap();
+        assert_eq!(
+            manager.trezor_source(&other.to_uri()).unwrap(),
+            Some(TrezorTarget::unregistered(other, false))
+        );
+
+        // A Trezor key is not a Ledger key, and the reverse.
+        assert_eq!(manager.ledger_source("tz").unwrap(), None);
+        assert_eq!(manager.ledger_source(&uri).unwrap(), None);
+        let ledger_uri = DerivationPath::new(0).unwrap().to_uri();
+        assert_eq!(manager.trezor_source(&ledger_uri).unwrap(), None);
+
+        // Commands without Trezor support refuse a Trezor key clearly.
+        for reference in ["tz", uri.as_str()] {
+            let error = manager.load_key(reference).unwrap_err().to_string();
+            assert!(error.contains("does not support Trezor signing"), "{error}");
+            assert!(error.contains("transfer"), "{error}");
+        }
+        // A URI is a selector, never an alias.
+        assert!(KeyManager::validate_name(&uri).is_err());
+        // Deleting a Trezor key's secret makes no sense.
+        let source = manager.get_entry("tz").unwrap().source.clone();
+        assert!(
+            delete_source(&source)
+                .unwrap_err()
+                .to_string()
+                .contains("stays on the device")
+        );
+
+        // Local keys and unknown references are not Trezor sources.
+        let (_directory, local) = KeyManager::test_fixture(&[("k", [2; 32])]);
+        assert_eq!(local.trezor_source("k").unwrap(), None);
+        assert_eq!(local.trezor_source("missing").unwrap(), None);
+        let public = Pubkey::from_bytes(&[2; 32]).to_string();
+        assert_eq!(local.trezor_source(&public).unwrap(), None);
+    }
+
+    /// As for Ledger paths: one registered address is used, different
+    /// addresses behind one `trezor://` path are an ambiguity error.
+    #[test]
+    fn trezor_uri_lookup_is_deterministic() {
+        let addr_a = Pubkey::from_bytes(&[1; 32]).to_string();
+        let addr_b = Pubkey::from_bytes(&[2; 32]).to_string();
+        let uri = TrezorPath::new(0).unwrap().to_uri();
+        let mut manager = KeyManager::new();
+        manager
+            .insert_entry("tz_a", trezor_entry(&addr_a, 0), false)
+            .unwrap();
+        manager
+            .insert_entry("tz_c", trezor_entry(&addr_a, 0), false)
+            .unwrap();
+        assert_eq!(manager.public_key(&uri).unwrap(), [1; 32]);
+        manager
+            .insert_entry("tz_b", trezor_entry(&addr_b, 0), false)
+            .unwrap();
+        let error = manager.trezor_source(&uri).unwrap_err().to_string();
+        assert!(error.contains("several registered keys"), "{error}");
+        assert!(error.contains("tz_a") && error.contains("tz_b"), "{error}");
+        // The alias is unambiguous.
+        assert_eq!(
+            manager.trezor_source("tz_b").unwrap(),
+            Some(TrezorTarget::registered(
+                TrezorPath::new(0).unwrap(),
+                false,
+                [2; 32]
+            ))
+        );
+    }
+
+    fn passphrase_entry(public_key: &str, account: u32) -> KeyEntry {
+        KeyEntry {
+            public_key: public_key.to_owned(),
+            source: KeySource::Trezor {
+                path: TrezorPath::new(account).unwrap(),
+                passphrase: true,
+            },
+        }
+    }
+
+    /// The shape an older CLI knows: no `passphrase` field in a Trezor source.
+    #[derive(Debug, Deserialize)]
+    #[serde(tag = "type", deny_unknown_fields)]
+    #[allow(dead_code)]
+    enum PreviousKeySource {
+        #[serde(rename = "trezor")]
+        Trezor { path: String },
+    }
+
+    /// X2: the flag is written only when set, a file written before it
+    /// existed reads as the standard wallet, and a CLI without the flag
+    /// refuses an entry that has it.
+    #[test]
+    fn the_passphrase_flag_is_written_only_when_set() {
+        let address = Pubkey::from_bytes(&[9; 32]).to_string();
+        let path = TrezorPath::new(0).unwrap();
+        let mut manager = KeyManager::new();
+        manager
+            .insert_entry("std", trezor_entry(&address, 0), false)
+            .unwrap();
+        let yaml = serde_yaml::to_string(&manager).unwrap();
+        assert_eq!(
+            yaml,
+            format!(
+                "std:\n  public_key: {address}\n  source:\n    type: trezor\n    path: 44'/8478'/0'/0'\n"
+            )
+        );
+        let json = serde_json::to_value(&manager.get_entry("std").unwrap().source).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "trezor", "path": "44'/8478'/0'/0'"})
+        );
+
+        // A file written before the flag existed.
+        let back: KeyManager = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(
+            back.get_entry("std").unwrap().source,
+            KeySource::Trezor {
+                path,
+                passphrase: false
+            }
+        );
+
+        // The flag survives a round trip, in YAML and in JSON.
+        manager
+            .insert_entry("hid", passphrase_entry(&address, 0), false)
+            .unwrap();
+        let yaml = serde_yaml::to_string(&manager).unwrap();
+        assert!(yaml.contains("passphrase: true"), "{yaml}");
+        assert_eq!(yaml.matches("passphrase").count(), 1, "{yaml}");
+        let back: KeyManager = serde_yaml::from_str(&yaml).unwrap();
+        assert!(back.get_entry("hid").unwrap().source.is_passphrase());
+        assert!(!back.get_entry("std").unwrap().source.is_passphrase());
+        let json = serde_json::to_value(&manager.get_entry("hid").unwrap().source).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "trezor", "path": "44'/8478'/0'/0'", "passphrase": true})
+        );
+        let entry: KeyEntry =
+            serde_json::from_value(serde_json::json!({"public_key": address, "source": json}))
+                .unwrap();
+        assert!(entry.source.is_passphrase());
+
+        // A CLI that does not know the flag refuses the entry instead of using
+        // the standard wallet; it still reads the entry without the flag.
+        let old = |source: serde_json::Value| serde_json::from_value::<PreviousKeySource>(source);
+        assert!(old(serde_json::json!({"type": "trezor", "path": "44'/8478'/0'/0'"})).is_ok());
+        let error = old(
+            serde_json::json!({"type": "trezor", "path": "44'/8478'/0'/0'", "passphrase": true}),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("unknown field `passphrase`"), "{error}");
+        // The current format refuses other unknown fields too.
+        assert!(
+            serde_json::from_value::<KeySource>(
+                serde_json::json!({"type": "trezor", "path": "44'/8478'/0'/0'", "hidden": true})
+            )
+            .is_err()
+        );
+    }
+
+    /// X3: a `trezor://` URI is the standard wallet. With a standard key, a
+    /// passphrase key only, or a standard key and two passphrase keys on one
+    /// path, the URI never resolves to a passphrase key; each alias resolves
+    /// to its own key and carries its flag to the connection.
+    #[test]
+    fn a_trezor_uri_never_resolves_to_a_passphrase_key() {
+        let path = TrezorPath::new(0).unwrap();
+        let uri = path.to_uri();
+        let address = |byte: u8| Pubkey::from_bytes(&[byte; 32]).to_string();
+
+        // Only a standard key.
+        let mut manager = KeyManager::new();
+        manager
+            .insert_entry("std", trezor_entry(&address(1), 0), false)
+            .unwrap();
+        let standard = Some(TrezorTarget::registered(path, false, [1; 32]));
+        assert_eq!(manager.trezor_source(&uri).unwrap(), standard);
+        assert_eq!(manager.public_key(&uri).unwrap(), [1; 32]);
+        assert_eq!(manager.resolve_public_key(&uri).unwrap(), [1; 32]);
+
+        // Only a passphrase key: as if nothing were registered for the path.
+        let mut only = KeyManager::new();
+        only.insert_entry("hid_a", passphrase_entry(&address(2), 0), false)
+            .unwrap();
+        let none = Some(TrezorTarget::unregistered(path, false));
+        assert_eq!(only.trezor_source(&uri).unwrap(), none);
+        assert_eq!(only.registered_trezor_public_key(&path).unwrap(), None);
+        assert_eq!(
+            only.trezor_source("hid_a").unwrap(),
+            Some(TrezorTarget::registered(path, true, [2; 32]))
+        );
+
+        // A standard key and two passphrase keys on one path.
+        manager
+            .insert_entry("hid_a", passphrase_entry(&address(2), 0), false)
+            .unwrap();
+        manager
+            .insert_entry("hid_b", passphrase_entry(&address(3), 0), false)
+            .unwrap();
+        assert_eq!(manager.trezor_source(&uri).unwrap(), standard);
+        assert_eq!(manager.public_key(&uri).unwrap(), [1; 32]);
+        assert_eq!(manager.resolve_public_key(&uri).unwrap(), [1; 32]);
+        assert_eq!(
+            manager.registered_trezor_public_key(&path).unwrap(),
+            Some([1; 32])
+        );
+        for (reference, expected) in [
+            ("std", TrezorTarget::registered(path, false, [1; 32])),
+            ("hid_a", TrezorTarget::registered(path, true, [2; 32])),
+            ("alias:hid_a", TrezorTarget::registered(path, true, [2; 32])),
+            ("HID_B", TrezorTarget::registered(path, true, [3; 32])),
+            ("alias:HID_B", TrezorTarget::registered(path, true, [3; 32])),
+        ] {
+            assert_eq!(
+                manager.trezor_source(reference).unwrap(),
+                Some(expected),
+                "{reference}"
+            );
+        }
+        // Aliases give the registered keys without touching a device.
+        assert_eq!(manager.public_key("hid_a").unwrap(), [2; 32]);
+        assert_eq!(manager.resolve_public_key("alias:hid_b").unwrap(), [3; 32]);
+
+        // Passphrase keys never take part in the ambiguity of a path.
+        manager
+            .insert_entry("std_b", trezor_entry(&address(4), 0), false)
+            .unwrap();
+        let error = manager.trezor_source(&uri).unwrap_err().to_string();
+        assert!(
+            error.contains("'std'") && error.contains("'std_b'"),
+            "{error}"
+        );
+        assert!(!error.contains("hid_"), "{error}");
+    }
+
+    /// A passphrase key is not a source that commands needing a local secret
+    /// can load, and the refusal does not offer the bare URI.
+    #[test]
+    fn commands_without_trezor_support_refuse_a_passphrase_key() {
+        let address = Pubkey::from_bytes(&[9; 32]).to_string();
+        let mut manager = KeyManager::new();
+        manager
+            .insert_entry("hid", passphrase_entry(&address, 0), false)
+            .unwrap();
+        let error = manager.load_key("hid").unwrap_err().to_string();
+        assert!(error.contains("passphrase wallet"), "{error}");
+        assert!(error.contains("does not support Trezor signing"), "{error}");
+        assert!(!error.contains("trezor://"), "{error}");
+    }
+
+    /// The reference of a registration: the alias for a key of a passphrase
+    /// wallet, the reference of its source for every other key.
+    #[test]
+    fn the_reference_of_a_passphrase_key_is_its_alias() {
+        let address = Pubkey::from_bytes(&[9; 32]).to_string();
+        let mut manager = KeyManager::new();
+        manager
+            .insert_entry("std", trezor_entry(&address, 0), false)
+            .unwrap();
+        manager
+            .insert_entry("hid", passphrase_entry(&address, 0), false)
+            .unwrap();
+        let source = |name: &str| manager.get_entry(name).unwrap().source.clone();
+        assert_eq!(
+            registration_reference("STD", &source("std")),
+            "trezor://44'/8478'/0'/0'"
+        );
+        let reference = registration_reference("HID", &source("hid"));
+        assert_eq!(reference, "alias:hid");
+        // It resolves back to that key, not to the standard wallet.
+        assert_eq!(
+            manager.trezor_source(&reference).unwrap(),
+            Some(TrezorTarget::registered(
+                TrezorPath::new(0).unwrap(),
+                true,
+                [9; 32]
+            ))
+        );
+        let ledger = KeySource::Ledger {
+            path: DerivationPath::new(0).unwrap(),
+        };
+        assert_eq!(registration_reference("x", &ledger), ledger.reference());
+        let file = KeySource::File {
+            path: "/k.key".into(),
+            managed: false,
+        };
+        assert_eq!(registration_reference("x", &file), "file:/k.key");
     }
 }

@@ -12,6 +12,12 @@ use crate::error::CliError;
 pub const LEDGER_CAPABLE_COMMANDS: &str = "transfer, token transfer, account create, \
 account create-eoa, txn sign, txn execute, message sign, keys add-ledger, keys show --verify";
 
+/// Commands that can sign with a Trezor key; the others refuse a Trezor key
+/// with an error naming these.
+pub const TREZOR_CAPABLE_COMMANDS: &str = "transfer, token transfer, account create, \
+account create-eoa (as the new account, not as the fee payer), txn sign, txn execute, \
+message sign (text messages only), keys add-trezor, keys show --verify";
+
 /// Generate a keypair from a private key hex string
 pub fn keypair_from_hex(private_key_hex: &str) -> Result<KeyPair, CliError> {
     KeyPair::from_hex_private_key("cli", private_key_hex)

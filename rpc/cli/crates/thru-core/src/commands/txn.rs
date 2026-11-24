@@ -163,6 +163,7 @@ async fn sign_transaction(
             }
         });
         let response = fee_payer_signer.add_ledger_preview(response, "transaction_sign");
+        let response = fee_payer_signer.add_trezor_preview(response, "transaction_sign");
         output::print_output(response, true);
     } else {
         println!("{}", base64_transaction);
@@ -386,7 +387,10 @@ async fn execute_transaction(
             }
         });
         let response = match &last_signer {
-            Some(signer) => signer.add_ledger_preview(response, "transaction_execute"),
+            Some(signer) => {
+                let response = signer.add_ledger_preview(response, "transaction_execute");
+                signer.add_trezor_preview(response, "transaction_execute")
+            }
             None => response,
         };
         output::print_output(response, true);

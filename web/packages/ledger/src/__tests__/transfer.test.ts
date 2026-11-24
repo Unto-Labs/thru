@@ -3,6 +3,8 @@
  * `thru-ledger-parser/src/transfer_tests.rs`. Cross-language parity with the
  * device is in `device-review.test.ts`.
  */
+import { WALLET_PROGRAM_ADDRESS } from '@thru/sdk';
+import { decodeAddress } from '@thru/sdk/helpers';
 import { describe, expect, it } from 'vitest';
 import { decodeAddress } from '@thru/sdk/helpers';
 import { WALLET_PROGRAM_ADDRESS } from '@thru/sdk';
@@ -16,7 +18,6 @@ import {
   thruAddress,
   TOKEN_PROGRAM,
   toHex,
-  WALLET_PROGRAM,
 } from '../protocol';
 import { buildBody, key, PUBKEY0 } from './helpers/fixtures';
 
@@ -49,7 +50,7 @@ function walletInstr(wallet: number, recipient: number, authority: number): Uint
 
 const eoa = (instr: Uint8Array, rw = RW, ro: Uint8Array[] = []): Uint8Array =>
   buildBody({ program: EOA_PROGRAM, rw, ro, instr });
-const wallet = (instr: Uint8Array): Uint8Array => buildBody({ program: WALLET_PROGRAM, rw: RW, instr });
+const wallet = (instr: Uint8Array): Uint8Array => buildBody({ program: decodeAddress(WALLET_PROGRAM_ADDRESS), rw: RW, instr });
 
 describe('decodeClearTransfer: native', () => {
   it('debits the fee payer and resolves the recipient', () => {

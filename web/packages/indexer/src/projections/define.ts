@@ -24,7 +24,6 @@ export interface AccountProjectionOptions<T extends ProjectionTables, G, R, M> {
   name: string;
   tables: T;
   writer: ProjectionWriter;
-  generation: string;
   chainId: number;
   intervalMs?: number;
   /** Notifications only wake the scheduler; pinned reads remain authoritative. */
@@ -37,6 +36,9 @@ export interface AccountProjectionOptions<T extends ProjectionTables, G, R, M> {
       A domain which permits absence represents it explicitly in R and deletes
       its rows in commit; the runtime never substitutes a newer account. */
   project(group: G, observation: Observation): Promise<R>;
+  /** `activation`: the first cut of this process, all groups in one
+      transaction; it replaces every group's rows (the previous run's rows
+      stay visible to readers until it commits). */
   commit(results: R[], ctx: CommitContext<T, M>, activation: boolean): Promise<void>;
   validateMessage?: (message: M) => M;
   onCommitted?: (observation: Observation, groups: number) => void;

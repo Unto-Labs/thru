@@ -1424,3 +1424,100 @@ fn standalone_refresh_has_its_own_core_layout_without_rebinding_approval() {
     assert_ne!(writer, refreshed);
     assert_eq!(approved, plan.invoke().unwrap());
 }
+
+fn trezor_refusal_config(registered: bool) -> Config {
+    let (_directory, mut keys) = crate::keys::KeyManager::test_fixture(&[("local", [1; 32])]);
+    if registered {
+        keys.insert_entry(
+            "tz",
+            crate::keys::KeyEntry {
+                public_key: thru_base::tn_tools::Pubkey::from_bytes(&[9; 32]).to_string(),
+                source: crate::keys::KeySource::Trezor {
+                    path: thru_trezor::DerivationPath::new(0).unwrap(),
+                    passphrase: false,
+                },
+            },
+            false,
+        )
+        .unwrap();
+    }
+    Config {
+        keys,
+        ..Config::default()
+    }
+}
+
+fn assert_governance_refused(result: Result<(), CliError>) {
+    let error = result.unwrap_err();
+    assert!(matches!(error, CliError::Validation(_)), "{error:?}");
+    assert!(
+        error.to_string().contains(
+            "Thru app on the Trezor does not support governance transactions; \
+             use a local or a Ledger key for it"
+        ),
+        "{error}"
+    );
+}
+
+/// Each operation refuses a Trezor signer at its entry: the plan path does not
+/// exist, so reaching the plan, the node or the device would fail differently.
+async fn run_governance_with_signer(
+    config: &Config,
+    operation: &str,
+    signer: &str,
+) -> Result<(), CliError> {
+    let plan = PathBuf::from("/nonexistent/plan.json");
+    let signer = signer.to_string();
+    let command = match operation {
+        "propose" => GovernanceCommands::Propose {
+            plan,
+            multisig: String::new(),
+            request: String::new(),
+            seed: String::new(),
+            multisig_program: String::new(),
+            signer,
+        },
+        "approve" => GovernanceCommands::Approve {
+            plan,
+            multisig: String::new(),
+            request: String::new(),
+            multisig_program: String::new(),
+            signer,
+        },
+        _ => GovernanceCommands::Execute {
+            plan,
+            multisig: None,
+            request: None,
+            multisig_program: None,
+            signer,
+            receipt: PathBuf::from("/nonexistent/receipt.json"),
+        },
+    };
+    handle_governance_command(config, command, true).await
+}
+
+#[tokio::test]
+async fn governance_operations_refuse_a_trezor_uri_signer() {
+    let config = trezor_refusal_config(false);
+    for operation in ["propose", "approve", "execute"] {
+        assert_governance_refused(
+            run_governance_with_signer(&config, operation, "trezor://44'/8478'/0'/0'").await,
+        );
+    }
+}
+
+#[tokio::test]
+async fn governance_operations_refuse_a_registered_trezor_key_by_name() {
+    let config = trezor_refusal_config(true);
+    for operation in ["propose", "approve", "execute"] {
+        assert_governance_refused(run_governance_with_signer(&config, operation, "tz").await);
+        assert_governance_refused(run_governance_with_signer(&config, operation, "alias:tz").await);
+    }
+}
+
+#[test]
+fn trezor_signer_refusal_leaves_local_keys_alone() {
+    let config = trezor_refusal_config(true);
+    refuse_trezor_signer(&config, "local").unwrap();
+    assert!(refuse_trezor_signer(&config, "tz").is_err());
+}

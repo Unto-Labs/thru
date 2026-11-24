@@ -20,9 +20,12 @@ working.
 ## Contents
 
 - [Quickstart](#quickstart)
+- [A new key](#a-new-key)
 - [Clients and deployments](#clients-and-deployments)
 - [Reading](#reading)
 - [Actions](#actions)
+- [Fees and builder codes](#fees-and-builder-codes)
+- [Loss waterfall](#loss-waterfall)
 - [Cross margin](#cross-margin)
 - [Funding](#funding)
 - [State units](#state-units)
@@ -38,13 +41,15 @@ working.
 
 ```ts
 import { readFileSync } from 'node:fs';
-import { createPerpsClient, keypairSignerFromJSON } from '@thru/programs/perps';
+import { createPerpsClient, ensurePerpsAccounts, keypairSignerFromJSON } from '@thru/programs/perps';
 
 const perps = await createPerpsClient({
   deployment: JSON.parse(readFileSync('deployment.betanet.json', 'utf8')),
   indexerUrl: 'https://perps-api.example.org', // optional
 });
-const signer = keypairSignerFromJSON(JSON.parse(readFileSync('key.json', 'utf8')));
+const key = JSON.parse(readFileSync('key.json', 'utf8')); // { address, privateKeyHex }
+await ensurePerpsAccounts(perps, key); // a new key: its account and its quote token account
+const signer = keypairSignerFromJSON(key);
 const owner = signer.address;
 
 await perps.send(await perps.createSeat({ market: 'BTC-UUSD', owner }), signer);
@@ -67,6 +72,43 @@ Every builder returns `{ transaction, meta }`:
 
 `send(tx, signer)` signs the transaction, sends it and resolves when it has
 executed.
+
+## A new key
+
+A fresh key has nothing on chain. Before it can trade it needs:
+
+- **its own account**, because a key pays for its transactions (the fee
+  payer);
+- **its canonical token account for the quote mint** (UUSD), which
+  `deposit` draws from and `withdraw` pays into.
+
+`ensurePerpsAccounts(perps, key)` creates both, and is safe to run at every
+start:
+
+```ts
+const setup = await ensurePerpsAccounts(perps, { address, privateKeyHex });
+// { feePayer: { address, status: 'existing' | 'created' | 'restored' },
+//   tokenAccounts: [{ symbol: 'UUSD', mint, owner, address, status: 'existing' | 'created' | 'restored', amount }] }
+```
+
+- `key` is `{ address, privateKeyHex }` (the key file `keypairSignerFromJSON`
+  reads) or `{ address, privateKey }`.
+- The key signs its own account's creation. An account that state
+  compression archived (the fee payer or a token account) is restored
+  instead, signed by the key.
+- It creates a token account for every quote mint the deployment's markets
+  use, or for `{ quotes: ['UUSD'] }`.
+- It does not fund the token account. Send quote tokens to
+  `tokenAccounts[0].address` (on Betanet, the faucet in the deployment
+  record funds an existing token account).
+
+The parts are exported too. `ensureFeePayerAccount(thru, key)` creates or
+restores the account. `ensureQuoteTokenAccount(perps, payer, { owner?,
+quote?, submit? })` creates one token account and works with any signer, so a
+wallet can pay for its own; it restores an archived one only with
+`submit.archived` (the restore's signer), and refuses it otherwise.
+`readQuoteTokenAccount(perps, owner, quote?)` returns the account's address,
+balance and whether it is archived.
 
 ## Clients and deployments
 
@@ -121,17 +163,24 @@ authority and must be the signer.
 | Action | Parameters | Notes |
 | --- | --- | --- |
 | `createSeat` | `market, owner` | Once per market. |
-| `placeOrder` | `market, owner, side, orderType?, postOnly?, price \| priceAtoms, size \| quantityAtoms \| lots, clientId?, rounding?` | `orderType`: `gtc` (default), `ioc`, `fok`, `alo` (post-only), `mtl`. Requests the state units the order needs. |
-| `placeOrders` | `market, owner, orders[], cancels?[]` | Cancels first, then orders, in one atomic transaction. |
+| `placeOrder` | `market, owner, side, orderType?, postOnly?, price \| priceAtoms, size \| quantityAtoms \| lots, clientId?, expiresAtNs?, rounding?, builder?` | `orderType`: `gtc` (default), `ioc`, `fok`, `alo` (post-only), `mtl`. Requests the state units the order needs. |
+| `placeOrders` | `market, owner, orders[], cancels?[], builder?` | Cancels first, then orders, in one atomic transaction. `builder: { seatIndex, feePpm }` puts a builder code on every order. |
 | `cancel` | `market, owner, orderId, orderEntryIndex?` | Looks up the entry index when it is not given. |
 | `cancelAll` | `market, owner` | Every resting order of the seat. |
 | `modify` | `market, owner, orderId, size \| quantityAtoms \| lots` | Can only reduce an order. |
-| `deposit` / `withdraw` | `market, owner, amount \| amountAtoms` | Moves funds between the owner's canonical token account for the quote mint and the market's current vault. |
+| `deposit` / `withdraw` | `market, owner, amount \| amountAtoms, seatIndex?` | Moves funds between the owner's canonical token account for the quote mint and the market's current vault. `seatIndex` picks one of the owner's seats (a builder's fee seat). |
 | `createMarginAccount` | `market, owner, accountId?` | On the market's quote vault. |
 | `linkMargin` / `unlinkMargin` | `market, owner, accountId?` | Makes the seat cross, or isolated again (only a flat seat with a nonnegative balance). |
 | `settleFunding` | `market, seatIndexes? \| owner` | Optional (see [Funding](#funding)). |
 | `settleAccountFunding` | `owner, marginAccount?` | Every linked seat of the account. |
 | `liquidate` | `market, owner, targetSeatIndex` | The owner's seat takes the target's position. Cross targets and cross liquidators get their margin records. |
+| `registerBuilderCode` | `market, owner, seatIndex?` | The owner's empty seat becomes its builder fee seat; the seat index is the builder code. Irreversible. |
+| `approveBuilder` / `revokeBuilder` | `market, owner, builder, maxFeePpm` / `market, owner` | Lets one builder charge the seat's resting orders as maker. |
+| `setFees` | `market, authority, takerFeePpm, makerRebatePpm, builderFeeCapPpm, feeInsuranceSharePpm, liqInsuranceSharePpm` | Market authority. Increases of the taker fee and builder cap wait an hour. |
+| `claimFees` | `market, authority, amountAtoms?, seatIndex?` | Market authority. Moves protocol fees (default all) into its own seat. Refused while the market has bad debt. |
+| `depositInsurance` | `market, owner, amount \| amountAtoms, seatIndex?` | Moves free collateral of the seat into the market's insurance balance. Allowed while the market is frozen for bad debt. |
+| `resolveBadDebt` | `market` | Permissionless. Runs the market's bad debt through the loss waterfall. Refused when nothing could cover any of it. |
+| `setRiskParams` | `market, authority, socializeCapBps, ifEpochBudgetBps, bankruptLiqRewardBps` | Market authority. The loss waterfall's parameters. |
 
 Prices and sizes take either human units or atoms, never both:
 
@@ -143,6 +192,96 @@ Prices and sizes take either human units or atoms, never both:
 
 A value off the tick or lot grid fails unless you pass `rounding: 'down' |
 'up' | 'nearest'`.
+
+## Fees and builder codes
+
+The program charges trading fees and pays builder codes
+(`thru-perps/PLAN-FEES.md`). Every rate starts at 0; the market authority
+turns them on with `setFees`.
+
+`getFees(market)` returns the rates in effect, a pending increase and the
+fee and insurance balances. All rates are ppm of filled notional (10,000 =
+1%):
+
+- the taker pays `takerFeePpm` (rounded up), the maker of each fill gets
+  `makerRebatePpm` (rounded down) out of it;
+- a builder code adds the builder's rate, at most 1% and at most the
+  market's `builderFeeCapPpm`.
+
+**A builder code is a fee seat index in one market.** A builder gets one
+per market:
+
+```ts
+await perps.send(await perps.createSeat({ market, owner: builder }), builderSigner);
+const code = await perps.registerBuilderCode({ market, owner: builder });
+await perps.send(code, builderSigner);
+console.log('builder code', code.meta.seatIndex);
+```
+
+The fee seat never trades again; fees are credited to it and the builder
+withdraws them with `withdraw({ market, owner, amount, seatIndex })`
+(`getBuilderCode(market, owner)` gives the index and the balance). Use a
+key kept for building: `registerBuilderCode` without `seatIndex` converts
+only an empty seat, and `getSeat` returns an owner's trading seat before
+its fee seat.
+
+A trader (or an app that builds the trader's transactions) puts the code
+on an order transaction:
+
+```ts
+await perps.send(
+  await perps.placeOrder({ market, owner, side: 'buy', price: '84000', size: '0.01', orderType: 'ioc', builder: { seatIndex: 12, feePpm: 500 } }),
+  signer,
+);
+```
+
+- **As taker**, the trader pays `floor(N * rate / 1e6)` of its filled
+  notional `N` with no approval: the trader signs the code with the
+  transaction.
+- **As maker**, a resting order keeps the code, but a fill charges it only
+  if the seat approved that builder: `approveBuilder({ market, owner,
+  builder: 12, maxFeePpm: 500 })` (one approval per seat, replaced by the
+  next; `revokeBuilder` removes it at once). The rate is the lowest of the
+  order's, the approval's and the market cap. It is waived when it would
+  put an isolated maker under margin, when a cross maker's price
+  improvement does not cover it, and on a self-match.
+
+The FEE event (type 18, `parsePerpEvent`) reports every charge.
+
+## Loss waterfall
+
+The program covers losses with a waterfall (`thru-perps/PLAN-WATERFALL.md`).
+When a liquidation leaves a loss that the seat's collateral cannot cover, the
+market covers it from, in order:
+
+1. its fee balance;
+2. its insurance balance, at most `ifEpochBudgetBps` of it per 8 hour
+   epoch (0: no cap);
+3. a per-lot charge on the open positions, at most `socializeCapBps` of a
+   lot's notional per epoch, priced at the oracle mark.
+
+What is left stays in `state.badDebt`. While it is nonzero the market's
+withdrawals are frozen (`MARKET_WITHDRAWALS_FROZEN`).
+
+- `depositInsurance({ market, owner, amount })` moves free collateral of
+  the owner's seat into the insurance balance. It cannot be withdrawn
+  again. It is allowed while the market is frozen, which is how a frozen
+  market recovers. The program settles funding first and moves at most what
+  a withdrawal could take.
+- `resolveBadDebt({ market })` runs the outstanding bad debt through the
+  waterfall again. Anyone may send it. The client refuses it when nothing
+  could cover any of it (no fee balance, no insurance and no
+  socialization); the program fails with `NOTHING_RESOLVED` when the bad
+  debt does not fall.
+- `setRiskParams({ market, authority, socializeCapBps, ifEpochBudgetBps,
+  bankruptLiqRewardBps })` is for the market authority. `socializeCapBps`
+  is at most the gap between initial and maintenance margin, and
+  `bankruptLiqRewardBps` at most the liquidation fee
+  (`perpRiskParamsProblem`).
+
+`getFees(market)` returns the fee and insurance balances; `state.risk`
+(from `getMarket`) holds the parameters and the epoch counters. The LOSS
+(type 19) and INSURANCE (type 20) events report every draw and deposit.
 
 ## Cross margin
 
@@ -266,7 +405,9 @@ before you send again.
 | `funding` | `FUNDING_DISABLED` (-217), `INVALID_FUNDING_PARAMS` (-218), `FUNDING_UPDATE_NOT_ALONE` (-219) | |
 | `liquidation` | `NOT_LIQUIDATABLE` (-215), `SELF_LIQUIDATION` (-216) | |
 | `unauthorized` | `UNAUTHORIZED_SEAT_AUTH` (-901), `MARGIN_UNAUTHORIZED` (-227), ... | Sign as the owner. |
-| `seat` | `SEAT_NOT_FOUND` (-601), `SEAT_ARENA_FULL` (-603) | Create a seat. |
+| `seat` | `SEAT_NOT_FOUND` (-601), `SEAT_ARENA_FULL` (-603), `FEE_SEAT` (-232) | Create a seat. A fee seat only withdraws. |
+| `fees` | `FEE_PARAM_INVALID` (-231), `BUILDER_INVALID` (-233), `FEE_CLAIM_BLOCKED` (-234) | Check the builder code (a fee seat of another wallet in this market, at most 1%), the rates, or the market's bad debt. |
+| `loss-waterfall` | `NOTHING_RESOLVED` (-229), `RISK_PARAM_INVALID` (-230) | |
 
 `PERP_ERROR_CODES` holds the full table, which a test checks against
 `errors.h`. The helpers are `perpErrorName(code)`, `perpErrorText(code)` and
@@ -334,6 +475,10 @@ quoteVault, oracleFeed } }`):
 - `marginAccountCreateTx`, `marginLinkTx`, `marginTransferTx`,
   `withMarginRecord`
 - `settleFundingTx`, `settleAccountFundingTx`, `fundingUpdateTx`
+- fees and builder codes: `seatSetFeeReceiverTx`, `seatSetBuilderApprovalTx`,
+  `marketSetFeesTx`, `feeClaimTx`
+- loss waterfall: `insuranceDepositTx`, `resolveBadDebtTx`,
+  `marketSetRiskParamsTx`
 - admin: `setFundingTx`, `marketSetStatusTx`, `marketSetCrossTx`,
   `marketSetVaultTx`, `exchangeSetStatusTx`
 
@@ -356,13 +501,23 @@ Related helpers:
 
 ## Examples
 
-- [`examples/place-and-cancel.ts`](./examples/place-and-cancel.ts): creates a
-  seat if needed, places a post-only bid, lists it and cancels it.
+- [`examples/read-book.ts`](./examples/read-book.ts): read-only; every
+  market's mark, funding, fees and top of book (no key needed).
+- [`examples/place-and-cancel.ts`](./examples/place-and-cancel.ts): creates
+  the key's accounts and a seat if needed, places a post-only bid, lists it
+  and cancels it.
 - [`examples/market-maker-bot.ts`](./examples/market-maker-bot.ts): a
   two-sided quoter that replaces its quotes atomically and handles errors by
   `kind`.
 - [`examples/agent-tools.ts`](./examples/agent-tools.ts): the actions as LLM
   tools.
+- [`examples/builder-code.ts`](./examples/builder-code.ts): a builder
+  registers its code, a trader approves it and sends a coded order, the
+  builder reads and withdraws its earnings (two keys,
+  `PERPS_BUILDER_KEY_FILE` and `PERPS_KEY_FILE`).
+- [`examples/keeper.ts`](./examples/keeper.ts): a permissionless keeper that
+  cranks funding when it is due and liquidates isolated seats below their
+  maintenance margin into its own seat.
 
 Run them with `npx tsx <file>`, with `PERPS_DEPLOYMENT`, `PERPS_KEY_FILE`
 and, optionally, `PERPS_INDEXER_URL` set.

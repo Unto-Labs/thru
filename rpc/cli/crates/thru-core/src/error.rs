@@ -128,6 +128,17 @@ pub enum CliError {
         reason: Option<String>,
     },
 
+    /// Trezor hardware-wallet errors (cancelled on the device, no device,
+    /// pairing failed, ...). `message` states the fix; `code` is a stable
+    /// machine-readable class.  `reason` is the Thru app's own refusal
+    /// reason (such as `message_not_text`) when the app refused the request.
+    #[error("Trezor: {message}")]
+    Trezor {
+        code: String,
+        message: String,
+        reason: Option<String>,
+    },
+
     /// Generic error with context
     #[error("{message}")]
     Generic { message: String },

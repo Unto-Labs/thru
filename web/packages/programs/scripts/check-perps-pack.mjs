@@ -33,6 +33,9 @@ try {
     'package/src/perp/examples/place-and-cancel.ts',
     'package/src/perp/examples/market-maker-bot.ts',
     'package/src/perp/examples/agent-tools.ts',
+    'package/src/perp/examples/builder-code.ts',
+    'package/src/perp/examples/keeper.ts',
+    'package/src/perp/examples/read-book.ts',
   ]) {
     assert.ok(files.includes(required), `the package is missing ${required}`);
   }

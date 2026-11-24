@@ -48,7 +48,14 @@ export * from "./projections/writer";
 export * from "./projections/define";
 
 export * from "./delivery/outbox";
-export { migrateProjectionStorage } from "./projections/migration";
+export { PROJECTION_STORAGE_SQL, PROJECTION_TABLES } from "./projections/migration";
 export { projectionStorage } from "./projections/schema";
+export * from "./projections/schema-migrations";
+export { blockHashReader, latestAnchor, highestSlot, defineAnchorRefresh } from "./projections/anchor";
+export * from "./projections/read";
+export * from "./projections/commands";
+export { isNotFound, CUT_ATTEMPTS } from "./projections/processor";
 
 export { createPostgresClient } from "./postgres";
+export { formatLogLine, writeLogLine, logFatal, type IndexerLogLevel } from "./runtime/logger";
+export { isSourceUnreachable, SourceBackoff } from "./runtime/backoff";

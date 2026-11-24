@@ -160,7 +160,7 @@ pub enum Commands {
         subcommand: KeysCommands,
     },
 
-    /// Off-chain message signing (local or Ledger keys)
+    /// Off-chain message signing (local, Ledger or Trezor keys)
     #[command(name = "message")]
     Message {
         #[command(subcommand)]
@@ -1095,9 +1095,12 @@ impl clap::builder::TypedValueParser for RejectPositionalSeed {
 #[derive(Subcommand)]
 pub enum MessageCommands {
     /// Sign a message in the tn_msg_sign_v1__ domain and print the ts...
-    /// signature (on a Ledger the message is reviewed on the device)
+    /// signature (on a Ledger or a Trezor the message is reviewed on the
+    /// device; a Trezor signs text messages only: 1 to 512 bytes of printable
+    /// ASCII and line breaks, at most 16 lines)
     Sign {
-        /// Signing key: a key name (local or Ledger) or a ledger:// URI
+        /// Signing key: a key name (local, Ledger or Trezor) or a ledger:// or
+        /// trezor:// URI
         #[arg(long, default_value = "default")]
         key: String,
 
@@ -1217,13 +1220,51 @@ pub enum KeysCommands {
         no_verify: bool,
     },
 
+    /// Add a Trezor key: confirm its address on the device, then store
+    /// trezor://44'/8478'/<account>'/0' and the address in the configuration.
+    /// With --passphrase the key is one of a passphrase (hidden) wallet
+    #[command(
+        name = "add-trezor",
+        long_about = "Add a Trezor key: confirm its address on the device, then store \
+trezor://44'/8478'/<account>'/0' and the address in the configuration.\n\n\
+With --passphrase the key belongs to a passphrase (hidden) wallet. The passphrase is typed \
+on the Trezor, never on this computer, and it is asked at every command that uses the key \
+(every command opens a session). The registration stores the address the device then has; a \
+mistyped passphrase gives another address and is refused as a key mismatch before anything \
+is signed. Select such a key by its alias (NAME or alias:NAME): a trezor:// URI always means \
+the standard wallet."
+    )]
+    AddTrezor {
+        /// Overwrite existing key
+        #[arg(long)]
+        overwrite: bool,
+
+        /// Key name (case-insensitive)
+        name: String,
+
+        /// Trezor account index N in m/44'/8478'/N'/0'
+        #[arg(long, default_value_t = 0)]
+        account: u32,
+
+        /// Skip the on-device address confirmation
+        #[arg(long = "no-verify")]
+        no_verify: bool,
+
+        /// Register a key of a passphrase (hidden) wallet: the passphrase is
+        /// typed on the Trezor at every command; a trezor:// URI never selects
+        /// it, only its alias does
+        #[arg(long)]
+        passphrase: bool,
+    },
+
     /// Show a key's type and address (never the private key)
     Show {
         /// Key name
         name: String,
 
-        /// For a Ledger key, display the address on the device and wait for
-        /// the user to confirm it
+        /// For a Ledger or Trezor key, display the address on the device and
+        /// wait for the user to confirm it (for a key of a passphrase wallet,
+        /// type the passphrase on the Trezor first)
         #[arg(long)]
         verify: bool,
     },
@@ -1469,12 +1510,13 @@ pub enum AccountCommands {
     },
 
     /// Create an EOA whose own key signs an EOA-create authorization (on a
-    /// Ledger: reviewed and approved on the device) while another key pays
-    /// the fee
+    /// Ledger or a Trezor: reviewed and approved on the device) while another
+    /// key pays the fee
     #[command(name = "create-eoa")]
     CreateEoa {
-        /// Key for the new account: a key name (local or Ledger) or a
-        /// ledger://44'/8478'/<account>'/0' URI
+        /// Key for the new account: a key name (local, Ledger or Trezor), a
+        /// ledger://44'/8478'/<account>'/0' URI or a
+        /// trezor://44'/8478'/<account>'/0' URI
         #[arg(conflicts_with = "ledger")]
         account: Option<String>,
 
@@ -1483,7 +1525,8 @@ pub enum AccountCommands {
         ledger: Option<String>,
 
         /// Fee payer key name or ledger:// URI (defaults to 'default'); must
-        /// already exist on chain
+        /// already exist on chain. Not a Trezor key: the Trezor app does not
+        /// show the creation transaction and does not sign blind
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
     },
@@ -1706,7 +1749,8 @@ pub enum TokenCommands {
         token_program: Option<String>,
     },
 
-    /// Transfer tokens between accounts
+    /// Transfer tokens between accounts (a Ledger or Trezor fee payer
+    /// reviews the transfer on the device)
     Transfer {
         /// Source token account address
         from: String,
@@ -4802,6 +4846,126 @@ mod tests {
             }
             _ => panic!("unexpected command"),
         }
+    }
+
+    /// The help of the two commands a Trezor key can sign names the Trezor and
+    /// what it signs, and the list of Trezor-capable commands names both.
+    #[test]
+    fn help_and_lists_name_the_trezor_commands() {
+        use clap::CommandFactory;
+        let mut command = Cli::command();
+        let message = command
+            .find_subcommand_mut("message")
+            .and_then(|c| c.find_subcommand_mut("sign"))
+            .unwrap()
+            .render_long_help()
+            .to_string();
+        assert!(message.contains("Trezor"), "{message}");
+        assert!(message.contains("text messages only"), "{message}");
+        let token = command
+            .find_subcommand_mut("token")
+            .and_then(|c| c.find_subcommand_mut("transfer"))
+            .unwrap()
+            .render_long_help()
+            .to_string();
+        assert!(token.contains("Trezor"), "{token}");
+        let eoa = command
+            .find_subcommand_mut("account")
+            .and_then(|c| c.find_subcommand_mut("create-eoa"))
+            .unwrap()
+            .render_long_help()
+            .to_string();
+        assert!(eoa.contains("Trezor"), "{eoa}");
+        assert!(eoa.contains("does not sign blind"), "{eoa}");
+        let add = command
+            .find_subcommand_mut("keys")
+            .and_then(|c| c.find_subcommand_mut("add-trezor"))
+            .unwrap()
+            .render_long_help()
+            .to_string();
+        assert!(add.contains("--passphrase"), "{add}");
+        assert!(add.contains("typed on the Trezor"), "{add}");
+        assert!(add.contains("always means"), "{add}");
+        assert!(crate::crypto::TREZOR_CAPABLE_COMMANDS.contains("account create-eoa"));
+        for list in [
+            crate::crypto::TREZOR_CAPABLE_COMMANDS,
+            crate::crypto::LEDGER_CAPABLE_COMMANDS,
+        ] {
+            assert!(list.contains("token transfer"), "{list}");
+            assert!(list.contains("message sign"), "{list}");
+        }
+    }
+
+    #[test]
+    fn parses_keys_add_trezor() {
+        let cli = Cli::try_parse_from(["thru", "keys", "add-trezor", "tz"]).unwrap();
+        match cli.command {
+            Commands::Keys {
+                subcommand:
+                    KeysCommands::AddTrezor {
+                        overwrite,
+                        name,
+                        account,
+                        no_verify,
+                        passphrase,
+                    },
+            } => {
+                assert_eq!(name, "tz");
+                assert_eq!(account, 0);
+                assert!(!overwrite);
+                assert!(!no_verify);
+                assert!(!passphrase);
+            }
+            _ => panic!("unexpected command"),
+        }
+
+        let cli = Cli::try_parse_from([
+            "thru",
+            "keys",
+            "add-trezor",
+            "tz",
+            "--account",
+            "3",
+            "--overwrite",
+            "--no-verify",
+        ])
+        .unwrap();
+        match cli.command {
+            Commands::Keys {
+                subcommand:
+                    KeysCommands::AddTrezor {
+                        overwrite,
+                        account,
+                        no_verify,
+                        ..
+                    },
+            } => {
+                assert_eq!(account, 3);
+                assert!(overwrite);
+                assert!(no_verify);
+            }
+            _ => panic!("unexpected command"),
+        }
+        let cli =
+            Cli::try_parse_from(["thru", "keys", "add-trezor", "hid", "--passphrase"]).unwrap();
+        match cli.command {
+            Commands::Keys {
+                subcommand:
+                    KeysCommands::AddTrezor {
+                        passphrase,
+                        account,
+                        ..
+                    },
+            } => {
+                assert!(passphrase);
+                assert_eq!(account, 0);
+            }
+            _ => panic!("unexpected command"),
+        }
+        assert!(Cli::try_parse_from(["thru", "keys", "add-trezor"]).is_err());
+        assert!(
+            Cli::try_parse_from(["thru", "keys", "add-trezor", "tz", "--account", "x"]).is_err()
+        );
     }
 
     #[test]

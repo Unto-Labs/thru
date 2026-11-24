@@ -406,9 +406,13 @@ describe("runAccountStreamProcessor", () => {
     );
 
     expect(checkpointMocks.updateCheckpoint).not.toHaveBeenCalled();
-    expect(logSpy).toHaveBeenCalledWith(
-      "[account-stream:test-accounts] Block finished: slot 10, no checkpoint yet (no accounts handled)"
-    );
+    /* The default sink writes one JSON line per record. */
+    const records = logSpy.mock.calls.map(([line]) => JSON.parse(line as string));
+    expect(records).toContainEqual(expect.objectContaining({
+      severity: "DEBUG",
+      logger: "account-stream:test-accounts",
+      message: "Block finished: slot 10, no checkpoint yet (no accounts handled)",
+    }));
     logSpy.mockRestore();
   });
 

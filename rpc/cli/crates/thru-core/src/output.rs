@@ -771,28 +771,54 @@ fn print_keys_info(data: &Value) {
         }
     }
     if let Some(secret) = data.get("secret") {
-        let action = match secret.get("status").and_then(Value::as_str) {
-            Some("deleted") => "Deleted backing secret",
-            _ => "Retained backing secret",
-        };
-        println!("{action}: {}", format_value(&secret["reference"]));
+        println!("{}", format_backing_secret(secret));
         if let Some(error) = secret.get("error").and_then(Value::as_str) {
             eprintln!("Secret cleanup failed after saving the registration: {error}");
         }
     }
 }
 
+/// The line about the prior source of a registration that was replaced or
+/// removed (`secret` of the report).
+pub(crate) fn format_backing_secret(secret: &Value) -> String {
+    if secret.get("reference").is_none() && secret.get("public_key").is_some() {
+        // A key of a passphrase wallet that no alias names any more has no
+        // reference, only its address, its path and the flag.
+        return format!(
+            "Unregistered key of a passphrase wallet: {} ({}); its secret stays on the device",
+            format_value(&secret["public_key"]),
+            format_value(&secret["path"])
+        );
+    }
+    let action = match secret.get("status").and_then(Value::as_str) {
+        Some("deleted") => "Deleted backing secret",
+        _ => "Retained backing secret",
+    };
+    format!("{action}: {}", format_value(&secret["reference"]))
+}
+
 fn print_key_entry(entry: &Value) {
-    println!("  {}", format_value(&entry["name"]).bold());
+    print!("{}", format_key_entry(entry));
+}
+
+pub(crate) fn format_key_entry(entry: &Value) -> String {
+    let mut text = format!("  {}\n", format_value(&entry["name"]).bold());
     if let Some(public_key) = entry.get("public_key") {
-        println!("    Address: {}", format_value(public_key));
+        text += &format!("    Address: {}\n", format_value(public_key));
     }
     if let Some(reference) = entry.get("reference") {
-        println!("    Key reference: {}", format_value(reference));
+        text += &format!("    Key reference: {}\n", format_value(reference));
     }
     if let Some(path) = entry.get("derivation_path") {
-        println!("    Derivation path: {}", format_value(path));
+        text += &format!("    Derivation path: {}\n", format_value(path));
     }
+    if entry.get("passphrase") == Some(&Value::Bool(true)) {
+        if let Some(path) = entry.get("path") {
+            text += &format!("    Path: {}\n", format_value(path));
+        }
+        text += "    Passphrase wallet: yes (typed on the Trezor at every command)\n";
+    }
+    text
 }
 
 /// Print transfer information

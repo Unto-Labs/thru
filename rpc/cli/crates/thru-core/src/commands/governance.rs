@@ -1488,6 +1488,15 @@ async fn submit_transaction(
     }
     Ok(details.signature.as_str().to_string())
 }
+/// Governance transactions target programs the Thru app on the Trezor never
+/// signs, so a Trezor signer is refused before the node or the device is used.
+fn refuse_trezor_signer(config: &Config, signer: &str) -> Result<(), CliError> {
+    if config.keys.trezor_source(signer)?.is_some() {
+        return Err(crate::keys::trezor_app_cannot("governance transactions"));
+    }
+    Ok(())
+}
+
 pub async fn handle_governance_command(
     config: &Config,
     command: GovernanceCommands,
@@ -1545,6 +1554,7 @@ pub async fn handle_governance_command(
             multisig_program,
             signer,
         } => {
+            refuse_trezor_signer(config, &signer)?;
             let plan: Plan = read_json(&plan)?;
             plan.validate()?;
             if plan.input.eoa_admin {
@@ -1603,6 +1613,7 @@ pub async fn handle_governance_command(
             multisig_program,
             signer,
         } => {
+            refuse_trezor_signer(config, &signer)?;
             canonical_multisig(&multisig_program)?;
             let plan: Plan = read_json(&plan)?;
             plan.validate()?;
@@ -1636,6 +1647,7 @@ pub async fn handle_governance_command(
             signer,
             receipt,
         } => {
+            refuse_trezor_signer(config, &signer)?;
             let plan: Plan = read_json(&plan)?;
             plan.validate()?;
             let a = &plan.input;

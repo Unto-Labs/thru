@@ -6,8 +6,9 @@ use crate::{
     error::CliError,
     hd::{self, HdPath},
     keys::{
-        KeyEntry, KeyManager, KeySource, KeyStorage, LoadedKey, StagedSecret, delete_source,
-        generate_seed, load_source, open_key_file, read_seed, stage_secret,
+        KeyEntry, KeyManager, KeySource, KeyStorage, LoadedKey, StagedSecret, TrezorTarget,
+        delete_source, generate_seed, load_source, open_key_file, read_seed,
+        registration_reference, stage_secret,
     },
     output,
 };
@@ -18,9 +19,13 @@ use std::{
     sync::Arc,
 };
 
-use crate::signing::{connect_ledger, ledger_error, ledger_is_emulator};
+use crate::signing::{
+    connect_ledger, connect_trezor, ledger_error, ledger_is_emulator, trezor_is_emulator,
+    trezor_key_error,
+};
 use thru_base::tn_tools::Pubkey;
 use thru_ledger::{DerivationPath, LedgerSigner};
+use thru_trezor::{DerivationPath as TrezorPath, TrezorSigner};
 
 const REMOVE_DEFAULT_ERROR: &str = "Removing 'default' requires --force; commands with an omitted signer will need a new default key";
 
@@ -109,6 +114,23 @@ pub async fn handle_keys_command(
             account,
             no_verify,
         } => add_ledger_key(&name, account, overwrite, no_verify, json_format).await,
+        KeysCommands::AddTrezor {
+            overwrite,
+            name,
+            account,
+            no_verify,
+            passphrase,
+        } => {
+            add_trezor_key(
+                &name,
+                account,
+                passphrase,
+                overwrite,
+                no_verify,
+                json_format,
+            )
+            .await
+        }
         KeysCommands::Show { name, verify } => show_key(config, &name, verify, json_format).await,
     }
 }
@@ -207,6 +229,122 @@ pub fn record_ledger_key(
         .insert_entry(name, ledger_entry(signer), overwrite)
 }
 
+/// `thru keys add-trezor <name> [--account N] [--passphrase]`: read the Trezor
+/// key at `m/44'/8478'/N'/0'`, have the user confirm the address on the device
+/// (unless `--no-verify`), then register its path and address. With
+/// `--passphrase` the key is read from the wallet of a passphrase the person
+/// types on the device, and the registration says so.
+async fn add_trezor_key(
+    name: &str,
+    account: u32,
+    passphrase: bool,
+    overwrite: bool,
+    no_verify: bool,
+    json_format: bool,
+) -> Result<(), CliError> {
+    let path = TrezorPath::new(account)
+        .map_err(|e| CliError::Validation(format!("Invalid Trezor account index: {e}")))?;
+    KeyManager::validate_name(name)?;
+    let config_path = Config::get_config_path()?;
+    // Fail before prompting on the device.
+    precheck_alias(&config_path, name, overwrite).await?;
+    let signer = connect_trezor(TrezorTarget::unregistered(path, passphrase))?;
+    let verified = !no_verify;
+    if verified {
+        signer
+            .verify_address_on_device()
+            .map_err(|e| trezor_key_error(e, passphrase))?;
+    }
+    // An approval on the emulator is not an approval on a hardware wallet,
+    // and is never reported as one.
+    let emulator = trezor_is_emulator();
+    let entry = trezor_entry(&signer, passphrase);
+    let mut response = trezor_added_json(name, &entry, verified, emulator);
+    let registered = register_entry(
+        &config_path,
+        name,
+        entry.clone(),
+        None,
+        overwrite,
+        "add-trezor",
+    )
+    .await?;
+    if let Some(secret) = registered.get("secret") {
+        // The overwritten registration's prior source and what became of it.
+        response["trezor_key"]["secret"] = secret.clone();
+    }
+    if json_format {
+        output::print_output(response, true);
+    } else {
+        output::print_success(&trezor_added_text(name, &entry, verified, emulator));
+    }
+    Ok(())
+}
+
+/// The JSON report of `keys add-trezor`: `source` is the reference of the new
+/// registration, which for a key of a passphrase wallet is its alias.
+fn trezor_added_json(name: &str, entry: &KeyEntry, verified: bool, emulator: bool) -> Value {
+    let KeySource::Trezor { path, passphrase } = &entry.source else {
+        unreachable!("keys add-trezor registers a Trezor source");
+    };
+    let mut response = json!({
+        "trezor_key": {
+            "operation": "add-trezor",
+            "name": name.to_lowercase(),
+            "source": registration_reference(name, &entry.source),
+            "path": path.to_string(),
+            "public_key": entry.public_key,
+            "verified_on_device": verified && !emulator,
+            "verified_on_emulator": verified && emulator,
+            "status": "success",
+        }
+    });
+    if *passphrase {
+        response["trezor_key"]["passphrase"] = json!(true);
+    }
+    response
+}
+
+/// The text `keys add-trezor` prints on success.
+fn trezor_added_text(name: &str, entry: &KeyEntry, verified: bool, emulator: bool) -> String {
+    let KeySource::Trezor { path, passphrase } = &entry.source else {
+        unreachable!("keys add-trezor registers a Trezor source");
+    };
+    let wallet = if *passphrase {
+        format!(
+            ", key of a passphrase wallet: select it as {} (a trezor:// URI is the standard wallet)",
+            registration_reference(name, &entry.source)
+        )
+    } else {
+        String::new()
+    };
+    format!(
+        "Trezor key '{}' added: {} ({}){}{}",
+        name.to_lowercase(),
+        entry.public_key,
+        path,
+        wallet,
+        match (verified, emulator) {
+            (true, false) => ", address confirmed on the device",
+            (true, true) => ", address confirmed on the Trezor EMULATOR (not a hardware device)",
+            (false, _) => "",
+        }
+    )
+}
+
+/// The registration of a connected Trezor signer: its path, the address the
+/// device reported, and whether it is a key of a passphrase wallet.
+fn trezor_entry(signer: &TrezorSigner, passphrase: bool) -> KeyEntry {
+    trezor_entry_at(*signer.path(), signer.address(), passphrase)
+}
+
+fn trezor_entry_at(path: TrezorPath, address: String, passphrase: bool) -> KeyEntry {
+    KeyEntry {
+        public_key: address,
+        source: KeySource::Trezor { path, passphrase },
+    }
+}
+
 /// Describe a key without revealing secrets: type, address and, for Ledger
 /// keys, the path.  A `ledger://` URI that no registered key uses is read
 /// from the device (silently).
@@ -221,14 +359,31 @@ fn describe_key_with(
     public_key: &[u8; 32],
 ) -> Result<Value, CliError> {
     let ledger = config.keys.ledger_source(name)?;
+    let trezor = config.keys.trezor_source(name)?;
     let public_key = Pubkey::from_bytes(public_key).to_string();
     let name = name.strip_prefix("alias:").unwrap_or(name).to_lowercase();
     Ok(match ledger {
-        None => json!({
-            "name": name,
-            "type": "local",
-            "public_key": public_key,
-        }),
+        None => match trezor {
+            None => json!({
+                "name": name,
+                "type": "local",
+                "public_key": public_key,
+            }),
+            Some(target) => {
+                let mut info = json!({
+                    "name": name,
+                    "type": "trezor",
+                    "source": registration_reference(&name, &target.source()),
+                    "path": target.path().to_string(),
+                    "public_key": public_key,
+                    "cached": target.expected().is_some(),
+                });
+                if target.passphrase() {
+                    info["passphrase"] = json!(true);
+                }
+                info
+            }
+        },
         Some((path, registered)) => json!({
             "name": name,
             "type": "ledger",
@@ -251,10 +406,31 @@ async fn show_key(
 ) -> Result<(), CliError> {
     let public_key = config.keys.public_key(name)?;
     let mut info = describe_key_with(config, name, &public_key)?;
-    if verify {
+    if verify && let Some(target) = config.keys.trezor_source(name)? {
+        if !json_format {
+            println!(
+                "Address: {}",
+                info["public_key"].as_str().unwrap_or_default()
+            );
+        }
+        // Expect the key read above, so a device or seed swapped in between
+        // fails instead of being confirmed.
+        let passphrase = target.passphrase();
+        let signer = connect_trezor(TrezorTarget::registered(
+            target.path(),
+            passphrase,
+            public_key,
+        ))?;
+        signer
+            .verify_address_on_device()
+            .map_err(|e| trezor_key_error(e, passphrase))?;
+        let emulator = trezor_is_emulator();
+        info["verified_on_device"] = json!(!emulator);
+        info["verified_on_emulator"] = json!(emulator);
+    } else if verify {
         let Some((path, _)) = config.keys.ledger_source(name)? else {
             return Err(CliError::Validation(format!(
-                "--verify needs a Ledger key; '{}' is a local key",
+                "--verify needs a Ledger or Trezor key; '{}' is a local key",
                 name
             )));
         };
@@ -276,20 +452,16 @@ async fn show_key(
     if json_format {
         output::print_output(json!({ "key": info }), true);
     } else {
-        println!(
-            "Key '{}' ({})",
-            info["name"].as_str().unwrap_or_default(),
-            info["type"].as_str().unwrap_or("?")
-        );
-        println!(
-            "  Address: {}",
-            info["public_key"].as_str().unwrap_or_default()
-        );
-        if let Some(path) = info["path"].as_str() {
-            println!("  Path:    {}", path);
-            println!("  Source:  {}", info["source"].as_str().unwrap_or_default());
-        }
-        if verify && ledger_is_emulator() {
+        print!("{}", show_text(&info));
+        if verify && info["type"] == "trezor" {
+            if trezor_is_emulator() {
+                output::print_warning(
+                    "Address confirmed on the Trezor EMULATOR, not on a hardware device",
+                );
+            } else {
+                output::print_success("Address confirmed on the Trezor");
+            }
+        } else if verify && ledger_is_emulator() {
             output::print_warning(
                 "Address confirmed on the Speculos EMULATOR, not on a hardware device",
             );
@@ -300,14 +472,43 @@ async fn show_key(
     Ok(())
 }
 
+/// The lines `keys show` prints about a key.
+fn show_text(info: &Value) -> String {
+    let mut text = format!(
+        "Key '{}' ({})\n  Address: {}\n",
+        info["name"].as_str().unwrap_or_default(),
+        info["type"].as_str().unwrap_or("?"),
+        info["public_key"].as_str().unwrap_or_default()
+    );
+    if let Some(path) = info["path"].as_str() {
+        text += &format!("  Path:    {path}\n");
+        text += &format!(
+            "  Source:  {}\n",
+            info["source"].as_str().unwrap_or_default()
+        );
+    }
+    if info["passphrase"] == true {
+        text +=
+            "  Passphrase wallet: yes (the passphrase is typed on the Trezor at every command)\n";
+    }
+    text
+}
+
 fn entry_output(manager: &KeyManager, name: &str) -> Result<Value, CliError> {
     let entry = manager.get_entry(name)?;
     // Turn registered relative paths into usable direct references for output.
     let source = manager.resolved_source(entry);
-    Ok(
-        json!({"name": name.to_lowercase(), "public_key": entry.public_key,
-        "reference": source.reference(), "source": source}),
-    )
+    let mut output = json!({"name": name.to_lowercase(), "public_key": entry.public_key,
+        "reference": registration_reference(name, &source), "source": source});
+    if let KeySource::Trezor {
+        path,
+        passphrase: true,
+    } = &source
+    {
+        output["path"] = json!(path.to_string());
+        output["passphrase"] = json!(true);
+    }
+    Ok(output)
 }
 
 fn entries(config: &Config) -> Result<Vec<Value>, CliError> {
@@ -391,8 +592,11 @@ async fn commit_config_cleanups(
             let plan = if durable {
                 plan_cleanup(&path, &config, &entry, explicit, verified.as_deref())
             } else {
-                CleanupPlan::Done(json!({"reference": entry.source.reference(), "status": "retained",
-                    "error": "Registration committed, but directory sync failed; prior secret retained"}))
+                let mut report = prior_source_report(&entry, "retained");
+                report["error"] = json!(
+                    "Registration committed, but directory sync failed; prior secret retained"
+                );
+                CleanupPlan::Done(report)
             };
             match plan {
                 CleanupPlan::Delete(source @ KeySource::MacosKeychain { .. }) => {
@@ -677,6 +881,12 @@ async fn remove_key(
                     .into(),
             ));
         }
+        if entry.source.is_trezor() {
+            return Err(CliError::Validation(
+                "A Trezor key's secret stays on the device; remove it without --delete-secret"
+                    .into(),
+            ));
+        }
         let read = (entry.public_key.clone(), manager.resolved_source(&entry));
         // Fail before any secret read (and prompt) when deletion is refused.
         if source_referenced(&snapshot, &read.1)? {
@@ -825,12 +1035,28 @@ fn plan_cleanup(
     })();
     match result {
         Ok(true) => CleanupPlan::Delete(source.clone()),
-        Ok(false) => {
-            CleanupPlan::Done(json!({"reference": source.reference(), "status": "retained"}))
+        Ok(false) => CleanupPlan::Done(prior_source_report(entry, "retained")),
+        Err(error) => {
+            let mut report = prior_source_report(entry, "retained");
+            report["error"] = json!(error.to_string());
+            CleanupPlan::Done(report)
         }
-        Err(error) => CleanupPlan::Done(
-            json!({"reference": source.reference(), "status": "retained", "error": error.to_string()}),
-        ),
+    }
+}
+
+/// What a report says about the prior source of a registration that was
+/// replaced or removed. The registration's alias no longer names it, and the
+/// only reference of a key of a passphrase wallet is its alias (the URI of its
+/// path would select the standard wallet), so such a key is reported by its
+/// public key, its path and the passphrase flag, with no reference.
+fn prior_source_report(entry: &KeyEntry, status: &str) -> Value {
+    match &entry.source {
+        KeySource::Trezor {
+            path,
+            passphrase: true,
+        } => json!({"public_key": entry.public_key, "path": path.to_string(),
+            "passphrase": true, "status": status}),
+        source => json!({"reference": source.reference(), "status": status}),
     }
 }
 
@@ -1023,6 +1249,16 @@ async fn move_at(
             if !all {
                 return Err(CliError::Validation(format!(
                     "Signing key alias {name:?} is a Ledger key; its secret stays on the device and cannot be moved"
+                )));
+            }
+            unchanged.push(name);
+            continue;
+        }
+        if source.is_trezor() {
+            // A Trezor key's secret stays on the device; only --all skips it.
+            if !all {
+                return Err(CliError::Validation(format!(
+                    "Signing key alias {name:?} is a Trezor key; its secret stays on the device and cannot be moved"
                 )));
             }
             unchanged.push(name);
@@ -1658,6 +1894,117 @@ mod tests {
         );
     }
 
+    const TREZOR_ADDRESS: &str = "taHWXdTRD0-KOS2eF8TYzep8aOKj6tw1mXu7ZzjjnMDm6A";
+
+    /// What `keys add-trezor` commits, without a device: the registration of
+    /// path 0 under the config lock, then the config read back.
+    #[tokio::test]
+    async fn add_trezor_registers_path_and_address_and_round_trips() {
+        let directory = tempfile::tempdir().unwrap();
+        let config_path = directory.path().join("config.yaml");
+        let path = TrezorPath::new(0).unwrap();
+        let response = register_entry(
+            &config_path,
+            "TZ",
+            trezor_entry_at(path, TREZOR_ADDRESS.into(), false),
+            None,
+            false,
+            "add-trezor",
+        )
+        .await
+        .unwrap();
+        assert_eq!(response["operation"], "add-trezor");
+        assert_eq!(response["status"], "success");
+
+        let raw = std::fs::read_to_string(&config_path).unwrap();
+        assert!(raw.contains("type: trezor"), "{raw}");
+        assert!(!raw.contains("trezor://"), "{raw}");
+        let config = Config::load_for_update(&config_path).await.unwrap();
+        let entry = config.keys.get_entry("tz").unwrap();
+        assert_eq!(
+            entry.source,
+            KeySource::Trezor {
+                path,
+                passphrase: false
+            }
+        );
+        assert_eq!(entry.reference(), "trezor://44'/8478'/0'/0'");
+        assert_eq!(entry.public_key, TREZOR_ADDRESS);
+        let info = describe_key(&config, "tz").unwrap();
+        assert_eq!(info["type"], "trezor");
+        assert_eq!(info["public_key"], TREZOR_ADDRESS);
+        assert_eq!(info["source"], "trezor://44'/8478'/0'/0'");
+        assert_eq!(info["path"], path.to_string());
+        assert_eq!(info["cached"], true);
+        // Removal unregisters it; the secret stays on the device.
+        let mut config = config;
+        let removed = remove_key_from_config(&mut config, "tz", false).unwrap();
+        assert!(removed.source.is_trezor());
+        assert!(delete_source(&removed.source).is_err());
+    }
+
+    #[tokio::test]
+    async fn add_trezor_refuses_an_existing_name_until_overwrite() {
+        let directory = tempfile::tempdir().unwrap();
+        let config_path = directory.path().join("config.yaml");
+        let first = TrezorPath::new(0).unwrap();
+        let second = TrezorPath::new(1).unwrap();
+        let second_address = Pubkey::from_bytes(&[9; 32]).to_string();
+        register_entry(
+            &config_path,
+            "tz",
+            trezor_entry_at(first, TREZOR_ADDRESS.into(), false),
+            None,
+            false,
+            "add-trezor",
+        )
+        .await
+        .unwrap();
+        // Refused before the device is asked anything (any case of the name).
+        assert!(precheck_alias(&config_path, "TZ", false).await.is_err());
+        assert!(precheck_alias(&config_path, "TZ", true).await.is_ok());
+        let error = register_entry(
+            &config_path,
+            "TZ",
+            trezor_entry_at(second, second_address.clone(), false),
+            None,
+            false,
+            "add-trezor",
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("--overwrite"), "{error}");
+        let config = Config::load_for_update(&config_path).await.unwrap();
+        assert_eq!(
+            config.keys.get_entry("tz").unwrap().source,
+            KeySource::Trezor {
+                path: first,
+                passphrase: false
+            }
+        );
+
+        register_entry(
+            &config_path,
+            "tz",
+            trezor_entry_at(second, second_address.clone(), false),
+            None,
+            true,
+            "add-trezor",
+        )
+        .await
+        .unwrap();
+        let config = Config::load_for_update(&config_path).await.unwrap();
+        let entry = config.keys.get_entry("tz").unwrap();
+        assert_eq!(
+            entry.source,
+            KeySource::Trezor {
+                path: second,
+                passphrase: false
+            }
+        );
+        assert_eq!(entry.public_key, second_address);
+    }
+
     #[test]
     fn test_ledger_key_record_describe_remove() {
         use std::sync::Arc;
@@ -1981,5 +2328,241 @@ mod tests {
             assert_eq!(value["public_key"], address(seed));
             assert_eq!(*config.keys.load_key(name).unwrap().private_key, seed);
         }
+    }
+
+    fn address_of(byte: u8) -> String {
+        Pubkey::from_bytes(&[byte; 32]).to_string()
+    }
+
+    const STANDARD_URI: &str = "trezor://44'/8478'/0'/0'";
+
+    /// Registers a standard key `std` (key 1) and the passphrase keys `hid`
+    /// (key 2) and `other` (key 3), all on path 0, through the registration
+    /// the command uses.
+    async fn register_trezor_keys(config_path: &Path) -> Vec<Value> {
+        let path = TrezorPath::new(0).unwrap();
+        let mut responses = Vec::new();
+        for (name, byte, passphrase) in [("std", 1, false), ("hid", 2, true), ("other", 3, true)] {
+            responses.push(
+                register_entry(
+                    config_path,
+                    name,
+                    trezor_entry_at(path, address_of(byte), passphrase),
+                    None,
+                    false,
+                    "add-trezor",
+                )
+                .await
+                .unwrap(),
+            );
+        }
+        responses
+    }
+
+    /// X3: every place that prints something a person can pass back as a key
+    /// gives a passphrase key as `alias:NAME`, in text and in JSON, and it
+    /// resolves to that key and not to the standard wallet on the same path.
+    #[tokio::test]
+    async fn passphrase_key_references_resolve_back_in_every_output() {
+        let directory = tempfile::tempdir().unwrap();
+        let config_path = directory.path().join("config.yaml");
+        let responses = register_trezor_keys(&config_path).await;
+        let config = Config::load_for_update(&config_path).await.unwrap();
+        let hidden = config.keys.get_entry("hid").unwrap().clone();
+        let resolves = |reference: &str, byte: u8, passphrase: bool| {
+            let target = config.keys.trezor_source(reference).unwrap().unwrap();
+            assert_eq!(target.passphrase(), passphrase, "{reference}");
+            assert_eq!(target.expected(), Some([byte; 32]), "{reference}");
+        };
+
+        // keys add-trezor: JSON and text.
+        let added = trezor_added_json("HID", &hidden, true, false);
+        assert_eq!(added["trezor_key"]["source"], "alias:hid");
+        assert_eq!(added["trezor_key"]["passphrase"], true);
+        assert_eq!(added["trezor_key"]["path"], "m/44'/8478'/0'/0'");
+        assert_eq!(added["trezor_key"]["public_key"], address_of(2));
+        resolves(added["trezor_key"]["source"].as_str().unwrap(), 2, true);
+        let text = trezor_added_text("HID", &hidden, true, false);
+        assert!(text.contains("select it as alias:hid"), "{text}");
+        assert!(text.contains("the standard wallet"), "{text}");
+        assert!(text.contains("m/44'/8478'/0'/0'"), "{text}");
+        assert!(!text.contains("a trezor://44"), "{text}");
+        // The registration's own response (what `register` prints).
+        assert_eq!(responses[1]["reference"], "alias:hid");
+        assert_eq!(responses[1]["passphrase"], true);
+
+        // keys show: JSON and text.
+        for name in ["hid", "alias:hid", "HID"] {
+            let info = describe_key(&config, name).unwrap();
+            assert_eq!(info["source"], "alias:hid", "{name}");
+            assert_eq!(info["passphrase"], true);
+            assert_eq!(info["path"], "m/44'/8478'/0'/0'");
+            assert_eq!(info["public_key"], address_of(2));
+            resolves(info["source"].as_str().unwrap(), 2, true);
+            let text = show_text(&info);
+            assert!(text.contains("Source:  alias:hid\n"), "{text}");
+            assert!(text.contains("Passphrase wallet: yes"), "{text}");
+            assert!(text.contains("Path:    m/44'/8478'/0'/0'"), "{text}");
+        }
+
+        // keys list and keys get: JSON and text.
+        let listed = entries(&config).unwrap();
+        let find = |name: &str| listed.iter().find(|entry| entry["name"] == name).unwrap();
+        for (name, byte) in [("hid", 2), ("other", 3)] {
+            let entry = find(name);
+            assert_eq!(entry["reference"], format!("alias:{name}"));
+            assert_eq!(entry["passphrase"], true);
+            assert_eq!(entry["path"], "m/44'/8478'/0'/0'");
+            assert_eq!(entry["source"]["passphrase"], true);
+            resolves(entry["reference"].as_str().unwrap(), byte, true);
+            let text = crate::output::format_key_entry(entry);
+            assert!(
+                text.contains(&format!("Key reference: alias:{name}\n")),
+                "{text}"
+            );
+            assert!(text.contains("Passphrase wallet: yes"), "{text}");
+            assert!(text.contains("Path: m/44'/8478'/0'/0'"), "{text}");
+            assert!(!text.contains("trezor://"), "{text}");
+        }
+        let got = entry_output(&config.keys, "HID").unwrap();
+        assert_eq!(&got, find("hid"));
+
+        // The standard wallet on the same path is unchanged: the URI, and no
+        // passphrase field anywhere.
+        assert_eq!(
+            find("std"),
+            &json!({"name": "std", "public_key": address_of(1),
+                "reference": STANDARD_URI,
+                "source": {"type": "trezor", "path": "44'/8478'/0'/0'"}})
+        );
+        resolves(STANDARD_URI, 1, false);
+        let info = describe_key(&config, "std").unwrap();
+        assert_eq!(
+            info,
+            json!({"name": "std", "type": "trezor", "source": STANDARD_URI,
+                "path": "m/44'/8478'/0'/0'", "public_key": address_of(1), "cached": true})
+        );
+        let text = show_text(&info);
+        assert_eq!(
+            text,
+            format!(
+                "Key 'std' (trezor)\n  Address: {}\n  Path:    m/44'/8478'/0'/0'\n  Source:  {STANDARD_URI}\n",
+                address_of(1)
+            )
+        );
+        let uri_info = describe_key(&config, STANDARD_URI).unwrap();
+        assert_eq!(uri_info["public_key"], address_of(1));
+        assert_eq!(uri_info["source"], STANDARD_URI);
+        assert!(uri_info.get("passphrase").is_none());
+        let standard = config.keys.get_entry("std").unwrap().clone();
+        let added = trezor_added_json("std", &standard, false, false);
+        assert_eq!(added["trezor_key"]["source"], STANDARD_URI);
+        assert!(added["trezor_key"].get("passphrase").is_none());
+        let text = trezor_added_text("std", &standard, true, false);
+        assert_eq!(
+            text,
+            format!(
+                "Trezor key 'std' added: {} (m/44'/8478'/0'/0'), address confirmed on the device",
+                address_of(1)
+            )
+        );
+        let text = crate::output::format_key_entry(find("std"));
+        assert!(
+            !text.contains("Passphrase") && !text.contains("Path:"),
+            "{text}"
+        );
+    }
+
+    /// X3: a passphrase key that no alias names any more (replaced by a new
+    /// registration under the same alias, or removed) is reported by its public
+    /// key, its path and the flag, with no reference, in JSON and in text; the
+    /// alias then resolves to the new key. A standard key is reported as ever.
+    #[tokio::test]
+    async fn a_passphrase_key_without_an_alias_is_reported_without_a_reference() {
+        let directory = tempfile::tempdir().unwrap();
+        let config_path = directory.path().join("config.yaml");
+        register_trezor_keys(&config_path).await;
+        let path = TrezorPath::new(0).unwrap();
+
+        // Replaced under the same alias by another passphrase key.
+        let replaced = register_entry(
+            &config_path,
+            "hid",
+            trezor_entry_at(path, address_of(4), true),
+            None,
+            true,
+            "add-trezor",
+        )
+        .await
+        .unwrap();
+        let report = &replaced["secret"];
+        assert_eq!(
+            report,
+            &json!({"public_key": address_of(2), "path": "m/44'/8478'/0'/0'",
+                "passphrase": true, "status": "retained"})
+        );
+        assert!(report.get("reference").is_none());
+        let text = crate::output::format_backing_secret(report);
+        assert!(text.contains(&address_of(2)), "{text}");
+        assert!(text.contains("m/44'/8478'/0'/0'"), "{text}");
+        assert!(
+            !text.contains("null") && !text.contains("trezor://"),
+            "{text}"
+        );
+        assert!(!text.contains("alias:"), "{text}");
+        let config = Config::load_for_update(&config_path).await.unwrap();
+        let target = config.keys.trezor_source("hid").unwrap().unwrap();
+        assert_eq!(
+            (target.passphrase(), target.expected()),
+            (true, Some([4; 32]))
+        );
+        assert_eq!(replaced["reference"], "alias:hid");
+
+        // Removed.
+        let mut config = config;
+        let removed = remove_key_from_config(&mut config, "other", false).unwrap();
+        let cleanup = commit_config(
+            &config_path,
+            &config,
+            Vec::new(),
+            None,
+            Some((removed, false, None)),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            cleanup,
+            json!({"public_key": address_of(3), "path": "m/44'/8478'/0'/0'",
+                "passphrase": true, "status": "retained"})
+        );
+        let text = crate::output::format_backing_secret(&cleanup);
+        assert!(text.contains(&address_of(3)), "{text}");
+        assert!(
+            !text.contains("null") && !text.contains("trezor://"),
+            "{text}"
+        );
+        let config = Config::load_for_update(&config_path).await.unwrap();
+        assert!(config.keys.trezor_source("other").unwrap().is_none());
+
+        // A standard key: the report is the reference of its source, as ever.
+        let replaced = register_entry(
+            &config_path,
+            "std",
+            trezor_entry_at(path, address_of(5), false),
+            None,
+            true,
+            "add-trezor",
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            replaced["secret"],
+            json!({"reference": STANDARD_URI, "status": "retained"})
+        );
+        assert_eq!(
+            crate::output::format_backing_secret(&replaced["secret"]),
+            format!("Retained backing secret: {STANDARD_URI}")
+        );
     }
 }

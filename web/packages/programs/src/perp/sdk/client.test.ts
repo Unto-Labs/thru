@@ -1,6 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import { TransactionVmError } from '@thru/sdk/proto';
-import { PERP_CBOOK_MAX_PRICE_IN_TICKS, derivePerpMarginAccountAddress, perpSettleFunding } from '../index';
+import {
+  PERP_CBOOK_MAX_PRICE_IN_TICKS,
+  PERP_SEAT_APPROVAL_PPM_SHIFT,
+  PERP_SEAT_APPROVAL_SEAT_SHIFT,
+  PERP_SEAT_FLAG_FEE,
+  derivePerpMarginAccountAddress,
+  perpSettleFunding,
+  type PerpMarket,
+  type PerpMarketFees,
+  type PerpMarketRisk,
+} from '../index';
 import { createPerpsClient, type PerpsClient } from './client';
 import {
   createPerpsIndexer,
@@ -11,7 +21,7 @@ import {
   PERPS_INDEXER_MAX_PAGES,
   PerpsIndexerError,
 } from './indexer';
-import { TransactionFailedError } from './errors';
+import { TransactionFailedError, perpErrorKind } from './errors';
 import { createWalletSigner, type PerpsSigner, type PerpsWalletIntent } from './signers';
 import { describePerpsActions, perpsToolDefinitions, runPerpsAction, validatePerpsActionParams } from './describe';
 import {
@@ -226,6 +236,24 @@ describe('createPerpsClient', () => {
     /* All from the indexer: the chain's order arena and margin accounts were never read. */
     expect(env.reads).not.toContain(A.orderArena);
     expect(env.reads).not.toContain(env.margin);
+  });
+
+  it('reads every page of the owner\'s seats from the indexer, so a fee seat on a later page is found', async () => {
+    const seatJson = (i: number) => ({
+      seat: {
+        market: A.seatArena, seatIndex: i + 1, authority: OWNER, collateralAtoms: i === 204 ? '12' : '0', cross: false, longLots: '0', shortLots: '0',
+        openBidLots: '0', openAskLots: '0', headOrderEntryIndex: 0, entryNotionalAtoms: '0', openBidNotionalAtoms: '0', openAskNotionalAtoms: '0',
+        feeReceiver: i === 204, builderApproval: null,
+      },
+    });
+    const { fetch, calls } = pagedIndexer({ [`/v1/owners/${OWNER}`]: { total: 205, item: seatJson } });
+    const { client: perps, env } = await client({ indexerUrl: 'https://indexer.example', fetch });
+    expect(await perps.getBuilderCode('BTC-UUSD', OWNER)).toEqual({ market: A.seatArena, owner: OWNER, seatIndex: 205, balance: 12n });
+    expect(calls.filter((url) => url.pathname === `/v1/owners/${OWNER}`).map((url) => [url.searchParams.get('market'), url.searchParams.get('cursor')])).toEqual([
+      [A.seatArena, null],
+      [A.seatArena, 'c200'],
+    ]);
+    expect(env.reads).not.toContain(A.seatArena);
   });
 
   it('reads the chain instead of returning a list the indexer cannot page to the end', async () => {
@@ -462,6 +490,266 @@ describe('PerpsClient.send', () => {
   });
 });
 
+/** A chain for builder codes: in BTC, OWNER trades from seat 1 and
+    approves builder code 2 up to 300 ppm; BUILDER's seat 2 is its fee seat
+    (97 atoms earned); NEWB holds an empty seat 3; the market authority holds
+    seat 4; `more` adds seats from 5 on. */
+const BUILDER = address(42);
+const NEWB = address(43);
+async function builderChain(extra: Record<string, unknown> = {}, more: Parameters<typeof seatArenaBytes>[1] = []) {
+  const approval = 1n | (300n << PERP_SEAT_APPROVAL_PPM_SHIFT) | (2n << PERP_SEAT_APPROVAL_SEAT_SHIFT);
+  const accounts = new Map<string, Uint8Array>([
+    [A.seatArena, seatArenaBytes(A, [
+      { authority: OWNER, quantityQuote: 10_000_000n, flags: approval },
+      { authority: BUILDER, quantityQuote: 97n, flags: 1n | PERP_SEAT_FLAG_FEE },
+      { authority: NEWB, quantityQuote: 0n },
+      { authority: A.marketAuthority, quantityQuote: 0n },
+      ...more,
+    ])],
+    [A.orderArena, orderArenaBytes([])],
+    [A.bidsCbook, cbookBytes(10)],
+    [A.asksCbook, cbookBytes(10)],
+  ]);
+  const thru = {
+    accounts: {
+      get: vi.fn(async (addr: string) => {
+        const data = accounts.get(addr);
+        if (!data) throw new Error(`account ${addr} not found`);
+        return { data: { data }, meta: { nonce: 3n } };
+      }),
+    },
+    transactions: { sendAndTrack: vi.fn(), send: vi.fn(), getStatus: vi.fn() },
+    helpers: await import('@thru/sdk').then(({ deriveAddress, deriveProgramAddress }) => ({ deriveAddress, deriveProgramAddress })),
+  };
+  const perps = await createPerpsClient({ deployment, thru: thru as never, nowNs: () => 1_000n, ...extra });
+  return perps;
+}
+
+/** perps.getMarket with fee rates and balances in the market state. */
+function withFees(perps: PerpsClient, fees: Partial<PerpMarketFees>, risk: Partial<PerpMarketRisk> = {}) {
+  const read = perps.getMarket.bind(perps);
+  vi.spyOn(perps, 'getMarket').mockImplementation(async (market, options) => {
+    const info = await read(market, options);
+    const zero = { takerFeePpm: 0, makerRebatePpm: 0, builderFeeCapPpm: 0, feeInsuranceSharePpm: 0, liqInsuranceSharePpm: 0, pendingTakerFeePpm: 0, pendingBuilderFeeCapPpm: 0, pendingActivationNs: 0n };
+    return { ...info, state: { ...info.state, fees: { ...zero, ...fees }, risk: { ...info.state.risk, ...risk } } };
+  });
+}
+
+describe('builder codes and fees', () => {
+  it('tells a trading seat from a fee seat and reads builder codes', async () => {
+    const perps = await builderChain();
+    expect(await perps.getSeat('BTC-UUSD', OWNER)).toMatchObject({ seatIndex: 1, builderApproval: { builderSeatIndex: 2, maxFeePpm: 300 } });
+    expect(await perps.getSeat('BTC-UUSD', BUILDER)).toMatchObject({ seatIndex: 2, feeReceiver: true });
+    expect(await perps.getBuilderCode('BTC-UUSD', BUILDER)).toEqual({ market: A.seatArena, owner: BUILDER, seatIndex: 2, balance: 97n });
+    expect(await perps.getBuilderCode('BTC-UUSD', OWNER)).toBeNull();
+    expect((await perps.getSeats('BTC-UUSD', NEWB)).map((seat) => seat.seatIndex)).toEqual([3]);
+  });
+
+  it('trades from a key\'s trading seat when its fee seat comes first', async () => {
+    /* BOTH's fee seat 5 comes before its trading seat 6. */
+    const BOTH = address(44);
+    const perps = await builderChain({}, [
+      { authority: BOTH, quantityQuote: 12n, flags: 1n | PERP_SEAT_FLAG_FEE },
+      { authority: BOTH, quantityQuote: 5_000_000n },
+    ]);
+    expect((await perps.getSeats('BTC-UUSD', BOTH)).map((seat) => seat.seatIndex)).toEqual([5, 6]);
+    expect(await perps.getSeat('BTC-UUSD', BOTH)).toMatchObject({ seatIndex: 6 });
+    expect(await perps.getBuilderCode('BTC-UUSD', BOTH)).toMatchObject({ seatIndex: 5, balance: 12n });
+    expect((await perps.deposit({ market: 'BTC-UUSD', owner: BOTH, amount: '1' })).meta).toMatchObject({ action: 'deposit', seatIndex: 6 });
+  });
+
+  it('reads the rates in effect and a pending increase', async () => {
+    const perps = await builderChain();
+    expect(await perps.getFees('BTC-UUSD')).toMatchObject({ pending: null, rates: { takerFeePpm: 0, builderFeeCapPpm: 0 } });
+    withFees(perps, { takerFeePpm: 300, makerRebatePpm: 100, builderFeeCapPpm: 1000, pendingTakerFeePpm: 500, pendingActivationNs: 2_000n }, { feeBalance: 59n, insuranceBalance: 15n });
+    expect(await perps.getFees('BTC-UUSD')).toEqual({
+      market: A.seatArena,
+      rates: { takerFeePpm: 300, makerRebatePpm: 100, builderFeeCapPpm: 1000, feeInsuranceSharePpm: 0, liqInsuranceSharePpm: 0 },
+      pending: { takerFeePpm: 500, builderFeeCapPpm: 0, activationNs: 2_000n },
+      feeBalance: 59n,
+      insuranceBalance: 15n,
+    });
+    /* Once due, the increase is the rate in effect. */
+    const later = await builderChain({ nowNs: () => 2_000n });
+    withFees(later, { takerFeePpm: 300, pendingTakerFeePpm: 500, pendingActivationNs: 2_000n });
+    expect(await later.getFees('BTC-UUSD')).toMatchObject({ rates: { takerFeePpm: 500 }, pending: null });
+  });
+
+  it('registers a builder code on an empty seat only, unless a seat is named', async () => {
+    const perps = await builderChain();
+    const built = await perps.registerBuilderCode({ market: 'BTC-UUSD', owner: NEWB });
+    expect(built.meta).toMatchObject({ action: 'registerBuilderCode', seatIndex: 3, owner: NEWB });
+    expect(built.transaction.instructions).toEqual([
+      expect.objectContaining({ ix: 'market_record', seatIndex: 3 }),
+      expect.objectContaining({ ix: 'seat_set_fee_receiver' }),
+    ]);
+    await expect(perps.registerBuilderCode({ market: 'BTC-UUSD', owner: BUILDER })).rejects.toThrow('already has builder code #2');
+    /* OWNER's seat holds collateral: converting it takes an explicit seatIndex. */
+    await expect(perps.registerBuilderCode({ market: 'BTC-UUSD', owner: OWNER })).rejects.toThrow('no empty seat');
+    expect((await perps.registerBuilderCode({ market: 'BTC-UUSD', owner: OWNER, seatIndex: 1 })).meta.seatIndex).toBe(1);
+    await expect(perps.registerBuilderCode({ market: 'BTC-UUSD', owner: OWNER, seatIndex: 3 })).rejects.toThrow('not a seat of');
+  });
+
+  it('approves and revokes a builder for maker fills', async () => {
+    const perps = await builderChain();
+    const approve = await perps.approveBuilder({ market: 'BTC-UUSD', owner: OWNER, builder: 2, maxFeePpm: 300 });
+    expect(approve.meta).toMatchObject({ action: 'approveBuilder', seatIndex: 1 });
+    expect(approve.transaction.instructions[1]).toMatchObject({ ix: 'seat_set_builder_approval', builderSeatIndex: 2, maxFeePpm: 300 });
+    const revoke = await perps.revokeBuilder({ market: 'BTC-UUSD', owner: OWNER });
+    expect(revoke.transaction.instructions[1]).toMatchObject({ ix: 'seat_set_builder_approval', builderSeatIndex: 0, maxFeePpm: 0 });
+    await expect(perps.approveBuilder({ market: 'BTC-UUSD', owner: OWNER, builder: 3, maxFeePpm: 300 })).rejects.toThrow('is not a builder');
+    await expect(perps.approveBuilder({ market: 'BTC-UUSD', owner: OWNER, builder: 2, maxFeePpm: 10_001 })).rejects.toThrow('1..10000');
+    await expect(perps.approveBuilder({ market: 'BTC-UUSD', owner: BUILDER, builder: 2, maxFeePpm: 300 })).rejects.toThrow('own authority');
+  });
+
+  it('puts a builder code on an order transaction', async () => {
+    const perps = await builderChain();
+    const built = await perps.placeOrder({ market: 'BTC-UUSD', owner: OWNER, side: 'buy', price: '84000', lots: 1n, orderType: 'ioc', builder: { seatIndex: 2, feePpm: 500 } });
+    expect(built.transaction.instructions.map((ix) => ix.ix)).toEqual(['market_record', 'create_order_entry']);
+    expect(built.transaction.instructions[0]).toMatchObject({ seatIndex: 1, builderSeatIndex: 2, builderFeePpm: 500 });
+    await expect(perps.placeOrder({ market: 'BTC-UUSD', owner: OWNER, side: 'buy', price: '84000', lots: 1n, builder: { seatIndex: 2, feePpm: 0 } })).rejects.toThrow('builder.feePpm');
+  });
+
+  it('gives fee and loss waterfall errors their own kinds', () => {
+    expect(perpErrorKind(-1, -233n)).toBe('fees');
+    expect(perpErrorKind(-1, -234n)).toBe('fees');
+    expect(perpErrorKind(-1, -231n)).toBe('fees');
+    expect(perpErrorKind(-1, -229n)).toBe('loss-waterfall');
+    expect(perpErrorKind(-1, -232n)).toBe('seat');
+  });
+
+  it('sets an order\'s expiry in block time', async () => {
+    const perps = await builderChain();
+    const built = await perps.placeOrder({ market: 'BTC-UUSD', owner: OWNER, side: 'buy', price: '84000', lots: 1n, expiresAtNs: 1_900_000_000_000_000_000n });
+    expect(built.transaction.instructions[1]).toMatchObject({ ix: 'create_order_entry', expirationTime: '1900000000000000000' });
+    await expect(perps.placeOrder({ market: 'BTC-UUSD', owner: OWNER, side: 'buy', price: '84000', lots: 1n, expiresAtNs: 0n })).rejects.toThrow('expiresAtNs');
+  });
+
+  it('withdraws a builder\'s earnings from its fee seat', async () => {
+    const perps = await builderChain();
+    const built = await perps.withdraw({ market: 'BTC-UUSD', owner: BUILDER, amountAtoms: 97n, seatIndex: 2 });
+    expect(built.meta).toMatchObject({ action: 'withdraw', seatIndex: 2 });
+    expect(built.transaction.instructions[0]).toMatchObject({ ix: 'market_record', seatIndex: 2 });
+    await expect(perps.withdraw({ market: 'BTC-UUSD', owner: OWNER, amountAtoms: 1n, seatIndex: 2 })).rejects.toThrow('not a seat of');
+  });
+
+  it('sets fees and claims the fee balance as the market authority', async () => {
+    const perps = await builderChain();
+    const rates = { takerFeePpm: 300, makerRebatePpm: 100, builderFeeCapPpm: 1000, feeInsuranceSharePpm: 250_000, liqInsuranceSharePpm: 0 };
+    const set = await perps.setFees({ market: 'BTC-UUSD', authority: A.marketAuthority, ...rates });
+    expect(set.transaction.instructions[1]).toMatchObject({ ix: 'market_set_fees', ...rates });
+    await expect(perps.setFees({ market: 'BTC-UUSD', authority: OWNER, ...rates })).rejects.toThrow('not the market authority');
+    await expect(perps.setFees({ market: 'BTC-UUSD', authority: A.marketAuthority, ...rates, makerRebatePpm: 400 })).rejects.toThrow('makerRebatePpm');
+
+    await expect(perps.claimFees({ market: 'BTC-UUSD', authority: A.marketAuthority })).rejects.toThrow('no protocol fees');
+    withFees(perps, rates, { feeBalance: 59n });
+    const claim = await perps.claimFees({ market: 'BTC-UUSD', authority: A.marketAuthority });
+    expect(claim.meta).toMatchObject({ action: 'claimFees', seatIndex: 4 });
+    expect(claim.transaction.instructions).toEqual([
+      expect.objectContaining({ ix: 'market_record', seatIndex: 4, marketAuthority: A.marketAuthority }),
+      expect.objectContaining({ ix: 'fee_claim', amount: '59' }),
+    ]);
+    await expect(perps.claimFees({ market: 'BTC-UUSD', authority: A.marketAuthority, amountAtoms: 60n })).rejects.toThrow('exceeds the fee balance 59');
+    await expect(perps.claimFees({ market: 'BTC-UUSD', authority: OWNER })).rejects.toThrow('not the market authority');
+  });
+
+  it('runs the builder code actions for agents', async () => {
+    const perps = await builderChain();
+    expect(await runPerpsAction(perps, 'getBuilderCode', { market: 'BTC-UUSD', owner: BUILDER })).toMatchObject({ ok: true, result: { seatIndex: 2, balance: '97' } });
+    const order = await runPerpsAction(perps, 'placeOrder', { market: 'BTC-UUSD', owner: OWNER, side: 'buy', price: '84000', lots: '1', builder: { seatIndex: 2, feePpm: 500 } });
+    expect(order).toMatchObject({ ok: true });
+    expect(validatePerpsActionParams('approveBuilder', { market: 'BTC-UUSD', owner: OWNER, builder: 2, maxFeePpm: 20_000 })).toEqual(['params.maxFeePpm must be <= 10000']);
+  });
+});
+
+/** perps.getMarket with parts of the market state replaced (risk merged). */
+function withState(perps: PerpsClient, patch: Partial<Omit<PerpMarket, 'risk'>> & { risk?: Partial<PerpMarketRisk> }) {
+  const read = perps.getMarket.bind(perps);
+  vi.spyOn(perps, 'getMarket').mockImplementation(async (market, options) => {
+    const info = await read(market, options);
+    const { risk, ...rest } = patch;
+    return { ...info, state: { ...info.state, ...rest, risk: { ...info.state.risk, ...risk } } };
+  });
+}
+
+describe('loss waterfall', () => {
+  it('deposits a seat\'s collateral into insurance, within its settled collateral', async () => {
+    const perps = await builderChain();
+    const built = await perps.depositInsurance({ market: 'BTC-UUSD', owner: OWNER, amount: '2.5' });
+    expect(built.meta).toMatchObject({ action: 'depositInsurance', owner: OWNER, seatIndex: 1, cross: false });
+    expect(built.transaction.instructions).toEqual([
+      expect.objectContaining({ ix: 'market_record', seatAuthority: OWNER, seatIndex: 1, oracleFeed: A.oracleFeed }),
+      { ix: 'insurance_deposit', marketRecordIndex: 1, amount: '2500000' },
+    ]);
+    expect(built.transaction.readWrite).toContain(A.seatArena);
+    expect(built.transaction.readWrite).not.toContain(A.quoteVault);
+    await expect(perps.depositInsurance({ market: 'BTC-UUSD', owner: OWNER, amountAtoms: 10_000_001n })).rejects.toThrow('exceeds the collateral of seat #1');
+    await expect(perps.depositInsurance({ market: 'BTC-UUSD', owner: OWNER, amountAtoms: 0n })).rejects.toThrow('amount must be positive');
+    /* A builder pays in from its fee seat. */
+    expect((await perps.depositInsurance({ market: 'BTC-UUSD', owner: BUILDER, amountAtoms: 97n, seatIndex: 2 })).meta.seatIndex).toBe(2);
+    await expect(perps.depositInsurance({ market: 'BTC-UUSD', owner: BUILDER, amountAtoms: 98n, seatIndex: 2 })).rejects.toThrow('exceeds the collateral');
+  });
+
+  it('carries a cross seat\'s margin record and leaves its free margin to the program', async () => {
+    const { client: perps, env } = await client();
+    const built = await perps.depositInsurance({ market: 'BTC-UUSD', owner: OWNER, amountAtoms: 1_000n });
+    expect(built.meta).toMatchObject({ cross: true, marginAccount: env.margin });
+    expect(built.transaction.instructions.map((ix) => ix.ix)).toEqual(['margin_record', 'market_record', 'insurance_deposit']);
+  });
+
+  it('resolves bad debt only when some stage could cover it', async () => {
+    const perps = await builderChain();
+    await expect(perps.resolveBadDebt({ market: 'BTC-UUSD' })).rejects.toThrow('BTC-UUSD: the market has no bad debt');
+    withState(perps, { badDebt: 500n, openInterestLots: 0n, risk: { socializeCapBps: 100 } });
+    await expect(perps.resolveBadDebt({ market: 'BTC-UUSD' })).rejects.toThrow('no fee balance, no insurance balance and no loss socialization (no open interest)');
+    vi.restoreAllMocks();
+    withState(perps, { badDebt: 500n, openInterestLots: 2n, risk: { socializeCapBps: 0 } });
+    await expect(perps.resolveBadDebt({ market: 'BTC-UUSD' })).rejects.toThrow('(socializeCapBps is 0)');
+    vi.restoreAllMocks();
+    withState(perps, { badDebt: 500n, risk: { insuranceBalance: 40n } });
+    const built = await perps.resolveBadDebt({ market: 'BTC-UUSD' });
+    expect(built.meta).toMatchObject({ action: 'resolveBadDebt', market: A.seatArena });
+    expect(built.meta.owner).toBeUndefined();
+    expect(built.transaction.instructions).toEqual([
+      expect.objectContaining({ ix: 'market_record', oracleFeed: A.oracleFeed }),
+      { ix: 'resolve_bad_debt', marketRecordIndex: 1 },
+    ]);
+    expect(built.transaction.instructions[0]).not.toHaveProperty('seatAuthority');
+    vi.restoreAllMocks();
+    /* Socialization alone may cover it: the program decides (mark, cap left). */
+    withState(perps, { badDebt: 500n, openInterestLots: 2n, risk: { socializeCapBps: 100 } });
+    expect((await perps.resolveBadDebt({ market: 'BTC-UUSD' })).meta.action).toBe('resolveBadDebt');
+  });
+
+  it('sets risk params as the market authority, within the market\'s limits', async () => {
+    const perps = await builderChain();
+    /* The fixture market: initial 500, maintenance 250, liquidation fee 100 bps. */
+    const risk = { socializeCapBps: 250, ifEpochBudgetBps: 2_000, bankruptLiqRewardBps: 100 };
+    const built = await perps.setRiskParams({ market: 'BTC-UUSD', authority: A.marketAuthority, ...risk });
+    expect(built.meta).toMatchObject({ action: 'setRiskParams', owner: A.marketAuthority });
+    expect(built.transaction.instructions).toEqual([
+      expect.objectContaining({ ix: 'market_record', marketAuthority: A.marketAuthority }),
+      { ix: 'market_set_risk_params', marketRecordIndex: 1, ...risk },
+    ]);
+    const set = (patch: Partial<typeof risk>, authority = A.marketAuthority) => perps.setRiskParams({ market: 'BTC-UUSD', authority, ...risk, ...patch });
+    await expect(set({ socializeCapBps: 251 })).rejects.toThrow('socializeCapBps must be at most the initial minus maintenance margin, 250 bps');
+    await expect(set({ ifEpochBudgetBps: 10_001 })).rejects.toThrow('ifEpochBudgetBps must be at most 10000');
+    await expect(set({ bankruptLiqRewardBps: 101 })).rejects.toThrow('bankruptLiqRewardBps must be at most the liquidation fee, 100 bps');
+    await expect(set({ socializeCapBps: 70_000 })).rejects.toThrow('0..65535');
+    await expect(set({}, OWNER)).rejects.toThrow('is not the market authority');
+  });
+
+  it('runs the waterfall actions for agents', async () => {
+    const perps = await builderChain();
+    expect(await runPerpsAction(perps, 'resolveBadDebt', { market: 'BTC-UUSD' })).toMatchObject({ ok: false, error: { message: 'BTC-UUSD: the market has no bad debt' } });
+    const deposit = await runPerpsAction(perps, 'depositInsurance', { market: 'BTC-UUSD', owner: OWNER, amountAtoms: '5' });
+    expect(deposit).toMatchObject({ ok: true, result: { meta: { action: 'depositInsurance' } } });
+    expect(validatePerpsActionParams('setRiskParams', { market: 'BTC-UUSD', authority: A.marketAuthority, socializeCapBps: 1, ifEpochBudgetBps: 10_001, bankruptLiqRewardBps: 0 })).toEqual([
+      'params.ifEpochBudgetBps must be <= 10000',
+    ]);
+  });
+});
+
 describe('agent actions', () => {
   it('describes every action with a JSON Schema', () => {
     const all = describePerpsActions();
@@ -469,6 +757,8 @@ describe('agent actions', () => {
       'getMarkets', 'getMarket', 'getBook', 'getMark', 'getFunding', 'getSeat', 'getMarginAccounts', 'getOpenOrders',
       'createSeat', 'placeOrder', 'placeOrders', 'cancel', 'cancelAll', 'modify', 'deposit', 'withdraw',
       'createMarginAccount', 'linkMargin', 'unlinkMargin', 'settleFunding', 'settleAccountFunding', 'liquidate',
+      'getFees', 'getBuilderCode', 'registerBuilderCode', 'approveBuilder', 'revokeBuilder', 'setFees', 'claimFees',
+      'depositInsurance', 'resolveBadDebt', 'setRiskParams',
     ]);
     for (const action of all) {
       expect(action.parameters.type).toBe('object');

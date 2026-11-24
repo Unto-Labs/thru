@@ -46,6 +46,8 @@ export interface FixtureSeat {
   entryNotional?: bigint;
   headOrderEntryIndex?: number;
   cross?: boolean;
+  /** The whole seat flags word (default: active, plus cross). */
+  flags?: bigint;
 }
 
 /** A seat arena: the 512 byte market header (lot 1, tick 1000, 20x) and seats. */
@@ -93,7 +95,7 @@ export function seatArenaBytes(market: FixtureMarket, seats: FixtureSeat[], opti
     view.setUint32(at + 72, seat.headOrderEntryIndex ?? 0, true);
     view.setBigUint64(at + 80, seat.entryNotional ?? 0n, true);
     view.setBigUint64(at + 88, seat.openBidNotional ?? 0n, true);
-    view.setBigUint64(at + 120, seat.cross ? 3n : 1n, true);
+    view.setBigUint64(at + 120, seat.flags ?? (seat.cross ? 3n : 1n), true);
   });
   return data;
 }

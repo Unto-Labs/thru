@@ -9,7 +9,7 @@ function fixture() {
   const factory = () => ({getHeight:async () => ({finalized:height}),getChainInfo:async () => ({chainId:7}),close}) as any;
   const writer = {transaction:async (fn: any) => fn({tx:{sql:{}},revision:'1'}),activate:vi.fn()};
   const options: AccountProjectionOptions<{}, string, string, unknown> = {
-    name:'pinned',tables:{},writer:writer as any,generation:'1',chainId:7,intervalMs:1,
+    name:'pinned',tables:{},writer:writer as any,chainId:7,intervalMs:1,
     resolveGroups:vi.fn(async () => [{key:'required',value:'required'}]),
     project:vi.fn(async (g) => g),commit:vi.fn(async () => {}),onCommitted:() => abort.abort(),
   };
@@ -80,4 +80,41 @@ it('commits a finalized target despite continuous newer notifications, then proc
     await running;
     expect(cuts).toEqual([200n,next]);
   } finally { f.abort.abort(); await running.catch(() => {}); }
+});
+it('backs off the notification stream while the source cannot be reached, and starts over once it streams', async () => {
+  /* F-G4-2: a refused connection was retried (and logged) every second. */
+  vi.useFakeTimers();
+  const f = fixture(), state = initial();
+  f.options.intervalMs = 3_600_000;
+  f.options.onCommitted = () => {};
+  const errors: number[] = [];
+  f.options.onError = () => { errors.push(Date.now()); };
+  let up = false;
+  const refused = () => Object.assign(new Error('[unavailable] connect ECONNREFUSED 127.0.0.1:8473'), { code: 14 });
+  f.options.updates = async function* (signal) {
+    if (!up) throw refused();
+    yield { slot: 1n };
+    await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
+  };
+  const running = runAccounts(f.options, state, f.factory, f.abort.signal, {});
+  try {
+    const t0 = Date.now();
+    await vi.advanceTimersByTimeAsync(120_000);
+    /* 1, 2, 4, 8, 16, 30, 30, 30 s apart (plus jitter): 7 or 8 attempts in two minutes, not 120. */
+    expect(errors.length).toBeGreaterThanOrEqual(6);
+    expect(errors.length).toBeLessThanOrEqual(8);
+    const gaps = errors.slice(1).map((t, i) => t - errors[i]);
+    [1000, 2000, 4000, 8000, 16000].forEach((ms, i) => {
+      expect(gaps[i]).toBeGreaterThanOrEqual(ms);
+      expect(gaps[i]).toBeLessThanOrEqual(ms * 1.2 + 50);
+    });
+    expect(Math.max(...gaps)).toBeLessThanOrEqual(36_050);
+    expect(errors[0] - t0).toBeLessThan(100);
+    /* The source is back: the next attempt (at most one step later) streams and resets the backoff. */
+    up = true;
+    const before = errors.length;
+    await vi.advanceTimersByTimeAsync(36_000);
+    expect(errors.length).toBe(before);
+    expect(state.minimum).toBe(1n);
+  } finally { f.abort.abort(); await running.catch(() => {}); vi.useRealTimers(); }
 });

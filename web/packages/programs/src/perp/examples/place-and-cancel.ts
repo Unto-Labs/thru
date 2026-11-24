@@ -5,20 +5,26 @@
 
    PERPS_KEY_FILE is { "address": "ta...", "privateKeyHex": "..." } (the
    perps tools' key file format); the key pays for its transactions and
-   needs quote collateral in the market (deposit) to post. */
+   needs quote collateral in the market (deposit) to post.  A fresh key
+   gets its account and its quote token account first (ensurePerpsAccounts;
+   funding the token account is up to you). */
 
 import { readFileSync } from 'node:fs';
 import {
   TransactionFailedError,
   createPerpsClient,
+  ensurePerpsAccounts,
   formatPerpPrice,
   keypairSignerFromJSON,
   perpRoundPrice,
 } from '@thru/programs/perps';
 
 const deployment = JSON.parse(readFileSync(process.env.PERPS_DEPLOYMENT ?? 'deployment.betanet.json', 'utf8'));
-const signer = keypairSignerFromJSON(JSON.parse(readFileSync(process.env.PERPS_KEY_FILE ?? 'key.json', 'utf8')));
+const key = JSON.parse(readFileSync(process.env.PERPS_KEY_FILE ?? 'key.json', 'utf8'));
+const signer = keypairSignerFromJSON(key);
 const perps = await createPerpsClient({ deployment, indexerUrl: process.env.PERPS_INDEXER_URL });
+const setup = await ensurePerpsAccounts(perps, key);
+for (const account of setup.tokenAccounts) console.log(`${account.symbol} token account ${account.address}: ${account.amount} atoms${account.status === 'existing' ? '' : ` (${account.status})`}`);
 const market = process.argv[2] ?? perps.deployment.markets[0]!.symbol;
 const record = perps.market(market);
 const owner = signer.address;

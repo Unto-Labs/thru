@@ -1,3 +1,4 @@
+export * from './accounts';
 export * from './client';
 export * from './compression';
 export * from './deployment';

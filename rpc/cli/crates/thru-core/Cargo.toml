@@ -16,6 +16,11 @@ default = []
 # emulator (ledger/sim, rpc/cli/tests/thru_cli_ledger_e2e.sh). Never enable it
 # in release builds: any TCP endpoint could then impersonate the Ledger.
 ledger-speculos = ["thru-ledger/speculos"]
+# Test-only: let THRU_TREZOR_EMULATOR=host:port point Trezor keys at the Trezor
+# emulator, and allow pairing without a code there (trezor/scripts/test-host.sh).
+# Never enable it in release builds: any UDP endpoint could then impersonate
+# the Trezor.
+trezor-emulator = ["thru-trezor/emulator"]
 
 [dependencies]
 # Thru dependencies
@@ -24,6 +29,9 @@ thru-base = { version = "0.1.0", path = "../../../thru-base" }
 # Ledger hardware-wallet signer (USB HID). The Speculos emulator transport is
 # compiled in only with the `ledger-speculos` feature below (test builds).
 thru-ledger = { version = "0.1.0", path = "../../../thru-ledger" }
+# Trezor hardware-wallet signer (USB). The emulator transport is compiled in
+# only with the `trezor-emulator` feature above (test builds).
+thru-trezor = { version = "0.1.0", path = "../../../thru-trezor" }
 abi_gen = { package = "thru-abi-gen", version = "0.1.0", path = "../../../abi/abi_gen" }
 abi_loader = { package = "thru-abi-loader", version = "0.1.0", path = "../../../abi/abi_loader" }
 abi_reflect = { package = "thru-abi-reflect", version = "0.1.0", path = "../../../abi/abi_reflect" }
@@ -72,9 +80,9 @@ libc = "0.2"
 gethostname = "1.1"
 
 # DWARF debug info resolution
-addr2line = "0.26"
-gimli = "0.33"
-object = { version = "0.39", default-features = false, features = ["read", "elf", "std"] }
+addr2line = "0.27"
+gimli = "0.34"
+object = { version = "0.40", default-features = false, features = ["read", "elf", "std"] }
 
 # Output formatting
 colored = "3.1"

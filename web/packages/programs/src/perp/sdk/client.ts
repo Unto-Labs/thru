@@ -4,6 +4,10 @@ import { deriveTokenAccountAddress } from '../../token/derivation';
 import {
   buildPerpOrderBookSnapshot,
   derivePerpMarginAccountAddress,
+  PERP_FEE_MAX_PPM,
+  perpEffectiveFeeRates,
+  perpFeeParamsProblem,
+  perpFeesPendingDue,
   perpMarkFromFeed,
   perpNextFundingRoundNs,
   perpOracleFeedIsFresh,
@@ -13,11 +17,16 @@ import {
   parsePerpMarketAccount,
   parsePerpOrderArenaAccount,
   parsePerpSeatArenaAccount,
+  perpResolveBadDebtProblem,
+  perpRiskParamsProblem,
   perpSeatOrders,
+  perpSettleFunding,
+  type PerpFeeParams,
   type PerpMarginAccount,
   type PerpMarket,
   type PerpOrderBookLevel,
   type PerpOrderType,
+  type PerpRiskParams,
   type PerpSeatEntry,
 } from '../index';
 import { loadPerpsDeployment, PERPS_NETWORK_RPC_URLS, type PerpDeployment, type PerpDeploymentMarket, type PerpsDeploymentSource } from './deployment';
@@ -44,14 +53,21 @@ import type { PerpsSigner } from './signers';
 import {
   cancelOrdersTx,
   depositTx,
+  feeClaimTx,
+  insuranceDepositTx,
   liquidateTx,
   marginAccountCreateTx,
   marginLinkTx,
+  marketSetFeesTx,
+  marketSetRiskParamsTx,
   modifyOrderTx,
   ordersTx,
   perpCrossAccountRef,
   readOrderBookState,
+  resolveBadDebtTx,
   seatCreateTx,
+  seatSetBuilderApprovalTx,
+  seatSetFeeReceiverTx,
   settleAccountFundingTx,
   settleFundingTx,
   withdrawTx,
@@ -95,6 +111,7 @@ export interface PerpsClientOptions {
 
 /* Page sizes for the indexer's owner lists: the largest each route serves. */
 const INDEXER_ORDERS_PAGE = 200;
+const INDEXER_OWNER_SEATS_PAGE = 200;
 const INDEXER_MARGIN_PAGE = 16;
 
 /** A price or size: on-chain atoms (bigint, or a decimal string of atoms
@@ -116,8 +133,47 @@ export interface PerpsOrderParams {
   lots?: PerpsAmount;
   /** 16 bytes as hex, echoed in events. */
   clientId?: string;
+  /** Block time (ns since the epoch) at which a resting order expires; the
+      program skips and drops it from then on (GTT_ORDER_EXPIRED).  Default:
+      never. */
+  expiresAtNs?: PerpsAmount;
   /** Round a human price / size onto the grid instead of failing (default exact). */
   rounding?: PerpRounding;
+}
+
+/** A builder code on an order transaction: the builder's fee seat
+    in the market and the rate it charges, ppm of filled notional (at most
+    PERP_FEE_MAX_PPM = 1%; the market's builderFeeCapPpm caps what is
+    charged).  The trader signs it with the transaction's market record, so
+    it applies to every order of that transaction: as taker on what fills
+    at once, and as maker on what rests, if the seat approves the builder
+    (approveBuilder). */
+export interface PerpsBuilderTerms {
+  seatIndex: number;
+  feePpm: number;
+}
+
+/** A market's trading fees (getFees). */
+export interface PerpsFeesInfo {
+  market: string;
+  /** The rates in effect now (a pending increase that is due included). */
+  rates: PerpFeeParams;
+  /** An increase that has not taken effect yet (market_set_fees waits an hour). */
+  pending: { takerFeePpm: number; builderFeeCapPpm: number; activationNs: bigint } | null;
+  /** Protocol fees the market authority can claim (claimFees). */
+  feeBalance: bigint;
+  insuranceBalance: bigint;
+}
+
+/** A builder's fee seat in a market (getBuilderCode). */
+export interface PerpsBuilderCodeInfo {
+  market: string;
+  owner: string;
+  /** The builder code: put it on orders as `builder.seatIndex`. */
+  seatIndex: number;
+  /** Earned fees (and any deposit) in quote atoms: withdraw with
+      withdraw({ ..., seatIndex }). */
+  balance: bigint;
 }
 
 export interface PerpsBuilt {
@@ -295,18 +351,54 @@ export class PerpsClient {
     return { market: record.seatArena, enabled, funding, nextRoundNs: enabled ? perpNextFundingRoundNs(funding) : null };
   }
 
-  /** The owner's seat in the market, or null. */
+  /** The owner's trading seat in the market, or null: its first seat that
+      is not a builder's fee seat, else its fee seat (which only withdraws). */
   async getSeat(market: string, owner: string, options: PerpsReadOptions = {}): Promise<PerpSeatEntry | null> {
+    const seats = await this.getSeats(market, owner, options);
+    return seats.find((seat) => !seat.feeReceiver) ?? seats[0] ?? null;
+  }
+
+  /** Every seat of the owner in the market (a key may hold several, e.g. a
+      trading seat and a builder's fee seat). From the indexer, every page of
+      the owner's portfolio in the market; a list the indexer cannot page to
+      the end (indexerAllItems) is read from the chain instead. */
+  async getSeats(market: string, owner: string, options: PerpsReadOptions = {}): Promise<PerpSeatEntry[]> {
     const record = this.market(market);
     const authority = normalizeAddress(owner);
     return this.viaIndexer(options,
-      async (indexer) => {
-        const page = await indexer.get(`/v1/owners/${authority}/portfolio`, { market: record.seatArena });
-        const entry = indexerItems(page).find((item) => (item.seat as Record<string, unknown> | undefined)?.market === record.seatArena);
-        return entry ? perpSeatFromIndexer(entry.seat as Record<string, unknown>) : null;
-      },
-      async () => parsePerpSeatArenaAccount(await readAccount(this.thru, record.seatArena)).seats.find((seat) => seat.seatAuthority === authority) ?? null,
+      async (indexer) =>
+        (await indexerAllItems(indexer, `/v1/owners/${authority}`, { market: record.seatArena, limit: INDEXER_OWNER_SEATS_PAGE }))
+          .filter((item) => (item.seat as Record<string, unknown> | undefined)?.market === record.seatArena)
+          .map((item) => perpSeatFromIndexer(item.seat as Record<string, unknown>)),
+      async () => parsePerpSeatArenaAccount(await readAccount(this.thru, record.seatArena)).seats.filter((seat) => seat.seatAuthority === authority),
     );
+  }
+
+  /* Fees and builder codes ********************************************************/
+
+  /** The market's fee rates in effect now, a pending increase, and its fee
+      and insurance balances.  Every rate starts at 0. */
+  async getFees(market: string, options: PerpsReadOptions = {}): Promise<PerpsFeesInfo> {
+    const { address, state } = await this.getMarket(market, options);
+    const fees = state.fees;
+    const pending = fees.pendingActivationNs !== 0n && !perpFeesPendingDue(fees, this.nowNs())
+      ? { takerFeePpm: fees.pendingTakerFeePpm, builderFeeCapPpm: fees.pendingBuilderFeeCapPpm, activationNs: fees.pendingActivationNs }
+      : null;
+    return {
+      market: address,
+      rates: perpEffectiveFeeRates(state, this.nowNs()),
+      pending,
+      feeBalance: state.risk.feeBalance,
+      insuranceBalance: state.risk.insuranceBalance,
+    };
+  }
+
+  /** The owner's builder code in the market (its fee seat), or null.  A
+      code belongs to one market: a builder registers one per market. */
+  async getBuilderCode(market: string, owner: string, options: PerpsReadOptions = {}): Promise<PerpsBuilderCodeInfo | null> {
+    const fee = (await this.getSeats(market, owner, options)).find((seat) => seat.feeReceiver);
+    if (!fee) return null;
+    return { market: this.market(market).seatArena, owner: normalizeAddress(owner), seatIndex: fee.seatIndex, balance: fee.quantityQuote };
   }
 
   /** The owner's margin accounts.  From the indexer, every page of them; a list the indexer cannot page
@@ -382,11 +474,14 @@ export class PerpsClient {
 
   /** The owner's seat in the market and, when it is cross, its margin
       account as a margin record names it. */
-  async seatContext(market: string, owner: string): Promise<{ ref: MarketRef; seat: PerpSeatEntry; margin?: CrossAccountRef; state: PerpMarket }> {
+  async seatContext(market: string, owner: string, seatIndex?: number): Promise<{ ref: MarketRef; seat: PerpSeatEntry; margin?: CrossAccountRef; state: PerpMarket }> {
     const rpc = { source: 'rpc' } as const;
     const { state } = await this.getMarket(market, rpc);
     const ref = this.marketRef(market, state);
-    const seat = await this.getSeat(market, owner, rpc);
+    const seat = seatIndex === undefined
+      ? await this.getSeat(market, owner, rpc)
+      : (await this.getSeats(market, owner, rpc)).find((entry) => entry.seatIndex === seatIndex) ?? null;
+    if (!seat && seatIndex !== undefined) throw new Error(`seat #${seatIndex} in ${this.market(market).symbol} is not a seat of ${owner}`);
     if (!seat) throw new Error(`${owner} has no seat in ${this.market(market).symbol}; create one first (createSeat)`);
     if (!seat.cross) return { ref, seat, state };
     const account = (await this.getMarginAccounts(owner, rpc)).find((entry) => entry.links.some((link) => link.market === ref.market.seatArena && link.seatIndex === seat.seatIndex));
@@ -420,22 +515,25 @@ export class PerpsClient {
   }
 
   /** One order (see placeOrders). */
-  async placeOrder(params: PerpsOrderParams & { market: string; owner: string }): Promise<PerpsBuilt> {
-    const { market, owner, ...order } = params;
-    return this.placeOrders({ market, owner, orders: [order] });
+  async placeOrder(params: PerpsOrderParams & { market: string; owner: string; builder?: PerpsBuilderTerms }): Promise<PerpsBuilt> {
+    const { market, owner, builder, ...order } = params;
+    return this.placeOrders({ market, owner, orders: [order], builder });
   }
 
   /** Cancels, then orders, atomically, on the owner's seat (isolated or
       cross).  The transaction requests the state units resting the orders
-      grows the books by. */
-  async placeOrders(params: { market: string; owner: string; orders: PerpsOrderParams[]; cancels?: Array<{ orderId: PerpsAmount; orderEntryIndex?: number }> }): Promise<PerpsBuilt> {
+      grows the books by.  `builder` puts a builder code on every order of
+      the transaction. */
+  async placeOrders(params: { market: string; owner: string; orders: PerpsOrderParams[]; cancels?: Array<{ orderId: PerpsAmount; orderEntryIndex?: number }>; builder?: PerpsBuilderTerms }): Promise<PerpsBuilt> {
     const owner = normalizeAddress(params.owner);
+    if (params.builder) checkBuilderRate(params.builder.seatIndex, params.builder.feePpm, 'builder.feePpm');
     const { ref, seat, margin } = await this.seatContext(params.market, owner);
     const record = this.market(params.market);
     const orders = params.orders.map((order) => this.orderRequest(record, order));
     const cancels = await this.cancelRequests(params.market, owner, params.cancels ?? []);
     const book = await readOrderBookState(this.thru, record, { withOrders: cancels.length > 0, attempts: 2 });
-    const tx = ordersTx(ref, owner, seat.seatIndex, orders, cancels, book, { margin });
+    const builder = params.builder ? { builderSeatIndex: params.builder.seatIndex, feePpm: params.builder.feePpm } : undefined;
+    const tx = ordersTx(ref, owner, seat.seatIndex, orders, cancels, book, { margin, builder });
     return this.built('placeOrders', tx, { market: record.seatArena, owner, seatIndex: seat.seatIndex, cross: !!margin, marginAccount: margin?.address });
   }
 
@@ -467,26 +565,24 @@ export class PerpsClient {
     return this.built('modify', tx, { market: record.seatArena, owner, seatIndex: seat.seatIndex, cross: !!margin, marginAccount: margin?.address });
   }
 
-  /** `amount` human quote units ("100.5") or `amountAtoms`. */
-  async deposit(params: { market: string; owner: string; amount?: string; amountAtoms?: PerpsAmount }): Promise<PerpsBuilt> {
+  /** `amount` human quote units ("100.5") or `amountAtoms`.  `seatIndex`
+      picks one of the owner's seats (default: its trading seat, getSeat). */
+  async deposit(params: { market: string; owner: string; amount?: string; amountAtoms?: PerpsAmount; seatIndex?: number }): Promise<PerpsBuilt> {
     return this.collateral('deposit', params);
   }
 
-  /** The program settles funding and checks free margin itself: no settle needed first. */
-  async withdraw(params: { market: string; owner: string; amount?: string; amountAtoms?: PerpsAmount }): Promise<PerpsBuilt> {
+  /** The program settles funding and checks free margin itself: no settle
+      needed first.  A builder withdraws its earnings with the fee seat's
+      `seatIndex` (getBuilderCode). */
+  async withdraw(params: { market: string; owner: string; amount?: string; amountAtoms?: PerpsAmount; seatIndex?: number }): Promise<PerpsBuilt> {
     return this.collateral('withdraw', params);
   }
 
-  private async collateral(action: 'deposit' | 'withdraw', params: { market: string; owner: string; amount?: string; amountAtoms?: PerpsAmount }): Promise<PerpsBuilt> {
+  private async collateral(action: 'deposit' | 'withdraw', params: { market: string; owner: string; amount?: string; amountAtoms?: PerpsAmount; seatIndex?: number }): Promise<PerpsBuilt> {
     const owner = normalizeAddress(params.owner);
     const record = this.market(params.market);
-    const mint = this.deployment.quoteMints.find((entry) => entry.symbol === record.quoteSymbol);
-    if (!mint) throw new Error(`no quote mint ${record.quoteSymbol}`);
-    const amount = exactlyOne({ amount: params.amount, amountAtoms: params.amountAtoms }, (key, value) =>
-      key === 'amount' ? parseUnits(String(value), mint.decimals) : toAtoms(value as PerpsAmount, 'amountAtoms'),
-    );
-    if (amount <= 0n) throw new Error('amount must be positive');
-    const { ref, seat, margin } = await this.seatContext(params.market, owner);
+    const { mint, amount } = this.quoteAmount(record, params);
+    const { ref, seat, margin } = await this.seatContext(params.market, owner, params.seatIndex);
     const wallet = deriveTokenAccountAddress(this.thru, owner, mint.address, this.deployment.tokenProgram);
     const build = action === 'deposit' ? depositTx : withdrawTx;
     const tx = build(ref, owner, seat.seatIndex, wallet, amount, { margin });
@@ -583,6 +679,154 @@ export class PerpsClient {
     return this.built('liquidate', tx, { market: ref.market.seatArena, owner, seatIndex: seat.seatIndex, cross: !!margin, marginAccount: margin?.address });
   }
 
+  /* Fee and builder code actions ****************************************************/
+
+  /** A builder turns one of its seats into its fee seat in the market: the
+      seat's index becomes its builder code, and fees on coded orders are
+      paid into it.  Irreversible: the seat never trades, rests orders or
+      links again; it only withdraws.  The seat must be isolated, flat and
+      without orders.  Without `seatIndex`, the owner's only empty seat (no
+      collateral, as createSeat leaves it) is used, so a trading seat is
+      never converted by accident: createSeat, then registerBuilderCode,
+      from a key kept for building. */
+  async registerBuilderCode(params: { market: string; owner: string; seatIndex?: number }): Promise<PerpsBuilt> {
+    const owner = normalizeAddress(params.owner);
+    const record = this.market(params.market);
+    const rpc = { source: 'rpc' } as const;
+    const { state } = await this.getMarket(params.market, rpc);
+    const seats = await this.getSeats(params.market, owner, rpc);
+    const existing = seats.find((seat) => seat.feeReceiver);
+    if (existing) throw new Error(`${owner} already has builder code #${existing.seatIndex} in ${record.symbol}`);
+    const unused = (seat: PerpSeatEntry) => !seat.cross && seat.longLots === 0n && seat.shortLots === 0n && seat.headOrderEntryIndex === 0;
+    let seat: PerpSeatEntry | undefined;
+    if (params.seatIndex !== undefined) {
+      seat = seats.find((entry) => entry.seatIndex === params.seatIndex);
+      if (!seat) throw new Error(`seat #${params.seatIndex} in ${record.symbol} is not a seat of ${owner}`);
+      if (!unused(seat)) throw new Error(`seat #${seat.seatIndex} must be isolated, flat and without orders to become a fee seat`);
+    } else {
+      const empty = seats.filter((entry) => unused(entry) && entry.quantityQuote === 0n);
+      if (empty.length !== 1) {
+        throw new Error(empty.length
+          ? `${owner} has ${empty.length} empty seats in ${record.symbol}; pass seatIndex`
+          : `${owner} has no empty seat in ${record.symbol}; createSeat first (or pass the seatIndex of a flat, isolated seat to convert)`);
+      }
+      seat = empty[0]!;
+    }
+    const tx = seatSetFeeReceiverTx(this.marketRef(params.market, state), owner, seat.seatIndex);
+    return this.built('registerBuilderCode', tx, { market: record.seatArena, owner, seatIndex: seat.seatIndex });
+  }
+
+  /** The owner's seat lets builder code `builder` (a fee seat in this
+      market) charge its resting orders up to maxFeePpm when they fill as
+      maker.  One approval per seat: this replaces the previous one.  A
+      taker builder fee needs no approval (the signed order carries it). */
+  async approveBuilder(params: { market: string; owner: string; builder: number; maxFeePpm: number; seatIndex?: number }): Promise<PerpsBuilt> {
+    checkBuilderRate(params.builder, params.maxFeePpm, 'maxFeePpm');
+    const owner = normalizeAddress(params.owner);
+    const { ref, seat } = await this.seatContext(params.market, owner, params.seatIndex);
+    const arena = parsePerpSeatArenaAccount(await readAccount(this.thru, ref.market.seatArena));
+    const builder = arena.seats.find((entry) => entry.seatIndex === params.builder);
+    if (!builder?.feeReceiver) throw new Error(`seat #${params.builder} in ${this.market(params.market).symbol} is not a builder's fee seat`);
+    if (builder.seatAuthority === owner) throw new Error('a seat cannot approve its own authority\'s builder code');
+    const tx = seatSetBuilderApprovalTx(ref, owner, seat.seatIndex, { builderSeatIndex: params.builder, maxFeePpm: params.maxFeePpm });
+    return this.built('approveBuilder', tx, { market: ref.market.seatArena, owner, seatIndex: seat.seatIndex, cross: !!seat.cross });
+  }
+
+  /** Removes the owner's seat's builder approval: the next fill of a
+      resting order charges no maker builder fee (no cancel needed). */
+  async revokeBuilder(params: { market: string; owner: string; seatIndex?: number }): Promise<PerpsBuilt> {
+    const owner = normalizeAddress(params.owner);
+    const { ref, seat } = await this.seatContext(params.market, owner, params.seatIndex);
+    const tx = seatSetBuilderApprovalTx(ref, owner, seat.seatIndex, { builderSeatIndex: 0, maxFeePpm: 0 });
+    return this.built('revokeBuilder', tx, { market: ref.market.seatArena, owner, seatIndex: seat.seatIndex, cross: !!seat.cross });
+  }
+
+  /** Market authority: sets the fee rates (ppm).  An increase of the taker
+      fee or the builder cap takes effect an hour later (getFees shows it
+      pending); decreases, the rebate and the insurance shares apply at once. */
+  async setFees(params: PerpFeeParams & { market: string; authority: string }): Promise<PerpsBuilt> {
+    const { market, authority: rawAuthority, ...rates } = params;
+    const problem = perpFeeParamsProblem(rates);
+    if (problem) throw new Error(problem);
+    const authority = normalizeAddress(rawAuthority);
+    const { state } = await this.getMarket(market, { source: 'rpc' });
+    this.requireMarketAuthority(market, state, authority);
+    const tx = marketSetFeesTx(this.marketRef(market, state), authority, rates);
+    return this.built('setFees', tx, { market: this.market(market).seatArena, owner: authority });
+  }
+
+  /** Market authority: moves protocol fees (default: the whole fee
+      balance) into its own seat in the market, which then withdraws them.
+      Refused while the market has bad debt. */
+  async claimFees(params: { market: string; authority: string; amountAtoms?: PerpsAmount; seatIndex?: number }): Promise<PerpsBuilt> {
+    const authority = normalizeAddress(params.authority);
+    const { ref, seat, state } = await this.seatContext(params.market, authority, params.seatIndex);
+    this.requireMarketAuthority(params.market, state, authority);
+    const { symbol } = this.market(params.market);
+    const balance = state.risk.feeBalance;
+    const amount = params.amountAtoms === undefined ? balance : toAtoms(params.amountAtoms, 'amountAtoms');
+    if (amount <= 0n) throw new Error(`no protocol fees to claim in ${symbol}`);
+    if (amount > balance) throw new Error(`amount ${amount} exceeds the fee balance ${balance}`);
+    if (state.badDebt) throw new Error(`${symbol} has bad debt: fee claims are refused until it is resolved`);
+    const tx = feeClaimTx(ref, authority, seat.seatIndex, amount);
+    return this.built('claimFees', tx, { market: ref.market.seatArena, owner: authority, seatIndex: seat.seatIndex });
+  }
+
+  /* Loss waterfall ******************************************************************/
+
+  /** Moves `amount` (human quote units) or `amountAtoms` of the owner's
+      seat's free collateral into the market's insurance balance, which
+      covers the market's losses before they are charged to open positions.
+      Not withdrawable: insurance belongs to the market.  The program
+      settles the seat's funding first and moves at most what a withdrawal
+      could take; an isolated seat is refused up front beyond its settled
+      collateral.  Allowed while the market is frozen for bad debt (it is
+      how a frozen market recovers).  `seatIndex` picks one of the owner's
+      seats (a builder can pay in from its fee seat). */
+  async depositInsurance(params: { market: string; owner: string; amount?: string; amountAtoms?: PerpsAmount; seatIndex?: number }): Promise<PerpsBuilt> {
+    const owner = normalizeAddress(params.owner);
+    const record = this.market(params.market);
+    const { amount } = this.quoteAmount(record, params);
+    const { ref, seat, margin, state } = await this.seatContext(params.market, owner, params.seatIndex);
+    if (!seat.cross) {
+      const collateral = perpSettleFunding(state, seat).seat.quantityQuote;
+      if (amount > collateral) throw new Error(`amount ${amount} exceeds the collateral of seat #${seat.seatIndex} (${collateral} after funding)`);
+    }
+    const tx = insuranceDepositTx(ref, owner, seat.seatIndex, amount, { margin });
+    return this.built('depositInsurance', tx, { market: record.seatArena, owner, seatIndex: seat.seatIndex, cross: !!margin, marginAccount: margin?.address });
+  }
+
+  /** Permissionless: runs the market's bad debt (state.badDebt; while it
+      is nonzero withdrawals are frozen) through the loss waterfall: the
+      fee balance, then insurance within its epoch budget, then a per-lot
+      charge on open positions.  Any key may send it.  Refused up front
+      when nothing could cover any of it (perpResolveBadDebtProblem); the
+      program fails with NOTHING_RESOLVED when the bad debt does not fall. */
+  async resolveBadDebt(params: { market: string }): Promise<PerpsBuilt> {
+    const record = this.market(params.market);
+    const { state } = await this.getMarket(params.market, { source: 'rpc' });
+    const problem = perpResolveBadDebtProblem(state);
+    if (problem) throw new Error(`${record.symbol}: ${problem}`);
+    const tx = resolveBadDebtTx(this.marketRef(params.market, state));
+    return this.built('resolveBadDebt', tx, { market: record.seatArena });
+  }
+
+  /** Market authority: sets the loss waterfall parameters (bps): the
+      per-lot loss charge cap per 8 hour epoch, the insurance draw budget
+      per epoch and the reward for liquidating a bankrupt isolated seat.
+      Refused up front outside the market's limits (perpRiskParamsProblem). */
+  async setRiskParams(params: PerpRiskParams & { market: string; authority: string }): Promise<PerpsBuilt> {
+    const { market, authority: rawAuthority, ...risk } = params;
+    const authority = normalizeAddress(rawAuthority);
+    const record = this.market(market);
+    const { state } = await this.getMarket(market, { source: 'rpc' });
+    this.requireMarketAuthority(market, state, authority);
+    const problem = perpRiskParamsProblem(state, risk);
+    if (problem) throw new Error(problem);
+    const tx = marketSetRiskParamsTx(this.marketRef(market, state), authority, risk);
+    return this.built('setRiskParams', tx, { market: record.seatArena, owner: authority });
+  }
+
   /* Sending *************************************************************************/
 
   /** Signs the transaction with `signer` and waits for its execution
@@ -600,6 +844,11 @@ export class PerpsClient {
 
   /* Internals ************************************************************************/
 
+  /** Refuses up front what the program refuses with UNAUTHORIZED_MARKET_AUTH. */
+  private requireMarketAuthority(market: string, state: PerpMarket, authority: string): void {
+    if (state.marketAuthority !== authority) throw new Error(`${authority} is not the market authority of ${this.market(market).symbol}`);
+  }
+
   private async viaIndexer<T>(options: PerpsReadOptions, indexed: (indexer: PerpsIndexer) => Promise<T>, rpc: () => Promise<T>): Promise<T> {
     if (this.indexer && options.source !== 'rpc') {
       try {
@@ -609,6 +858,17 @@ export class PerpsClient {
       }
     }
     return rpc();
+  }
+
+  /** A positive quote amount: `amount` in the market's quote units or `amountAtoms`. */
+  private quoteAmount(record: PerpDeploymentMarket, params: { amount?: string; amountAtoms?: PerpsAmount }): { mint: PerpDeployment['quoteMints'][number]; amount: bigint } {
+    const mint = this.deployment.quoteMints.find((entry) => entry.symbol === record.quoteSymbol);
+    if (!mint) throw new Error(`no quote mint ${record.quoteSymbol}`);
+    const amount = exactlyOne({ amount: params.amount, amountAtoms: params.amountAtoms }, (key, value) =>
+      key === 'amount' ? parseUnits(String(value), mint.decimals) : toAtoms(value as PerpsAmount, 'amountAtoms'),
+    );
+    if (amount <= 0n) throw new Error('amount must be positive');
+    return { mint, amount };
   }
 
   private orderRequest(record: PerpDeploymentMarket, order: PerpsOrderParams): OrderRequest {
@@ -624,6 +884,7 @@ export class PerpsClient {
       price,
       quantity: this.quantity(record, order, rounding),
       ...(order.clientId ? { clientId: clientIdBytes(order.clientId) } : {}),
+      ...(order.expiresAtNs === undefined ? {} : { expirationTime: positiveAtoms(order.expiresAtNs, 'expiresAtNs') }),
     };
   }
 
@@ -663,6 +924,19 @@ export async function createPerpsClient(options: PerpsClientOptions): Promise<Pe
   const thru = options.thru ?? createThruClient({ baseUrl: rpcUrl });
   const indexer = options.indexerUrl ? createPerpsIndexer({ ...options.indexer, url: options.indexerUrl, fetch: options.indexer?.fetch ?? options.fetch }) : null;
   return new PerpsClient(thru, deployment, indexer, options.marginAccountIds ?? [0, 1, 2, 3], options.nowNs);
+}
+
+/** A builder code's seat and rate as the program accepts them: a seat, and
+    a rate in (0, PERP_FEE_MAX_PPM]. */
+function checkBuilderRate(seatIndex: number, ppm: number, label: string): void {
+  if (!Number.isInteger(seatIndex) || seatIndex <= 0) throw new Error(`builder seat index must be a positive integer, got ${seatIndex}`);
+  if (!Number.isInteger(ppm) || ppm <= 0 || ppm > PERP_FEE_MAX_PPM) throw new Error(`${label} must be an integer in 1..${PERP_FEE_MAX_PPM} (1%), got ${ppm}`);
+}
+
+function positiveAtoms(value: PerpsAmount, label: string): bigint {
+  const atoms = toAtoms(value, label);
+  if (atoms <= 0n || atoms > 9_223_372_036_854_775_807n) throw new Error(`${label} must be in 1..2^63-1`);
+  return atoms;
 }
 
 function toAtoms(value: PerpsAmount, label: string): bigint {

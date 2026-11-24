@@ -396,7 +396,8 @@ verification and install.
 ### Publish order
 
 0. **`thru-ledger` (0.1.0)** (`rpc/thru-ledger`), after `thru-base`: `thru-core`
-   depends on it for Ledger key sources.
+   depends on it for Ledger key sources. **`thru-trezor` (0.1.0)**
+   (`rpc/thru-trezor`), also after `thru-base`: the same for Trezor key sources.
 
 1. **`thru-core` (0.1.0)**
    ```
@@ -527,3 +528,113 @@ blind signing); in `--json` mode they are reported as
 `{"error": {"type": "ledger", "code": ..., "status_word": ..., "reason": ...}}`,
 where `reason` is the corpus reason class (for example `rw_unsorted`) of a
 rejected transaction.
+
+## Trezor keys
+
+Keys can live on a Trezor Safe 7 running the Thru app (`rpc/thru-trezor`,
+[`trezor/README.md`](../../trezor/README.md)). Select one with
+`trezor://44'/8478'/<account>'/0'` wherever a signing key is accepted, or
+register it under a name with `thru keys add-trezor`: the CLI reads the key at
+`m/44'/8478'/<account>'/0'`, has you confirm the address on the device (unless
+`--no-verify`), and stores the source `{type: trezor, path:
+"44'/8478'/<account>'/0'"}` and the address as the key's `public_key` (the
+device's key must then equal it on every use). An existing name is refused
+unless `--overwrite` is given.
+
+```bash
+export THRU_TREZOR_APP=/path/to/thru.thru.org_0.1.1.0_sdk0.1_armv8m_abi1_T3W1_en.tapp
+thru keys add-trezor tz --account 0                  # confirm the address on the device, then store it
+thru keys show tz --verify                           # address/path; --verify re-displays it on the device
+thru transfer tz <dst> 100                           # the registered name works wherever a key does
+thru keys show "trezor://44'/8478'/0'/0'" --verify   # address; --verify shows it on the device
+thru transfer "trezor://44'/8478'/0'/0'" <dst> 100   # the device shows the transfer; hold to confirm
+thru account create "trezor://44'/8478'/0'/0'"       # creation of the signing account
+thru token transfer <from> <to> 100 --fee-payer tz   # the device shows the token transfer
+thru message sign --key tz "hello"                   # the device shows the text; hold to confirm
+thru account create-eoa tz --fee-payer funded        # the device shows the EOA authorization; funded pays
+```
+
+`txn sign` and `txn execute` also accept a Trezor `--fee-payer`, but the device
+signs only the two transaction kinds below.
+
+- `THRU_TREZOR_APP`: the Thru app image for the device, a `.tapp` file; its
+  `.proof` file must be beside it and the root packet two directories up (the
+  layout `trezorctl extapp load` expects). Unset or unreadable is an error that
+  says so. The image is loaded on every run.
+- `THRU_TREZOR_EMULATOR=host:port`: the Trezor emulator over UDP, only in test
+  builds with the `trezor-emulator` feature (`cargo build -p thru --features
+  trezor-emulator`); it also allows pairing without a code. Release builds
+  refuse to run when the variable is set, and feature builds print an
+  "EMULATOR, NOT A HARDWARE DEVICE" warning on every connection.
+
+The device needs firmware that can load apps; stock retail firmware cannot yet.
+The first connection pairs: the Trezor shows a one-time code, which the CLI asks
+for on standard input (prompts go to standard error). The pairing credential is
+kept in `~/.thru/cli/trezor-pairing.json` (owner-only), so later runs do not
+pair again.
+
+**Passphrase (hidden) wallets.** A key `trezor://...` is always the standard
+wallet (the empty passphrase). To use a key of a passphrase wallet, register it
+with `thru keys add-trezor NAME [--account N] --passphrase`: you type the
+passphrase on the Trezor (the computer never sees it), and the CLI stores the
+address the device then has, with `passphrase: true` in the source
+(`{type: trezor, path: "44'/8478'/<account>'/0'", passphrase: true}`; the flag is
+written only when set, so other entries and old configuration files are
+unchanged, and a CLI that predates it refuses such an entry). Select the key by
+its alias, `NAME` or `alias:NAME`, and only by it: a `trezor://` URI never
+selects a passphrase key, as a signer or as a destination, and `thru keys
+add-trezor`, `show`, `list` and `get` print `alias:NAME` as the reference of one (with its
+path and `passphrase: true`). Every command that uses the key opens a session,
+so the Trezor asks for the passphrase every time ("Enter the passphrase on the
+Trezor."), including `keys show NAME --verify`. A mistyped passphrase gives
+another key, which is refused as a key mismatch ("another passphrase may have
+been typed on the Trezor") before anything is signed. A Trezor set to take the
+passphrase on the device only refuses the standard wallet with
+`passphrase_on_device_only`; register the key with `--passphrase` and leave the
+passphrase empty on the device for the standard wallet. When a replaced or
+removed passphrase key is reported, it is named by its address, path and
+`passphrase: true`, with no reference.
+
+The app signs, and reviews on the device: a native transfer, a token transfer
+in the layout the CLI builds (`thru token transfer`, the plain or the checked
+instruction, with the token hint when the CLI can build one, as for a Ledger),
+the creation of the signing account, an EOA create authorization
+(`thru account create-eoa`, with the Trezor key as the new account), and a text
+message (`thru message sign`).
+A message is text if it is 1 to 512 bytes of printable ASCII and line breaks,
+at most 16 lines, with no space at the start or end of a line, no two spaces in
+a row, and no long run of one-character words separated by single spaces; the
+CLI refuses any other message before it connects, and a local or a Ledger key
+can sign it. The app refuses every other transaction (other programs'
+instructions, token transfers in another layout) on the device, and the CLI
+refuses `token transfer --via-multisig` (it needs a local key),
+`account create-eoa` with a Trezor `--fee-payer` (the app does not show that
+transaction and does not sign blind; a Trezor key can be the new account, whose
+EOA authorization the device shows), `governance propose`, `approve` and `execute`, and every command not
+listed above for a Trezor key, with a sentence saying so. Errors are reported
+in `--json` as
+`{"error": {"type": "trezor", "code": ..., "message": ..., "reason": ...}}`;
+`code` is one of `user_rejected`, `not_found`, `ambiguous_device`, `locked`,
+`timeout`, `pairing_failed`, `credentials`, `app_image`, `key_mismatch`,
+`passphrase_on_device_only`, `device_error`, `app_refused`, `invalid_request`, `protocol_error`,
+`transport`, `emulator_unsupported`. For `app_refused`, `reason` is the app's
+own text (`message_not_text`, `token_hint_length`, `token_hint_kind`,
+`token_hint_mismatch`, `unsupported_transaction`, `fee_payer_mismatch`, ...);
+it is `null` for every other code.
+
+**Review preview.** Right before a request is sent to the Trezor (after the
+connection, so after pairing and a passphrase entry), the CLI prints to standard
+error what the device must show: `Trezor review (TITLE): your device must show
+exactly these values`, the steps of the review in order with their fields,
+notes, warnings and menus, and `Reject on the device if any value differs.` The
+same review is `trezor_preview` in the `--json` output of `transfer`,
+`token_transfer`, `account_create`, `account_create_eoa`, `transaction_sign`,
+`transaction_execute` and `message_sign` (only for a Trezor key; the output of
+any other key does not change). A request the Thru app will refuse has no
+review: nothing is printed, `trezor_preview` is `null`, and the request is
+sent all the same, so the app's refusal (`app_refused`) is the answer. The code
+is `crates/thru-core/src/trezor_preview.rs`; its module documentation holds the
+exact JSON schema (`kind`, `steps`, each with `name`, `title`, `items` of
+`field`, `note` and `warning`, and `menus`), and its tests compare the preview
+with the app's fixture (`trezor/app-thru/tests/fixtures/sign_tx.json`) and
+English texts (`trezor/app-thru/translations/en.json`).

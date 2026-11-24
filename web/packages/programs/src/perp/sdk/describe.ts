@@ -55,10 +55,19 @@ const orderSchema: JsonSchema = {
     quantityAtoms: { ...atoms, description: 'Size in base atoms, a multiple of the lot size' },
     lots: { ...atoms, description: 'Size in lots' },
     clientId: { type: 'string', pattern: '^[0-9a-fA-F]{32}$', description: '16-byte client id as hex' },
+    expiresAtNs: { ...atoms, description: 'Block time (ns since the epoch) at which a resting order expires (default never)' },
     rounding: { type: 'string', enum: ['exact', 'down', 'up', 'nearest'], description: 'Round a human price/size onto the grid (default exact: fail when off-grid)' },
   },
 };
 const obj = (properties: Record<string, JsonSchema>, required: string[]): JsonSchema => ({ type: 'object', additionalProperties: false, properties, required });
+const ppm: JsonSchema = { type: 'integer', minimum: 0, maximum: 1_000_000, description: 'Parts per million (10000 = 1%)' };
+const builderPpm: JsonSchema = { type: 'integer', minimum: 1, maximum: 10_000, description: 'Rate in ppm of filled notional, at most 10000 (1%)' };
+const bps = (maximum: number, description: string): JsonSchema => ({ type: 'integer', minimum: 0, maximum, description });
+const seatIndex: JsonSchema = { type: 'integer', minimum: 1, description: "One of the owner's seats in the market (default: its trading seat)" };
+const builder: JsonSchema = {
+  ...obj({ seatIndex: { type: 'integer', minimum: 1, description: "The builder code: the builder's fee seat index in this market" }, feePpm: builderPpm }, ['seatIndex', 'feePpm']),
+  description: 'Builder code on every order of the transaction',
+};
 
 const ACTIONS: readonly PerpsActionDescription[] = [
   { name: 'getMarkets', kind: 'read', description: "Every market of the deployment with its on-chain state (margins, funding, open interest).", parameters: obj({}, []) },
@@ -74,7 +83,7 @@ const ACTIONS: readonly PerpsActionDescription[] = [
     name: 'placeOrder',
     kind: 'transaction',
     description: 'Place one order on the owner\'s seat (isolated or cross); requests the state units the order needs.',
-    parameters: { ...orderSchema, required: ['market', 'owner', 'side'], properties: { market, owner, ...orderSchema.properties } },
+    parameters: { ...orderSchema, required: ['market', 'owner', 'side'], properties: { market, owner, ...orderSchema.properties, builder } },
   },
   {
     name: 'placeOrders',
@@ -86,6 +95,7 @@ const ACTIONS: readonly PerpsActionDescription[] = [
         owner,
         orders: { type: 'array', items: orderSchema },
         cancels: { type: 'array', items: obj({ orderId: atoms, orderEntryIndex: { type: 'integer', minimum: 1 } }, ['orderId']) },
+        builder,
       },
       ['market', 'owner', 'orders'],
     ),
@@ -98,14 +108,51 @@ const ACTIONS: readonly PerpsActionDescription[] = [
     description: 'Reduce a resting order to a smaller size (increases are refused).',
     parameters: obj({ market, owner, orderId: atoms, orderEntryIndex: { type: 'integer', minimum: 1 }, size: decimal, quantityAtoms: atoms, lots: atoms }, ['market', 'owner', 'orderId']),
   },
-  { name: 'deposit', kind: 'transaction', description: "Deposit quote collateral from the owner's token account into the seat.", parameters: obj({ market, owner, amount: decimal, amountAtoms: atoms }, ['market', 'owner']) },
-  { name: 'withdraw', kind: 'transaction', description: 'Withdraw free collateral to the owner\'s token account (a cross seat draws on its account).', parameters: obj({ market, owner, amount: decimal, amountAtoms: atoms }, ['market', 'owner']) },
+  { name: 'deposit', kind: 'transaction', description: "Deposit quote collateral from the owner's token account into the seat.", parameters: obj({ market, owner, amount: decimal, amountAtoms: atoms, seatIndex }, ['market', 'owner']) },
+  { name: 'withdraw', kind: 'transaction', description: 'Withdraw free collateral to the owner\'s token account (a cross seat draws on its account; a builder withdraws earnings with its fee seat\'s seatIndex).', parameters: obj({ market, owner, amount: decimal, amountAtoms: atoms, seatIndex }, ['market', 'owner']) },
   { name: 'createMarginAccount', kind: 'transaction', description: "Create a cross margin account on the market's quote vault.", parameters: obj({ market, owner, accountId: { type: 'integer', minimum: 0 } }, ['market', 'owner']) },
   { name: 'linkMargin', kind: 'transaction', description: "Link the owner's seat in a market into a margin account (cross margin).", parameters: obj({ market, owner, accountId: { type: 'integer', minimum: 0 } }, ['market', 'owner']) },
   { name: 'unlinkMargin', kind: 'transaction', description: "Unlink the owner's flat seat from its margin account.", parameters: obj({ market, owner }, ['market', 'owner']) },
   { name: 'settleFunding', kind: 'transaction', description: "Settle funding for seats of a market (by index) or the owner's seat; optional, the program settles before it reads equity.", parameters: obj({ market, owner, seatIndexes: { type: 'array', items: { type: 'integer', minimum: 1 } } }, ['market']) },
   { name: 'settleAccountFunding', kind: 'transaction', description: 'Settle funding of every seat a margin account links.', parameters: obj({ owner, marginAccount: address }, ['owner']) },
   { name: 'liquidate', kind: 'transaction', description: "Liquidate seat targetSeatIndex with the owner's seat in the same market.", parameters: obj({ market, owner, targetSeatIndex: { type: 'integer', minimum: 1 } }, ['market', 'owner', 'targetSeatIndex']) },
+  { name: 'getFees', kind: 'read', description: "The market's fee rates in effect (ppm), a pending increase, and its fee and insurance balances.", parameters: obj({ market }, ['market']) },
+  { name: 'getBuilderCode', kind: 'read', description: "The owner's builder code in a market (its fee seat index) and the fees it has earned, or null.", parameters: obj({ market, owner }, ['market', 'owner']) },
+  { name: 'registerBuilderCode', kind: 'transaction', description: "Turn the owner's empty seat (createSeat first) into its builder fee seat; the seat index is the builder code. Irreversible: the seat never trades again.", parameters: obj({ market, owner, seatIndex }, ['market', 'owner']) },
+  { name: 'approveBuilder', kind: 'transaction', description: "Let builder code `builder` charge the owner's resting orders up to maxFeePpm when they fill as maker (one approval per seat).", parameters: obj({ market, owner, builder: { type: 'integer', minimum: 1, description: "The builder's fee seat index" }, maxFeePpm: builderPpm, seatIndex }, ['market', 'owner', 'builder', 'maxFeePpm']) },
+  { name: 'revokeBuilder', kind: 'transaction', description: "Remove the owner's seat's builder approval (takes effect on the next fill).", parameters: obj({ market, owner, seatIndex }, ['market', 'owner']) },
+  {
+    name: 'setFees',
+    kind: 'transaction',
+    description: 'Market authority: set the fee rates in ppm (increases of the taker fee and builder cap wait an hour).',
+    parameters: obj(
+      { market, authority: { ...address, description: 'The market authority (the signer)' }, takerFeePpm: ppm, makerRebatePpm: ppm, builderFeeCapPpm: ppm, feeInsuranceSharePpm: ppm, liqInsuranceSharePpm: ppm },
+      ['market', 'authority', 'takerFeePpm', 'makerRebatePpm', 'builderFeeCapPpm', 'feeInsuranceSharePpm', 'liqInsuranceSharePpm'],
+    ),
+  },
+  { name: 'claimFees', kind: 'transaction', description: "Market authority: move protocol fees (default all) into its own seat in the market, then withdraw them; refused while the market has bad debt.", parameters: obj({ market, authority: { ...address, description: 'The market authority (the signer)' }, amountAtoms: atoms, seatIndex }, ['market', 'authority']) },
+  {
+    name: 'depositInsurance',
+    kind: 'transaction',
+    description: "Move free collateral of the owner's seat into the market's insurance balance (covers the market's losses first; not withdrawable). Allowed while the market is frozen for bad debt.",
+    parameters: obj({ market, owner, amount: decimal, amountAtoms: atoms, seatIndex }, ['market', 'owner']),
+  },
+  { name: 'resolveBadDebt', kind: 'transaction', description: "Permissionless: run the market's bad debt (which freezes withdrawals) through the loss waterfall: fees, insurance, then a per-lot charge on open positions.", parameters: obj({ market }, ['market']) },
+  {
+    name: 'setRiskParams',
+    kind: 'transaction',
+    description: "Market authority: set the loss waterfall parameters in bps (per-lot loss charge cap per 8 hour epoch, insurance draw budget per epoch, bankrupt liquidation reward).",
+    parameters: obj(
+      {
+        market,
+        authority: { ...address, description: 'The market authority (the signer)' },
+        socializeCapBps: bps(65_535, 'Per-lot loss charge cap per epoch, bps of a lot\'s notional; at most the initial minus maintenance margin (0: nothing is socialized)'),
+        ifEpochBudgetBps: bps(10_000, "Insurance draws per epoch, bps of the epoch's opening balance (0: no cap)"),
+        bankruptLiqRewardBps: bps(65_535, 'Paid from insurance to the liquidator of a bankrupt isolated seat, bps of the notional; at most the liquidation fee'),
+      },
+      ['market', 'authority', 'socializeCapBps', 'ifEpochBudgetBps', 'bankruptLiqRewardBps'],
+    ),
+  },
 ];
 
 /** Every action with its parameter schema. */
@@ -187,6 +234,7 @@ export async function runPerpsAction(
       case 'getMarket':
       case 'getMark':
       case 'getFunding':
+      case 'getFees':
         result = await run(p.market);
         break;
       case 'getBook':
@@ -194,6 +242,7 @@ export async function runPerpsAction(
         break;
       case 'getSeat':
       case 'getOpenOrders':
+      case 'getBuilderCode':
         result = await run(p.market, p.owner);
         break;
       case 'getMarginAccounts':

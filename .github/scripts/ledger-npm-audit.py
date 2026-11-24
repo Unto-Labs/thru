@@ -1,18 +1,29 @@
 #!/usr/bin/env python3
-"""Advisory audit of @thru/ledger's runtime dependency closure (audit U6).
+"""Advisory audit of a web package's runtime dependency closure (audit U6).
 
 `pnpm audit` reports on the whole web/ workspace lockfile, and its JSON
 findings list a single example path, so it cannot say whether an advisory
-reaches @thru/ledger. This script computes the runtime closure of
-web/packages/ledger from web/pnpm-lock.yaml: its dependencies, its peer
-dependencies (the Ledger DMK transports users install next to it; the lock
-records them under devDependencies) and workspace packages it links
-(@thru/sdk), followed transitively through the lockfile's snapshots. It then
-runs `pnpm audit --json` and fails if any advisory's affected version is in
-that closure.
+reaches one package. This script computes the runtime closure of a package
+(by default web/packages/ledger, @thru/ledger) from web/pnpm-lock.yaml: its
+dependencies, its peer dependencies (the Ledger DMK transports users install
+next to it; the lock records them under devDependencies) and workspace
+packages it links (@thru/sdk), followed transitively through the lockfile's
+snapshots. It then runs `pnpm audit --json` and fails if any advisory's
+affected version is in that closure.
 
 Usage: python3 .github/scripts/ledger-npm-audit.py [--web DIR] [--audit-json FILE]
+           [--package PATH] [--label NAME] [--bundled-dev NAME ...]
+           [--require-present]
   --audit-json FILE  use a saved `pnpm audit --json` report instead of running it
+  --package PATH     the package's directory below web/, as the lockfile names
+                     its importer (default packages/ledger)
+  --label NAME       the package's name in the output (default @thru/ledger)
+  --bundled-dev NAME a devDependency whose code the package's build bundles
+                     into what it ships, so that it is runtime code (repeat
+                     the option; each name must be in devDependencies)
+  --require-present  fail, instead of printing SKIP, when the package is not
+                     in the tree (for a package that is not part of a stack
+                     that is merged in layers)
 
 Needs PyYAML and, unless --audit-json is given, pnpm and registry access.
 """
@@ -27,14 +38,16 @@ import yaml
 from ledger_stack_presence import present_or_previously_tracked
 
 
-PACKAGE = "packages/ledger"
+DEFAULT_PACKAGE = "packages/ledger"
+DEFAULT_LABEL = "@thru/ledger"
 
 
 def base_version(v: str) -> str:
     return str(v).split("(", 1)[0]
 
 
-def closure(lock: dict, web: Path) -> set[tuple[str, str]]:
+def closure(lock: dict, web: Path, package: str = DEFAULT_PACKAGE,
+            bundled_dev: tuple[str, ...] = ()) -> set[tuple[str, str]]:
     importers = lock["importers"]
     snapshots = lock["snapshots"]
     if not isinstance(snapshots, dict):
@@ -53,6 +66,10 @@ def closure(lock: dict, web: Path) -> set[tuple[str, str]]:
             for name in pkg.get("peerDependencies", {}):
                 if name in dev:
                     deps[name] = dev[name]
+            for name in bundled_dev:
+                if name not in dev:
+                    raise ValueError(f"bundled devDependency {name} is not in {path}'s devDependencies")
+                deps[name] = dev[name]
         for name, spec in deps.items():
             version = str(spec["version"])
             if version.startswith("link:"):
@@ -65,7 +82,7 @@ def closure(lock: dict, web: Path) -> set[tuple[str, str]]:
                 continue
             stack.append((name, version))
 
-    add_importer(PACKAGE, include_peers=True)
+    add_importer(package, include_peers=True)
     while stack:
         name, version = stack.pop()
         key = f"{name}@{version}"
@@ -96,22 +113,28 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--web", type=Path, default=Path(__file__).resolve().parents[2] / "web")
     ap.add_argument("--audit-json", type=Path)
+    ap.add_argument("--package", default=DEFAULT_PACKAGE)
+    ap.add_argument("--label", default=DEFAULT_LABEL)
+    ap.add_argument("--bundled-dev", action="append", default=[])
+    ap.add_argument("--require-present", action="store_true")
     args = ap.parse_args()
+    package, label = args.package.strip("/"), args.label
 
     lock = yaml.safe_load((args.web / "pnpm-lock.yaml").read_text())
     if not isinstance(lock, dict) or not isinstance(lock.get("importers"), dict):
         raise ValueError("pnpm lockfile has no importers mapping")
-    manifest = args.web / PACKAGE / "package.json"
-    if (PACKAGE not in lock["importers"]
+    manifest = args.web / package / "package.json"
+    if (not args.require_present
+            and package not in lock["importers"]
             and not manifest.exists()
             and not present_or_previously_tracked(
-                args.web.parent, ("web/packages/ledger/package.json",))):
-        print("SKIP: @thru/ledger is not present in this stack")
+                args.web.parent, (f"web/{package}/package.json",))):
+        print(f"SKIP: {label} is not present in this stack")
         return 0
-    if PACKAGE not in lock["importers"] or not manifest.is_file():
-        raise ValueError("@thru/ledger requires both its package.json and lockfile importer")
-    pkgs = closure(lock, args.web)
-    print(f"@thru/ledger runtime closure: {len(pkgs)} packages")
+    if package not in lock["importers"] or not manifest.is_file():
+        raise ValueError(f"{label} requires both its package.json and lockfile importer")
+    pkgs = closure(lock, args.web, package, tuple(args.bundled_dev))
+    print(f"{label} runtime closure: {len(pkgs)} packages")
 
     if args.audit_json:
         report = json.loads(args.audit_json.read_text())
@@ -147,11 +170,11 @@ def main() -> int:
     total = report.get("metadata", {}).get("vulnerabilities", {})
     print(f"workspace-wide pnpm audit totals (all packages): {total}")
     if hits:
-        print(f"FAIL: {len(hits)} advisories reach @thru/ledger:")
+        print(f"FAIL: {len(hits)} advisories reach {label}:")
         for sev, name, v, title, url in sorted(hits):
             print(f"  {sev:<9} {name}@{v}: {title} {url}")
         return 1
-    print("OK: no known advisories in @thru/ledger's runtime dependency closure")
+    print(f"OK: no known advisories in {label}'s runtime dependency closure")
     return 0
 
 

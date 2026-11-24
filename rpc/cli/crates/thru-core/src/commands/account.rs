@@ -232,6 +232,7 @@ async fn create_account(
             "failed",
         );
         let response = signer.add_ledger_preview(response, "account_create");
+        let response = signer.add_trezor_preview(response, "account_create");
         output::print_output(response, json_format);
 
         return Err(CliError::TransactionSubmission(error_msg));
@@ -245,6 +246,7 @@ async fn create_account(
         "success",
     );
     let response = signer.add_ledger_preview(response, "account_create");
+    let response = signer.add_trezor_preview(response, "account_create");
     output::print_output(response, json_format);
 
     if !json_format {
@@ -1351,11 +1353,61 @@ pub fn build_eoa_create_transaction(
         .with_state_units(1)
 }
 
+/// What a key does in `account create-eoa`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EoaRole {
+    /// The new account: its key signs the EOA create authorization.
+    Account,
+    /// The key that pays: it signs the creation transaction.
+    FeePayer,
+}
+
+/// Whether the key `reference` selects may play `role`. Every key may be the
+/// account: a Trezor signs the authorization, which the app shows. A Trezor
+/// key may not pay: the creation transaction is one the Thru app does not show,
+/// and the app does not sign blind. Decided from the configuration alone, so
+/// that nothing touches a device or a node when it is refused.
+fn check_eoa_role(
+    keys: &crate::keys::KeyManager,
+    reference: &str,
+    role: EoaRole,
+) -> Result<(), CliError> {
+    match role {
+        EoaRole::Account => Ok(()),
+        EoaRole::FeePayer => {
+            if keys.trezor_source(reference)?.is_some() {
+                return Err(CliError::Validation(
+                    "a Trezor key cannot pay for an EOA creation: the Thru app on the Trezor \
+                     does not show that transaction and does not sign blind; pass --fee-payer \
+                     with a local or a Ledger key"
+                        .to_string(),
+                ));
+            }
+            Ok(())
+        }
+    }
+}
+
 fn sign_eoa_authorization(
     signer: &ResolvedSigner,
     chain_id: u16,
     fee_payer: &[u8; 32],
 ) -> Result<[u8; 64], CliError> {
+    if let Some(trezor) = &signer.trezor {
+        let review = crate::trezor_preview::eoa_auth_review(
+            EoaAuthKind::Create,
+            chain_id,
+            fee_payer,
+            &signer.public_key,
+            &trezor.pubkey(),
+            trezor.path(),
+        );
+        signer.set_trezor_review(review.clone());
+        return crate::signing::eprint_trezor_review_then(review.as_ref(), || {
+            trezor.try_sign_eoa_auth(EoaAuthKind::Create, chain_id, fee_payer, &signer.public_key)
+        })
+        .map_err(crate::signing::trezor_error);
+    }
     if let Some(ledger) = &signer.ledger {
         return ledger
             .try_sign_eoa_auth(EoaAuthKind::Create, chain_id, fee_payer, &signer.public_key)
@@ -1372,8 +1424,9 @@ fn sign_eoa_authorization(
 }
 
 /// `thru account create-eoa`: create an EOA for `account` (typically a Ledger
-/// key) with the fee paid by another key.  The account key signs the EOA
-/// create authorization (SIGN_EOA_AUTH on a Ledger); the fee payer signs the
+/// or a Trezor key) with the fee paid by another key.  The account key signs the EOA
+/// create authorization (SIGN_EOA_AUTH on a Ledger, the EOA authorization of
+/// the Thru app on a Trezor); the fee payer signs the
 /// transaction.
 pub async fn create_eoa(
     config: &Config,
@@ -1383,6 +1436,10 @@ pub async fn create_eoa(
     json_format: bool,
 ) -> Result<(), CliError> {
     let fee_payer_name = fee_payer.unwrap_or("default");
+    // Refuse before connecting to (and pairing with) a Trezor that cannot do it.
+    check_eoa_role(&config.keys, account, EoaRole::Account)?;
+    check_eoa_role(&config.keys, fee_payer_name, EoaRole::FeePayer)?;
+
     let account_ledger = config.keys.ledger_source(account)?;
     if require_ledger && account_ledger.is_none() {
         return Err(CliError::Validation(format!(
@@ -1395,9 +1452,12 @@ pub async fn create_eoa(
     let fee_payer_ledger = config.keys.ledger_source(fee_payer_name)?;
     let same_key = match (&account_ledger, &fee_payer_ledger) {
         (Some((account_path, _)), Some((fee_payer_path, _))) => account_path == fee_payer_path,
-        (None, None) => {
-            config.keys.public_key(account)? == config.keys.public_key(fee_payer_name)?
-        }
+        (None, None) => match config.keys.trezor_source(account)? {
+            // The Trezor is not asked before the fee payer is known to differ;
+            // an unregistered one is compared after both are connected.
+            Some(target) => target.expected() == Some(config.keys.public_key(fee_payer_name)?),
+            None => config.keys.public_key(account)? == config.keys.public_key(fee_payer_name)?,
+        },
         _ => false,
     };
     if same_key {
@@ -1506,6 +1566,9 @@ pub async fn create_eoa(
             "fee_payer_ledger_preview": fee_payer_signer.ledger_preview_json(),
         }
     });
+    // The EOA authorization reviewed on the account's Trezor (a Trezor cannot
+    // be the fee payer).
+    let response = account_signer.add_trezor_preview(response, "account_create_eoa");
     output::print_output(response, json_format);
     if failed {
         let (vm_error_msg, _) = vm_error_strings(details.vm_error);
@@ -1752,6 +1815,281 @@ mod tests {
         assert!(
             thru_base::tn_signature::verify_message(&message, &signature, &account.public_key)
                 .is_ok()
+        );
+    }
+
+    fn trezor_registration(public_key: &str, passphrase: bool) -> crate::keys::KeyEntry {
+        crate::keys::KeyEntry {
+            public_key: public_key.to_owned(),
+            source: crate::keys::KeySource::Trezor {
+                path: thru_trezor::DerivationPath::new(0).unwrap(),
+                passphrase,
+            },
+        }
+    }
+
+    /// Which keys may play which role in `create-eoa`: a Trezor key may be the
+    /// account, by alias or by URI (the standard wallet or a passphrase
+    /// wallet), and may not pay; every other key may play both.
+    #[test]
+    fn eoa_roles_admit_a_trezor_account_and_refuse_a_trezor_fee_payer() {
+        let (_directory, mut keys) = crate::keys::KeyManager::test_fixture(&[("local", [1; 32])]);
+        let address = thru_base::tn_tools::Pubkey::from_bytes(&[9; 32]).to_string();
+        keys.insert_entry("tz", trezor_registration(&address, false), false)
+            .unwrap();
+        keys.insert_entry("hid", trezor_registration(&address, true), false)
+            .unwrap();
+        let uri = "trezor://44'/8478'/0'/0'";
+
+        for reference in ["tz", "alias:tz", "hid", "alias:hid", uri, "local"] {
+            check_eoa_role(&keys, reference, EoaRole::Account)
+                .unwrap_or_else(|e| panic!("{reference} as the account: {e}"));
+        }
+        for reference in ["local", "ledger://44'/8478'/0'/0'"] {
+            check_eoa_role(&keys, reference, EoaRole::FeePayer)
+                .unwrap_or_else(|e| panic!("{reference} as the fee payer: {e}"));
+        }
+        for reference in ["tz", "alias:tz", "hid", "alias:hid", uri] {
+            let error = check_eoa_role(&keys, reference, EoaRole::FeePayer).unwrap_err();
+            assert!(matches!(error, CliError::Validation(_)), "{error:?}");
+            assert_eq!(
+                error.to_string(),
+                "Validation error: a Trezor key cannot pay for an EOA creation: the Thru app \
+                 on the Trezor does not show that transaction and does not sign blind; pass \
+                 --fee-payer with a local or a Ledger key",
+                "{reference}"
+            );
+        }
+    }
+
+    /// With the emulator (`test-host.sh`): a Trezor account signs the EOA
+    /// authorization through `sign_eoa_authorization`, and the chain would
+    /// accept the signature. Skipped unless `THRU_TREZOR_EMULATOR` and
+    /// `THRU_TREZOR_APP` are set.
+    #[cfg(feature = "trezor-emulator")]
+    #[test]
+    fn trezor_emulator_signs_an_eoa_authorization() {
+        if std::env::var(crate::signing::ENV_TREZOR_EMULATOR).is_err() {
+            eprintln!(
+                "skipped: {} is not set",
+                crate::signing::ENV_TREZOR_EMULATOR
+            );
+            return;
+        }
+        let config = Config::default();
+        let account = resolve_signer(&config, "trezor://44'/8478'/0'/0'").unwrap();
+        assert!(account.is_trezor());
+        let fee_payer = [42; 32];
+        let signature = sign_eoa_authorization(&account, 1, &fee_payer).unwrap();
+        let message = thru_base::signer::build_eoa_auth_message(
+            EoaAuthKind::Create,
+            1,
+            &fee_payer,
+            &account.public_key,
+        );
+        assert!(
+            thru_base::tn_signature::verify_message(&message, &signature, &account.public_key)
+                .is_ok()
+        );
+    }
+
+    /// One vector of the shared EOA authorization corpus
+    /// (`THRU_TEST_EOA_VECTOR`), through the CLI's own path on the Trezor
+    /// emulator: the review is `eoa_auth_review` (printed before the request,
+    /// and written to `THRU_TEST_PREVIEW_OUT` for the script to compare with
+    /// what the device showed), a `create` goes through
+    /// `sign_eoa_authorization` and a `delete` (which no command sends yet)
+    /// through the same steps.  A valid vector must give the corpus signature.
+    /// A rejected one must be refused with the corpus reason; the host crate
+    /// may stop it first, and then the error is reported as `eoa-outcome:
+    /// host-refused` for the script to show; `THRU_TEST_EXPECT_CODE` names the
+    /// error code expected when the person refuses on the device.  Run by
+    /// `trezor/scripts/test-host.sh` once for each vector; skipped unless a
+    /// vector is named.
+    #[cfg(feature = "trezor-emulator")]
+    #[test]
+    fn trezor_emulator_signs_an_eoa_vector_with_its_review() {
+        if std::env::var(crate::signing::ENV_TREZOR_EMULATOR).is_err() {
+            eprintln!(
+                "skipped: {} is not set",
+                crate::signing::ENV_TREZOR_EMULATOR
+            );
+            return;
+        }
+        let Ok(name) = std::env::var("THRU_TEST_EOA_VECTOR") else {
+            eprintln!("skipped: THRU_TEST_EOA_VECTOR is not set");
+            return;
+        };
+        let corpus: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../../../contrib/test/vectors/signing/eoa_auth_vectors.json"
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+        let vector = corpus
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|v| v["name"] == name.as_str())
+            .unwrap_or_else(|| panic!("no EOA vector {name}"));
+        let key = |field: &str| -> [u8; 32] {
+            hex::decode(vector[field].as_str().unwrap())
+                .unwrap()
+                .try_into()
+                .unwrap()
+        };
+        let kind = match vector["kind"].as_str().unwrap() {
+            "create" => EoaAuthKind::Create,
+            _ => EoaAuthKind::Delete,
+        };
+        let chain_id = u16::try_from(vector["chain_id"].as_u64().unwrap()).unwrap();
+        let (fee_payer, account) = (key("fee_payer_hex"), key("account_hex"));
+        let uri = format!(
+            "trezor://{}",
+            vector["signer_path"]
+                .as_str()
+                .unwrap()
+                .trim_start_matches("m/")
+        );
+        let signer = resolve_signer(&Config::default(), &uri).unwrap();
+        let trezor = signer.trezor.as_ref().expect("a Trezor signer");
+        let result = if kind == EoaAuthKind::Create && account == signer.public_key {
+            sign_eoa_authorization(&signer, chain_id, &fee_payer)
+        } else {
+            let review = crate::trezor_preview::eoa_auth_review(
+                kind,
+                chain_id,
+                &fee_payer,
+                &account,
+                &trezor.pubkey(),
+                trezor.path(),
+            );
+            signer.set_trezor_review(review.clone());
+            crate::signing::eprint_trezor_review_then(review.as_ref(), || {
+                trezor.try_sign_eoa_auth(kind, chain_id, &fee_payer, &account)
+            })
+            .map_err(crate::signing::trezor_error)
+        };
+        if let Ok(path) = std::env::var("THRU_TEST_PREVIEW_OUT") {
+            std::fs::write(
+                path,
+                serde_json::to_string_pretty(&signer.trezor_preview_json()).unwrap(),
+            )
+            .unwrap();
+        }
+        // The person may refuse on the device: then the code of the error is
+        // what is expected.
+        if let Ok(code) = std::env::var("THRU_TEST_EXPECT_CODE") {
+            match result {
+                Err(CliError::Trezor { code: got, .. }) => assert_eq!(got, code, "{name}"),
+                other => panic!("{name}: want the error {code}, got {other:?}"),
+            }
+            eprintln!("eoa vector {name}: ok");
+            return;
+        }
+        match vector["category"].as_str().unwrap() {
+            "valid" => {
+                let signature = result.unwrap_or_else(|e| panic!("{name}: {e:?}"));
+                assert_eq!(
+                    hex::encode(signature),
+                    vector["signature_hex"].as_str().unwrap(),
+                    "{name}"
+                );
+            }
+            _ => {
+                let reason = vector["reject_reason"].as_str().unwrap();
+                match result {
+                    Err(CliError::Trezor {
+                        reason: Some(got), ..
+                    }) => {
+                        assert_eq!(got, reason, "{name}");
+                        eprintln!("eoa-outcome: app-refused {got}");
+                    }
+                    // The host's own check of the request, with the sentence
+                    // for this reason; any other error (a timeout, a lost
+                    // connection, a cancellation) is not a refusal.
+                    Err(CliError::Trezor {
+                        code,
+                        message,
+                        reason: None,
+                    }) if code == "invalid_request" => {
+                        let sentence = match reason {
+                            "account_mismatch" => "must be this Trezor key",
+                            "bad_chain_id" => "the chain id of an EOA authorization is not zero",
+                            other => panic!("{name}: the host has no refusal for {other}"),
+                        };
+                        assert!(message.contains(sentence), "{name}: {message}");
+                        eprintln!("eoa-outcome: host-refused {message}");
+                    }
+                    Err(other) => panic!("{name}: want the refusal {reason}, got {other:?}"),
+                    Ok(_) => panic!("{name}: signed, want the refusal {reason}"),
+                }
+            }
+        }
+        eprintln!("eoa vector {name}: ok");
+    }
+
+    /// A Trezor fee payer for `create-eoa` is refused up front too, before any
+    /// signer is resolved; no device, `THRU_TREZOR_*` variable or node is used.
+    #[tokio::test]
+    async fn eoa_creation_with_a_trezor_fee_payer_is_refused() {
+        let (_directory, keys) = crate::keys::KeyManager::test_fixture(&[("local", [1; 32])]);
+        let config = Config {
+            keys,
+            ..Config::default()
+        };
+        let error = create_eoa(
+            &config,
+            "local",
+            false,
+            Some("trezor://44'/8478'/0'/0'"),
+            true,
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(error, CliError::Validation(_)), "{error:?}");
+        assert!(
+            error.to_string().contains(
+                "a Trezor key cannot pay for an EOA creation: the Thru app on the Trezor \
+                 does not show that transaction and does not sign blind"
+            ),
+            "{error}"
+        );
+    }
+
+    /// With no `--fee-payer` the key named `default` pays; a registered Trezor
+    /// `default` key is refused the same way.
+    #[tokio::test]
+    async fn eoa_creation_with_a_trezor_default_fee_payer_is_refused() {
+        let (_directory, mut keys) = crate::keys::KeyManager::test_fixture(&[("local", [1; 32])]);
+        keys.insert_entry(
+            "default",
+            crate::keys::KeyEntry {
+                public_key: thru_base::tn_tools::Pubkey::from_bytes(&[9; 32]).to_string(),
+                source: crate::keys::KeySource::Trezor {
+                    path: thru_trezor::DerivationPath::new(0).unwrap(),
+                    passphrase: false,
+                },
+            },
+            false,
+        )
+        .unwrap();
+        let config = Config {
+            keys,
+            ..Config::default()
+        };
+        let error = create_eoa(&config, "local", false, None, true)
+            .await
+            .unwrap_err();
+        assert!(matches!(error, CliError::Validation(_)), "{error:?}");
+        assert!(
+            error.to_string().contains(
+                "a Trezor key cannot pay for an EOA creation: the Thru app on the Trezor \
+                 does not show that transaction and does not sign blind"
+            ),
+            "{error}"
         );
     }
 }

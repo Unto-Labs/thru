@@ -1,0 +1,105 @@
+{
+  "name": "@thru/trezor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Trezor host for the Thru device app: the connection driver (Trezor Host Protocol link, pairing, credentials, sessions, app loader and the app's requests) on @trezor/protocol, bundled for browsers, and the protobuf encodings of the messages the host uses.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Unto-Labs/thru.git",
+    "directory": "web/packages/trezor"
+  },
+  "bugs": {
+    "url": "https://github.com/Unto-Labs/thru/issues"
+  },
+  "keywords": [
+    "thru",
+    "blockchain",
+    "trezor",
+    "hardware-wallet",
+    "thp",
+    "signer"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./protocol": {
+      "types": "./dist/protocol.d.ts",
+      "import": "./dist/protocol.js",
+      "require": "./dist/protocol.cjs"
+    },
+    "./emulator": {
+      "types": "./dist/emulator.d.ts",
+      "import": "./dist/emulator.js",
+      "require": "./dist/emulator.cjs"
+    },
+    "./webusb": {
+      "types": "./dist/webusb.d.ts",
+      "import": "./dist/webusb.js",
+      "require": "./dist/webusb.cjs"
+    },
+    "./node-usb": {
+      "types": "./dist/node-usb.d.ts",
+      "import": "./dist/node-usb.js",
+      "require": "./dist/node-usb.cjs"
+    }
+  },
+  "scripts": {
+    "build": "pnpm run clean && tsup && node scripts/check-bundle.mjs",
+    "dev": "tsup --watch",
+    "lint": "eslint src/ scripts/",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "pnpm run build && vitest run",
+    "test:run": "pnpm run build && vitest run",
+    "test:watch": "vitest watch",
+    "test:browser": "pnpm run build && node scripts/run-browser-vectors.mjs",
+    "clean": "rm -rf dist",
+    "test:emulator": "pnpm run build && bash ../../../trezor/scripts/test-web-host.sh",
+    "test:emulator:browser": "pnpm run build && bash ../../../trezor/scripts/test-web-host.sh --browser"
+  },
+  "dependencies": {
+    "@thru/ledger": "workspace:*",
+    "@thru/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@bufbuild/protobuf": "^2.12.0",
+    "@eslint/js": "^9.39.4",
+    "@noble/ciphers": "^2.2.0",
+    "@noble/hashes": "^2.2.0",
+    "@trezor/protocol": "10.0.1",
+    "@types/node": "^25.9.1",
+    "buffer": "^6.0.3",
+    "esbuild": "^0.27.7",
+    "eslint": "^9.39.4",
+    "playwright-core": "^1.61.1",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.60.1",
+    "usb": "^3.3.0",
+    "vitest": "^4.1.7"
+  },
+  "peerDependencies": {
+    "usb": "^3.3.0"
+  },
+  "peerDependenciesMeta": {
+    "usb": {
+      "optional": true
+    }
+  }
+}

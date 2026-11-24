@@ -17,6 +17,8 @@ path = "src/main.rs"
 default = []
 # Test-only Speculos emulator transport for Ledger keys (see thru-core).
 ledger-speculos = ["thru-core/ledger-speculos"]
+# Test-only emulator transport for Trezor keys (see thru-core).
+trezor-emulator = ["thru-core/trezor-emulator"]
 
 [dependencies]
 thru-core = { version = "0.1.0", path = "../thru-core" }

@@ -131,6 +131,8 @@ export type PerpErrorKind =
   | 'liquidation'
   | 'unauthorized'
   | 'seat'
+  | 'fees'
+  | 'loss-waterfall'
   | 'invalid-transaction'
   | 'timeout'
   | 'unknown';
@@ -232,6 +234,11 @@ const KIND: Partial<Record<PerpErrorName, PerpErrorKind>> = {
   SEAT_ARENA_FULL: 'seat',
   SEAT_ARENA_DATA_NOT_FOUND: 'seat',
   FEE_SEAT: 'seat',
+  FEE_PARAM_INVALID: 'fees',
+  BUILDER_INVALID: 'fees',
+  FEE_CLAIM_BLOCKED: 'fees',
+  NOTHING_RESOLVED: 'loss-waterfall',
+  RISK_PARAM_INVALID: 'loss-waterfall',
 };
 
 /** The errors.h name of a program error code (signed), or null. */

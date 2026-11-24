@@ -19,10 +19,22 @@
 //! port, with a loud warning on every connection; other builds refuse to run
 //! when that variable is set.
 //!
+//! A Trezor key works the same way with `trezor://44'/8478'/0'/0'` (backend:
+//! `rpc/thru-trezor`, the Thru app on a Trezor Safe 7).  Transport: USB.  Builds
+//! with the non-default `trezor-emulator` cargo feature (test harnesses only)
+//! also accept `THRU_TREZOR_EMULATOR=host:port` for the Trezor emulator, with a
+//! loud warning on every connection; other builds refuse to run when that
+//! variable is set.  The Thru app image comes from `THRU_TREZOR_APP`.  The app
+//! signs transactions, text messages and EOA authorizations, and the device
+//! shows its own review.
+//!
 //! Before the device asks for approval, the CLI prints the review the device
-//! will show (spec §11.3), including the full transaction or message hash.
+//! will show (spec §11.3), including the full transaction or message hash.  For
+//! a Trezor key that review is [`crate::trezor_preview`]'s, printed right
+//! before the signing request is sent and kept for the `trezor_preview` of the
+//! `--json` output.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use thru_base::signer::{
     EoaAuthKind, SignError, Signer, attach_signature, build_transaction_signing_message,
@@ -34,9 +46,15 @@ use thru_ledger::{
     DerivationPath, LedgerError, LedgerSigner, Operation, Preview, PreviewFn, Progress, ProgressFn,
     Transport,
 };
+use thru_trezor::{
+    AppImage, ConnectOptions, FileCredentialStorage, Transport as TrezorTransport, TransportError,
+    TrezorError, TrezorSigner, Ui,
+};
 
 use crate::config::Config;
 use crate::error::CliError;
+use crate::keys::TrezorTarget;
+use crate::trezor_preview::{self, Review};
 
 /// URI scheme that marks a Ledger key source, e.g. `ledger://44'/8478'/0'/0'`.
 pub const LEDGER_URI_SCHEME: &str = thru_ledger::LEDGER_URI_SCHEME;
@@ -327,7 +345,396 @@ pub fn ledger_error(e: LedgerError) -> CliError {
     }
 }
 
-/// A signing identity resolved from a key name or a `ledger://` URI.
+/// URI scheme that marks a Trezor key source, e.g. `trezor://44'/8478'/0'/0'`.
+pub const TREZOR_URI_SCHEME: &str = thru_trezor::TREZOR_URI_SCHEME;
+
+/// Environment variable selecting the Trezor emulator (`host:port` of its UDP
+/// port) instead of USB.
+pub const ENV_TREZOR_EMULATOR: &str = "THRU_TREZOR_EMULATOR";
+
+/// Environment variable naming the Thru app image (a `.tapp` file) to load on
+/// the Trezor.
+pub const ENV_TREZOR_APP: &str = "THRU_TREZOR_APP";
+
+/// File, in the CLI's configuration directory, holding the pairing credentials.
+pub const TREZOR_PAIRING_FILE: &str = "trezor-pairing.json";
+
+/// What the device shows as the name of this host when it asks to pair.
+const TREZOR_HOST_NAME: &str = "this computer";
+
+/// A connected Trezor shared between a [`ResolvedSigner`]'s `signer` and its
+/// `trezor` handle.
+struct SharedTrezor(Arc<TrezorSigner>);
+
+impl Signer for SharedTrezor {
+    fn public_key(&self) -> [u8; 32] {
+        self.0.public_key()
+    }
+    fn sign(&self, msg: &thru_base::signer::SigningMessage) -> Result<[u8; 64], SignError> {
+        self.0.sign(msg)
+    }
+    fn sign_transaction_body(&self, body: &[u8]) -> Result<[u8; 64], SignError> {
+        self.0.sign_transaction_body(body)
+    }
+    fn sign_message(&self, message: &[u8]) -> Result<[u8; 64], SignError> {
+        self.0.sign_message(message)
+    }
+    fn sign_eoa_auth(
+        &self,
+        kind: EoaAuthKind,
+        chain_id: u16,
+        fee_payer: &[u8; 32],
+        account: &[u8; 32],
+    ) -> Result<[u8; 64], SignError> {
+        self.0.sign_eoa_auth(kind, chain_id, fee_payer, account)
+    }
+}
+
+/// Whether this build can talk to the Trezor emulator.  Only builds with the
+/// non-default cargo feature `trezor-emulator` (test harnesses) can; a release
+/// CLI never treats a UDP endpoint as a Trezor.
+pub const TREZOR_EMULATOR_SUPPORTED: bool = cfg!(feature = "trezor-emulator");
+
+/// The emulator endpoint selected by [`ENV_TREZOR_EMULATOR`], if set.
+fn trezor_emulator_endpoint() -> Option<String> {
+    std::env::var(ENV_TREZOR_EMULATOR)
+        .ok()
+        .map(|a| a.trim().to_string())
+        .filter(|a| !a.is_empty())
+}
+
+/// Whether Trezor operations in this process go to the emulator rather than a
+/// hardware device.  Approvals over this transport are not approvals on a
+/// hardware wallet and are never reported as such.
+pub fn trezor_is_emulator() -> bool {
+    TREZOR_EMULATOR_SUPPORTED && trezor_emulator_endpoint().is_some()
+}
+
+/// The warning printed on every connection to the emulator.
+pub fn trezor_emulator_warning(addr: &str) -> String {
+    format!(
+        "WARNING: {ENV_TREZOR_EMULATOR}={addr}: using the Trezor EMULATOR, NOT A HARDWARE \
+         DEVICE. Keys and approvals come from whatever answers on that UDP port, and pairing \
+         is skipped. Never use this for real funds; unset {ENV_TREZOR_EMULATOR} to use a USB \
+         Trezor."
+    )
+}
+
+/// Open the Trezor transport and say how to connect over it: the first USB
+/// device, or (only in builds with the `trezor-emulator` feature) the emulator
+/// named by [`ENV_TREZOR_EMULATOR`], the one transport on which pairing may be
+/// skipped.  In other builds, setting the variable is an error rather than
+/// being silently ignored.
+pub fn open_trezor_transport() -> Result<(Box<dyn TrezorTransport + Send>, ConnectOptions), CliError>
+{
+    let options = ConnectOptions::new(TREZOR_HOST_NAME, "thru");
+    if let Some(addr) = trezor_emulator_endpoint() {
+        return open_trezor_emulator(&addr, options);
+    }
+    let t =
+        thru_trezor::UsbTransport::open().map_err(|e| trezor_error(TrezorError::Transport(e)))?;
+    Ok((Box::new(t), options))
+}
+
+#[cfg(feature = "trezor-emulator")]
+fn open_trezor_emulator(
+    addr: &str,
+    options: ConnectOptions,
+) -> Result<(Box<dyn TrezorTransport + Send>, ConnectOptions), CliError> {
+    eprintln!("{}", trezor_emulator_warning(addr));
+    let t = thru_trezor::UdpTransport::connect(addr)
+        .map_err(|e| trezor_error(TrezorError::Transport(e)))?;
+    // The one place that allows pairing without a code.
+    Ok((Box::new(t), options.allow_skip_pairing(true)))
+}
+
+#[cfg(not(feature = "trezor-emulator"))]
+fn open_trezor_emulator(
+    addr: &str,
+    _options: ConnectOptions,
+) -> Result<(Box<dyn TrezorTransport + Send>, ConnectOptions), CliError> {
+    Err(trezor_emulator_unsupported(addr))
+}
+
+#[cfg(not(feature = "trezor-emulator"))]
+fn trezor_emulator_unsupported(addr: &str) -> CliError {
+    CliError::Trezor {
+        code: "emulator_unsupported".to_string(),
+        reason: None,
+        message: format!(
+            "{ENV_TREZOR_EMULATOR} is set ({addr}), but this thru build does not support the \
+             Trezor emulator and will not treat a UDP endpoint as a Trezor. Unset \
+             {ENV_TREZOR_EMULATOR} to use a USB Trezor (emulator support exists only in test \
+             builds with the `trezor-emulator` cargo feature)."
+        ),
+    }
+}
+
+/// Fail at once, before anything else is read or opened, when the emulator is
+/// requested in a build that does not support it.
+fn check_trezor_emulator_allowed() -> Result<(), CliError> {
+    #[cfg(not(feature = "trezor-emulator"))]
+    if let Some(addr) = trezor_emulator_endpoint() {
+        return Err(trezor_emulator_unsupported(&addr));
+    }
+    Ok(())
+}
+
+/// The Thru app image named by [`ENV_TREZOR_APP`].
+pub fn trezor_app_image() -> Result<AppImage, CliError> {
+    let tell = |why: String| CliError::Trezor {
+        code: "app_image".to_string(),
+        reason: None,
+        message: format!(
+            "{why}. Set {ENV_TREZOR_APP} to the path of the Thru app image for your Trezor \
+             (the .tapp file; its .proof file must be beside it)"
+        ),
+    };
+    let path = std::env::var(ENV_TREZOR_APP)
+        .ok()
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty())
+        .ok_or_else(|| tell(format!("{ENV_TREZOR_APP} is not set")))?;
+    AppImage::read(&path).map_err(|e| tell(format!("cannot use {ENV_TREZOR_APP}={path}: {e}")))
+}
+
+/// What the person is told while the Trezor waits for a confirmation.
+const TREZOR_CONFIRM_PROMPT: &str = "Confirm on the Trezor.";
+
+/// What the person is told while the Trezor waits for the passphrase of a
+/// passphrase wallet; the computer never sees it.
+const TREZOR_PASSPHRASE_PROMPT: &str = "Enter the passphrase on the Trezor.";
+
+/// The terminal side of a Trezor connection: prompts go to standard error, the
+/// pairing code is read from standard input.
+struct TerminalUi;
+
+impl Ui for TerminalUi {
+    fn confirm_on_device(&mut self) {
+        eprintln!("{TREZOR_CONFIRM_PROMPT}");
+    }
+
+    fn enter_passphrase_on_device(&mut self) {
+        eprintln!("{TREZOR_PASSPHRASE_PROMPT}");
+    }
+
+    fn pairing_code(&mut self) -> thru_trezor::Result<String> {
+        read_pairing_code(&mut std::io::stdin().lock(), &mut std::io::stderr())
+    }
+}
+
+/// Prompt on `out` and read one line of digits from `input` (the device shows
+/// them as `123 456`).
+fn read_pairing_code(
+    input: &mut impl std::io::BufRead,
+    out: &mut impl std::io::Write,
+) -> thru_trezor::Result<String> {
+    let _ = write!(out, "Code shown on the Trezor: ");
+    let _ = out.flush();
+    let mut line = String::new();
+    let n = input
+        .read_line(&mut line)
+        .map_err(|e| TrezorError::Pairing(format!("could not read the code: {e}")))?;
+    let code: String = line.chars().filter(|c| !c.is_whitespace()).collect();
+    if n == 0 || code.is_empty() {
+        return Err(TrezorError::Pairing(
+            "no code was entered; run the command again and type the digits the Trezor shows"
+                .to_string(),
+        ));
+    }
+    Ok(code)
+}
+
+/// Connect to the Trezor and read the key `target` names: at its path, in the
+/// wallet of its passphrase flag (the passphrase is typed on the device), and
+/// required to equal its expected public key if it has one.
+pub fn connect_trezor(target: TrezorTarget) -> Result<TrezorSigner, CliError> {
+    // Cheap local checks first: nothing may touch a device when they fail.
+    check_trezor_emulator_allowed()?;
+    let image = trezor_app_image()?;
+    let storage = FileCredentialStorage::new(Config::get_config_dir()?.join(TREZOR_PAIRING_FILE));
+    let (transport, options) = open_trezor_transport()?;
+    connect_trezor_with(transport, &options, &image, &storage, target)
+}
+
+/// [`connect_trezor`] over an explicit transport (used by tests).
+pub fn connect_trezor_with(
+    transport: Box<dyn TrezorTransport + Send>,
+    options: &ConnectOptions,
+    image: &AppImage,
+    storage: &FileCredentialStorage,
+    target: TrezorTarget,
+) -> Result<TrezorSigner, CliError> {
+    let options = options.clone().passphrase_on_device(target.passphrase());
+    match target.expected() {
+        Some(pk) => TrezorSigner::connect_expecting(
+            transport,
+            &options,
+            image,
+            target.path(),
+            storage,
+            Box::new(TerminalUi),
+            &pk,
+        ),
+        None => TrezorSigner::connect(
+            transport,
+            &options,
+            image,
+            target.path(),
+            storage,
+            Box::new(TerminalUi),
+        ),
+    }
+    .map_err(|e| trezor_key_error(e, target.passphrase()))
+}
+
+/// Stable machine-readable class of a Trezor error (JSON `error.code`).
+pub fn trezor_error_code(e: &TrezorError) -> &'static str {
+    match e {
+        TrezorError::Cancelled => "user_rejected",
+        TrezorError::Transport(TransportError::NotFound(_)) => "not_found",
+        TrezorError::Transport(TransportError::Ambiguous) => "ambiguous_device",
+        TrezorError::Transport(TransportError::Io(_)) => "transport",
+        TrezorError::Timeout(_) => "timeout",
+        TrezorError::DeviceLocked => "locked",
+        TrezorError::Protocol(_) | TrezorError::Unexpected(_) | TrezorError::App(_) => {
+            "protocol_error"
+        }
+        TrezorError::Failure { .. } => "device_error",
+        TrezorError::AppRefused(_) => "app_refused",
+        TrezorError::InvalidRequest(_) => "invalid_request",
+        TrezorError::PassphraseOnDeviceOnly => "passphrase_on_device_only",
+        TrezorError::PassphraseProtectionOff => "passphrase_protection_off",
+        TrezorError::OlderProtocolRefused => "older_protocol_refused",
+        TrezorError::Pairing(_) => "pairing_failed",
+        TrezorError::Credentials(_) => "credentials",
+        TrezorError::AppImage(_) => "app_image",
+        TrezorError::KeyMismatch { .. } => "key_mismatch",
+    }
+}
+
+/// Convert a Trezor error into a CLI error carrying the actionable message.
+pub fn trezor_error(e: TrezorError) -> CliError {
+    let code = trezor_error_code(&e);
+    let hint = match code {
+        "not_found" => {
+            " (connect the Trezor with a USB cable and unlock it, and close Trezor Suite)"
+        }
+        "app_image" => " (check THRU_TREZOR_APP: it must name the Thru app image for this device)",
+        "passphrase_on_device_only" => {
+            "; register this key as a key of a passphrase wallet \
+             (thru keys add-trezor NAME --passphrase) and type its passphrase on the Trezor \
+             (an empty passphrase gives the standard wallet)"
+        }
+        _ => "",
+    };
+    let reason = e.app_refusal().map(str::to_string);
+    let message = match e.app_refusal() {
+        Some(reason) => trezor_refusal_sentence(reason),
+        None => format!("{e}{hint}"),
+    };
+    CliError::Trezor {
+        code: code.to_string(),
+        message,
+        reason,
+    }
+}
+
+/// [`trezor_error`] for a failure on the key of a wallet: when the key is of a
+/// passphrase wallet, a key mismatch says that another passphrase may have
+/// been typed on the device.
+pub fn trezor_key_error(e: TrezorError, passphrase: bool) -> CliError {
+    let mismatch = passphrase && matches!(e, TrezorError::KeyMismatch { .. });
+    let mut error = trezor_error(e);
+    if mismatch && let CliError::Trezor { message, .. } = &mut error {
+        message.push_str(
+            "; this key belongs to a passphrase wallet, so another passphrase may have been \
+             typed on the Trezor",
+        );
+    }
+    error
+}
+
+/// What the Thru app's refusal `reason` means for the person at the
+/// keyboard.  A reason this CLI does not know is passed on as the app gave it.
+fn trezor_refusal_sentence(reason: &str) -> String {
+    match reason {
+        "message_not_text" => format!(
+            "the Trezor signs a message only if it can show it as text: {TREZOR_TEXT_RULE}; \
+             sign other messages with a local or a Ledger key"
+        ),
+        "token_hint_length" => "the Thru app on the Trezor refused the token hint: it is not \
+             129 bytes long (this is a fault of the CLI; report it)"
+            .to_string(),
+        "token_hint_kind" => "the Thru app on the Trezor refused the token hint: it is not a \
+             token transfer hint (this is a fault of the CLI; report it)"
+            .to_string(),
+        "token_hint_mismatch" => "the Thru app on the Trezor refused the token hint: the mint \
+             and the owners in it do not derive the token accounts of this transaction, or the \
+             transaction is not a token transfer"
+            .to_string(),
+        "unsupported_transaction" => "the Thru app on the Trezor does not sign this \
+             transaction: it signs only native transfers, token transfers in the layout the \
+             CLI builds, wallet-program transfers whose accounts are exactly the wallet \
+             account and the recipient, and the creation of the signing account"
+            .to_string(),
+        "fee_payer_mismatch" => "the transaction's fee payer is not the key of this Trezor; \
+             the Trezor signs only transactions that this key pays for"
+            .to_string(),
+        other => format!("the Thru app on the Trezor refused the request: {other}"),
+    }
+}
+
+/// What a message must be for a Trezor to sign it (the rule of
+/// [`thru_ledger::preview::is_text_message`], which the Trezor app applies
+/// too).
+pub const TREZOR_TEXT_RULE: &str = "1 to 512 bytes of printable ASCII and line breaks, at most 16 \
+     lines, no space at the start or end of a line, no two spaces in a row, and no long run of \
+     one-character words separated by single spaces";
+
+/// The token hint as the Trezor app takes it: the Ledger's encoding.
+pub fn trezor_token_hint_bytes(hint: &thru_ledger::TokenHint) -> [u8; thru_trezor::TOKEN_HINT_LEN] {
+    const _: () = assert!(thru_ledger::token_hint::TOKEN_HINT_SZ == thru_trezor::TOKEN_HINT_LEN);
+    hint.encode()
+}
+
+/// Prints `review` (when there is one) and then sends the request.  Nothing is
+/// sent before the review is printed; a request the app will refuse has no
+/// review and is sent all the same, so the app's own refusal is the answer.
+pub(crate) fn print_trezor_review_then<T>(
+    review: Option<&Review>,
+    print: impl FnOnce(&str),
+    request: impl FnOnce() -> T,
+) -> T {
+    if let Some(review) = review {
+        print(&trezor_preview::format_trezor_preview(review));
+    }
+    request()
+}
+
+/// [`print_trezor_review_then`] that prints to standard error.
+pub(crate) fn eprint_trezor_review_then<T>(
+    review: Option<&Review>,
+    request: impl FnOnce() -> T,
+) -> T {
+    print_trezor_review_then(review, |text| eprint!("{text}"), request)
+}
+
+/// Puts `preview` under `trezor_preview` in the `section` object of a `--json`
+/// response; a response without that object is returned as it is.
+fn insert_trezor_preview(
+    mut response: serde_json::Value,
+    section: &str,
+    preview: serde_json::Value,
+) -> serde_json::Value {
+    if let Some(obj) = response.get_mut(section).and_then(|v| v.as_object_mut()) {
+        obj.insert("trezor_preview".to_string(), preview);
+    }
+    response
+}
+
+/// A signing identity resolved from a key name, a `ledger://` URI or a
+/// `trezor://` URI.
 pub struct ResolvedSigner {
     /// What the user typed (key name or URI).
     pub name: String,
@@ -341,12 +748,22 @@ pub struct ResolvedSigner {
     pub address: Pubkey,
     /// The connected Ledger, for a Ledger key (same device as `signer`).
     pub ledger: Option<Arc<LedgerSigner>>,
+    /// The connected Trezor, for a Trezor key (same device as `signer`).
+    pub trezor: Option<Arc<TrezorSigner>>,
+    /// The review the Trezor was last asked to show (`None` before the first
+    /// request, and after one the Thru app will refuse).
+    trezor_review: Mutex<Option<Review>>,
 }
 
 impl ResolvedSigner {
     /// Whether the key lives on a Ledger.
     pub fn is_ledger(&self) -> bool {
         self.ledger.is_some()
+    }
+
+    /// Whether the key lives on a Trezor.
+    pub fn is_trezor(&self) -> bool {
+        self.trezor.is_some()
     }
 
     /// The review preview of the last request sent to the Ledger, if any.
@@ -360,6 +777,35 @@ impl ResolvedSigner {
         self.ledger_preview()
             .map(|p| ledger_preview_json(&p))
             .unwrap_or(serde_json::Value::Null)
+    }
+
+    /// Keeps the review of the request the Trezor is about to get.
+    pub(crate) fn set_trezor_review(&self, review: Option<Review>) {
+        *self.trezor_review.lock().unwrap_or_else(|e| e.into_inner()) = review;
+    }
+
+    /// The review of the last request sent to the Trezor, as the
+    /// `trezor_preview` value (`null` when there was none).
+    pub fn trezor_preview_json(&self) -> serde_json::Value {
+        self.trezor_review
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map_or(serde_json::Value::Null, Review::to_json)
+    }
+
+    /// For a Trezor key, add `trezor_preview` to the `section` object of a
+    /// `--json` response; every other key leaves the response unchanged.
+    pub fn add_trezor_preview(
+        &self,
+        response: serde_json::Value,
+        section: &str,
+    ) -> serde_json::Value {
+        if self.is_trezor() {
+            insert_trezor_preview(response, section, self.trezor_preview_json())
+        } else {
+            response
+        }
     }
 
     /// For a Ledger key, add `ledger_preview` to the `section` object of a
@@ -390,13 +836,32 @@ impl ResolvedSigner {
             public_key,
             address: Pubkey::from_bytes(&public_key),
             ledger: Some(ledger),
+            trezor: None,
+            trezor_review: Mutex::new(None),
+        }
+    }
+
+    /// Wrap a connected Trezor signer.
+    pub fn from_trezor(name: &str, trezor: TrezorSigner) -> Self {
+        let trezor = Arc::new(trezor);
+        let public_key = trezor.pubkey();
+        Self {
+            name: name.to_string(),
+            path: None,
+            signer: Box::new(SharedTrezor(trezor.clone())),
+            public_key,
+            address: Pubkey::from_bytes(&public_key),
+            ledger: None,
+            trezor: Some(trezor),
+            trezor_review: Mutex::new(None),
         }
     }
 }
 
 /// Resolve a signing key reference (alias, file, Keychain item, or a
-/// `ledger://…` URI) to a signer.  Ledger keys connect to the device and are
-/// checked against the registered public key, if any.
+/// `ledger://…` / `trezor://…` URI) to a signer.  Ledger and Trezor keys
+/// connect to the device and are checked against the registered public key,
+/// if any.
 pub fn resolve_signer(config: &Config, name_or_uri: &str) -> Result<ResolvedSigner, CliError> {
     resolve_signer_reusing_ledger(config, name_or_uri, None)
 }
@@ -414,6 +879,12 @@ pub(crate) fn resolve_signer_reusing_ledger(
         };
         return Ok(ResolvedSigner::from_ledger(name_or_uri, path, ledger));
     }
+    if let Some(target) = config.keys.trezor_source(name_or_uri)? {
+        return Ok(ResolvedSigner::from_trezor(
+            name_or_uri,
+            connect_trezor(target)?,
+        ));
+    }
     let key = config.keys.load_key(name_or_uri)?;
     let public_key = key.public_key;
     Ok(ResolvedSigner {
@@ -423,6 +894,8 @@ pub(crate) fn resolve_signer_reusing_ledger(
         address: Pubkey::from_bytes(&public_key),
         signer: Box::new(key),
         ledger: None,
+        trezor: None,
+        trezor_review: Mutex::new(None),
     })
 }
 
@@ -463,17 +936,20 @@ pub fn sign_transaction_for(
     sign_transaction_for_with_token_hint(transaction, signer, None, other)
 }
 
-/// [`sign_transaction_for`] for a token transfer: a Ledger signer also sends
-/// `token_hint` (APDU spec §7.2.1), so the device shows the token-account
-/// owners and the mint instead of the token accounts.  The hint is checked
-/// against the transaction before the device is contacted.  Local keys ignore
-/// it.
+/// [`sign_transaction_for`] for a token transfer: a Ledger or a Trezor signer
+/// also sends `token_hint` (APDU spec §7.2.1), so the device shows the
+/// token-account owners and the mint instead of the token accounts.  A Ledger
+/// checks the hint against the transaction before the device is contacted;
+/// the Trezor app checks it on the device.  Local keys ignore it.
 pub fn sign_transaction_for_with_token_hint(
     transaction: &mut Transaction,
     signer: &ResolvedSigner,
     token_hint: Option<&thru_ledger::TokenHint>,
     other: impl Fn(Box<dyn std::error::Error>) -> CliError,
 ) -> Result<Vec<u8>, CliError> {
+    if let Some(trezor) = &signer.trezor {
+        return sign_transaction_on_trezor(transaction, trezor, signer, token_hint, other);
+    }
     let Some(ledger) = &signer.ledger else {
         return sign_transaction(transaction, signer.signer.as_ref()).map_err(other);
     };
@@ -485,6 +961,74 @@ pub fn sign_transaction_for_with_token_hint(
         None => ledger.try_sign_transaction_body(msg.body()),
     }
     .map_err(ledger_error)?;
+    let signed = attach_signature(&msg, sig).map_err(|e| other(Box::new(e)))?;
+    transaction
+        .attach_signed_wire(&signed)
+        .map_err(|e| other(Box::new(e)))?;
+    Ok(signed)
+}
+
+/// [`sign_transaction_for`] for a Trezor key: the body is frozen once and sent
+/// to the device (which reviews it, and checks `token_hint` against it when
+/// there is one), and the signature is verified over the same snapshot before
+/// it is attached.  Trezor errors keep their typed [`CliError::Trezor`].
+fn sign_transaction_on_trezor(
+    transaction: &mut Transaction,
+    trezor: &TrezorSigner,
+    signer: &ResolvedSigner,
+    token_hint: Option<&thru_ledger::TokenHint>,
+    other: impl Fn(Box<dyn std::error::Error>) -> CliError,
+) -> Result<Vec<u8>, CliError> {
+    sign_transaction_with_trezor_request(
+        transaction,
+        &trezor.pubkey(),
+        trezor.path(),
+        |review| signer.set_trezor_review(review),
+        token_hint,
+        other,
+        |text| eprint!("{text}"),
+        |body, hint| match hint {
+            Some(hint) => trezor.try_sign_transaction_body_with_token_hint(body, hint),
+            None => trezor.try_sign_transaction_body(body),
+        },
+    )
+}
+
+/// The steps of [`sign_transaction_on_trezor`] around the device exchange
+/// `request`: validate, freeze the body, check the fee payer is `pubkey`, work
+/// out the review the app will show, print it, and only then send the request.
+/// The review is handed to `record`, which keeps it for the JSON output.  A shape the app will
+/// refuse has no review and is sent anyway: the app's refusal is the answer
+/// (see `trezor_refusal_sentence`), there is no second refusal here.
+#[allow(clippy::too_many_arguments)]
+fn sign_transaction_with_trezor_request(
+    transaction: &mut Transaction,
+    pubkey: &[u8; 32],
+    path: &thru_trezor::DerivationPath,
+    record: impl FnOnce(Option<Review>),
+    token_hint: Option<&thru_ledger::TokenHint>,
+    other: impl Fn(Box<dyn std::error::Error>) -> CliError,
+    print: impl FnOnce(&str),
+    request: impl FnOnce(&[u8], Option<&[u8; thru_trezor::TOKEN_HINT_LEN]>) -> thru_trezor::Result<[u8; 64]>,
+) -> Result<Vec<u8>, CliError> {
+    transaction.validate().map_err(|e| other(Box::new(e)))?;
+    let msg = build_transaction_signing_message(&transaction.to_wire_for_signing())
+        .map_err(|e| other(Box::new(e)))?;
+    // The fee payer must be this key, or the signature would verify under a
+    // key the chain does not look at; refuse before involving the device.
+    if msg.expected_pubkey() != pubkey {
+        return Err(other(Box::new(SignError::KeyMismatch {
+            expected: *msg.expected_pubkey(),
+            got: *pubkey,
+        })));
+    }
+    let review = trezor_preview::transaction_review(msg.body(), pubkey, path, token_hint);
+    record(review.clone());
+    let hint = token_hint.map(trezor_token_hint_bytes);
+    let sig = print_trezor_review_then(review.as_ref(), print, || {
+        request(msg.body(), hint.as_ref())
+    })
+    .map_err(trezor_error)?;
     let signed = attach_signature(&msg, sig).map_err(|e| other(Box::new(e)))?;
     transaction
         .attach_signed_wire(&signed)
@@ -1414,5 +1958,911 @@ mod tests {
     #[cfg(not(feature = "ledger-speculos"))]
     fn record_ledger_key_for_test(config: &mut Config, name: &str, signer: &LedgerSigner) {
         crate::commands::keys::record_ledger_key(config, name, signer, false).unwrap();
+    }
+
+    // ---- Trezor ----
+
+    /// The `THRU_TREZOR_*` variables are process-wide: tests that set them
+    /// take this lock and restore the previous values on drop.
+    static TREZOR_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct TrezorEnv {
+        _guard: std::sync::MutexGuard<'static, ()>,
+        saved: Vec<(&'static str, Option<String>)>,
+    }
+
+    impl TrezorEnv {
+        fn set(vars: &[(&'static str, Option<&str>)]) -> Self {
+            let guard = TREZOR_ENV_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut saved = Vec::new();
+            for (name, value) in vars {
+                saved.push((*name, std::env::var(name).ok()));
+                // SAFETY: tests that touch THRU_TREZOR_* hold TREZOR_ENV_LOCK.
+                unsafe {
+                    match value {
+                        Some(value) => std::env::set_var(name, value),
+                        None => std::env::remove_var(name),
+                    }
+                }
+            }
+            Self {
+                _guard: guard,
+                saved,
+            }
+        }
+    }
+
+    impl Drop for TrezorEnv {
+        fn drop(&mut self) {
+            for (name, value) in self.saved.drain(..) {
+                // SAFETY: the lock is still held (the guard drops last).
+                unsafe {
+                    match value {
+                        Some(value) => std::env::set_var(name, value),
+                        None => std::env::remove_var(name),
+                    }
+                }
+            }
+        }
+    }
+
+    fn trezor_path0() -> thru_trezor::DerivationPath {
+        thru_trezor::DerivationPath::new(0).unwrap()
+    }
+
+    #[test]
+    fn trezor_uri_parses_to_trezor_source() {
+        let keys = crate::keys::KeyManager::new();
+        for value in [
+            "trezor://44'/8478'/0'/0'",
+            "TREZOR://44'/8478'/0'/0'",
+            "  trezor://44'/8478'/0'/0'",
+            "trezor://m/44'/8478'/0'/0'",
+        ] {
+            assert!(thru_trezor::is_trezor_uri(value));
+            let target = keys.trezor_source(value).unwrap().unwrap();
+            assert_eq!(target.path(), trezor_path0());
+            assert_eq!(target.expected(), None);
+            assert!(!target.passphrase());
+            assert_eq!(target.path().to_uri(), "trezor://44'/8478'/0'/0'");
+            // Never a Ledger key.
+            assert_eq!(keys.ledger_source(value).unwrap(), None);
+        }
+        assert_eq!(TREZOR_URI_SCHEME, "trezor://");
+        let depth3 = keys
+            .trezor_source("trezor://44'/8478'/7'")
+            .unwrap()
+            .unwrap()
+            .path();
+        assert_eq!(depth3, thru_trezor::DerivationPath::new_depth3(7).unwrap());
+        for bad in [
+            "trezor://44'/8478'/0'/1'",
+            "trezor://44'/501'/0'/0'",
+            "trezor://44'/8478'/0/0'",
+            "trezor://garbage",
+        ] {
+            let err = keys.trezor_source(bad).unwrap_err().to_string();
+            assert!(err.contains("Invalid Trezor key source"), "{bad}: {err}");
+        }
+        assert!(!thru_trezor::is_trezor_uri(SEED_HEX));
+        assert!(!thru_trezor::is_trezor_uri("trezor"));
+    }
+
+    /// The release CLI never treats `THRU_TREZOR_EMULATOR` as a Trezor: it is
+    /// a hard error, raised before the app image or the endpoint is touched.
+    #[cfg(not(feature = "trezor-emulator"))]
+    #[test]
+    fn trezor_emulator_env_is_refused_without_the_feature() {
+        let endpoint = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        endpoint.set_nonblocking(true).unwrap();
+        let addr = endpoint.local_addr().unwrap().to_string();
+        let _env = TrezorEnv::set(&[(ENV_TREZOR_EMULATOR, Some(&addr)), (ENV_TREZOR_APP, None)]);
+
+        for result in [
+            connect_trezor(TrezorTarget::unregistered(trezor_path0(), false)).map(|_| ()),
+            open_trezor_transport().map(|_| ()),
+        ] {
+            match result {
+                Err(CliError::Trezor { code, message, .. }) => {
+                    assert_eq!(code, "emulator_unsupported");
+                    assert!(message.contains(ENV_TREZOR_EMULATOR), "{message}");
+                    assert!(message.contains(&addr), "{message}");
+                }
+                other => panic!("unexpected result: {other:?}"),
+            }
+        }
+        assert!(!trezor_is_emulator());
+        // The endpoint was never contacted.
+        let mut packet = [0u8; 64];
+        let heard = endpoint.recv(&mut packet);
+        assert!(
+            matches!(&heard, Err(e) if e.kind() == std::io::ErrorKind::WouldBlock),
+            "the endpoint was contacted: {heard:?}"
+        );
+    }
+
+    /// Test builds with `trezor-emulator`: the emulator is accepted, loudly
+    /// flagged, and is the one transport pairing may be skipped on.
+    #[cfg(feature = "trezor-emulator")]
+    #[test]
+    fn trezor_emulator_feature_flags_the_emulator() {
+        // Answers the transport's PINGPING once, as the emulator does.
+        let endpoint = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        let addr = endpoint.local_addr().unwrap().to_string();
+        let responder = std::thread::spawn(move || {
+            let mut packet = [0u8; 64];
+            let (n, from) = endpoint.recv_from(&mut packet).unwrap();
+            assert_eq!(&packet[..n], b"PINGPING");
+            endpoint.send_to(b"PONGPONG", from).unwrap();
+        });
+        let _env = TrezorEnv::set(&[(ENV_TREZOR_EMULATOR, Some(&addr))]);
+        assert!(trezor_is_emulator());
+        let result = open_trezor_transport();
+        responder.join().unwrap();
+        assert!(result.is_ok());
+        let warning = trezor_emulator_warning("127.0.0.1:21324");
+        assert!(
+            warning.contains("EMULATOR, NOT A HARDWARE DEVICE"),
+            "{warning}"
+        );
+        assert!(warning.contains(ENV_TREZOR_EMULATOR), "{warning}");
+    }
+
+    /// An unset or unreadable `THRU_TREZOR_APP` is an error that says what to
+    /// set, found before any device is opened (the USB path is never reached).
+    #[test]
+    fn trezor_app_image_errors_say_what_to_set() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("thru.tapp");
+        let missing = missing.to_str().unwrap();
+        for value in [None, Some(""), Some("  "), Some(missing)] {
+            let _env = TrezorEnv::set(&[(ENV_TREZOR_EMULATOR, None), (ENV_TREZOR_APP, value)]);
+            for result in [
+                trezor_app_image().map(|_| ()),
+                connect_trezor(TrezorTarget::unregistered(trezor_path0(), false)).map(|_| ()),
+            ] {
+                match result {
+                    Err(CliError::Trezor { code, message, .. }) => {
+                        assert_eq!(code, "app_image", "{value:?}");
+                        assert!(message.contains("Set THRU_TREZOR_APP"), "{message}");
+                        if let Some(v) = value.filter(|v| v.starts_with('/')) {
+                            assert!(message.contains(v), "{message}");
+                        }
+                    }
+                    other => panic!("{value:?}: unexpected result: {other:?}"),
+                }
+            }
+        }
+    }
+
+    /// A key mismatch of a key of a passphrase wallet says that another
+    /// passphrase may have been typed; for a standard key it says what it
+    /// always said.
+    #[test]
+    fn a_key_mismatch_of_a_passphrase_key_names_the_passphrase() {
+        let mismatch = || TrezorError::KeyMismatch {
+            expected: address_string(&[1; 32]),
+            got: address_string(&[2; 32]),
+        };
+        let sentence = format!(
+            "the Trezor's key is {}, expected {}",
+            address_string(&[2; 32]),
+            address_string(&[1; 32])
+        );
+        match trezor_key_error(mismatch(), false) {
+            CliError::Trezor { code, message, .. } => {
+                assert_eq!(code, "key_mismatch");
+                assert_eq!(message, sentence);
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+        match trezor_key_error(mismatch(), true) {
+            CliError::Trezor { code, message, .. } => {
+                assert_eq!(code, "key_mismatch");
+                assert_eq!(
+                    message,
+                    format!(
+                        "{sentence}; this key belongs to a passphrase wallet, so another \
+                         passphrase may have been typed on the Trezor"
+                    )
+                );
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+        // Other failures are not touched by the flag.
+        for passphrase in [false, true] {
+            match trezor_key_error(TrezorError::Cancelled, passphrase) {
+                CliError::Trezor { code, message, .. } => {
+                    assert_eq!(code, "user_rejected");
+                    assert_eq!(message, "cancelled on the Trezor");
+                }
+                other => panic!("unexpected {other:?}"),
+            }
+        }
+    }
+
+    /// A device that takes the passphrase on the device only refuses the
+    /// standard wallet's empty passphrase; the sentence says how to go on.
+    #[test]
+    fn the_on_device_passphrase_refusal_says_to_register_with_the_flag() {
+        match trezor_error(TrezorError::PassphraseOnDeviceOnly) {
+            CliError::Trezor { code, message, .. } => {
+                assert_eq!(code, "passphrase_on_device_only");
+                assert_eq!(
+                    message,
+                    "the Trezor is set to take the passphrase on the device only, and refused a \
+                     passphrase sent by the computer (also an empty one); register this key as a \
+                     key of a passphrase wallet (thru keys add-trezor NAME --passphrase) and \
+                     type its passphrase on the Trezor (an empty passphrase gives the standard \
+                     wallet)"
+                );
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    /// The words the person reads while the device waits.
+    #[test]
+    fn trezor_prompts_name_what_the_device_waits_for() {
+        assert_eq!(TREZOR_CONFIRM_PROMPT, "Confirm on the Trezor.");
+        assert_eq!(
+            TREZOR_PASSPHRASE_PROMPT,
+            "Enter the passphrase on the Trezor."
+        );
+    }
+
+    /// X3: a bare `trezor://` URI as a destination, with only a passphrase key
+    /// registered for its path, is as if nothing were registered: it goes to
+    /// the device for the standard wallet (here it stops at the missing app
+    /// image) instead of answering with the hidden wallet's address.
+    #[test]
+    fn a_trezor_uri_destination_ignores_a_passphrase_key() {
+        let _env = TrezorEnv::set(&[(ENV_TREZOR_EMULATOR, None), (ENV_TREZOR_APP, None)]);
+        let mut keys = crate::keys::KeyManager::new();
+        keys.insert_entry(
+            "hid",
+            crate::keys::KeyEntry {
+                public_key: address_string(&[9; 32]),
+                source: crate::keys::KeySource::Trezor {
+                    path: trezor_path0(),
+                    passphrase: true,
+                },
+            },
+            false,
+        )
+        .unwrap();
+        let uri = trezor_path0().to_uri();
+        for result in [keys.resolve_public_key(&uri), keys.public_key(&uri)] {
+            match result {
+                Err(CliError::Trezor { code, .. }) => assert_eq!(code, "app_image"),
+                other => panic!("the URI did not go to the device: {other:?}"),
+            }
+        }
+        // The alias is the only way to the hidden wallet's key, without a device.
+        assert_eq!(keys.resolve_public_key("alias:hid").unwrap(), [9; 32]);
+        assert_eq!(keys.public_key("hid").unwrap(), [9; 32]);
+    }
+
+    #[test]
+    fn trezor_errors_map_to_stable_codes() {
+        let cases: Vec<(TrezorError, &str)> = vec![
+            (TrezorError::Cancelled, "user_rejected"),
+            (
+                TrezorError::Transport(TransportError::NotFound("none".into())),
+                "not_found",
+            ),
+            (
+                TrezorError::Transport(TransportError::Ambiguous),
+                "ambiguous_device",
+            ),
+            (
+                TrezorError::Transport(TransportError::Io("x".into())),
+                "transport",
+            ),
+            (TrezorError::Timeout("the button"), "timeout"),
+            (TrezorError::DeviceLocked, "locked"),
+            (TrezorError::Protocol("p".into()), "protocol_error"),
+            (TrezorError::Unexpected("u".into()), "protocol_error"),
+            (TrezorError::App("a".into()), "protocol_error"),
+            (
+                TrezorError::Failure {
+                    code: 3,
+                    message: "bad data".into(),
+                },
+                "device_error",
+            ),
+            (TrezorError::Pairing("wrong code".into()), "pairing_failed"),
+            (TrezorError::Credentials("c".into()), "credentials"),
+            (TrezorError::AppImage("i".into()), "app_image"),
+            (
+                TrezorError::KeyMismatch {
+                    expected: "taA".into(),
+                    got: "taB".into(),
+                },
+                "key_mismatch",
+            ),
+            (
+                TrezorError::PassphraseProtectionOff,
+                "passphrase_protection_off",
+            ),
+            (TrezorError::OlderProtocolRefused, "older_protocol_refused"),
+        ];
+        for (error, code) in cases {
+            let text = error.to_string();
+            match trezor_error(error) {
+                CliError::Trezor {
+                    code: got, message, ..
+                } => {
+                    assert_eq!(got, code);
+                    assert!(message.contains(&text), "{message} / {text}");
+                }
+                other => panic!("unexpected {other:?}"),
+            }
+        }
+        let error = trezor_error(TrezorError::Failure {
+            code: 3,
+            message: "bad data".into(),
+        });
+        assert_eq!(
+            error.to_string(),
+            "Trezor: the Trezor reported failure 3: bad data"
+        );
+        // --json rendering.
+        let json = crate::format_error_json(&trezor_error(TrezorError::Cancelled));
+        assert_eq!(json["error"]["type"], "trezor");
+        assert_eq!(json["error"]["code"], "user_rejected");
+        assert!(
+            json["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("cancelled on the Trezor")
+        );
+        let json = crate::format_error_json(&trezor_error(TrezorError::KeyMismatch {
+            expected: "taA".into(),
+            got: "taB".into(),
+        }));
+        assert_eq!(json["error"]["code"], "key_mismatch");
+        assert!(json["error"]["reason"].is_null());
+    }
+
+    /// Each reason the app can refuse with has its own sentence; the code is
+    /// `app_refused` and the reason stays available in the JSON error.
+    #[test]
+    fn trezor_app_refusals_have_a_sentence_and_keep_their_reason() {
+        let cases = [
+            ("message_not_text", "can show it as text"),
+            ("token_hint_length", "not 129 bytes long"),
+            ("token_hint_kind", "not a token transfer hint"),
+            ("token_hint_mismatch", "do not derive the token accounts"),
+            ("unsupported_transaction", "does not sign this transaction"),
+            ("fee_payer_mismatch", "not the key of this Trezor"),
+            ("some_new_reason", "refused the request: some_new_reason"),
+        ];
+        for (reason, phrase) in cases {
+            let error = trezor_error(TrezorError::AppRefused(reason.into()));
+            let json = crate::format_error_json(&error);
+            assert_eq!(json["error"]["type"], "trezor", "{reason}");
+            assert_eq!(json["error"]["code"], "app_refused", "{reason}");
+            assert_eq!(json["error"]["reason"], reason);
+            let message = json["error"]["message"].as_str().unwrap();
+            assert!(message.contains(phrase), "{reason}: {message}");
+            // A known reason is explained, not echoed.
+            if reason != "some_new_reason" {
+                assert!(!message.contains(reason), "{reason}: {message}");
+            }
+        }
+        // The text sentence says what the device accepts and where else to sign.
+        let CliError::Trezor { message, .. } =
+            trezor_error(TrezorError::AppRefused("message_not_text".into()))
+        else {
+            panic!("not a Trezor error");
+        };
+        for part in [
+            "1 to 512 bytes of printable ASCII",
+            "at most 16 lines",
+            "a local or a Ledger key",
+        ] {
+            assert!(message.contains(part), "{message}");
+        }
+
+        // A request refused on the host keeps its own code and no reason.
+        let error = trezor_error(TrezorError::InvalidRequest("too long".into()));
+        let json = crate::format_error_json(&error);
+        assert_eq!(json["error"]["code"], "invalid_request");
+        assert!(json["error"]["reason"].is_null());
+        assert!(
+            json["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("too long")
+        );
+    }
+
+    /// The hint the Trezor app gets is the Ledger's encoding of it, 129 bytes.
+    #[test]
+    fn trezor_token_hint_is_the_ledger_encoding() {
+        let hint = thru_ledger::TokenHint::new([0x33; 32], [0x22; 32]);
+        let bytes = trezor_token_hint_bytes(&hint);
+        assert_eq!(bytes.len(), 129);
+        assert_eq!(bytes, hint.encode());
+        assert_eq!(bytes[0], thru_ledger::token_hint::TOKEN_HINT_KIND);
+        assert_eq!(&bytes[1..33], &[0x33; 32]);
+        assert_eq!(&bytes[33..65], &[0x22; 32]);
+        assert_eq!(&bytes[65..], &[0u8; 64][..]);
+    }
+
+    /// A Trezor alias and a `trezor://` URI with a message the device would
+    /// not show as text are refused before anything is connected.  The
+    /// emulator endpoint is bound and the app image is unset: a connection
+    /// attempt would be a Trezor error (or, with the feature, a packet on the
+    /// endpoint), never the validation error asserted here.
+    #[test]
+    fn trezor_message_that_is_not_text_is_refused_without_a_device() {
+        use crate::commands::message::sign_message_bytes;
+        let endpoint = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        endpoint.set_nonblocking(true).unwrap();
+        let addr = endpoint.local_addr().unwrap().to_string();
+        let _env = TrezorEnv::set(&[(ENV_TREZOR_EMULATOR, Some(&addr)), (ENV_TREZOR_APP, None)]);
+
+        let mut keys = crate::keys::KeyManager::new();
+        keys.insert_entry(
+            "tz",
+            crate::keys::KeyEntry {
+                public_key: address_string(&[9; 32]),
+                source: crate::keys::KeySource::Trezor {
+                    path: trezor_path0(),
+                    passphrase: false,
+                },
+            },
+            false,
+        )
+        .unwrap();
+        let config = Config {
+            keys,
+            ..Config::default()
+        };
+        let too_many_lines = "a\n".repeat(17).into_bytes();
+        let messages: [&[u8]; 6] = [
+            &[0, 1, 2],
+            &[0xff, 0xfe],
+            b"two  spaces",
+            b"tab\there",
+            &[b'a'; 513],
+            &too_many_lines,
+        ];
+        for key in ["tz", "alias:tz", "trezor://44'/8478'/0'/0'"] {
+            for message in messages {
+                let error = sign_message_bytes(&config, key, message).unwrap_err();
+                assert!(matches!(error, CliError::Validation(_)), "{key}: {error:?}");
+                let text = error.to_string();
+                for part in [
+                    "can show it as text",
+                    "512 bytes",
+                    "a local or a Ledger key",
+                ] {
+                    assert!(text.contains(part), "{key}: {text}");
+                }
+            }
+            // Text goes on to connect, which stops before any device is
+            // opened: at the unset app image, or (a build without the
+            // feature) at the emulator variable.
+            let error = sign_message_bytes(&config, key, b"hello").unwrap_err();
+            assert!(
+                matches!(&error, CliError::Trezor { code, .. }
+                    if code == "app_image" || code == "emulator_unsupported"),
+                "{key}: {error:?}"
+            );
+        }
+        let mut packet = [0u8; 64];
+        let heard = endpoint.recv(&mut packet);
+        assert!(
+            matches!(&heard, Err(e) if e.kind() == std::io::ErrorKind::WouldBlock),
+            "the endpoint was contacted: {heard:?}"
+        );
+    }
+
+    #[test]
+    fn trezor_pairing_code_is_one_line_of_digits() {
+        let mut out = Vec::new();
+        let code = read_pairing_code(&mut std::io::Cursor::new(b" 123 456 \n".to_vec()), &mut out)
+            .unwrap();
+        assert_eq!(code, "123456");
+        assert!(
+            String::from_utf8(out)
+                .unwrap()
+                .starts_with("Code shown on the Trezor: ")
+        );
+        // End of input or an empty line is a pairing failure, not a wrong code.
+        for input in [&b""[..], &b"\n"[..], &b"  \n"[..]] {
+            let error =
+                read_pairing_code(&mut std::io::Cursor::new(input.to_vec()), &mut Vec::new())
+                    .unwrap_err();
+            assert!(matches!(error, TrezorError::Pairing(_)), "{error:?}");
+        }
+    }
+
+    /// Through the CLI's own code path (`resolve_signer`) on the Trezor
+    /// emulator: the key is the shared vector's, and the signature of the
+    /// fixture transfer equals the recorded one, both through the `Signer`
+    /// the commands use and through `sign_transaction_for`.  Run by
+    /// `trezor/scripts/test-host.sh`; skipped unless `THRU_TREZOR_EMULATOR`
+    /// and `THRU_TREZOR_APP` are set.
+    #[cfg(feature = "trezor-emulator")]
+    #[test]
+    fn trezor_emulator_signs_the_fixture_transfer_through_resolve_signer() {
+        // The lock first: another test sets the variable for a moment, and
+        // reading it before the lock would take that value for the caller's.
+        let _env = TrezorEnv::set(&[]);
+        if trezor_emulator_endpoint().is_none() {
+            eprintln!("skipped: {ENV_TREZOR_EMULATOR} is not set");
+            return;
+        }
+        let fixture: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../../../trezor/app-thru/tests/fixtures/sign_tx.json"
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+        let case = fixture["cases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["name"] == "transfer_shared_corpus")
+            .expect("case transfer_shared_corpus");
+        let body = hex::decode(case["body_hex"].as_str().unwrap()).unwrap();
+        let want = case["signature_hex"].as_str().unwrap();
+
+        let config = Config::default();
+        let signer = resolve_signer(&config, "trezor://44'/8478'/0'/0'").unwrap();
+        assert!(signer.is_trezor());
+        assert!(!signer.is_ledger());
+        assert_eq!(
+            signer.address.as_str(),
+            "taHWXdTRD0-KOS2eF8TYzep8aOKj6tw1mXu7ZzjjnMDm6A"
+        );
+        assert_eq!(
+            hex::encode(signer.signer.sign_transaction_body(&body).unwrap()),
+            want
+        );
+
+        // The same transaction through the helper every command uses.
+        let mut wire = body.clone();
+        wire.extend_from_slice(&[0u8; 64]);
+        let mut transaction = Transaction::from_wire(&wire).expect("fixture body parses");
+        assert_eq!(transaction.to_wire_for_signing(), body);
+        let signed = sign_transaction_for(&mut transaction, &signer, |e| {
+            CliError::Crypto(format!("Failed to sign transaction: {e}"))
+        })
+        .unwrap();
+        assert_eq!(hex::encode(&signed[body.len()..]), want);
+        assert_eq!(signed[..body.len()], body[..]);
+    }
+
+    /// One case of the app's fixture, named by `THRU_TEST_FIXTURE_CASE`,
+    /// through `sign_transaction_for_with_token_hint` on the Trezor emulator
+    /// (what every command that sends a transaction calls), with the case's
+    /// token hint when it has one.  A signed case must give the fixture's
+    /// signature; a refused one must be refused by the app with the fixture's
+    /// reason, which for a wrong hint proves that the hint reached the device.
+    /// The review the CLI printed beforehand (`trezor_preview`) is written to
+    /// the file named by `THRU_TEST_PREVIEW_OUT`, for the script to compare
+    /// with what the device showed.  `THRU_TEST_EXPECT_CODE` names the error
+    /// code expected instead when the person refuses on the device.  Run by
+    /// `trezor/scripts/test-host.sh`, once for each case; skipped unless the
+    /// case is named.
+    #[cfg(feature = "trezor-emulator")]
+    #[test]
+    fn trezor_emulator_signs_a_fixture_case_with_its_token_hint() {
+        let _env = TrezorEnv::set(&[]);
+        if trezor_emulator_endpoint().is_none() {
+            eprintln!("skipped: {ENV_TREZOR_EMULATOR} is not set");
+            return;
+        }
+        let Ok(name) = std::env::var("THRU_TEST_FIXTURE_CASE") else {
+            eprintln!("skipped: THRU_TEST_FIXTURE_CASE is not set");
+            return;
+        };
+        let fixture: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../../../trezor/app-thru/tests/fixtures/sign_tx.json"
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+        let case = fixture["cases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["name"] == name.as_str())
+            .unwrap_or_else(|| panic!("no fixture case {name}"));
+        let body = hex::decode(case["body_hex"].as_str().unwrap()).unwrap();
+        let hint = case["token_hint_hex"].as_str().map(|text| {
+            let bytes: [u8; thru_ledger::token_hint::TOKEN_HINT_SZ] = hex::decode(text)
+                .unwrap()
+                .try_into()
+                .expect("a hint of 129 bytes");
+            assert_eq!(bytes[0], thru_ledger::token_hint::TOKEN_HINT_KIND);
+            let part = |i: usize| <[u8; 32]>::try_from(&bytes[1 + 32 * i..33 + 32 * i]).unwrap();
+            let hint = thru_ledger::TokenHint {
+                mint: part(0),
+                recipient_owner: part(1),
+                recipient_seed: part(2),
+                source_seed: part(3),
+            };
+            assert_eq!(hint.encode(), bytes);
+            hint
+        });
+
+        let uri = format!(
+            "trezor://{}",
+            case["path"].as_str().unwrap().trim_start_matches("m/")
+        );
+        let signer = resolve_signer(&Config::default(), &uri).unwrap();
+        let mut wire = body.clone();
+        wire.extend_from_slice(&[0u8; 64]);
+        let mut transaction = Transaction::from_wire(&wire).expect("fixture body parses");
+        let result =
+            sign_transaction_for_with_token_hint(&mut transaction, &signer, hint.as_ref(), |e| {
+                CliError::Crypto(format!("Failed to sign transaction: {e}"))
+            });
+        if let Ok(path) = std::env::var("THRU_TEST_PREVIEW_OUT") {
+            std::fs::write(
+                path,
+                serde_json::to_string_pretty(&signer.trezor_preview_json()).unwrap(),
+            )
+            .unwrap();
+        }
+        // The person may refuse on the device: then the code of the error is
+        // what is expected, whatever the fixture says of the transaction.
+        if let Ok(code) = std::env::var("THRU_TEST_EXPECT_CODE") {
+            match result {
+                Err(CliError::Trezor { code: got, .. }) => assert_eq!(got, code, "{name}"),
+                other => panic!("{name}: want the error {code}, got {other:?}"),
+            }
+            eprintln!("fixture case {name}: ok");
+            return;
+        }
+        match case["outcome"].as_str().unwrap() {
+            "signed" => {
+                let signed = result.unwrap_or_else(|e| panic!("{name}: {e:?}"));
+                assert_eq!(
+                    hex::encode(&signed[body.len()..]),
+                    case["signature_hex"].as_str().unwrap(),
+                    "{name}"
+                );
+                assert_eq!(signed[..body.len()], body[..]);
+            }
+            reason => match result {
+                Err(CliError::Trezor {
+                    reason: Some(got), ..
+                }) => {
+                    assert_eq!(got, reason, "{name}")
+                }
+                other => panic!("{name}: want the app's refusal {reason}, got {other:?}"),
+            },
+        }
+        eprintln!("fixture case {name}: ok");
+    }
+}
+
+/// The review of a Trezor request: printed before the request is sent, and
+/// the same value in the JSON output.
+#[cfg(test)]
+mod trezor_review_tests {
+    use super::*;
+    use std::cell::RefCell;
+    use thru_base::txn_tools::{EOA_PROGRAM, TransactionBuilder};
+
+    fn key() -> crate::keys::LoadedKey {
+        crate::keys::LoadedKey::from_seed(zeroize::Zeroizing::new([1u8; 32]))
+    }
+
+    fn path() -> thru_trezor::DerivationPath {
+        thru_trezor::DerivationPath::new(0).unwrap()
+    }
+
+    fn transfer(fee_payer: [u8; 32]) -> Transaction {
+        TransactionBuilder::build_transfer(fee_payer, EOA_PROGRAM, [0x40; 32], 5, 1000, 7, 500)
+            .unwrap()
+    }
+
+    fn local_resolved() -> ResolvedSigner {
+        let key = key();
+        let public_key = key.public_key;
+        ResolvedSigner {
+            name: "local".to_string(),
+            path: None,
+            signer: Box::new(key),
+            public_key,
+            address: Pubkey::from_bytes(&public_key),
+            ledger: None,
+            trezor: None,
+            trezor_review: Mutex::new(None),
+        }
+    }
+
+    /// Signs `transaction` through the Trezor path with a recording device: the
+    /// log holds what happened, in order.
+    fn run(
+        transaction: &mut Transaction,
+        hint: Option<&thru_ledger::TokenHint>,
+        log: &RefCell<Vec<String>>,
+        recorded: &RefCell<Option<Review>>,
+    ) -> Result<Vec<u8>, CliError> {
+        let key = key();
+        sign_transaction_with_trezor_request(
+            transaction,
+            &key.public_key,
+            &path(),
+            |review| {
+                log.borrow_mut().push("record".to_string());
+                *recorded.borrow_mut() = review;
+            },
+            hint,
+            |e| CliError::Crypto(e.to_string()),
+            |text| log.borrow_mut().push(format!("print {}", text.lines().next().unwrap())),
+            |body, hint| {
+                log.borrow_mut()
+                    .push(format!("request {} bytes, hint {}", body.len(), hint.is_some()));
+                Ok(key.sign_transaction_body(body).unwrap())
+            },
+        )
+    }
+
+    #[test]
+    fn the_review_is_printed_before_the_signing_request_is_sent() {
+        let (log, recorded) = (RefCell::new(Vec::new()), RefCell::new(None));
+        let mut tx = transfer(key().public_key);
+        let signed = run(&mut tx, None, &log, &recorded).unwrap();
+        let log = log.borrow();
+        assert_eq!(log.len(), 3, "{log:?}");
+        assert_eq!(log[0], "record");
+        assert_eq!(
+            log[1],
+            "print Trezor review (Send): your device must show exactly these values"
+        );
+        assert_eq!(log[2], format!("request {} bytes, hint false", signed.len() - 64));
+        assert_eq!(recorded.borrow().as_ref().unwrap().kind, "transfer");
+    }
+
+    /// A shape the app refuses has no review: nothing is printed, the request
+    /// is still sent (the app's refusal is the answer), and no review is kept.
+    #[test]
+    fn a_shape_the_app_refuses_is_still_sent_without_a_review() {
+        let (log, recorded) = (RefCell::new(Vec::new()), RefCell::new(None));
+        let mut tx = transfer(key().public_key).with_may_compress_account();
+        run(&mut tx, None, &log, &recorded).unwrap();
+        let log = log.borrow();
+        assert_eq!(log.len(), 2, "{log:?}");
+        assert_eq!(log[0], "record");
+        assert!(log[1].starts_with("request "), "{log:?}");
+        assert!(recorded.borrow().is_none());
+    }
+
+    /// The device refusing (here: an error from the request) leaves the printed
+    /// review in place and gives the app's refusal sentence, not a second one.
+    #[test]
+    fn an_app_refusal_is_the_apps_sentence() {
+        let key = key();
+        let mut tx = transfer(key.public_key).with_may_compress_account();
+        let error = sign_transaction_with_trezor_request(
+            &mut tx,
+            &key.public_key,
+            &path(),
+            |_| {},
+            None,
+            |e| CliError::Crypto(e.to_string()),
+            |_| panic!("no review to print"),
+            |_, _| Err(TrezorError::AppRefused("unsupported_transaction".to_string())),
+        )
+        .unwrap_err();
+        match error {
+            CliError::Trezor { code, message, .. } => {
+                assert_eq!(code, "app_refused");
+                assert!(message.contains("does not sign this transaction"), "{message}");
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_fee_payer_that_is_not_the_key_never_reaches_the_device() {
+        let (log, recorded) = (RefCell::new(Vec::new()), RefCell::new(None));
+        let mut tx = transfer([0x99; 32]);
+        assert!(run(&mut tx, None, &log, &recorded).is_err());
+        assert!(log.borrow().is_empty());
+    }
+
+    #[test]
+    fn a_token_hint_is_sent_with_the_request_and_proven_in_the_review() {
+        let (log, recorded) = (RefCell::new(Vec::new()), RefCell::new(None));
+        let fee_payer = key().public_key;
+        let mint = [0x50; 32];
+        let owner = [0x60; 32];
+        let (source, dest) = (
+            thru_ledger::token_account_address(&fee_payer, &mint, &[0x71; 32]),
+            thru_ledger::token_account_address(&owner, &mint, &[0x72; 32]),
+        );
+        let hint = thru_ledger::TokenHint {
+            mint,
+            recipient_owner: owner,
+            recipient_seed: [0x72; 32],
+            source_seed: [0x71; 32],
+        };
+        let mut tx = TransactionBuilder::build_token_transfer(
+            fee_payer,
+            thru_base::bootstrap_addresses::TOKEN_PROGRAM_BYTES,
+            source,
+            dest,
+            fee_payer,
+            9,
+            1000,
+            0,
+            500,
+        )
+        .unwrap();
+        run(&mut tx, Some(&hint), &log, &recorded).unwrap();
+        assert!(log.borrow()[2].ends_with("hint true"), "{:?}", log.borrow());
+        let review = recorded.borrow().clone().unwrap();
+        let json = review.to_json();
+        assert_eq!(json["kind"], "token_transfer");
+        let parties = json["steps"][0]["items"].as_array().unwrap();
+        let address_type = parties.iter().find(|i| i["label"] == "Address type").unwrap();
+        assert_eq!(address_type["value"], "Token account owners");
+    }
+
+    /// Messages and EOA authorizations print through the same helper.
+    #[test]
+    fn nothing_is_sent_before_the_text_is_printed() {
+        let log = RefCell::new(Vec::new());
+        let review = crate::trezor_preview::message_review(b"hi", &[1; 32], &path()).unwrap();
+        let out = print_trezor_review_then(
+            Some(&review),
+            |text| log.borrow_mut().push(format!("print {}", text.lines().next().unwrap())),
+            || {
+                log.borrow_mut().push("request".to_string());
+                7
+            },
+        );
+        assert_eq!(out, 7);
+        assert_eq!(
+            *log.borrow(),
+            [
+                "print Trezor review (Sign message): your device must show exactly these values",
+                "request"
+            ]
+        );
+        let out = print_trezor_review_then(None, |_| panic!("no review"), || 8);
+        assert_eq!(out, 8);
+    }
+
+    #[test]
+    fn json_gets_trezor_preview_only_for_a_trezor_key() {
+        let response = serde_json::json!({ "transfer": { "status": "success" } });
+        // A local key: the response is byte for byte the same.
+        let local = local_resolved();
+        assert_eq!(local.trezor_preview_json(), serde_json::Value::Null);
+        assert_eq!(
+            serde_json::to_string(&local.add_trezor_preview(response.clone(), "transfer")).unwrap(),
+            serde_json::to_string(&response).unwrap()
+        );
+        // The insertion a Trezor key does.
+        let review = crate::trezor_preview::message_review(b"hi", &[1; 32], &path()).unwrap();
+        let with = insert_trezor_preview(response.clone(), "transfer", review.to_json());
+        assert_eq!(with["transfer"]["status"], "success");
+        assert_eq!(with["transfer"]["trezor_preview"], review.to_json());
+        // A response without the section is returned as it is.
+        assert_eq!(insert_trezor_preview(response.clone(), "other", review.to_json()), response);
+        // A key that has made no request reports null, not a missing key.
+        assert_eq!(
+            insert_trezor_preview(response, "transfer", serde_json::Value::Null)["transfer"]
+                ["trezor_preview"],
+            serde_json::Value::Null
+        );
     }
 }

@@ -1298,8 +1298,8 @@ async fn transfer(
     let from_pubkey = validate_address_or_hex(from)?;
     let to_pubkey = validate_address_or_hex(to)?;
 
-    // Resolve the signer before making RPC requests; for a Ledger key this
-    // connects to the device.
+    // Resolve the signer before making RPC requests; for a Ledger or a Trezor
+    // key this connects to the device.
     let signer = crate::signing::resolve_signer(config, fee_payer.unwrap_or("default"))?;
 
     // The source token account's owner is the token program that manages it
@@ -1367,11 +1367,13 @@ async fn transfer(
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?
     .with_chain_id(chain.chain_id);
 
-    // A Ledger shows the mint and the account owners when it gets a hint.
-    let token_hint = if signer.is_ledger() {
-        ledger_token_hint(&client, &transaction, &to_pubkey, json_format).await
-    } else {
-        None
+    // A Ledger or a Trezor shows the mint and the account owners when it gets
+    // a hint.
+    let token_hint = match token_hint_device(signer.is_ledger(), signer.is_trezor()) {
+        Some(device) => {
+            device_token_hint(&client, &transaction, &to_pubkey, device, json_format).await
+        }
+        None => None,
     };
     let wire = crate::signing::sign_transaction_for_with_token_hint(
         &mut transaction,
@@ -1401,6 +1403,7 @@ async fn transfer(
         }
         let response = serde_json::json!({ "token_transfer": token_transfer });
         let response = signer.add_ledger_preview(response, "token_transfer");
+        let response = signer.add_trezor_preview(response, "token_transfer");
         crate::output::print_output(response, true);
     } else {
         println!("Transfer completed successfully!");
@@ -1411,20 +1414,32 @@ async fn transfer(
     Ok(())
 }
 
-/// The token hint for a Ledger-signed transfer (APDU spec §7.2.1): the mint
-/// and owner of the destination token account, read from chain, with the
-/// default account seeds.  `None` when the account cannot be read or the hint
-/// does not prove both accounts (for example a non-default seed); the Ledger
-/// then shows the token accounts, which is still a correct review.
-async fn ledger_token_hint(
+/// The hardware device that gets a token hint: a Ledger or a Trezor key, on
+/// the same terms; a local key gets none.
+fn token_hint_device(is_ledger: bool, is_trezor: bool) -> Option<&'static str> {
+    match (is_ledger, is_trezor) {
+        (true, _) => Some("Ledger"),
+        (false, true) => Some("Trezor"),
+        (false, false) => None,
+    }
+}
+
+/// The token hint for a Ledger- or Trezor-signed transfer (APDU spec §7.2.1;
+/// the Trezor app takes the same 129 bytes): the mint and owner of the
+/// destination token account, read from chain, with the default account
+/// seeds.  `None` when the account cannot be read or the hint does not prove
+/// both accounts (for example a non-default seed); the device named by
+/// `device` then shows the token accounts, which is still a correct review.
+async fn device_token_hint(
     client: &Client,
     transaction: &thru_base::txn_lib::Transaction,
     destination: &[u8; 32],
+    device: &str,
     json_format: bool,
 ) -> Option<thru_ledger::TokenHint> {
     let note = |why: &str| {
         if !json_format {
-            eprintln!("Note: the Ledger will show the token accounts, not their owners ({why}).");
+            eprintln!("Note: the {device} will show the token accounts, not their owners ({why}).");
         }
     };
     let account = match client
@@ -2765,6 +2780,13 @@ mod tests {
         .unwrap()
         .with_chain_id(1)
         .to_wire_for_signing()
+    }
+
+    #[test]
+    fn token_hint_goes_to_ledger_and_trezor_keys_only() {
+        assert_eq!(token_hint_device(true, false), Some("Ledger"));
+        assert_eq!(token_hint_device(false, true), Some("Trezor"));
+        assert_eq!(token_hint_device(false, false), None);
     }
 
     #[test]

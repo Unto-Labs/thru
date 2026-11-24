@@ -4,6 +4,7 @@ import {
   createPerpExchangeSetStatusInstruction,
   createPerpFeeClaimInstruction,
   createPerpFundingUpdateInstruction,
+  createPerpInsuranceDepositInstruction,
   createPerpLiquidateInstruction,
   createPerpMarginAccountCreateInstruction,
   createPerpMarginLinkInstruction,
@@ -14,10 +15,12 @@ import {
   createPerpMarketSetCrossInstruction,
   createPerpMarketSetFeesInstruction,
   createPerpMarketSetFundingInstruction,
+  createPerpMarketSetRiskParamsInstruction,
   createPerpMarketSetStatusInstruction,
   createPerpMarketSetVaultInstruction,
   createPerpModifyOrderEntryInstruction,
   createPerpOrderEntryInstruction,
+  createPerpResolveBadDebtInstruction,
   createPerpSeatCreateInstruction,
   createPerpSeatSetBuilderApprovalInstruction,
   createPerpSeatSetFeeReceiverInstruction,
@@ -112,6 +115,9 @@ export type PerpInstructionSpec =
   | { ix: 'fee_claim'; marketRecordIndex: number; amount: PerpU64 }
   | { ix: 'seat_set_fee_receiver'; marketRecordIndex: number }
   | { ix: 'seat_set_builder_approval'; marketRecordIndex: number; builderSeatIndex: number; maxFeePpm: number }
+  | { ix: 'insurance_deposit'; marketRecordIndex: number; amount: PerpU64 }
+  | { ix: 'resolve_bad_debt'; marketRecordIndex: number }
+  | { ix: 'market_set_risk_params'; marketRecordIndex: number; socializeCapBps: number; ifEpochBudgetBps: number; bankruptLiqRewardBps: number }
   | { ix: 'exchange_set_status'; exchangeMeta: string; exchangeAdmin: string; statusFlags: number }
   | { ix: 'margin_account_create'; owner: string; marginAccount: string; vault: string; accountId: number; /** hex */ proof: string }
   | {
@@ -236,6 +242,17 @@ export function encodePerpInstruction(spec: PerpInstructionSpec): InstructionDat
         marketRecordIndex: spec.marketRecordIndex,
         builderSeatIndex: spec.builderSeatIndex,
         maxFeePpm: spec.maxFeePpm,
+      });
+    case 'insurance_deposit':
+      return createPerpInsuranceDepositInstruction({ marketRecordIndex: spec.marketRecordIndex, amount: u64(spec.amount, 'amount') });
+    case 'resolve_bad_debt':
+      return createPerpResolveBadDebtInstruction({ marketRecordIndex: spec.marketRecordIndex });
+    case 'market_set_risk_params':
+      return createPerpMarketSetRiskParamsInstruction({
+        marketRecordIndex: spec.marketRecordIndex,
+        socializeCapBps: spec.socializeCapBps,
+        ifEpochBudgetBps: spec.ifEpochBudgetBps,
+        bankruptLiqRewardBps: spec.bankruptLiqRewardBps,
       });
     case 'exchange_set_status':
       return createPerpExchangeSetStatusInstruction({

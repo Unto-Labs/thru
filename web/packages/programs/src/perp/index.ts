@@ -63,6 +63,7 @@ import {
   ExchangeSetStatusInstructionBuilder,
   FeeClaimInstructionBuilder,
   FundingUpdateInstructionBuilder,
+  InsuranceDepositInstructionBuilder,
   LiquidateInstructionBuilder,
   MarginAccountCreateInstructionBuilder,
   MarginAccountPayload,
@@ -72,6 +73,7 @@ import {
   MarketAccountPayload,
   MarketSetCrossInstructionBuilder,
   MarketSetFeesInstructionBuilder,
+  MarketSetRiskParamsInstructionBuilder,
   MarketSetVaultInstructionBuilder,
   MarketCreateInstructionBuilder,
   MarketRecordInstructionBuilder,
@@ -85,6 +87,7 @@ import {
   OrderEntry as OrderEntryView,
   PerpEvent,
   PerpInstructionBuilder,
+  ResolveBadDebtInstructionBuilder,
   SeatArenaAccount,
   SeatArenaHeader,
   SeatCreateInstructionBuilder,
@@ -386,7 +389,10 @@ type PerpInstructionVariant =
   | 'market_set_fees'
   | 'fee_claim'
   | 'seat_set_fee_receiver'
-  | 'seat_set_builder_approval';
+  | 'seat_set_builder_approval'
+  | 'insurance_deposit'
+  | 'resolve_bad_debt'
+  | 'market_set_risk_params';
 
 export type PerpOrderSide = OrderSide;
 export type PerpOrderType = OrderType;
@@ -822,6 +828,26 @@ export interface PerpSeatSetBuilderApprovalArgs {
   builderSeatIndex: number;
   /** 1..PERP_FEE_MAX_PPM, or 0 to revoke. */
   maxFeePpm: number;
+}
+
+/** The loss waterfall's parameters (market_set_risk_params), bps; see
+    PerpMarketRisk for what each one does and perpRiskParamsProblem for
+    the limits. */
+export type PerpRiskParams = Pick<PerpMarketRisk, 'socializeCapBps' | 'ifEpochBudgetBps' | 'bankruptLiqRewardBps'>;
+
+export interface PerpMarketSetRiskParamsArgs extends PerpRiskParams {
+  marketRecordIndex: number;
+}
+
+export interface PerpInsuranceDepositArgs {
+  marketRecordIndex: number;
+  /** Quote atoms moved from the record's seat into the insurance balance (> 0). */
+  amount: bigint;
+}
+
+export interface PerpResolveBadDebtArgs {
+  /** A record without a seat; its oracle feed prices the per-lot charge cap. */
+  marketRecordIndex: number;
 }
 
 export interface PerpOrderEntry {
@@ -1831,6 +1857,50 @@ export function perpFeesAfterSet(current: PerpMarketFees, nowNs: bigint, params:
   };
 }
 
+/* Loss waterfall (mirrors thru-perps/tn_perp_program/utils/risk.h) ************/
+
+/** Why market_set_risk_params would reject params on this market
+    (risk_params_valid), or null.  Each value is a u16; the per-epoch
+    charge cap may be at most the gap between initial and maintenance
+    margin (one epoch's charge cannot take a seat from initial to below
+    maintenance), the insurance epoch budget at most 100%, the bankrupt
+    liquidation reward at most the liquidation fee.  A market whose initial
+    margin does not exceed its maintenance margin takes no parameters. */
+export function perpRiskParamsProblem(
+  market: Pick<PerpMarket, 'initialMarginBps' | 'maintenanceMarginBps' | 'liquidationFeeBps'>,
+  params: PerpRiskParams,
+): string | null {
+  for (const [label, value] of [
+    ['socializeCapBps', params.socializeCapBps],
+    ['ifEpochBudgetBps', params.ifEpochBudgetBps],
+    ['bankruptLiqRewardBps', params.bankruptLiqRewardBps],
+  ] as const) {
+    if (!Number.isInteger(value) || value < 0 || value > 0xffff) return `${label} must be an integer in 0..65535`;
+  }
+  if (market.initialMarginBps <= market.maintenanceMarginBps) return 'the market takes no risk parameters: its initial margin does not exceed its maintenance margin';
+  const gap = market.initialMarginBps - market.maintenanceMarginBps;
+  if (params.socializeCapBps > gap) return `socializeCapBps must be at most the initial minus maintenance margin, ${gap} bps`;
+  if (params.ifEpochBudgetBps > Number(PERP_BPS_DENOMINATOR)) return `ifEpochBudgetBps must be at most ${PERP_BPS_DENOMINATOR} (100%)`;
+  if (params.bankruptLiqRewardBps > market.liquidationFeeBps) return `bankruptLiqRewardBps must be at most the liquidation fee, ${market.liquidationFeeBps} bps`;
+  return null;
+}
+
+/** Why resolve_bad_debt would resolve nothing now (the program then fails
+    with NOTHING_RESOLVED), or null when some stage may cover part of the
+    market's bad debt.  It resolves nothing without bad debt, or with no
+    fee balance, no insurance balance and no socialization (a charge cap of
+    0 or no open interest).  Null is not a promise: insurance is limited by
+    its epoch budget, and socialization needs a fresh mark and charge cap
+    left in the epoch. */
+export function perpResolveBadDebtProblem(market: Pick<PerpMarket, 'badDebt' | 'openInterestLots' | 'risk'>): string | null {
+  if (market.badDebt === 0n) return 'the market has no bad debt';
+  const { feeBalance, insuranceBalance, socializeCapBps } = market.risk;
+  if (feeBalance === 0n && insuranceBalance === 0n && (socializeCapBps === 0 || market.openInterestLots === 0n)) {
+    return `nothing can cover its bad debt of ${market.badDebt}: no fee balance, no insurance balance and no loss socialization (${socializeCapBps === 0 ? 'socializeCapBps is 0' : 'no open interest'})`;
+  }
+  return null;
+}
+
 /** The most one lot at price can be charged as taker (fee_per_lot):
     ceil(lot * price * taker) + ceil(lot * price * builder), an upper bound
     of any fill's telescoped charge per lot.  Pass it to perpMaxBuyLots /
@@ -2540,6 +2610,64 @@ export function createPerpSeatSetBuilderApprovalInstruction(args: PerpSeatSetBui
       .set_builder_seat_idx(args.builderSeatIndex)
       .build();
     return buildPerpInstruction('seat_set_builder_approval', payload);
+  };
+}
+
+/** The record's seat (its authority signs through the record) moves
+    `amount` of its free collateral into the market's insurance balance, a
+    ledger move inside the vault (INSURANCE event).  The program settles the
+    seat's funding first and moves only what a withdrawal could take
+    (INSUFFICIENT_FUNDS_QUOTE otherwise); a cross seat needs its margin
+    record.  Allowed while the market is frozen for bad debt: it is how a
+    frozen market recovers. */
+export function createPerpInsuranceDepositInstruction(args: PerpInsuranceDepositArgs): InstructionData {
+  assertU64(args.amount, 'amount');
+  if (args.amount === 0n) throw new Error('amount must be positive');
+  return async () => {
+    const payload = new InsuranceDepositInstructionBuilder()
+      .set_market_record_idx(assertU8(args.marketRecordIndex, 'marketRecordIndex'))
+      .set_reserved0(0)
+      .set_reserved1(0)
+      .set_amount(args.amount)
+      .build();
+    return buildPerpInstruction('insurance_deposit', payload);
+  };
+}
+
+/** Permissionless: runs the market's outstanding bad debt through the loss
+    waterfall (the part charged to longs, then the part charged to both
+    sides): the fee balance, then insurance within its epoch budget, then a
+    per-lot charge on the open positions, capped per epoch and priced at the
+    mark of the record's oracle feed (without a fresh mark nothing is
+    socialized).  Fails with NOTHING_RESOLVED unless the bad debt falls
+    (perpResolveBadDebtProblem). */
+export function createPerpResolveBadDebtInstruction(args: PerpResolveBadDebtArgs): InstructionData {
+  return async () => {
+    const payload = new ResolveBadDebtInstructionBuilder()
+      .set_market_record_idx(assertU8(args.marketRecordIndex, 'marketRecordIndex'))
+      .set_reserved0(0)
+      .set_reserved1(0)
+      .build();
+    return buildPerpInstruction('resolve_bad_debt', payload);
+  };
+}
+
+/** Market authority only: sets the loss waterfall parameters (bps).  The
+    program checks them against the market (RISK_PARAM_INVALID): see
+    perpRiskParamsProblem; this checks what it can without the market. */
+export function createPerpMarketSetRiskParamsInstruction(args: PerpMarketSetRiskParamsArgs): InstructionData {
+  assertU16(args.socializeCapBps, 'socializeCapBps');
+  assertU16(args.ifEpochBudgetBps, 'ifEpochBudgetBps');
+  assertU16(args.bankruptLiqRewardBps, 'bankruptLiqRewardBps');
+  if (args.ifEpochBudgetBps > Number(PERP_BPS_DENOMINATOR)) throw new Error(`ifEpochBudgetBps must be at most ${PERP_BPS_DENOMINATOR} (100%)`);
+  return async () => {
+    const payload = new MarketSetRiskParamsInstructionBuilder()
+      .set_market_record_idx(assertU8(args.marketRecordIndex, 'marketRecordIndex'))
+      .set_socialize_cap_bps(args.socializeCapBps)
+      .set_if_epoch_budget_bps(args.ifEpochBudgetBps)
+      .set_bankrupt_liq_reward_bps(args.bankruptLiqRewardBps)
+      .build();
+    return buildPerpInstruction('market_set_risk_params', payload);
   };
 }
 
