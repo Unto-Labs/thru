@@ -76,14 +76,28 @@ describe("Oracle read helpers", () => {
     );
   });
 
-  it("normalizes seeds and maps program errors", () => {
-    const seed = normalizeOracleFeedSeed(
-      "abcdefghijklmnopqrstuvwxyz0123456789",
-    );
+  it("truncates and zero pads the seed to exactly 32 bytes", () => {
+    /* Documented contract: UTF-8, truncated to 32 bytes, zero padded when
+     * shorter. This is deliberate, so the test pins it rather than guarding it. */
+    const seed = normalizeOracleFeedSeed("BTC/USD");
     expect(seed).toHaveLength(32);
-    expect(new TextDecoder().decode(seed)).toBe(
-      "abcdefghijklmnopqrstuvwxyz012345",
+    expect(new TextDecoder().decode(seed.subarray(0, 7))).toBe("BTC/USD");
+    expect(seed.subarray(7).every((byte) => byte === 0)).toBe(true);
+
+    const full = normalizeOracleFeedSeed("abcdefghijklmnopqrstuvwxyz012345");
+    expect(full).toHaveLength(32);
+
+    /* A longer label keeps only its first 32 bytes, so two labels that share a
+     * 32-byte prefix resolve to the same feed. Callers disambiguate. */
+    const prefix = "abcdefghijklmnopqrstuvwxyz012345";
+    expect(normalizeOracleFeedSeed(prefix + "6789")).toEqual(
+      normalizeOracleFeedSeed(prefix + "different"),
     );
+    expect(normalizeOracleFeedSeed(new Uint8Array(33))).toHaveLength(32);
+    expect(normalizeOracleFeedSeed(new Uint8Array(33)).at(-1)).toBe(0);
+  });
+
+  it("maps program errors", () => {
     expect(oracleProgramErrorFromCode(3n)).toBe(
       OracleProgramError.UnauthorizedOperation,
     );

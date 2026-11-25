@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { Pubkey } from '@thru/sdk';
 import { PERP_CBOOK_EMPTY_PRICE_IN_TICKS, PERP_CBOOK_MAX_PRICE_IN_TICKS, estimatePerpOrderStateUnits } from '../index';
 import { PerpInstruction } from '../abi/thru/program/perp/types';
+import { encodePerpInstructions } from './instructions';
 import {
   depositTx,
+  encodePerpTransaction,
   liquidateTx,
+  marginAccountCreateTx,
   marginLinkTx,
   marginTransferTx,
+  perpTransactionAccountOrder,
   ordersTx,
   perpCrossAccountRef,
   perpTransactionFromJSON,
@@ -62,6 +66,11 @@ function walk(bytes: Uint8Array, limit = Infinity): Array<{ name: string; payloa
     if (variant.name === 'margin_record') {
       const links = bytes[at + 4]!;
       size = 7 + links * 4 + (links & 1) * 4;
+    }
+    if (variant.name === 'margin_account_create') {
+      /* 15 fixed bytes, then the proof (proof_sz at payload offset 11). */
+      const view = new DataView(bytes.buffer, bytes.byteOffset + at + 1);
+      size = 15 + view.getUint32(11, true);
     }
     out.push({ name: variant.name, payload: bytes.subarray(at + 1, at + 1 + size) });
     at += 1 + size;
@@ -178,12 +187,12 @@ describe('cross seat transactions', () => {
     expect(unlink.readOnly).not.toContain(marketA.seatArena);
   });
 
-  it('a margin transfer writes both linked arenas', () => {
+  it('a margin transfer writes both linked arenas and carries the owner read only', () => {
     const tx = marginTransferTx(deployment, OWNER, account, 1, 0, 500n);
     expect(tx.instructions.map((ix) => ix.ix)).toEqual(['margin_record', 'margin_transfer']);
     expect(tx.instructions[1]).toEqual({ ix: 'margin_transfer', marginRecordIndex: 0, fromLink: 1, toLink: 0, owner: OWNER, amount: '500' });
     expect(tx.readWrite).toEqual([marketA.seatArena, marketB.seatArena]);
-    expect(tx.readOnly).toEqual([ACCOUNT, marketB.oracleFeed, marketA.oracleFeed, marketC.seatArena, marketC.oracleFeed, deployment.exchangeMeta]);
+    expect(tx.readOnly).toEqual([OWNER, ACCOUNT, marketB.oracleFeed, marketA.oracleFeed, marketC.seatArena, marketC.oracleFeed, deployment.exchangeMeta]);
     expect(() => marginTransferTx(deployment, OWNER, account, 1, 1, 5n)).toThrow('are not two links');
   });
 
@@ -191,6 +200,55 @@ describe('cross seat transactions', () => {
     const notA = perpCrossAccountRef(ACCOUNT, { links: [{ market: marketB.seatArena }] }, [marketB]);
     expect(() => ordersTx(refA, OWNER, 7, [farBid], [], undefined, { margin: notA })).toThrow('does not link market');
     expect(() => perpCrossAccountRef(ACCOUNT, { links: [{ market: address(99) }] }, [marketA])).toThrow('oracle feed is unknown');
+  });
+});
+
+/* Both margin builders encode the owner's account index.  The owner is only
+   index 0 when it pays the fee, so a keypair signer whose key is not the
+   owner resolves the index only if the owner is in the lists: builder tests
+   that pass `feePayer = OWNER` hid that the lists omitted it. */
+describe('margin accounts with a fee payer other than the owner', () => {
+  it('create encodes under a distinct fee payer', async () => {
+    const tx = marginAccountCreateTx(deployment, OWNER, marketA.quoteVault, { address: ACCOUNT }, 3, new Uint8Array([1, 2, 3]));
+    expect(tx.readWrite).toEqual([ACCOUNT]);
+    expect(tx.readOnly).toEqual([OWNER, marketA.quoteVault]);
+    /* The margin account grows, nothing else does. */
+    expect(tx.stateUnits).toBe(1);
+
+    /* The signer's account order: fee payer, program, read-write, read-only. */
+    const expected = perpTransactionAccountOrder(tx, OTHER, PROGRAM);
+    expect(expected).toContain(OWNER);
+    const { accounts, data } = await encodePerpTransaction(tx, OTHER, PROGRAM);
+    expect(accounts).toEqual(expected);
+    const payload = walk(data)[0]!.payload;
+    expect(accounts[u16(payload, 1)]).toBe(OWNER);
+    expect(accounts[u16(payload, 3)]).toBe(ACCOUNT);
+    expect(accounts[u16(payload, 5)]).toBe(marketA.quoteVault);
+  });
+
+  it('create resolves when the owner pays the fee too', async () => {
+    const tx = marginAccountCreateTx(deployment, OWNER, marketA.quoteVault, { address: ACCOUNT }, 0, new Uint8Array());
+    /* The owner is the fee payer, so it is not repeated in the lists. */
+    expect(perpTransactionAccountOrder(tx, OWNER, PROGRAM)).toEqual([OWNER, PROGRAM, ACCOUNT, marketA.quoteVault]);
+    const { accounts, data } = await encodePerpTransaction(tx, OWNER, PROGRAM);
+    expect(u16(walk(data)[0]!.payload, 1)).toBe(accounts.indexOf(OWNER));
+  });
+
+  it('transfer encodes under a distinct fee payer', async () => {
+    const tx = marginTransferTx(deployment, OWNER, account, 1, 0, 500n);
+    expect(tx.readOnly).toContain(OWNER);
+
+    /* Encode the transfer instruction alone against the signer's order. */
+    const { accounts } = await encodePerpTransaction(tx, OTHER, PROGRAM);
+    const data = await encodePerpInstructions([tx.instructions[1]!])({
+      getAccountIndex: (pubkey: Uint8Array) => accounts.indexOf(Pubkey.from(pubkey).toThruFmt()),
+    });
+    const transfer = walk(data)[0]!;
+    expect(transfer.name).toBe('margin_transfer');
+    expect(transfer.payload[0]).toBe(0); /* margin_record_idx */
+    expect(transfer.payload[1]).toBe(1); /* from_link */
+    expect(transfer.payload[2]).toBe(0); /* to_link */
+    expect(accounts[u16(transfer.payload, 3)]).toBe(OWNER);
   });
 });
 
