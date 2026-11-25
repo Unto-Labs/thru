@@ -68,7 +68,7 @@ cp ../thru-rust-sdk/.cargo/config.toml .cargo/
 4. **Create the main program file** (`src/main.rs`):
 ```rust
 //! # My First Thru Network Program
-//! 
+//!
 //! This program demonstrates emitting a simple event.
 
 #![no_std]
@@ -81,7 +81,10 @@ use thru_sdk_macros::*;
 fn main(_instr_data: &[u8]) -> Result<u64, u64> {
     // Emit a simple message
     let message = b"Hello from my first Rust Thru program!\0";
-    sys_emit_event(message.as_ptr(), message.len() as u64);
+    // SAFETY: The pointer and length describe the same live message buffer.
+    unsafe {
+        sys_emit_event(message.as_ptr(), message.len() as u64);
+    }
 
     Ok(0)
 }
@@ -95,7 +98,7 @@ cargo build --release --bin my-thru-project
 
 6. **Find your built program:**
 ```bash
-ls target/riscv64imac-unknown-none-elf/release/my_thru_project
+ls target/riscv64imac-unknown-none-elf/release/my-thru-project
 ```
 
 ## Custom Installation
