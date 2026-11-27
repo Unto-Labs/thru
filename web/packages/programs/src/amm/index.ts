@@ -98,8 +98,27 @@ export const AMM_ERROR_LABELS: Record<number, string> = {
 
 const PUBKEY_LENGTH = 32;
 const LP_MINT_SEED_LABEL = asciiBytes('lp_mint');
+
+/**
+ * Fixed 1-byte vault seeds. Pools sharing a mint (e.g. WTHRU) derived identical vault
+ * token accounts with these, and the second `init_pool` reverted with the vault
+ * create/init failures (`Vault one create`/`Vault two create` — AMM errors 10/11 — or
+ * `Vault one init`/`Vault two init` — 15/16), or with `Account already initialized` (3)
+ * if the token program's check trips first. Use `deriveAmmVaultSeeds` (or
+ * `deriveAmmPoolAddresses`) instead. Retained for backwards compatibility and will be
+ * removed in a future release.
+ *
+ * @deprecated
+ */
 export const AMM_VAULT_ONE_SEED = oneByteSeed(0x01);
+/** @deprecated Companion to `AMM_VAULT_ONE_SEED`; see its note before using either. */
 export const AMM_VAULT_TWO_SEED = oneByteSeed(0x02);
+
+/* The pool-bound seed labels reuse the legacy constants.  Both are read-only
+   inputs to deriveAddress, so sharing one allocation is safe, and it keeps the
+   legacy bytes and the seed bytes from drifting apart. */
+const VAULT_ONE_SEED_LABEL = AMM_VAULT_ONE_SEED;
+const VAULT_TWO_SEED_LABEL = AMM_VAULT_TWO_SEED;
 
 export type AccountLookupContext = {
   getAccountIndex: (pubkey: Uint8Array) => number;
@@ -240,6 +259,38 @@ export function deriveAmmLpMintSeed(thru: Thru, poolBytes: Uint8Array | string):
   ]).bytes;
 }
 
+/**
+ * Derives the two pool-bound vault seeds.
+ *
+ * A token account is `deriveProgramAddress(token, deriveAddress([owner, mint, seed]))`,
+ * so the seed feeds the address; who may spend the account is the `owner` the account
+ * stores, which the seed does not set.  Binding the seed to the pool gives each pool's
+ * vault of a mint its own address.  Whether that also separates spending authority
+ * depends on the owner the program supplied at creation, which is not visible from this
+ * package — if the owner is the program itself, every vault of a mint still shares one
+ * signer however the seed is derived.  The legacy constants left every vault of a given
+ * mint on one of only two possible addresses.
+ *
+ * With the fixed seed the second `init_pool` for a shared mint fails, on the vault
+ * create/init errors (`Vault one create`/`Vault two create` — 10/11, or `Vault one
+ * init`/`Vault two init` — 15/16) or on `Account already initialized` (3) — which one
+ * depends on how far the call gets, and on the owner the program supplies.
+ *
+ * The on-chain program derives the vault seeds itself (init_pool's payload has no vault
+ * seed field), so it must adopt this derivation for new pools; against a program still
+ * using the constants this change alone will not produce a creatable vault.
+ */
+export function deriveAmmVaultSeeds(
+  thru: Thru,
+  poolBytes: Uint8Array | string,
+): { vaultOneSeed: Uint8Array; vaultTwoSeed: Uint8Array } {
+  const poolPubkey = toPubkeyBytes(poolBytes);
+  return {
+    vaultOneSeed: thru.helpers.deriveAddress([poolPubkey, VAULT_ONE_SEED_LABEL]).bytes,
+    vaultTwoSeed: thru.helpers.deriveAddress([poolPubkey, VAULT_TWO_SEED_LABEL]).bytes,
+  };
+}
+
 export function deriveAmmPoolAddresses(
   thru: Thru,
   args: {
@@ -269,6 +320,7 @@ export function deriveAmmPoolAddresses(
     ephemeral: false,
   });
   const lpMintSeed = deriveAmmLpMintSeed(thru, pool.bytes);
+  const { vaultOneSeed, vaultTwoSeed } = deriveAmmVaultSeeds(thru, pool.bytes);
 
   return {
     ...sorted,
@@ -276,8 +328,8 @@ export function deriveAmmPoolAddresses(
     poolBytes: pool.bytes,
     poolSeed,
     lpMintSeed,
-    vaultOneSeed: AMM_VAULT_ONE_SEED.slice(),
-    vaultTwoSeed: AMM_VAULT_TWO_SEED.slice(),
+    vaultOneSeed,
+    vaultTwoSeed,
     swapFeeBps,
   };
 }
