@@ -1257,8 +1257,6 @@ struct ManagerOp {
     summary: String,
     /// The CV program's metadata account (InitValidatorManager only)
     program_meta: Option<[u8; 32]>,
-    /// The instruction may verify a BLS proof of possession
-    proof: bool,
     /// The table's validator manager, which must sign; None for Init
     manager: Option<[u8; 32]>,
     encode: ManagerEncode,
@@ -1345,7 +1343,6 @@ async fn handle_manager_command(
                 action: "init_validator_manager",
                 summary: format!("init-validator-manager {}", to_address_string(&manager)),
                 program_meta: Some(program_meta),
-                proof: false,
                 manager: None,
                 encode: Arc::new(move |table_idx: u64, meta_idx: Option<u16>| {
                     build_cv_init_validator_manager_instruction(table_idx, meta_idx.unwrap_or_default(), manager)
@@ -1360,7 +1357,6 @@ async fn handle_manager_command(
                 action: "set_validator_manager",
                 summary: format!("set-validator-manager {}", to_address_string(&new_manager)),
                 program_meta: None,
-                proof: false,
                 manager: Some(require_manager(&table)?),
                 encode: Arc::new(move |table_idx: u64, _: Option<u16>| {
                     build_cv_set_validator_manager_instruction(table_idx, new_manager)
@@ -1375,7 +1371,6 @@ async fn handle_manager_command(
                 action: "set_self_service",
                 summary: format!("set-self-service {}", if enabled { "on" } else { "off" }),
                 program_meta: None,
-                proof: false,
                 manager: Some(require_manager(&table)?),
                 encode: Arc::new(move |table_idx: u64, _: Option<u16>| build_cv_set_self_service_instruction(table_idx, enabled)),
             };
@@ -1420,7 +1415,6 @@ async fn handle_manager_command(
                 action: "manager_activate",
                 summary: format!("manager-activate {} weight {}", to_address_string(&identity), weight),
                 program_meta: None,
-                proof: true,
                 manager: Some(require_manager(&table)?),
                 encode: Arc::new(move |table_idx: u64, _: Option<u16>| {
                     build_cv_manager_activate_instruction(table_idx, identity, bls_pubkey, bls_pop, claim_authority, weight)
@@ -1436,7 +1430,6 @@ async fn handle_manager_command(
                 action: "manager_deactivate",
                 summary: format!("manager-deactivate {}", to_address_string(&identity)),
                 program_meta: None,
-                proof: false,
                 manager: Some(require_manager(&table)?),
                 encode: Arc::new(move |table_idx: u64, _: Option<u16>| build_cv_manager_deactivate_instruction(table_idx, identity)),
             };
@@ -1455,7 +1448,6 @@ async fn handle_manager_command(
                 action: "manager_set_weight",
                 summary: format!("manager-set-weight {} weight {}", to_address_string(&identity), weight),
                 program_meta: None,
-                proof: false,
                 manager: Some(require_manager(&table)?),
                 encode: Arc::new(move |table_idx: u64, _: Option<u16>| {
                     build_cv_manager_set_weight_instruction(table_idx, identity, weight)
@@ -1495,7 +1487,6 @@ async fn handle_manager_command(
                     attestor_decay_fraction_bps
                 ),
                 program_meta: None,
-                proof: false,
                 manager: Some(require_manager(&table)?),
                 encode: Arc::new(move |table_idx: u64, _: Option<u16>| build_cv_set_params_instruction(table_idx, &params)),
             };
@@ -1553,7 +1544,6 @@ async fn run_manager_op(
         context.fee_payer_keypair.public_key,
         accounts,
         op.program_meta,
-        op.proof,
         move |table_idx, meta_idx| encode(table_idx, meta_idx),
         CONSENSUS_VALIDATOR_FEE,
         context.nonce,

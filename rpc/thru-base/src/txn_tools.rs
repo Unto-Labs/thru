@@ -7652,35 +7652,56 @@ pub fn build_cv_manager_set_weight_instruction(attestor_table_idx: u64, identity
     data
 }
 
+/// The compute units a consensus validator manager instruction needs when
+/// a Multisig executes it, or None when the Multisig's default execute
+/// budget is enough. `build_cv_manager_with_accounts` requests the same
+/// budget for the instruction sent directly (and the CV default for the
+/// None ones), so both paths read this one table:
+/// - ManagerActivate verifies a BLS proof of possession, which alone costs
+///   over 500M units (test_consensus_validator_program checks this for the
+///   same check in Activate).
+/// - ManagerDeactivate and ManagerSetWeight finalize the slot, which pays
+///   out every expiring pending block across the seats, and then post a
+///   weight update, so their cost grows with the table.
+/// - The other manager instructions only read and write the table header.
+pub fn cv_manager_compute_units(instruction: &[u8]) -> Option<u32> {
+    let discriminant = u32::from_le_bytes(instruction.get(..4)?.try_into().ok()?);
+    match discriminant {
+        CV_INSTRUCTION_MANAGER_ACTIVATE => Some(CONSENSUS_VALIDATOR_PROOF_COMPUTE_UNITS),
+        CV_INSTRUCTION_MANAGER_DEACTIVATE | CV_INSTRUCTION_MANAGER_SET_WEIGHT => {
+            Some(CONSENSUS_VALIDATOR_COMPUTE_UNITS)
+        }
+        _ => None,
+    }
+}
+
 impl TransactionBuilder {
     /// A consensus validator manager transaction: the attestor table
     /// (writable) and, for InitValidatorManager, the program's metadata
     /// account (read-only). `encode` gets the table's index and the
     /// metadata's. The fee payer is the authority (the manager, or the
-    /// application authority for InitValidatorManager). `proof` raises the
-    /// compute budget for an instruction that verifies a BLS proof of
-    /// possession (ManagerActivate).
-    #[allow(clippy::too_many_arguments)]
+    /// application authority for InitValidatorManager). The compute budget
+    /// is `cv_manager_compute_units` of the encoded instruction (the one a
+    /// Multisig execute gets), else the CV default.
     pub fn build_cv_manager_with_accounts(
         fee_payer: TnPubkey,
         accounts: ConsensusValidatorAccounts,
         program_meta: Option<TnPubkey>,
-        proof: bool,
         encode: impl FnOnce(u64, Option<u16>) -> Vec<u8>,
         fee: u64,
         nonce: u64,
         start_slot: u64,
     ) -> Result<Transaction> {
-        let mut tx = build_consensus_validator_tx(fee_payer, accounts.program, fee, nonce, start_slot);
-        if proof {
-            tx = tx.with_compute_units(CONSENSUS_VALIDATOR_PROOF_COMPUTE_UNITS);
-        }
+        let tx = build_consensus_validator_tx(fee_payer, accounts.program, fee, nonce, start_slot);
         let mut tx_accounts = vec![(accounts.attestor_table, true)];
         if let Some(meta) = program_meta {
             tx_accounts.push((meta, false));
         }
-        let (tx, indices) = add_sorted_accounts(tx, &tx_accounts);
+        let (mut tx, indices) = add_sorted_accounts(tx, &tx_accounts);
         let data = encode(indices[0] as u64, program_meta.map(|_| indices[1]));
+        if let Some(units) = cv_manager_compute_units(&data) {
+            tx = tx.with_compute_units(units);
+        }
         Ok(tx.with_instructions(data))
     }
 }
@@ -7737,7 +7758,6 @@ mod cv_manager_instruction_tests {
             [1u8; 32],
             accounts,
             Some(meta),
-            false,
             |table, meta_idx| {
                 seen = Some((table, meta_idx));
                 build_cv_init_validator_manager_instruction(table, meta_idx.unwrap(), [5u8; 32])
@@ -7750,6 +7770,60 @@ mod cv_manager_instruction_tests {
         /* The table is the only writable account (2); the metadata is the
            only read-only one (3). */
         assert_eq!(seen, Some((2, Some(3))));
+    }
+
+    /* Each manager instruction's budget, sent directly and through a
+       Multisig execute.  The direct transaction reads the budget from the
+       instruction it encodes, so a ManagerActivate can't go out with the
+       500M default.  The Multisig hint equals the direct budget wherever
+       the instruction needs more than the execute default. */
+    #[test]
+    fn manager_compute_units_match_the_direct_transaction() {
+        let key = [7u8; 32];
+        let params = CvStakeParams {
+            stake_units_per_weight: 1,
+            min_stake: 1,
+            max_decay_bps: 0,
+            idle_gap_decay_bps: 0,
+            max_idle_gap_decay_bps: 0,
+            attestor_decay_fraction_bps: 0,
+        };
+        /* (instruction, the Multisig execute hint, the direct request) */
+        let cases: [(Vec<u8>, Option<u32>, u32); 7] = [
+            (
+                build_cv_manager_activate_instruction(2, key, [1; 96], [2; 192], [3; 32], 100),
+                Some(1_000_000_000),
+                1_000_000_000,
+            ),
+            (build_cv_manager_deactivate_instruction(2, key), Some(500_000_000), 500_000_000),
+            (build_cv_manager_set_weight_instruction(2, key, 300), Some(500_000_000), 500_000_000),
+            (build_cv_init_validator_manager_instruction(2, 3, key), None, 500_000_000),
+            (build_cv_set_validator_manager_instruction(2, key), None, 500_000_000),
+            (build_cv_set_self_service_instruction(2, true), None, 500_000_000),
+            (build_cv_set_params_instruction(2, &params), None, 500_000_000),
+        ];
+        for (data, hint, direct_units) in cases {
+            let discriminant = data[0];
+            assert_eq!(cv_manager_compute_units(&data), hint, "discriminant {}", discriminant);
+            let encoded = data.clone();
+            let direct = TransactionBuilder::build_cv_manager_with_accounts(
+                [1u8; 32],
+                ConsensusValidatorAccounts::default(),
+                None,
+                move |_, _| encoded,
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+            assert_eq!(direct.req_compute_units, direct_units, "discriminant {}", discriminant);
+            assert_eq!(direct.instructions.as_deref(), Some(&data[..]), "discriminant {}", discriminant);
+        }
+
+        assert_eq!(cv_manager_compute_units(&[]), None);
+        assert_eq!(cv_manager_compute_units(&CV_INSTRUCTION_MANAGER_ACTIVATE.to_le_bytes()[..3]), None);
+        /* Activate (1) is top level only: a nested call reverts at once. */
+        assert_eq!(cv_manager_compute_units(&1u32.to_le_bytes()), None);
     }
 }
 

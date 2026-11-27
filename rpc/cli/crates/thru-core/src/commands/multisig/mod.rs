@@ -88,12 +88,17 @@ pub async fn handle_multisig_command(
             request,
             compute_units,
             state_units,
+            consensus_program,
             expect_code_hash,
             expect_abi_hash,
             yes,
             common,
         } => {
-            let ctx = Ctx::new(config, &common, json)?;
+            let mut ctx = Ctx::new(config, &common, json)?;
+            ctx.consensus_program = consensus_program
+                .as_deref()
+                .map(validate_address_or_hex)
+                .transpose()?;
             execute(
                 &ctx,
                 &request,
@@ -122,6 +127,11 @@ pub(crate) struct Ctx<'a> {
     pub client: Client,
     pub program: TnPubkey,
     pub json: bool,
+    /// A consensus validator program the executor names with `multisig
+    /// execute --consensus-program`, besides the configured and bootstrap
+    /// ones. Only the executor sets it: a request can't claim its own target
+    /// is the CV program.
+    pub consensus_program: Option<TnPubkey>,
     names: HashMap<TnPubkey, String>,
 }
 
@@ -168,6 +178,7 @@ impl<'a> Ctx<'a> {
             client,
             program,
             json,
+            consensus_program: None,
             names,
         })
     }
@@ -952,6 +963,22 @@ async fn recheck(ctx: &Ctx<'_>, rk: &TnPubkey, shown: &RequestAccount) -> Result
     Ok(())
 }
 
+/// The execute transaction's (compute, state) units: an explicit
+/// `--compute-units` / `--state-units`, else the decoder's hint for the
+/// action, else the default.
+fn execute_units(
+    compute_units: Option<u32>,
+    state_units: Option<u16>,
+    hints: decode::ExecHints,
+) -> (u32, u16) {
+    (
+        compute_units
+            .or(hints.compute_units)
+            .unwrap_or(ms::EXECUTE_COMPUTE_UNITS),
+        state_units.or(hints.state_units).unwrap_or(0),
+    )
+}
+
 async fn execute(
     ctx: &Ctx<'_>,
     request: &str,
@@ -1007,10 +1034,7 @@ async fn execute(
     recheck(ctx, &rk, &r).await?;
     let layout = MultisigLayout::from_request(payer.public_key, ctx.program, r.multisig, rk, &r)
         .map_err(|e| CliError::Validation(e.to_string()))?;
-    let cu = compute_units
-        .or(d.hints.compute_units)
-        .unwrap_or(ms::EXECUTE_COMPUTE_UNITS);
-    let su = state_units.or(d.hints.state_units).unwrap_or(0);
+    let (cu, su) = execute_units(compute_units, state_units, d.hints);
     let p = ctx.tx_params(&payer).await?;
     let tx = ms::build_execute_tx(&layout, r.multisig, rk, cu, su, &p).map_err(build_err)?;
     let det = ctx.submit(tx, &payer).await?;
@@ -1075,6 +1099,10 @@ pub(crate) struct ProposeSpec {
     pub build: Box<dyn Fn(&MultisigLayout, &TnPubkey) -> Result<RequestPayload, CliError> + Send>,
     /// Request seed pinned by `--show-layout`; otherwise derived from the next request id.
     pub request_seed: Option<[u8; 32]>,
+    /// Arguments `thru multisig execute` should get for this request (such
+    /// as `--consensus-program`), shown with the execute command and, with
+    /// --json, as `execute_args`.
+    pub execute_args: Vec<String>,
 }
 
 impl ProposeSpec {
@@ -1098,6 +1126,7 @@ impl ProposeSpec {
                 invoke_payload(layout, *multisig, target, &accounts, data)
             }),
             request_seed: None,
+            execute_args: Vec::new(),
         }
     }
 
@@ -1108,6 +1137,7 @@ impl ProposeSpec {
             child_ro: vec![],
             build: Box::new(move |_, _| Ok(payload.clone())),
             request_seed: None,
+            execute_args: Vec::new(),
         }
     }
 }
@@ -1643,33 +1673,38 @@ pub(crate) async fn propose(
     } else {
         text.push(format!("Not approved yet: 0/{} approvals", required));
     }
+    let execute_cmd = std::iter::once(format!("thru multisig execute {}", addr(&rk)))
+        .chain(spec.execute_args.iter().cloned())
+        .collect::<Vec<_>>()
+        .join(" ");
     if approvals >= required as u32 {
-        text.push(format!(
-            "Ready to execute: thru multisig execute {}",
-            addr(&rk)
-        ));
+        text.push(format!("Ready to execute: {}", execute_cmd));
     } else {
         text.push(format!(
             "Needs {} more approval(s): thru multisig approve {} --fee-payer <member>",
             required as u32 - approvals,
             addr(&rk)
         ));
+        if !spec.execute_args.is_empty() {
+            text.push(format!("Then execute with: {}", execute_cmd));
+        }
     }
-    ctx.emit(
-        json!({"multisig_propose": {
-            "status": "success",
-            "multisig": addr(&msk),
-            "request": addr(&rk),
-            "request_id": request_id,
-            "kind": ms::kind_name(payload.kind()),
-            "summary": spec.summary,
-            "approvals": approvals,
-            "required": required,
-            "signature": sig(&created),
-            "approve_signature": approve_sig,
-        }}),
-        &text,
-    );
+    let mut out = json!({
+        "status": "success",
+        "multisig": addr(&msk),
+        "request": addr(&rk),
+        "request_id": request_id,
+        "kind": ms::kind_name(payload.kind()),
+        "summary": spec.summary,
+        "approvals": approvals,
+        "required": required,
+        "signature": sig(&created),
+        "approve_signature": approve_sig,
+    });
+    if !spec.execute_args.is_empty() {
+        out["execute_args"] = json!(spec.execute_args);
+    }
+    ctx.emit(json!({ "multisig_propose": out }), &text);
     Ok(())
 }
 
@@ -1734,5 +1769,22 @@ mod tests {
         let plain = described("manager.upgrade", Some("ab12"));
         assert!(plain.check_pins(pins(Some("ab12"), None)).is_ok());
         assert!(plain.check_pins(pins(Some("ab12"), Some("cd34"))).is_err());
+    }
+
+    /* An explicit --compute-units / --state-units beats the decoder's hint
+       (such as a validator manager instruction's budget), which beats the
+       default. */
+    #[test]
+    fn explicit_execute_units_override_the_hints() {
+        let hinted = decode::ExecHints {
+            compute_units: Some(1_000_000_000),
+            state_units: Some(3),
+        };
+        assert_eq!(execute_units(None, None, hinted), (1_000_000_000, 3));
+        assert_eq!(execute_units(Some(7), Some(1), hinted), (7, 1));
+        assert_eq!(
+            execute_units(None, None, decode::ExecHints::default()),
+            (ms::EXECUTE_COMPUTE_UNITS, 0)
+        );
     }
 }

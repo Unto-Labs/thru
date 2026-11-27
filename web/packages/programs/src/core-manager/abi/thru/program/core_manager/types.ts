@@ -1567,7 +1567,7 @@ return c; })(buffer);
 }
 
 export class CoreManagerErrorBuilder {
-  private tag: number | null = null;
+  private tag: bigint | null = null;
   private payload: Uint8Array | null = null;
 
   constructor() {}
@@ -1575,7 +1575,7 @@ export class CoreManagerErrorBuilder {
   select_instruction(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_instruction expects 0 bytes");
-    this.tag = 4097;
+    this.tag = 4097n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -1583,7 +1583,7 @@ export class CoreManagerErrorBuilder {
   select_binding(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_binding expects 0 bytes");
-    this.tag = 4098;
+    this.tag = 4098n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -1591,7 +1591,7 @@ export class CoreManagerErrorBuilder {
   select_config(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_config expects 0 bytes");
-    this.tag = 4099;
+    this.tag = 4099n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -1599,7 +1599,7 @@ export class CoreManagerErrorBuilder {
   select_admin(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_admin expects 0 bytes");
-    this.tag = 4100;
+    this.tag = 4100n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -1607,7 +1607,7 @@ export class CoreManagerErrorBuilder {
   select_authorization(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_authorization expects 0 bytes");
-    this.tag = 4101;
+    this.tag = 4101n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -1615,7 +1615,7 @@ export class CoreManagerErrorBuilder {
   select_account(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_account expects 0 bytes");
-    this.tag = 4102;
+    this.tag = 4102n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -1623,7 +1623,7 @@ export class CoreManagerErrorBuilder {
   select_state(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_state expects 0 bytes");
-    this.tag = 4103;
+    this.tag = 4103n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -1631,7 +1631,7 @@ export class CoreManagerErrorBuilder {
   select_protected(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_protected expects 0 bytes");
-    this.tag = 4104;
+    this.tag = 4104n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -1639,7 +1639,7 @@ export class CoreManagerErrorBuilder {
   select_image(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_image expects 0 bytes");
-    this.tag = 4105;
+    this.tag = 4105n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -1647,7 +1647,7 @@ export class CoreManagerErrorBuilder {
   select_proof(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_proof expects 0 bytes");
-    this.tag = 4106;
+    this.tag = 4106n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -1655,16 +1655,16 @@ export class CoreManagerErrorBuilder {
   select_namespace(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_namespace expects 0 bytes");
-    this.tag = 4107;
+    this.tag = 4107n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
 
   build(): Uint8Array {
     if (this.tag === null || !this.payload) throw new Error("CoreManagerError builder missing variant");
-    const buffer = new Uint8Array(1 + this.payload.length);
-    buffer[0] = this.tag;
-    buffer.set(this.payload, 1);
+    const buffer = new Uint8Array(8 + this.payload.length);
+    new DataView(buffer.buffer).setBigUint64(0, this.tag, true);
+    buffer.set(this.payload, 8);
     __tnBuilderValidateOrThrow("CoreManagerError", CoreManagerError.validate(buffer));
     return buffer;
   }

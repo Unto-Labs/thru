@@ -1542,8 +1542,299 @@ const __tn_ir_PasskeyError = {
   root: { op: "const", value: 8n }
 } as const;
 
+export class PasskeyError_error_invalid_instruction_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PasskeyError_error_invalid_instruction_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PasskeyError_error_invalid_instruction_Inner.__tnCreateView requires a Uint8Array");
+    return new PasskeyError_error_invalid_instruction_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PasskeyError_error_invalid_account_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PasskeyError_error_invalid_account_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PasskeyError_error_invalid_account_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new PasskeyError_error_invalid_account_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PasskeyError_error_account_not_found_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PasskeyError_error_account_not_found_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PasskeyError_error_account_not_found_Inner.__tnCreateView requires a Uint8Array");
+    return new PasskeyError_error_account_not_found_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PasskeyError_error_account_not_writable_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PasskeyError_error_account_not_writable_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PasskeyError_error_account_not_writable_Inner.__tnCreateView requires a Uint8Array");
+    return new PasskeyError_error_account_not_writable_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PasskeyError_error_invalid_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PasskeyError_error_invalid_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PasskeyError_error_invalid_size_Inner.__tnCreateView requires a Uint8Array");
+    return new PasskeyError_error_invalid_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PasskeyError_error_invalid_owner_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PasskeyError_error_invalid_owner_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PasskeyError_error_invalid_owner_Inner.__tnCreateView requires a Uint8Array");
+    return new PasskeyError_error_invalid_owner_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PasskeyError_error_invalid_signature_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PasskeyError_error_invalid_signature_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PasskeyError_error_invalid_signature_Inner.__tnCreateView requires a Uint8Array");
+    return new PasskeyError_error_invalid_signature_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PasskeyError_error_not_validated_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PasskeyError_error_not_validated_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PasskeyError_error_not_validated_Inner.__tnCreateView requires a Uint8Array");
+    return new PasskeyError_error_not_validated_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PasskeyError_error_account_already_exists_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PasskeyError_error_account_already_exists_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PasskeyError_error_account_already_exists_Inner.__tnCreateView requires a Uint8Array");
+    return new PasskeyError_error_account_already_exists_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PasskeyError_error_invalid_challenge_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PasskeyError_error_invalid_challenge_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PasskeyError_error_invalid_challenge_Inner.__tnCreateView requires a Uint8Array");
+    return new PasskeyError_error_invalid_challenge_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PasskeyError_error_authority_expired_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PasskeyError_error_authority_expired_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PasskeyError_error_authority_expired_Inner.__tnCreateView requires a Uint8Array");
+    return new PasskeyError_error_authority_expired_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PasskeyError_error_passkey_required_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PasskeyError_error_passkey_required_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PasskeyError_error_passkey_required_Inner.__tnCreateView requires a Uint8Array");
+    return new PasskeyError_error_passkey_required_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PasskeyError_error_session_expiry_too_long_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PasskeyError_error_session_expiry_too_long_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("PasskeyError_error_session_expiry_too_long_Inner.__tnCreateView requires a Uint8Array");
+    return new PasskeyError_error_session_expiry_too_long_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class PasskeyError_error_Inner {
+  private view: DataView;
+  private __tnFieldContext: Record<string, number | bigint> | null = null;
+  private constructor(private buffer: Uint8Array, private descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    this.__tnFieldContext = fieldContext ?? null;
+  }
+
+  static __tnCreate(payload: Uint8Array, descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>): PasskeyError_error_Inner {
+    return new PasskeyError_error_Inner(new Uint8Array(payload), descriptor, fieldContext);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): PasskeyError_error_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["code"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 81)) descriptor = { name: "invalid_instruction", tag: 81, payloadSize: 0 };
+      if (__tnTagEquals(tag, 82)) descriptor = { name: "invalid_account_idx", tag: 82, payloadSize: 0 };
+      if (__tnTagEquals(tag, 83)) descriptor = { name: "account_not_found", tag: 83, payloadSize: 0 };
+      if (__tnTagEquals(tag, 84)) descriptor = { name: "account_not_writable", tag: 84, payloadSize: 0 };
+      if (__tnTagEquals(tag, 85)) descriptor = { name: "invalid_size", tag: 85, payloadSize: 0 };
+      if (__tnTagEquals(tag, 86)) descriptor = { name: "invalid_owner", tag: 86, payloadSize: 0 };
+      if (__tnTagEquals(tag, 87)) descriptor = { name: "invalid_signature", tag: 87, payloadSize: 0 };
+      if (__tnTagEquals(tag, 88)) descriptor = { name: "not_validated", tag: 88, payloadSize: 0 };
+      if (__tnTagEquals(tag, 89)) descriptor = { name: "account_already_exists", tag: 89, payloadSize: 0 };
+      if (__tnTagEquals(tag, 90)) descriptor = { name: "invalid_challenge", tag: 90, payloadSize: 0 };
+      if (__tnTagEquals(tag, 91)) descriptor = { name: "authority_expired", tag: 91, payloadSize: 0 };
+      if (__tnTagEquals(tag, 92)) descriptor = { name: "passkey_required", tag: 92, payloadSize: 0 };
+      if (__tnTagEquals(tag, 93)) descriptor = { name: "session_expiry_too_long", tag: 93, payloadSize: 0 };
+    }
+    return new PasskeyError_error_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
+  bytes(): Uint8Array {
+    return new Uint8Array(this.buffer);
+  }
+
+  variant(): __TnVariantDescriptor | null {
+    return this.descriptor;
+  }
+
+  asInvalidInstruction(): PasskeyError_error_invalid_instruction_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 81)) return null;
+    return PasskeyError_error_invalid_instruction_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidAccountIdx(): PasskeyError_error_invalid_account_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 82)) return null;
+    return PasskeyError_error_invalid_account_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAccountNotFound(): PasskeyError_error_account_not_found_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 83)) return null;
+    return PasskeyError_error_account_not_found_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAccountNotWritable(): PasskeyError_error_account_not_writable_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 84)) return null;
+    return PasskeyError_error_account_not_writable_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidSize(): PasskeyError_error_invalid_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 85)) return null;
+    return PasskeyError_error_invalid_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidOwner(): PasskeyError_error_invalid_owner_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 86)) return null;
+    return PasskeyError_error_invalid_owner_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidSignature(): PasskeyError_error_invalid_signature_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 87)) return null;
+    return PasskeyError_error_invalid_signature_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asNotValidated(): PasskeyError_error_not_validated_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 88)) return null;
+    return PasskeyError_error_not_validated_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAccountAlreadyExists(): PasskeyError_error_account_already_exists_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 89)) return null;
+    return PasskeyError_error_account_already_exists_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidChallenge(): PasskeyError_error_invalid_challenge_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 90)) return null;
+    return PasskeyError_error_invalid_challenge_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAuthorityExpired(): PasskeyError_error_authority_expired_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 91)) return null;
+    return PasskeyError_error_authority_expired_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asPasskeyRequired(): PasskeyError_error_passkey_required_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 92)) return null;
+    return PasskeyError_error_passkey_required_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSessionExpiryTooLong(): PasskeyError_error_session_expiry_too_long_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 93)) return null;
+    return PasskeyError_error_session_expiry_too_long_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+}
+
 export class PasskeyError {
   private view: DataView;
+  private static readonly __tnFieldOffset_error = 8;
 
   private constructor(private buffer: Uint8Array) {
     this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
@@ -1563,6 +1854,100 @@ export class PasskeyError {
     return PasskeyError.from_array(buffer);
   }
 
+  static readonly errorVariantDescriptors = Object.freeze([
+    {
+      name: "invalid_instruction",
+      tag: 81,
+      payloadSize: 0,
+      payloadType: "PasskeyError::error::invalid_instruction",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_account_idx",
+      tag: 82,
+      payloadSize: 0,
+      payloadType: "PasskeyError::error::invalid_account_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "account_not_found",
+      tag: 83,
+      payloadSize: 0,
+      payloadType: "PasskeyError::error::account_not_found",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "account_not_writable",
+      tag: 84,
+      payloadSize: 0,
+      payloadType: "PasskeyError::error::account_not_writable",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_size",
+      tag: 85,
+      payloadSize: 0,
+      payloadType: "PasskeyError::error::invalid_size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_owner",
+      tag: 86,
+      payloadSize: 0,
+      payloadType: "PasskeyError::error::invalid_owner",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_signature",
+      tag: 87,
+      payloadSize: 0,
+      payloadType: "PasskeyError::error::invalid_signature",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "not_validated",
+      tag: 88,
+      payloadSize: 0,
+      payloadType: "PasskeyError::error::not_validated",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "account_already_exists",
+      tag: 89,
+      payloadSize: 0,
+      payloadType: "PasskeyError::error::account_already_exists",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_challenge",
+      tag: 90,
+      payloadSize: 0,
+      payloadType: "PasskeyError::error::invalid_challenge",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "authority_expired",
+      tag: 91,
+      payloadSize: 0,
+      payloadType: "PasskeyError::error::authority_expired",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "passkey_required",
+      tag: 92,
+      payloadSize: 0,
+      payloadType: "PasskeyError::error::passkey_required",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "session_expiry_too_long",
+      tag: 93,
+      payloadSize: 0,
+      payloadType: "PasskeyError::error::session_expiry_too_long",
+      createPayloadBuilder: () => null,
+    },
+  ] as const);
+
   get_code(): bigint {
     const offset = 0;
     return this.view.getBigUint64(offset, true); /* little-endian */
@@ -1579,6 +1964,22 @@ export class PasskeyError {
 
   set code(value: bigint) {
     this.set_code(value);
+  }
+
+  errorVariant(): typeof PasskeyError.errorVariantDescriptors[number] | null {
+    const tag: number | bigint | null = this.get_code();
+    return PasskeyError.errorVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
+  }
+
+  error(): PasskeyError_error_Inner {
+    const descriptor = this.errorVariant();
+    if (!descriptor) throw new Error("PasskeyError: unknown error variant");
+    const offset = PasskeyError.__tnFieldOffset_error;
+    const remaining = this.buffer.length - offset;
+    const payloadLength = descriptor.payloadSize ?? remaining;
+    if (payloadLength < 0 || offset + payloadLength > this.buffer.length) throw new Error("PasskeyError: payload exceeds buffer bounds");
+    const slice = this.buffer.subarray(offset, offset + payloadLength);
+    return PasskeyError_error_Inner.__tnCreate(slice, descriptor, undefined);
   }
 
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
@@ -1612,17 +2013,35 @@ export class PasskeyError {
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
     if (buffer.length < 8) return { ok: false, code: "tn.buffer_too_small", consumed: 8 };
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed: 8 };
   }
 
-  static new(code: bigint): PasskeyError {
-    const buffer = new Uint8Array(8);
-    const view = new DataView(buffer.buffer);
-
-    let offset = 0;
-    view.setBigUint64(0, code, true); /* code (little-endian) */
-
-    return new PasskeyError(buffer);
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 8 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 81n: t3 = 0; break;
+  case 82n: t3 = 0; break;
+  case 83n: t3 = 0; break;
+  case 84n: t3 = 0; break;
+  case 85n: t3 = 0; break;
+  case 86n: t3 = 0; break;
+  case 87n: t3 = 0; break;
+  case 88n: t3 = 0; break;
+  case 89n: t3 = 0; break;
+  case 90n: t3 = 0; break;
+  case 91n: t3 = 0; break;
+  case 92n: t3 = 0; break;
+  case 93n: t3 = 0; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array): PasskeyError | null {
@@ -1640,35 +2059,133 @@ export class PasskeyError {
 }
 
 export class PasskeyErrorBuilder {
-  private buffer: Uint8Array;
-  private view: DataView;
+  private tag: bigint | null = null;
+  private payload: Uint8Array | null = null;
 
-  constructor() {
-    this.buffer = new Uint8Array(8);
-    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  constructor() {}
+
+  select_invalid_instruction(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_instruction expects 0 bytes");
+    this.tag = 81n;
+    this.payload = new Uint8Array(bytes);
+    return this;
   }
 
-  set_code(value: bigint): this {
-    const cast = __tnToBigInt(value);
-    this.view.setBigUint64(0, cast, true);
+  select_invalid_account_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_account_idx expects 0 bytes");
+    this.tag = 82n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_account_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_account_not_found expects 0 bytes");
+    this.tag = 83n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_account_not_writable(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_account_not_writable expects 0 bytes");
+    this.tag = 84n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_size expects 0 bytes");
+    this.tag = 85n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_owner(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_owner expects 0 bytes");
+    this.tag = 86n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_signature(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_signature expects 0 bytes");
+    this.tag = 87n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_not_validated(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_not_validated expects 0 bytes");
+    this.tag = 88n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_account_already_exists(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_account_already_exists expects 0 bytes");
+    this.tag = 89n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_challenge(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_challenge expects 0 bytes");
+    this.tag = 90n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_authority_expired(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_authority_expired expects 0 bytes");
+    this.tag = 91n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_passkey_required(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_passkey_required expects 0 bytes");
+    this.tag = 92n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_session_expiry_too_long(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_session_expiry_too_long expects 0 bytes");
+    this.tag = 93n;
+    this.payload = new Uint8Array(bytes);
     return this;
   }
 
   build(): Uint8Array {
-    const buffer = this.buffer.slice();
+    if (this.tag === null || !this.payload) throw new Error("PasskeyError builder missing variant");
+    const buffer = new Uint8Array(8 + this.payload.length);
+    new DataView(buffer.buffer).setBigUint64(0, this.tag, true);
+    buffer.set(this.payload, 8);
     __tnBuilderValidateOrThrow("PasskeyError", PasskeyError.validate(buffer));
     return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
-    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
-    __tnBuilderValidateOrThrow("PasskeyError", PasskeyError.validate(this.buffer));
-    target.set(this.buffer, offset);
+    const bytes = this.build();
+    if (target.length - offset < bytes.length) throw new Error("target buffer too small");
+    target.set(bytes, offset);
     return target;
   }
 
   finish(): PasskeyError {
-    const view = PasskeyError.from_array(this.buffer.slice());
+    const view = PasskeyError.from_array(this.build());
     if (!view) throw new Error("failed to build PasskeyError");
     return view;
   }
@@ -2750,6 +3267,7 @@ export class ValidateArgsBuilder {
       this.__tnFamWriter_authenticator_data = __tnCreateFamWriter(this, "authenticator_data", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 65535) throw new Error("ValidateArgsBuilder: authenticator_data has more than 65535 elements");
         this.__tnFam_authenticator_data = bytes;
         this.__tnFam_authenticator_dataCount = elementCount;
         this.set_authenticator_data_len(elementCount);
@@ -2764,6 +3282,7 @@ export class ValidateArgsBuilder {
       this.__tnFamWriter_client_data = __tnCreateFamWriter(this, "client_data", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 65535) throw new Error("ValidateArgsBuilder: client_data has more than 65535 elements");
         this.__tnFam_client_data = bytes;
         this.__tnFam_client_dataCount = elementCount;
         this.set_client_data_len(elementCount);
@@ -2784,7 +3303,13 @@ export class ValidateArgsBuilder {
     return this;
   }
 
+  private __tnSyncLengths(): void {
+    if (this.__tnFam_authenticator_dataCount !== null) this.set_authenticator_data_len(this.__tnFam_authenticator_dataCount);
+    if (this.__tnFam_client_dataCount !== null) this.set_client_data_len(this.__tnFam_client_dataCount);
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = ValidateArgs.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -2794,6 +3319,7 @@ export class ValidateArgsBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = ValidateArgs.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("ValidateArgsBuilder: target buffer too small");
@@ -5464,7 +5990,11 @@ export class CreateArgsBuilder {
     return this;
   }
 
+  private __tnSyncLengths(): void {
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = CreateArgs.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -5474,6 +6004,7 @@ export class CreateArgsBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = CreateArgs.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("CreateArgsBuilder: target buffer too small");
@@ -5956,7 +6487,11 @@ export class RegisterCredentialArgsBuilder {
     return this;
   }
 
+  private __tnSyncLengths(): void {
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = RegisterCredentialArgs.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -5966,6 +6501,7 @@ export class RegisterCredentialArgsBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = RegisterCredentialArgs.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("RegisterCredentialArgsBuilder: target buffer too small");

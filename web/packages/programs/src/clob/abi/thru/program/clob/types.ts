@@ -1755,8 +1755,1519 @@ const __tn_ir_ClobError = {
   root: { op: "const", value: 8n }
 } as const;
 
+export class ClobError_error_invalid_instr_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_invalid_instr_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_invalid_instr_size_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_invalid_instr_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_invalid_instr_type_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_invalid_instr_type_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_invalid_instr_type_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_invalid_instr_type_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_invalid_exchange_init_proof_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_invalid_exchange_init_proof_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_invalid_exchange_init_proof_size_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_invalid_exchange_init_proof_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_invalid_status_flags_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_invalid_status_flags_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_invalid_status_flags_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_invalid_status_flags_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_indivisible_price_ticks_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_indivisible_price_ticks_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_indivisible_price_ticks_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_indivisible_price_ticks_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_indivisible_qty_lots_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_indivisible_qty_lots_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_indivisible_qty_lots_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_indivisible_qty_lots_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_over_max_price_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_over_max_price_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_over_max_price_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_over_max_price_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_invalid_lot_or_tick_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_invalid_lot_or_tick_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_invalid_lot_or_tick_size_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_invalid_lot_or_tick_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_notional_overflow_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_notional_overflow_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_notional_overflow_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_notional_overflow_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_gtt_order_expired_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_gtt_order_expired_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_gtt_order_expired_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_gtt_order_expired_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_order_id_not_found_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_order_id_not_found_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_order_id_not_found_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_order_id_not_found_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_client_id_not_found_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_client_id_not_found_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_client_id_not_found_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_client_id_not_found_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_modify_increase_not_allowed_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_modify_increase_not_allowed_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_modify_increase_not_allowed_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_modify_increase_not_allowed_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_ask_bid_side_undef_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_ask_bid_side_undef_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_ask_bid_side_undef_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_ask_bid_side_undef_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_cbook_full_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_cbook_full_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_cbook_full_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_cbook_full_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_invalid_seatless_order_type_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_invalid_seatless_order_type_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_invalid_seatless_order_type_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_invalid_seatless_order_type_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_ob_side_state_mismatch_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_ob_side_state_mismatch_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_ob_side_state_mismatch_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_ob_side_state_mismatch_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_insufficient_funds_quote_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_insufficient_funds_quote_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_insufficient_funds_quote_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_insufficient_funds_quote_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_insufficient_funds_base_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_insufficient_funds_base_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_insufficient_funds_base_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_insufficient_funds_base_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_market_deposits_frozen_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_market_deposits_frozen_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_market_deposits_frozen_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_market_deposits_frozen_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_market_withdrawals_frozen_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_market_withdrawals_frozen_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_market_withdrawals_frozen_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_market_withdrawals_frozen_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_market_paused_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_market_paused_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_market_paused_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_market_paused_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_market_postonly_mode_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_market_postonly_mode_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_market_postonly_mode_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_market_postonly_mode_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_seat_not_found_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_seat_not_found_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_seat_not_found_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_seat_not_found_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_seat_arena_data_not_found_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_seat_arena_data_not_found_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_seat_arena_data_not_found_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_seat_arena_data_not_found_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_seat_arena_full_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_seat_arena_full_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_seat_arena_full_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_seat_arena_full_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_entry_idx_out_of_bounds_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_entry_idx_out_of_bounds_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_entry_idx_out_of_bounds_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_entry_idx_out_of_bounds_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_reserved_seat_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_reserved_seat_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_reserved_seat_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_reserved_seat_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_arena_entry_not_active_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_arena_entry_not_active_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_arena_entry_not_active_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_arena_entry_not_active_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_arena_full_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_arena_full_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_arena_full_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_arena_full_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_invalid_account_type_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_invalid_account_type_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_invalid_account_type_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_invalid_account_type_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_invalid_account_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_invalid_account_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_invalid_account_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_invalid_account_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_invalid_vault_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_invalid_vault_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_invalid_vault_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_invalid_vault_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_exchange_meta_invalid_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_exchange_meta_invalid_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_exchange_meta_invalid_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_exchange_meta_invalid_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_exchange_meta_not_found_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_exchange_meta_not_found_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_exchange_meta_not_found_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_exchange_meta_not_found_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_exchange_meta_wrong_owner_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_exchange_meta_wrong_owner_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_exchange_meta_wrong_owner_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_exchange_meta_wrong_owner_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_exchange_meta_invalid_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_exchange_meta_invalid_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_exchange_meta_invalid_size_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_exchange_meta_invalid_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_exchange_meta_invalid_account_type_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_exchange_meta_invalid_account_type_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_exchange_meta_invalid_account_type_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_exchange_meta_invalid_account_type_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_program_meta_invalid_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_program_meta_invalid_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_program_meta_invalid_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_program_meta_invalid_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_program_meta_not_found_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_program_meta_not_found_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_program_meta_not_found_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_program_meta_not_found_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_program_meta_wrong_owner_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_program_meta_wrong_owner_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_program_meta_wrong_owner_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_program_meta_wrong_owner_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_program_meta_invalid_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_program_meta_invalid_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_program_meta_invalid_size_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_program_meta_invalid_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_token_program_invalid_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_token_program_invalid_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_token_program_invalid_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_token_program_invalid_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_token_program_not_found_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_token_program_not_found_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_token_program_not_found_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_token_program_not_found_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_token_account_not_program_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_token_account_not_program_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_token_account_not_program_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_token_account_not_program_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_token_program_not_canonical_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_token_program_not_canonical_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_token_program_not_canonical_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_token_program_not_canonical_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_invalid_token_account_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_invalid_token_account_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_invalid_token_account_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_invalid_token_account_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_mismatch_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_mismatch_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_mismatch_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_mismatch_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_mismatch_token_program_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_mismatch_token_program_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_mismatch_token_program_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_mismatch_token_program_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_mismatch_seat_auth_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_mismatch_seat_auth_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_mismatch_seat_auth_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_mismatch_seat_auth_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_mismatch_base_vault_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_mismatch_base_vault_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_mismatch_base_vault_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_mismatch_base_vault_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_mismatch_quote_vault_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_mismatch_quote_vault_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_mismatch_quote_vault_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_mismatch_quote_vault_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_mismatch_market_auth_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_mismatch_market_auth_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_mismatch_market_auth_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_mismatch_market_auth_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_mismatch_order_arena_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_mismatch_order_arena_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_mismatch_order_arena_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_mismatch_order_arena_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_mismatch_bids_cbook_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_mismatch_bids_cbook_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_mismatch_bids_cbook_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_mismatch_bids_cbook_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_mismatch_asks_cbook_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_mismatch_asks_cbook_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_mismatch_asks_cbook_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_mismatch_asks_cbook_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_mismatch_exchange_meta_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_mismatch_exchange_meta_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_mismatch_exchange_meta_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_mismatch_exchange_meta_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_mismatch_program_pubkey_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_mismatch_program_pubkey_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_mismatch_program_pubkey_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_mismatch_program_pubkey_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_unauthorized_seat_auth_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_unauthorized_seat_auth_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_unauthorized_seat_auth_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_unauthorized_seat_auth_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_unauthorized_market_auth_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_unauthorized_market_auth_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_unauthorized_market_auth_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_unauthorized_market_auth_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_unauthorized_wallet_owner_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_unauthorized_wallet_owner_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_unauthorized_wallet_owner_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_unauthorized_wallet_owner_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_exchange_auth_invalid_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_exchange_auth_invalid_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_exchange_auth_invalid_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_exchange_auth_invalid_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_exchange_auth_not_signer_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_exchange_auth_not_signer_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_exchange_auth_not_signer_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_exchange_auth_not_signer_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_exchange_auth_mismatch_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_exchange_auth_mismatch_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_exchange_auth_mismatch_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_exchange_auth_mismatch_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_exchange_admin_invalid_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_exchange_admin_invalid_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_exchange_admin_invalid_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_exchange_admin_invalid_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_exchange_admin_not_signer_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_exchange_admin_not_signer_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_exchange_admin_not_signer_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_exchange_admin_not_signer_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_exchange_admin_mismatch_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_exchange_admin_mismatch_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_exchange_admin_mismatch_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_exchange_admin_mismatch_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_new_exchange_admin_invalid_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_new_exchange_admin_invalid_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_new_exchange_admin_invalid_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_new_exchange_admin_invalid_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_program_owned_wallet_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_program_owned_wallet_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_program_owned_wallet_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_program_owned_wallet_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_invalid_market_record_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_invalid_market_record_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_invalid_market_record_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_invalid_market_record_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_market_record_missing_seat_authority_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_market_record_missing_seat_authority_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_market_record_missing_seat_authority_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_market_record_missing_seat_authority_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_market_record_missing_seat_arena_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_market_record_missing_seat_arena_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_market_record_missing_seat_arena_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_market_record_missing_seat_arena_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_market_record_missing_market_auth_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_market_record_missing_market_auth_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_market_record_missing_market_auth_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_market_record_missing_market_auth_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_market_record_mismatch_seat_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_market_record_mismatch_seat_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ClobError_error_market_record_mismatch_seat_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new ClobError_error_market_record_mismatch_seat_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ClobError_error_Inner {
+  private view: DataView;
+  private __tnFieldContext: Record<string, number | bigint> | null = null;
+  private constructor(private buffer: Uint8Array, private descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    this.__tnFieldContext = fieldContext ?? null;
+  }
+
+  static __tnCreate(payload: Uint8Array, descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>): ClobError_error_Inner {
+    return new ClobError_error_Inner(new Uint8Array(payload), descriptor, fieldContext);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ClobError_error_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["code"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 18446744073709551515n)) descriptor = { name: "invalid_instr_size", tag: 18446744073709551515n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551514n)) descriptor = { name: "invalid_instr_type", tag: 18446744073709551514n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551513n)) descriptor = { name: "invalid_exchange_init_proof_size", tag: 18446744073709551513n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551512n)) descriptor = { name: "invalid_status_flags", tag: 18446744073709551512n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551415n)) descriptor = { name: "indivisible_price_ticks", tag: 18446744073709551415n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551414n)) descriptor = { name: "indivisible_qty_lots", tag: 18446744073709551414n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551413n)) descriptor = { name: "over_max_price", tag: 18446744073709551413n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551412n)) descriptor = { name: "invalid_lot_or_tick_size", tag: 18446744073709551412n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551411n)) descriptor = { name: "notional_overflow", tag: 18446744073709551411n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551315n)) descriptor = { name: "gtt_order_expired", tag: 18446744073709551315n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551314n)) descriptor = { name: "order_id_not_found", tag: 18446744073709551314n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551313n)) descriptor = { name: "client_id_not_found", tag: 18446744073709551313n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551312n)) descriptor = { name: "modify_increase_not_allowed", tag: 18446744073709551312n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551311n)) descriptor = { name: "ask_bid_side_undef", tag: 18446744073709551311n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551310n)) descriptor = { name: "cbook_full", tag: 18446744073709551310n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551309n)) descriptor = { name: "invalid_seatless_order_type", tag: 18446744073709551309n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551308n)) descriptor = { name: "ob_side_state_mismatch", tag: 18446744073709551308n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551215n)) descriptor = { name: "insufficient_funds_quote", tag: 18446744073709551215n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551214n)) descriptor = { name: "insufficient_funds_base", tag: 18446744073709551214n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551115n)) descriptor = { name: "market_deposits_frozen", tag: 18446744073709551115n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551114n)) descriptor = { name: "market_withdrawals_frozen", tag: 18446744073709551114n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551113n)) descriptor = { name: "market_paused", tag: 18446744073709551113n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551112n)) descriptor = { name: "market_postonly_mode", tag: 18446744073709551112n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551015n)) descriptor = { name: "seat_not_found", tag: 18446744073709551015n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551014n)) descriptor = { name: "seat_arena_data_not_found", tag: 18446744073709551014n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551013n)) descriptor = { name: "seat_arena_full", tag: 18446744073709551013n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551012n)) descriptor = { name: "entry_idx_out_of_bounds", tag: 18446744073709551012n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551011n)) descriptor = { name: "reserved_seat_idx", tag: 18446744073709551011n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551010n)) descriptor = { name: "arena_entry_not_active", tag: 18446744073709551010n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709551009n)) descriptor = { name: "arena_full", tag: 18446744073709551009n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550915n)) descriptor = { name: "invalid_account_type", tag: 18446744073709550915n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550914n)) descriptor = { name: "invalid_account_idx", tag: 18446744073709550914n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550913n)) descriptor = { name: "invalid_vault_pubkey", tag: 18446744073709550913n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550912n)) descriptor = { name: "exchange_meta_invalid_idx", tag: 18446744073709550912n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550911n)) descriptor = { name: "exchange_meta_not_found", tag: 18446744073709550911n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550910n)) descriptor = { name: "exchange_meta_wrong_owner", tag: 18446744073709550910n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550909n)) descriptor = { name: "exchange_meta_invalid_size", tag: 18446744073709550909n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550908n)) descriptor = { name: "exchange_meta_invalid_account_type", tag: 18446744073709550908n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550906n)) descriptor = { name: "program_meta_invalid_idx", tag: 18446744073709550906n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550905n)) descriptor = { name: "program_meta_not_found", tag: 18446744073709550905n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550904n)) descriptor = { name: "program_meta_wrong_owner", tag: 18446744073709550904n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550903n)) descriptor = { name: "program_meta_invalid_size", tag: 18446744073709550903n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550902n)) descriptor = { name: "token_program_invalid_idx", tag: 18446744073709550902n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550901n)) descriptor = { name: "token_program_not_found", tag: 18446744073709550901n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550900n)) descriptor = { name: "token_account_not_program", tag: 18446744073709550900n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550899n)) descriptor = { name: "token_program_not_canonical", tag: 18446744073709550899n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550898n)) descriptor = { name: "invalid_token_account", tag: 18446744073709550898n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550815n)) descriptor = { name: "mismatch_pubkey", tag: 18446744073709550815n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550814n)) descriptor = { name: "mismatch_token_program_pubkey", tag: 18446744073709550814n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550813n)) descriptor = { name: "mismatch_seat_auth_pubkey", tag: 18446744073709550813n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550812n)) descriptor = { name: "mismatch_base_vault_pubkey", tag: 18446744073709550812n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550811n)) descriptor = { name: "mismatch_quote_vault_pubkey", tag: 18446744073709550811n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550810n)) descriptor = { name: "mismatch_market_auth_pubkey", tag: 18446744073709550810n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550809n)) descriptor = { name: "mismatch_order_arena_pubkey", tag: 18446744073709550809n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550808n)) descriptor = { name: "mismatch_bids_cbook_pubkey", tag: 18446744073709550808n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550807n)) descriptor = { name: "mismatch_asks_cbook_pubkey", tag: 18446744073709550807n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550806n)) descriptor = { name: "mismatch_exchange_meta_pubkey", tag: 18446744073709550806n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550805n)) descriptor = { name: "mismatch_program_pubkey", tag: 18446744073709550805n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550715n)) descriptor = { name: "unauthorized_seat_auth", tag: 18446744073709550715n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550714n)) descriptor = { name: "unauthorized_market_auth", tag: 18446744073709550714n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550713n)) descriptor = { name: "unauthorized_wallet_owner", tag: 18446744073709550713n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550712n)) descriptor = { name: "exchange_auth_invalid_idx", tag: 18446744073709550712n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550711n)) descriptor = { name: "exchange_auth_not_signer", tag: 18446744073709550711n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550710n)) descriptor = { name: "exchange_auth_mismatch", tag: 18446744073709550710n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550709n)) descriptor = { name: "exchange_admin_invalid_idx", tag: 18446744073709550709n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550708n)) descriptor = { name: "exchange_admin_not_signer", tag: 18446744073709550708n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550707n)) descriptor = { name: "exchange_admin_mismatch", tag: 18446744073709550707n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550706n)) descriptor = { name: "new_exchange_admin_invalid_idx", tag: 18446744073709550706n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550705n)) descriptor = { name: "program_owned_wallet", tag: 18446744073709550705n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550615n)) descriptor = { name: "invalid_market_record_idx", tag: 18446744073709550615n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550614n)) descriptor = { name: "market_record_missing_seat_authority", tag: 18446744073709550614n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550613n)) descriptor = { name: "market_record_missing_seat_arena", tag: 18446744073709550613n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550612n)) descriptor = { name: "market_record_missing_market_auth", tag: 18446744073709550612n, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18446744073709550610n)) descriptor = { name: "market_record_mismatch_seat_idx", tag: 18446744073709550610n, payloadSize: 0 };
+    }
+    return new ClobError_error_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
+  bytes(): Uint8Array {
+    return new Uint8Array(this.buffer);
+  }
+
+  variant(): __TnVariantDescriptor | null {
+    return this.descriptor;
+  }
+
+  asInvalidInstrSize(): ClobError_error_invalid_instr_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551515n)) return null;
+    return ClobError_error_invalid_instr_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidInstrType(): ClobError_error_invalid_instr_type_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551514n)) return null;
+    return ClobError_error_invalid_instr_type_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidExchangeInitProofSize(): ClobError_error_invalid_exchange_init_proof_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551513n)) return null;
+    return ClobError_error_invalid_exchange_init_proof_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidStatusFlags(): ClobError_error_invalid_status_flags_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551512n)) return null;
+    return ClobError_error_invalid_status_flags_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asIndivisiblePriceTicks(): ClobError_error_indivisible_price_ticks_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551415n)) return null;
+    return ClobError_error_indivisible_price_ticks_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asIndivisibleQtyLots(): ClobError_error_indivisible_qty_lots_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551414n)) return null;
+    return ClobError_error_indivisible_qty_lots_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asOverMaxPrice(): ClobError_error_over_max_price_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551413n)) return null;
+    return ClobError_error_over_max_price_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidLotOrTickSize(): ClobError_error_invalid_lot_or_tick_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551412n)) return null;
+    return ClobError_error_invalid_lot_or_tick_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asNotionalOverflow(): ClobError_error_notional_overflow_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551411n)) return null;
+    return ClobError_error_notional_overflow_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asGttOrderExpired(): ClobError_error_gtt_order_expired_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551315n)) return null;
+    return ClobError_error_gtt_order_expired_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asOrderIdNotFound(): ClobError_error_order_id_not_found_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551314n)) return null;
+    return ClobError_error_order_id_not_found_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asClientIdNotFound(): ClobError_error_client_id_not_found_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551313n)) return null;
+    return ClobError_error_client_id_not_found_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asModifyIncreaseNotAllowed(): ClobError_error_modify_increase_not_allowed_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551312n)) return null;
+    return ClobError_error_modify_increase_not_allowed_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAskBidSideUndef(): ClobError_error_ask_bid_side_undef_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551311n)) return null;
+    return ClobError_error_ask_bid_side_undef_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asCbookFull(): ClobError_error_cbook_full_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551310n)) return null;
+    return ClobError_error_cbook_full_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidSeatlessOrderType(): ClobError_error_invalid_seatless_order_type_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551309n)) return null;
+    return ClobError_error_invalid_seatless_order_type_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asObSideStateMismatch(): ClobError_error_ob_side_state_mismatch_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551308n)) return null;
+    return ClobError_error_ob_side_state_mismatch_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInsufficientFundsQuote(): ClobError_error_insufficient_funds_quote_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551215n)) return null;
+    return ClobError_error_insufficient_funds_quote_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInsufficientFundsBase(): ClobError_error_insufficient_funds_base_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551214n)) return null;
+    return ClobError_error_insufficient_funds_base_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketDepositsFrozen(): ClobError_error_market_deposits_frozen_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551115n)) return null;
+    return ClobError_error_market_deposits_frozen_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketWithdrawalsFrozen(): ClobError_error_market_withdrawals_frozen_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551114n)) return null;
+    return ClobError_error_market_withdrawals_frozen_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketPaused(): ClobError_error_market_paused_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551113n)) return null;
+    return ClobError_error_market_paused_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketPostonlyMode(): ClobError_error_market_postonly_mode_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551112n)) return null;
+    return ClobError_error_market_postonly_mode_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSeatNotFound(): ClobError_error_seat_not_found_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551015n)) return null;
+    return ClobError_error_seat_not_found_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSeatArenaDataNotFound(): ClobError_error_seat_arena_data_not_found_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551014n)) return null;
+    return ClobError_error_seat_arena_data_not_found_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSeatArenaFull(): ClobError_error_seat_arena_full_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551013n)) return null;
+    return ClobError_error_seat_arena_full_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asEntryIdxOutOfBounds(): ClobError_error_entry_idx_out_of_bounds_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551012n)) return null;
+    return ClobError_error_entry_idx_out_of_bounds_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asReservedSeatIdx(): ClobError_error_reserved_seat_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551011n)) return null;
+    return ClobError_error_reserved_seat_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asArenaEntryNotActive(): ClobError_error_arena_entry_not_active_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551010n)) return null;
+    return ClobError_error_arena_entry_not_active_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asArenaFull(): ClobError_error_arena_full_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709551009n)) return null;
+    return ClobError_error_arena_full_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidAccountType(): ClobError_error_invalid_account_type_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550915n)) return null;
+    return ClobError_error_invalid_account_type_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidAccountIdx(): ClobError_error_invalid_account_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550914n)) return null;
+    return ClobError_error_invalid_account_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidVaultPubkey(): ClobError_error_invalid_vault_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550913n)) return null;
+    return ClobError_error_invalid_vault_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeMetaInvalidIdx(): ClobError_error_exchange_meta_invalid_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550912n)) return null;
+    return ClobError_error_exchange_meta_invalid_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeMetaNotFound(): ClobError_error_exchange_meta_not_found_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550911n)) return null;
+    return ClobError_error_exchange_meta_not_found_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeMetaWrongOwner(): ClobError_error_exchange_meta_wrong_owner_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550910n)) return null;
+    return ClobError_error_exchange_meta_wrong_owner_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeMetaInvalidSize(): ClobError_error_exchange_meta_invalid_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550909n)) return null;
+    return ClobError_error_exchange_meta_invalid_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeMetaInvalidAccountType(): ClobError_error_exchange_meta_invalid_account_type_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550908n)) return null;
+    return ClobError_error_exchange_meta_invalid_account_type_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asProgramMetaInvalidIdx(): ClobError_error_program_meta_invalid_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550906n)) return null;
+    return ClobError_error_program_meta_invalid_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asProgramMetaNotFound(): ClobError_error_program_meta_not_found_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550905n)) return null;
+    return ClobError_error_program_meta_not_found_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asProgramMetaWrongOwner(): ClobError_error_program_meta_wrong_owner_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550904n)) return null;
+    return ClobError_error_program_meta_wrong_owner_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asProgramMetaInvalidSize(): ClobError_error_program_meta_invalid_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550903n)) return null;
+    return ClobError_error_program_meta_invalid_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asTokenProgramInvalidIdx(): ClobError_error_token_program_invalid_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550902n)) return null;
+    return ClobError_error_token_program_invalid_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asTokenProgramNotFound(): ClobError_error_token_program_not_found_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550901n)) return null;
+    return ClobError_error_token_program_not_found_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asTokenAccountNotProgram(): ClobError_error_token_account_not_program_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550900n)) return null;
+    return ClobError_error_token_account_not_program_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asTokenProgramNotCanonical(): ClobError_error_token_program_not_canonical_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550899n)) return null;
+    return ClobError_error_token_program_not_canonical_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidTokenAccount(): ClobError_error_invalid_token_account_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550898n)) return null;
+    return ClobError_error_invalid_token_account_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchPubkey(): ClobError_error_mismatch_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550815n)) return null;
+    return ClobError_error_mismatch_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchTokenProgramPubkey(): ClobError_error_mismatch_token_program_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550814n)) return null;
+    return ClobError_error_mismatch_token_program_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchSeatAuthPubkey(): ClobError_error_mismatch_seat_auth_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550813n)) return null;
+    return ClobError_error_mismatch_seat_auth_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchBaseVaultPubkey(): ClobError_error_mismatch_base_vault_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550812n)) return null;
+    return ClobError_error_mismatch_base_vault_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchQuoteVaultPubkey(): ClobError_error_mismatch_quote_vault_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550811n)) return null;
+    return ClobError_error_mismatch_quote_vault_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchMarketAuthPubkey(): ClobError_error_mismatch_market_auth_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550810n)) return null;
+    return ClobError_error_mismatch_market_auth_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchOrderArenaPubkey(): ClobError_error_mismatch_order_arena_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550809n)) return null;
+    return ClobError_error_mismatch_order_arena_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchBidsCbookPubkey(): ClobError_error_mismatch_bids_cbook_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550808n)) return null;
+    return ClobError_error_mismatch_bids_cbook_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchAsksCbookPubkey(): ClobError_error_mismatch_asks_cbook_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550807n)) return null;
+    return ClobError_error_mismatch_asks_cbook_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchExchangeMetaPubkey(): ClobError_error_mismatch_exchange_meta_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550806n)) return null;
+    return ClobError_error_mismatch_exchange_meta_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMismatchProgramPubkey(): ClobError_error_mismatch_program_pubkey_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550805n)) return null;
+    return ClobError_error_mismatch_program_pubkey_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asUnauthorizedSeatAuth(): ClobError_error_unauthorized_seat_auth_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550715n)) return null;
+    return ClobError_error_unauthorized_seat_auth_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asUnauthorizedMarketAuth(): ClobError_error_unauthorized_market_auth_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550714n)) return null;
+    return ClobError_error_unauthorized_market_auth_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asUnauthorizedWalletOwner(): ClobError_error_unauthorized_wallet_owner_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550713n)) return null;
+    return ClobError_error_unauthorized_wallet_owner_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeAuthInvalidIdx(): ClobError_error_exchange_auth_invalid_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550712n)) return null;
+    return ClobError_error_exchange_auth_invalid_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeAuthNotSigner(): ClobError_error_exchange_auth_not_signer_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550711n)) return null;
+    return ClobError_error_exchange_auth_not_signer_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeAuthMismatch(): ClobError_error_exchange_auth_mismatch_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550710n)) return null;
+    return ClobError_error_exchange_auth_mismatch_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeAdminInvalidIdx(): ClobError_error_exchange_admin_invalid_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550709n)) return null;
+    return ClobError_error_exchange_admin_invalid_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeAdminNotSigner(): ClobError_error_exchange_admin_not_signer_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550708n)) return null;
+    return ClobError_error_exchange_admin_not_signer_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asExchangeAdminMismatch(): ClobError_error_exchange_admin_mismatch_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550707n)) return null;
+    return ClobError_error_exchange_admin_mismatch_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asNewExchangeAdminInvalidIdx(): ClobError_error_new_exchange_admin_invalid_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550706n)) return null;
+    return ClobError_error_new_exchange_admin_invalid_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asProgramOwnedWallet(): ClobError_error_program_owned_wallet_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550705n)) return null;
+    return ClobError_error_program_owned_wallet_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidMarketRecordIdx(): ClobError_error_invalid_market_record_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550615n)) return null;
+    return ClobError_error_invalid_market_record_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketRecordMissingSeatAuthority(): ClobError_error_market_record_missing_seat_authority_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550614n)) return null;
+    return ClobError_error_market_record_missing_seat_authority_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketRecordMissingSeatArena(): ClobError_error_market_record_missing_seat_arena_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550613n)) return null;
+    return ClobError_error_market_record_missing_seat_arena_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketRecordMissingMarketAuth(): ClobError_error_market_record_missing_market_auth_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550612n)) return null;
+    return ClobError_error_market_record_missing_market_auth_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketRecordMismatchSeatIdx(): ClobError_error_market_record_mismatch_seat_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18446744073709550610n)) return null;
+    return ClobError_error_market_record_mismatch_seat_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+}
+
 export class ClobError {
   private view: DataView;
+  private static readonly __tnFieldOffset_error = 8;
 
   private constructor(private buffer: Uint8Array) {
     this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
@@ -1776,6 +3287,527 @@ export class ClobError {
     return ClobError.from_array(buffer);
   }
 
+  static readonly errorVariantDescriptors = Object.freeze([
+    {
+      name: "invalid_instr_size",
+      tag: 18446744073709551515n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::invalid_instr_size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_instr_type",
+      tag: 18446744073709551514n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::invalid_instr_type",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_exchange_init_proof_size",
+      tag: 18446744073709551513n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::invalid_exchange_init_proof_size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_status_flags",
+      tag: 18446744073709551512n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::invalid_status_flags",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "indivisible_price_ticks",
+      tag: 18446744073709551415n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::indivisible_price_ticks",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "indivisible_qty_lots",
+      tag: 18446744073709551414n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::indivisible_qty_lots",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "over_max_price",
+      tag: 18446744073709551413n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::over_max_price",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_lot_or_tick_size",
+      tag: 18446744073709551412n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::invalid_lot_or_tick_size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "notional_overflow",
+      tag: 18446744073709551411n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::notional_overflow",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "gtt_order_expired",
+      tag: 18446744073709551315n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::gtt_order_expired",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "order_id_not_found",
+      tag: 18446744073709551314n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::order_id_not_found",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "client_id_not_found",
+      tag: 18446744073709551313n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::client_id_not_found",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "modify_increase_not_allowed",
+      tag: 18446744073709551312n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::modify_increase_not_allowed",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "ask_bid_side_undef",
+      tag: 18446744073709551311n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::ask_bid_side_undef",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "cbook_full",
+      tag: 18446744073709551310n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::cbook_full",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_seatless_order_type",
+      tag: 18446744073709551309n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::invalid_seatless_order_type",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "ob_side_state_mismatch",
+      tag: 18446744073709551308n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::ob_side_state_mismatch",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "insufficient_funds_quote",
+      tag: 18446744073709551215n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::insufficient_funds_quote",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "insufficient_funds_base",
+      tag: 18446744073709551214n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::insufficient_funds_base",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "market_deposits_frozen",
+      tag: 18446744073709551115n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::market_deposits_frozen",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "market_withdrawals_frozen",
+      tag: 18446744073709551114n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::market_withdrawals_frozen",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "market_paused",
+      tag: 18446744073709551113n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::market_paused",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "market_postonly_mode",
+      tag: 18446744073709551112n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::market_postonly_mode",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "seat_not_found",
+      tag: 18446744073709551015n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::seat_not_found",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "seat_arena_data_not_found",
+      tag: 18446744073709551014n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::seat_arena_data_not_found",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "seat_arena_full",
+      tag: 18446744073709551013n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::seat_arena_full",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "entry_idx_out_of_bounds",
+      tag: 18446744073709551012n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::entry_idx_out_of_bounds",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "reserved_seat_idx",
+      tag: 18446744073709551011n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::reserved_seat_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "arena_entry_not_active",
+      tag: 18446744073709551010n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::arena_entry_not_active",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "arena_full",
+      tag: 18446744073709551009n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::arena_full",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_account_type",
+      tag: 18446744073709550915n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::invalid_account_type",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_account_idx",
+      tag: 18446744073709550914n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::invalid_account_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_vault_pubkey",
+      tag: 18446744073709550913n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::invalid_vault_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_meta_invalid_idx",
+      tag: 18446744073709550912n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::exchange_meta_invalid_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_meta_not_found",
+      tag: 18446744073709550911n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::exchange_meta_not_found",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_meta_wrong_owner",
+      tag: 18446744073709550910n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::exchange_meta_wrong_owner",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_meta_invalid_size",
+      tag: 18446744073709550909n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::exchange_meta_invalid_size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_meta_invalid_account_type",
+      tag: 18446744073709550908n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::exchange_meta_invalid_account_type",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "program_meta_invalid_idx",
+      tag: 18446744073709550906n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::program_meta_invalid_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "program_meta_not_found",
+      tag: 18446744073709550905n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::program_meta_not_found",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "program_meta_wrong_owner",
+      tag: 18446744073709550904n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::program_meta_wrong_owner",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "program_meta_invalid_size",
+      tag: 18446744073709550903n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::program_meta_invalid_size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "token_program_invalid_idx",
+      tag: 18446744073709550902n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::token_program_invalid_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "token_program_not_found",
+      tag: 18446744073709550901n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::token_program_not_found",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "token_account_not_program",
+      tag: 18446744073709550900n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::token_account_not_program",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "token_program_not_canonical",
+      tag: 18446744073709550899n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::token_program_not_canonical",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_token_account",
+      tag: 18446744073709550898n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::invalid_token_account",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_pubkey",
+      tag: 18446744073709550815n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::mismatch_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_token_program_pubkey",
+      tag: 18446744073709550814n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::mismatch_token_program_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_seat_auth_pubkey",
+      tag: 18446744073709550813n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::mismatch_seat_auth_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_base_vault_pubkey",
+      tag: 18446744073709550812n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::mismatch_base_vault_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_quote_vault_pubkey",
+      tag: 18446744073709550811n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::mismatch_quote_vault_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_market_auth_pubkey",
+      tag: 18446744073709550810n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::mismatch_market_auth_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_order_arena_pubkey",
+      tag: 18446744073709550809n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::mismatch_order_arena_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_bids_cbook_pubkey",
+      tag: 18446744073709550808n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::mismatch_bids_cbook_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_asks_cbook_pubkey",
+      tag: 18446744073709550807n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::mismatch_asks_cbook_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_exchange_meta_pubkey",
+      tag: 18446744073709550806n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::mismatch_exchange_meta_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mismatch_program_pubkey",
+      tag: 18446744073709550805n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::mismatch_program_pubkey",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "unauthorized_seat_auth",
+      tag: 18446744073709550715n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::unauthorized_seat_auth",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "unauthorized_market_auth",
+      tag: 18446744073709550714n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::unauthorized_market_auth",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "unauthorized_wallet_owner",
+      tag: 18446744073709550713n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::unauthorized_wallet_owner",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_auth_invalid_idx",
+      tag: 18446744073709550712n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::exchange_auth_invalid_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_auth_not_signer",
+      tag: 18446744073709550711n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::exchange_auth_not_signer",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_auth_mismatch",
+      tag: 18446744073709550710n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::exchange_auth_mismatch",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_admin_invalid_idx",
+      tag: 18446744073709550709n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::exchange_admin_invalid_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_admin_not_signer",
+      tag: 18446744073709550708n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::exchange_admin_not_signer",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "exchange_admin_mismatch",
+      tag: 18446744073709550707n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::exchange_admin_mismatch",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "new_exchange_admin_invalid_idx",
+      tag: 18446744073709550706n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::new_exchange_admin_invalid_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "program_owned_wallet",
+      tag: 18446744073709550705n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::program_owned_wallet",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_market_record_idx",
+      tag: 18446744073709550615n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::invalid_market_record_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "market_record_missing_seat_authority",
+      tag: 18446744073709550614n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::market_record_missing_seat_authority",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "market_record_missing_seat_arena",
+      tag: 18446744073709550613n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::market_record_missing_seat_arena",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "market_record_missing_market_auth",
+      tag: 18446744073709550612n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::market_record_missing_market_auth",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "market_record_mismatch_seat_idx",
+      tag: 18446744073709550610n,
+      payloadSize: 0,
+      payloadType: "ClobError::error::market_record_mismatch_seat_idx",
+      createPayloadBuilder: () => null,
+    },
+  ] as const);
+
   get_code(): bigint {
     const offset = 0;
     return this.view.getBigUint64(offset, true); /* little-endian */
@@ -1792,6 +3824,22 @@ export class ClobError {
 
   set code(value: bigint) {
     this.set_code(value);
+  }
+
+  errorVariant(): typeof ClobError.errorVariantDescriptors[number] | null {
+    const tag: number | bigint | null = this.get_code();
+    return ClobError.errorVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
+  }
+
+  error(): ClobError_error_Inner {
+    const descriptor = this.errorVariant();
+    if (!descriptor) throw new Error("ClobError: unknown error variant");
+    const offset = ClobError.__tnFieldOffset_error;
+    const remaining = this.buffer.length - offset;
+    const payloadLength = descriptor.payloadSize ?? remaining;
+    if (payloadLength < 0 || offset + payloadLength > this.buffer.length) throw new Error("ClobError: payload exceeds buffer bounds");
+    const slice = this.buffer.subarray(offset, offset + payloadLength);
+    return ClobError_error_Inner.__tnCreate(slice, descriptor, undefined);
   }
 
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
@@ -1825,17 +3873,96 @@ export class ClobError {
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
     if (buffer.length < 8) return { ok: false, code: "tn.buffer_too_small", consumed: 8 };
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed: 8 };
   }
 
-  static new(code: bigint): ClobError {
-    const buffer = new Uint8Array(8);
-    const view = new DataView(buffer.buffer);
-
-    let offset = 0;
-    view.setBigUint64(0, code, true); /* code (little-endian) */
-
-    return new ClobError(buffer);
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 8 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 18446744073709551515n: t3 = 0; break;
+  case 18446744073709551514n: t3 = 0; break;
+  case 18446744073709551513n: t3 = 0; break;
+  case 18446744073709551512n: t3 = 0; break;
+  case 18446744073709551415n: t3 = 0; break;
+  case 18446744073709551414n: t3 = 0; break;
+  case 18446744073709551413n: t3 = 0; break;
+  case 18446744073709551412n: t3 = 0; break;
+  case 18446744073709551411n: t3 = 0; break;
+  case 18446744073709551315n: t3 = 0; break;
+  case 18446744073709551314n: t3 = 0; break;
+  case 18446744073709551313n: t3 = 0; break;
+  case 18446744073709551312n: t3 = 0; break;
+  case 18446744073709551311n: t3 = 0; break;
+  case 18446744073709551310n: t3 = 0; break;
+  case 18446744073709551309n: t3 = 0; break;
+  case 18446744073709551308n: t3 = 0; break;
+  case 18446744073709551215n: t3 = 0; break;
+  case 18446744073709551214n: t3 = 0; break;
+  case 18446744073709551115n: t3 = 0; break;
+  case 18446744073709551114n: t3 = 0; break;
+  case 18446744073709551113n: t3 = 0; break;
+  case 18446744073709551112n: t3 = 0; break;
+  case 18446744073709551015n: t3 = 0; break;
+  case 18446744073709551014n: t3 = 0; break;
+  case 18446744073709551013n: t3 = 0; break;
+  case 18446744073709551012n: t3 = 0; break;
+  case 18446744073709551011n: t3 = 0; break;
+  case 18446744073709551010n: t3 = 0; break;
+  case 18446744073709551009n: t3 = 0; break;
+  case 18446744073709550915n: t3 = 0; break;
+  case 18446744073709550914n: t3 = 0; break;
+  case 18446744073709550913n: t3 = 0; break;
+  case 18446744073709550912n: t3 = 0; break;
+  case 18446744073709550911n: t3 = 0; break;
+  case 18446744073709550910n: t3 = 0; break;
+  case 18446744073709550909n: t3 = 0; break;
+  case 18446744073709550908n: t3 = 0; break;
+  case 18446744073709550906n: t3 = 0; break;
+  case 18446744073709550905n: t3 = 0; break;
+  case 18446744073709550904n: t3 = 0; break;
+  case 18446744073709550903n: t3 = 0; break;
+  case 18446744073709550902n: t3 = 0; break;
+  case 18446744073709550901n: t3 = 0; break;
+  case 18446744073709550900n: t3 = 0; break;
+  case 18446744073709550899n: t3 = 0; break;
+  case 18446744073709550898n: t3 = 0; break;
+  case 18446744073709550815n: t3 = 0; break;
+  case 18446744073709550814n: t3 = 0; break;
+  case 18446744073709550813n: t3 = 0; break;
+  case 18446744073709550812n: t3 = 0; break;
+  case 18446744073709550811n: t3 = 0; break;
+  case 18446744073709550810n: t3 = 0; break;
+  case 18446744073709550809n: t3 = 0; break;
+  case 18446744073709550808n: t3 = 0; break;
+  case 18446744073709550807n: t3 = 0; break;
+  case 18446744073709550806n: t3 = 0; break;
+  case 18446744073709550805n: t3 = 0; break;
+  case 18446744073709550715n: t3 = 0; break;
+  case 18446744073709550714n: t3 = 0; break;
+  case 18446744073709550713n: t3 = 0; break;
+  case 18446744073709550712n: t3 = 0; break;
+  case 18446744073709550711n: t3 = 0; break;
+  case 18446744073709550710n: t3 = 0; break;
+  case 18446744073709550709n: t3 = 0; break;
+  case 18446744073709550708n: t3 = 0; break;
+  case 18446744073709550707n: t3 = 0; break;
+  case 18446744073709550706n: t3 = 0; break;
+  case 18446744073709550705n: t3 = 0; break;
+  case 18446744073709550615n: t3 = 0; break;
+  case 18446744073709550614n: t3 = 0; break;
+  case 18446744073709550613n: t3 = 0; break;
+  case 18446744073709550612n: t3 = 0; break;
+  case 18446744073709550610n: t3 = 0; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array): ClobError | null {
@@ -1853,35 +3980,621 @@ export class ClobError {
 }
 
 export class ClobErrorBuilder {
-  private buffer: Uint8Array;
-  private view: DataView;
+  private tag: bigint | null = null;
+  private payload: Uint8Array | null = null;
 
-  constructor() {
-    this.buffer = new Uint8Array(8);
-    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  constructor() {}
+
+  select_invalid_instr_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_instr_size expects 0 bytes");
+    this.tag = 18446744073709551515n;
+    this.payload = new Uint8Array(bytes);
+    return this;
   }
 
-  set_code(value: bigint): this {
-    const cast = __tnToBigInt(value);
-    this.view.setBigUint64(0, cast, true);
+  select_invalid_instr_type(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_instr_type expects 0 bytes");
+    this.tag = 18446744073709551514n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_exchange_init_proof_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_exchange_init_proof_size expects 0 bytes");
+    this.tag = 18446744073709551513n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_status_flags(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_status_flags expects 0 bytes");
+    this.tag = 18446744073709551512n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_indivisible_price_ticks(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_indivisible_price_ticks expects 0 bytes");
+    this.tag = 18446744073709551415n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_indivisible_qty_lots(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_indivisible_qty_lots expects 0 bytes");
+    this.tag = 18446744073709551414n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_over_max_price(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_over_max_price expects 0 bytes");
+    this.tag = 18446744073709551413n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_lot_or_tick_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_lot_or_tick_size expects 0 bytes");
+    this.tag = 18446744073709551412n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_notional_overflow(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_notional_overflow expects 0 bytes");
+    this.tag = 18446744073709551411n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_gtt_order_expired(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_gtt_order_expired expects 0 bytes");
+    this.tag = 18446744073709551315n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_order_id_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_order_id_not_found expects 0 bytes");
+    this.tag = 18446744073709551314n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_client_id_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_client_id_not_found expects 0 bytes");
+    this.tag = 18446744073709551313n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_modify_increase_not_allowed(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_modify_increase_not_allowed expects 0 bytes");
+    this.tag = 18446744073709551312n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_ask_bid_side_undef(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_ask_bid_side_undef expects 0 bytes");
+    this.tag = 18446744073709551311n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_cbook_full(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_cbook_full expects 0 bytes");
+    this.tag = 18446744073709551310n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_seatless_order_type(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_seatless_order_type expects 0 bytes");
+    this.tag = 18446744073709551309n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_ob_side_state_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_ob_side_state_mismatch expects 0 bytes");
+    this.tag = 18446744073709551308n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_insufficient_funds_quote(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_insufficient_funds_quote expects 0 bytes");
+    this.tag = 18446744073709551215n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_insufficient_funds_base(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_insufficient_funds_base expects 0 bytes");
+    this.tag = 18446744073709551214n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_market_deposits_frozen(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_market_deposits_frozen expects 0 bytes");
+    this.tag = 18446744073709551115n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_market_withdrawals_frozen(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_market_withdrawals_frozen expects 0 bytes");
+    this.tag = 18446744073709551114n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_market_paused(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_market_paused expects 0 bytes");
+    this.tag = 18446744073709551113n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_market_postonly_mode(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_market_postonly_mode expects 0 bytes");
+    this.tag = 18446744073709551112n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_seat_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_seat_not_found expects 0 bytes");
+    this.tag = 18446744073709551015n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_seat_arena_data_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_seat_arena_data_not_found expects 0 bytes");
+    this.tag = 18446744073709551014n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_seat_arena_full(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_seat_arena_full expects 0 bytes");
+    this.tag = 18446744073709551013n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_entry_idx_out_of_bounds(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_entry_idx_out_of_bounds expects 0 bytes");
+    this.tag = 18446744073709551012n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_reserved_seat_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_reserved_seat_idx expects 0 bytes");
+    this.tag = 18446744073709551011n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_arena_entry_not_active(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_arena_entry_not_active expects 0 bytes");
+    this.tag = 18446744073709551010n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_arena_full(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_arena_full expects 0 bytes");
+    this.tag = 18446744073709551009n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_account_type(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_account_type expects 0 bytes");
+    this.tag = 18446744073709550915n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_account_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_account_idx expects 0 bytes");
+    this.tag = 18446744073709550914n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_vault_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_vault_pubkey expects 0 bytes");
+    this.tag = 18446744073709550913n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_meta_invalid_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_meta_invalid_idx expects 0 bytes");
+    this.tag = 18446744073709550912n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_meta_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_meta_not_found expects 0 bytes");
+    this.tag = 18446744073709550911n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_meta_wrong_owner(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_meta_wrong_owner expects 0 bytes");
+    this.tag = 18446744073709550910n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_meta_invalid_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_meta_invalid_size expects 0 bytes");
+    this.tag = 18446744073709550909n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_meta_invalid_account_type(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_meta_invalid_account_type expects 0 bytes");
+    this.tag = 18446744073709550908n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_program_meta_invalid_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_program_meta_invalid_idx expects 0 bytes");
+    this.tag = 18446744073709550906n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_program_meta_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_program_meta_not_found expects 0 bytes");
+    this.tag = 18446744073709550905n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_program_meta_wrong_owner(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_program_meta_wrong_owner expects 0 bytes");
+    this.tag = 18446744073709550904n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_program_meta_invalid_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_program_meta_invalid_size expects 0 bytes");
+    this.tag = 18446744073709550903n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_token_program_invalid_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_token_program_invalid_idx expects 0 bytes");
+    this.tag = 18446744073709550902n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_token_program_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_token_program_not_found expects 0 bytes");
+    this.tag = 18446744073709550901n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_token_account_not_program(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_token_account_not_program expects 0 bytes");
+    this.tag = 18446744073709550900n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_token_program_not_canonical(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_token_program_not_canonical expects 0 bytes");
+    this.tag = 18446744073709550899n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_token_account(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_token_account expects 0 bytes");
+    this.tag = 18446744073709550898n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_pubkey expects 0 bytes");
+    this.tag = 18446744073709550815n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_token_program_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_token_program_pubkey expects 0 bytes");
+    this.tag = 18446744073709550814n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_seat_auth_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_seat_auth_pubkey expects 0 bytes");
+    this.tag = 18446744073709550813n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_base_vault_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_base_vault_pubkey expects 0 bytes");
+    this.tag = 18446744073709550812n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_quote_vault_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_quote_vault_pubkey expects 0 bytes");
+    this.tag = 18446744073709550811n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_market_auth_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_market_auth_pubkey expects 0 bytes");
+    this.tag = 18446744073709550810n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_order_arena_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_order_arena_pubkey expects 0 bytes");
+    this.tag = 18446744073709550809n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_bids_cbook_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_bids_cbook_pubkey expects 0 bytes");
+    this.tag = 18446744073709550808n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_asks_cbook_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_asks_cbook_pubkey expects 0 bytes");
+    this.tag = 18446744073709550807n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_exchange_meta_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_exchange_meta_pubkey expects 0 bytes");
+    this.tag = 18446744073709550806n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mismatch_program_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mismatch_program_pubkey expects 0 bytes");
+    this.tag = 18446744073709550805n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_unauthorized_seat_auth(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_unauthorized_seat_auth expects 0 bytes");
+    this.tag = 18446744073709550715n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_unauthorized_market_auth(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_unauthorized_market_auth expects 0 bytes");
+    this.tag = 18446744073709550714n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_unauthorized_wallet_owner(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_unauthorized_wallet_owner expects 0 bytes");
+    this.tag = 18446744073709550713n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_auth_invalid_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_auth_invalid_idx expects 0 bytes");
+    this.tag = 18446744073709550712n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_auth_not_signer(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_auth_not_signer expects 0 bytes");
+    this.tag = 18446744073709550711n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_auth_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_auth_mismatch expects 0 bytes");
+    this.tag = 18446744073709550710n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_admin_invalid_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_admin_invalid_idx expects 0 bytes");
+    this.tag = 18446744073709550709n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_admin_not_signer(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_admin_not_signer expects 0 bytes");
+    this.tag = 18446744073709550708n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_exchange_admin_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_exchange_admin_mismatch expects 0 bytes");
+    this.tag = 18446744073709550707n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_new_exchange_admin_invalid_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_new_exchange_admin_invalid_idx expects 0 bytes");
+    this.tag = 18446744073709550706n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_program_owned_wallet(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_program_owned_wallet expects 0 bytes");
+    this.tag = 18446744073709550705n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_market_record_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_market_record_idx expects 0 bytes");
+    this.tag = 18446744073709550615n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_market_record_missing_seat_authority(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_market_record_missing_seat_authority expects 0 bytes");
+    this.tag = 18446744073709550614n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_market_record_missing_seat_arena(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_market_record_missing_seat_arena expects 0 bytes");
+    this.tag = 18446744073709550613n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_market_record_missing_market_auth(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_market_record_missing_market_auth expects 0 bytes");
+    this.tag = 18446744073709550612n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_market_record_mismatch_seat_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_market_record_mismatch_seat_idx expects 0 bytes");
+    this.tag = 18446744073709550610n;
+    this.payload = new Uint8Array(bytes);
     return this;
   }
 
   build(): Uint8Array {
-    const buffer = this.buffer.slice();
+    if (this.tag === null || !this.payload) throw new Error("ClobError builder missing variant");
+    const buffer = new Uint8Array(8 + this.payload.length);
+    new DataView(buffer.buffer).setBigUint64(0, this.tag, true);
+    buffer.set(this.payload, 8);
     __tnBuilderValidateOrThrow("ClobError", ClobError.validate(buffer));
     return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
-    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
-    __tnBuilderValidateOrThrow("ClobError", ClobError.validate(this.buffer));
-    target.set(this.buffer, offset);
+    const bytes = this.build();
+    if (target.length - offset < bytes.length) throw new Error("target buffer too small");
+    target.set(bytes, offset);
     return target;
   }
 
   finish(): ClobError {
-    const view = ClobError.from_array(this.buffer.slice());
+    const view = ClobError.from_array(this.build());
     if (!view) throw new Error("failed to build ClobError");
     return view;
   }
@@ -3450,6 +6163,7 @@ export class ExchangeInitializeInstructionBuilder {
       this.__tnFamWriter_proof = __tnCreateFamWriter(this, "proof", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("ExchangeInitializeInstructionBuilder: proof has more than 4294967295 elements");
         this.__tnFam_proof = bytes;
         this.__tnFam_proofCount = elementCount;
         this.set_proof_sz(elementCount);
@@ -3459,7 +6173,12 @@ export class ExchangeInitializeInstructionBuilder {
     return this.__tnFamWriter_proof!;
   }
 
+  private __tnSyncLengths(): void {
+    if (this.__tnFam_proofCount !== null) this.set_proof_sz(this.__tnFam_proofCount);
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = ExchangeInitializeInstruction.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -3469,6 +6188,7 @@ export class ExchangeInitializeInstructionBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = ExchangeInitializeInstruction.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("ExchangeInitializeInstructionBuilder: target buffer too small");
@@ -5509,6 +8229,7 @@ export class MarketCreateInstructionBuilder {
       this.__tnFamWriter_proof_seat_arena = __tnCreateFamWriter(this, "proof_seat_arena", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("MarketCreateInstructionBuilder: proof_seat_arena has more than 4294967295 elements");
         this.__tnFam_proof_seat_arena = bytes;
         this.__tnFam_proof_seat_arenaCount = elementCount;
         this.set_proof_sz_seat_arena(elementCount);
@@ -5523,6 +8244,7 @@ export class MarketCreateInstructionBuilder {
       this.__tnFamWriter_proof_order_arena = __tnCreateFamWriter(this, "proof_order_arena", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("MarketCreateInstructionBuilder: proof_order_arena has more than 4294967295 elements");
         this.__tnFam_proof_order_arena = bytes;
         this.__tnFam_proof_order_arenaCount = elementCount;
         this.set_proof_sz_order_arena(elementCount);
@@ -5537,6 +8259,7 @@ export class MarketCreateInstructionBuilder {
       this.__tnFamWriter_proof_bids_cbook = __tnCreateFamWriter(this, "proof_bids_cbook", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("MarketCreateInstructionBuilder: proof_bids_cbook has more than 4294967295 elements");
         this.__tnFam_proof_bids_cbook = bytes;
         this.__tnFam_proof_bids_cbookCount = elementCount;
         this.set_proof_sz_bids_cbook(elementCount);
@@ -5551,6 +8274,7 @@ export class MarketCreateInstructionBuilder {
       this.__tnFamWriter_proof_asks_cbook = __tnCreateFamWriter(this, "proof_asks_cbook", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("MarketCreateInstructionBuilder: proof_asks_cbook has more than 4294967295 elements");
         this.__tnFam_proof_asks_cbook = bytes;
         this.__tnFam_proof_asks_cbookCount = elementCount;
         this.set_proof_sz_asks_cbook(elementCount);
@@ -5565,6 +8289,7 @@ export class MarketCreateInstructionBuilder {
       this.__tnFamWriter_proof_base_vault = __tnCreateFamWriter(this, "proof_base_vault", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("MarketCreateInstructionBuilder: proof_base_vault has more than 4294967295 elements");
         this.__tnFam_proof_base_vault = bytes;
         this.__tnFam_proof_base_vaultCount = elementCount;
         this.set_proof_sz_base_vault(elementCount);
@@ -5579,6 +8304,7 @@ export class MarketCreateInstructionBuilder {
       this.__tnFamWriter_proof_quote_vault = __tnCreateFamWriter(this, "proof_quote_vault", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("MarketCreateInstructionBuilder: proof_quote_vault has more than 4294967295 elements");
         this.__tnFam_proof_quote_vault = bytes;
         this.__tnFam_proof_quote_vaultCount = elementCount;
         this.set_proof_sz_quote_vault(elementCount);
@@ -5588,7 +8314,17 @@ export class MarketCreateInstructionBuilder {
     return this.__tnFamWriter_proof_quote_vault!;
   }
 
+  private __tnSyncLengths(): void {
+    if (this.__tnFam_proof_seat_arenaCount !== null) this.set_proof_sz_seat_arena(this.__tnFam_proof_seat_arenaCount);
+    if (this.__tnFam_proof_order_arenaCount !== null) this.set_proof_sz_order_arena(this.__tnFam_proof_order_arenaCount);
+    if (this.__tnFam_proof_bids_cbookCount !== null) this.set_proof_sz_bids_cbook(this.__tnFam_proof_bids_cbookCount);
+    if (this.__tnFam_proof_asks_cbookCount !== null) this.set_proof_sz_asks_cbook(this.__tnFam_proof_asks_cbookCount);
+    if (this.__tnFam_proof_base_vaultCount !== null) this.set_proof_sz_base_vault(this.__tnFam_proof_base_vaultCount);
+    if (this.__tnFam_proof_quote_vaultCount !== null) this.set_proof_sz_quote_vault(this.__tnFam_proof_quote_vaultCount);
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = MarketCreateInstruction.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -5598,6 +8334,7 @@ export class MarketCreateInstructionBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = MarketCreateInstruction.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("MarketCreateInstructionBuilder: target buffer too small");

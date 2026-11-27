@@ -68,13 +68,9 @@ pub fn emit_builder(resolved_type: &ResolvedType, type_ir: Option<&TypeIr>) -> O
     }
     if supports_const_struct(resolved_type) {
         return Some(emit_const_struct_builder(resolved_type));
-    } else if supports_tagged_enum_struct(resolved_type) {
-        let code = emit_tagged_enum_struct_builder(resolved_type);
-        if !code.is_empty() {
-            return Some(code);
-        }
     }
-    None
+    let shape = tagged_enum_struct(resolved_type)?;
+    Some(emit_tagged_enum_struct_builder(resolved_type, shape))
 }
 
 #[derive(Clone)]
@@ -1463,57 +1459,81 @@ fn emit_fixed_array_setter(
     }
 }
 
-fn supports_tagged_enum_struct(resolved_type: &ResolvedType) -> bool {
-    if let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind {
-        if fields.len() != 2 {
-            return false;
-        }
-        let tag_field = &fields[0];
-        let payload_field = &fields[1];
-
-        matches!(
-            tag_field.field_type.kind,
-            ResolvedTypeKind::Primitive {
-                prim_type: PrimitiveType::Integral(IntegralType::U8)
-            }
-        ) && matches!(payload_field.field_type.kind, ResolvedTypeKind::Enum { .. })
-            && enum_variants_const(&payload_field.field_type)
-    } else {
-        false
-    }
+/* A struct that is an integer tag field followed by the enum it selects
+(`tag-ref` names the tag field), every variant of constant size: what
+emit_tagged_enum_struct_builder writes. Program error types (`code` plus
+`error`) have this shape, with tags of any width. */
+struct TaggedEnumStruct<'a> {
+    tag_prim: &'a PrimitiveType,
+    tag_bits: u64,
+    payload_offset: u64,
+    variants: &'a [ResolvedEnumVariant],
 }
 
-fn enum_variants_const(enum_type: &ResolvedType) -> bool {
-    match &enum_type.kind {
-        ResolvedTypeKind::Enum { variants, .. } => variants
-            .iter()
-            .all(|variant| matches!(variant.variant_type.size, Size::Const(_))),
-        _ => false,
-    }
-}
-
-fn emit_tagged_enum_struct_builder(resolved_type: &ResolvedType) -> String {
+fn tagged_enum_struct(resolved_type: &ResolvedType) -> Option<TaggedEnumStruct<'_>> {
     let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind else {
-        return String::new();
+        return None;
     };
-    if fields.len() != 2 {
-        return String::new();
+    let [tag_field, enum_field] = fields.as_slice() else {
+        return None;
+    };
+    let ResolvedTypeKind::Primitive {
+        prim_type: tag_prim @ PrimitiveType::Integral(_),
+    } = &tag_field.field_type.kind
+    else {
+        return None;
+    };
+    let Size::Const(tag_size) = tag_field.field_type.size else {
+        return None;
+    };
+    let ResolvedTypeKind::Enum {
+        tag_expression: ExprKind::FieldRef(tag_ref),
+        variants,
+        ..
+    } = &enum_field.field_type.kind
+    else {
+        return None;
+    };
+    if tag_ref.path != [tag_field.name.as_str()]
+        || variants
+            .iter()
+            .any(|variant| !matches!(variant.variant_type.size, Size::Const(_)))
+    {
+        return None;
     }
-    let variants = match &fields[1].field_type.kind {
-        ResolvedTypeKind::Enum { variants, .. } => variants,
-        _ => return String::new(),
+    Some(TaggedEnumStruct {
+        tag_prim,
+        tag_bits: tag_size * 8,
+        payload_offset: struct_field_const_offset(resolved_type, &enum_field.name)?,
+        variants,
+    })
+}
+
+fn emit_tagged_enum_struct_builder(
+    resolved_type: &ResolvedType,
+    shape: TaggedEnumStruct<'_>,
+) -> String {
+    /* 64-bit tags are bigints. A tag-value is masked to the field's width:
+    a negative one, held as its u64 two's complement, becomes the field's. */
+    let tag_ts_type = primitive_to_ts_type(shape.tag_prim);
+    let tag_mask = if shape.tag_bits >= 64 {
+        u64::MAX
+    } else {
+        (1u64 << shape.tag_bits) - 1
     };
+    let bigint_suffix = if tag_ts_type == "bigint" { "n" } else { "" };
 
     let class_name = &resolved_type.name;
     let mut out = String::new();
 
     writeln!(out, "export class {}Builder {{", class_name).unwrap();
-    writeln!(out, "  private tag: number | null = null;").unwrap();
+    writeln!(out, "  private tag: {} | null = null;", tag_ts_type).unwrap();
     writeln!(out, "  private payload: Uint8Array | null = null;\n").unwrap();
     writeln!(out, "  constructor() {{}}\n").unwrap();
 
-    for variant in variants {
-        emit_variant_selector(variant, &mut out);
+    for variant in shape.variants {
+        let tag = format!("{}{}", variant.tag_value & tag_mask, bigint_suffix);
+        emit_variant_selector(variant, &tag, &mut out);
     }
 
     writeln!(
@@ -1524,11 +1544,27 @@ fn emit_tagged_enum_struct_builder(resolved_type: &ResolvedType) -> String {
     .unwrap();
     writeln!(
         out,
-        "    const buffer = new Uint8Array(1 + this.payload.length);"
+        "    const buffer = new Uint8Array({} + this.payload.length);",
+        shape.payload_offset
     )
     .unwrap();
-    writeln!(out, "    buffer[0] = this.tag;").unwrap();
-    writeln!(out, "    buffer.set(this.payload, 1);").unwrap();
+    writeln!(
+        out,
+        "    new DataView(buffer.buffer).{}(0, this.tag{});",
+        primitive_to_dataview_setter(shape.tag_prim),
+        if needs_endianness_arg(shape.tag_prim) {
+            ", true"
+        } else {
+            ""
+        }
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    buffer.set(this.payload, {});",
+        shape.payload_offset
+    )
+    .unwrap();
     writeln!(
         out,
         "    __tnBuilderValidateOrThrow(\"{c}\", {c}.validate(buffer));\n    return buffer;\n  }}\n",
@@ -1574,7 +1610,7 @@ fn emit_tagged_enum_struct_builder(resolved_type: &ResolvedType) -> String {
     out
 }
 
-fn emit_variant_selector(variant: &ResolvedEnumVariant, out: &mut String) {
+fn emit_variant_selector(variant: &ResolvedEnumVariant, tag: &str, out: &mut String) {
     let method_name = escape_ts_keyword(&format!("select_{}", variant.name));
     let expected = match variant.variant_type.size {
         Size::Const(sz) => sz,
@@ -1597,7 +1633,7 @@ fn emit_variant_selector(variant: &ResolvedEnumVariant, out: &mut String) {
         expected, method_name, expected
     )
     .unwrap();
-    writeln!(out, "    this.tag = {};", variant.tag_value).unwrap();
+    writeln!(out, "    this.tag = {};", tag).unwrap();
     writeln!(
         out,
         "    this.payload = new Uint8Array(bytes);\n    return this;\n  }}\n"
@@ -2951,9 +2987,6 @@ fn emit_dynamic_struct_builder(resolved_type: &ResolvedType, type_ir: &TypeIr) -
     if !fam_infos.is_empty() {
         return emit_fam_struct_builder(resolved_type, type_ir, fam_infos);
     }
-    if supports_tagged_enum_struct(resolved_type) {
-        return emit_tagged_enum_struct_builder(resolved_type);
-    }
     String::new()
 }
 
@@ -2966,7 +2999,7 @@ fn emit_enum_builder(
     let tag_ts_name = info.tag_ts_name.clone();
     let payload_offset = match info.payload_offset {
         Some(offset) => offset,
-        None => return emit_tagged_enum_struct_builder(resolved_type),
+        None => return String::new(),
     };
     let class_name = &resolved_type.name;
 
@@ -3032,7 +3065,7 @@ fn emit_enum_builder(
         }
     }
     if param_exprs.is_empty() {
-        return emit_tagged_enum_struct_builder(resolved_type);
+        return String::new();
     }
 
     let payload_prop = format!("__tnPayload_{}", info.enum_ts_name);

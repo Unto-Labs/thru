@@ -120,7 +120,6 @@ declare BOND_B_BP_ADDR=""
 declare BOND_B_SRC=""
 declare BOND_B_A=0
 declare BOND_B_P=0
-declare BOND_B_ACCEPTED=""
 declare GENESIS_EVENT_PROGRAM_HEX="$E2E_EVENT_EMISSION_PROGRAM_HEX"
 
 # Canonical WTHRU mint + the bootstrap-managed Token program, pinned in
@@ -129,8 +128,8 @@ declare GENESIS_EVENT_PROGRAM_HEX="$E2E_EVENT_EMISSION_PROGRAM_HEX"
 readonly WTHRU_MINT="$BOOTSTRAP_WTHRU_MINT_ADDRESS"
 readonly WTHRU_TOKEN_PROGRAM="$BOOTSTRAP_TOKEN_PROGRAM_ADDRESS"
 # §B (attestor_payment debit + ClaimFees) drives the fullnode block-builder BTP
-# endpoint (UDP) via send-block. §B ALWAYS runs — it never skips; if send-block
-# cannot be resolved the test fails.
+# endpoint (UDP) via send-block. When enabled, a missing send-block binary fails
+# the test rather than silently skipping it.
 #   BLOCKBUILDER_ADDR - block-builder BTP target (default 127.0.0.1:9002)
 #   SEND_BLOCK_BIN    - path (or name on PATH) of a PRE-BUILT send-block binary,
 #                       like the TS e2e's --send-block-path. When empty, the
@@ -140,12 +139,10 @@ readonly WTHRU_TOKEN_PROGRAM="$BOOTSTRAP_TOKEN_PROGRAM_ADDRESS"
 #                       (mirrors the TS e2e, which requires a pre-built binary).
 readonly BLOCKBUILDER_ADDR="${BLOCKBUILDER_ADDR:-127.0.0.1:9002}"
 readonly SEND_BLOCK_BIN="${SEND_BLOCK_BIN:-}"
-# §B (attestor_payment → PayOutBlock bond debit) is DISABLED by default: it only
-# fires when the node has certificate posting enabled
-# (tiles.cdrv.posting_certificate_frequency > 0) so PostCertificate → PayOutBlock
-# runs. The docker-dev node ships with posting disabled, so §B's debit assertion
-# can't pass there yet. Set RUN_BOND_SECTION_B=1 to run it once posting is wired.
-# See issues/bp-bond-payout-not-firing-analysis.md.
+# §B requires certificate posting (tiles.cdrv.posting_certificate_frequency > 0)
+# and a dedicated, funded posting fee payer. The default node disables posting.
+# Set RUN_BOND_SECTION_B=1 with those prerequisites on a fresh node to exercise
+# PostCertificate -> PayOutBlock, the active-bond debit and withdrawal lockout.
 readonly RUN_BOND_SECTION_B="${RUN_BOND_SECTION_B:-0}"
 
 # ---------------------------------------------------------------------------
@@ -378,20 +375,33 @@ assert_jq_raw_eq() {
 # Poll `bond show <signer>` until `.bond_show.<field>` renders to <expected>.
 # Tolerates post-submission propagation lag (a fresh-but-stale read returns
 # exit 0 with the old value, so we poll on the value itself).
+# An optional fifth argument gives finality-dependent payout reads a wall-clock
+# deadline instead of the short ordinary propagation retry budget.
 assert_bond_field() {
   local signer="$1"; local field="$2"; local expected="$3"; local ctx="$4"
   local attempts="${RETRY_ATTEMPTS:-5}"
   local delay="${RETRY_DELAY_SECS:-2}"
+  local timeout_secs="${5:-0}" deadline=0 remaining pause attempt
+  (( timeout_secs == 0 )) || deadline=$(( $(date +%s) + timeout_secs ))
   local out="" actual=""
-  for (( attempt = 1; attempt <= attempts; attempt++ )); do
-    if out=$(run_cli_json "bond show ${ctx} (attempt ${attempt}/${attempts})" bond show "$signer"); then
+  for (( attempt = 1; ; attempt++ )); do
+    if (( timeout_secs > 0 && attempt > 1 && $(date +%s) >= deadline )); then
+      break
+    fi
+    if out=$(run_cli_json "bond show ${ctx} (attempt ${attempt})" bond show "$signer"); then
       actual=$(printf '%s' "$out" | jq -r ".bond_show.${field}") || actual=""
       [[ "$actual" == "$expected" ]] && return 0
     fi
-    if (( attempt < attempts )); then
-      log "bond show ${ctx}: .${field} => '${actual}', want '${expected}'; retrying in ${delay}s..."
-      sleep "$delay"
+    pause="$delay"
+    if (( timeout_secs > 0 )); then
+      remaining=$(( deadline - $(date +%s) ))
+      (( remaining > 0 )) || break
+      (( pause <= remaining )) || pause="$remaining"
+    elif (( attempt >= attempts )); then
+      break
     fi
+    log "bond show ${ctx}: .${field} => '${actual}', want '${expected}'; retrying in ${pause}s..."
+    sleep "$pause"
   done
   log "Assertion failed: bond show ${ctx}: .${field} => '${actual}', expected '${expected}'"
   log "Payload: $out"
@@ -418,21 +428,58 @@ poll_wthru_amount() {
   return 1
 }
 
-# Wait until the node's finalized slot reaches <slot> (PayOutBlock debit and
-# ClaimFees only land once the block finalizes). Bounded poll; non-fatal.
+# Resolve the actual execution slot of a signed transaction. send-block reports
+# a proposal-header slot, which can differ when the node produces other blocks.
+transaction_execution_slot() {
+  local transaction="$1"; local ctx="$2"
+  local signature out slot
+  # tn_txn_get_fee_payer_signature: the last 64 bytes of the wire transaction.
+  signature=$(printf '%s' "$transaction" | base64 --decode | tail -c 64 | od -An -v -tx1 | tr -d '[:space:]') \
+    || die "$ctx: could not decode signed transaction"
+  [[ ${#signature} -eq 128 ]] || die "$ctx: missing fee-payer signature"
+  # GetTransaction is served through the history watermark, which can trail
+  # execution longer than the ordinary five-attempt read propagation retry.
+  local timeout_secs="${BOND_FINALIZE_TIMEOUT_SECS:-120}"
+  local deadline=$(( $(date +%s) + timeout_secs )) remaining pause
+  while (( $(date +%s) < deadline )); do
+    if out=$(run_cli_json "$ctx executed transaction" txn get "$signature"); then
+      slot=$(printf '%s' "$out" | jq -er \
+        '.transaction_get | select(.status == "success" and .vm_error == 0 and .user_error_code == 0) | .slot | numbers') \
+        || die "$ctx: transaction did not execute successfully: $out"
+      [[ "$slot" =~ ^[0-9]+$ ]] || die "$ctx: missing or invalid execution slot: $out"
+      printf '%s\n' "$slot"
+      return 0
+    fi
+    remaining=$(( deadline - $(date +%s) ))
+    (( remaining > 0 )) || break
+    pause="${RETRY_DELAY_SECS:-2}"
+    (( pause <= remaining )) || pause="$remaining"
+    sleep "$pause"
+  done
+  die "$ctx: transaction history unavailable after ${timeout_secs}s"
+}
+
+# Wait on the transaction's execution slot, never send-block's proposal header.
+# Certification/finality can lag an executed transaction and its history row.
 wait_for_finalized_slot() {
   local target="$1"; local ctx="$2"
+  [[ "$target" =~ ^[0-9]+$ ]] || die "$ctx: missing or invalid finality target"
   local timeout_secs="${BOND_FINALIZE_TIMEOUT_SECS:-120}"
-  local deadline=$(( $(date +%s) + timeout_secs ))
-  local fin=0
+  local deadline=$(( $(date +%s) + timeout_secs )) remaining pause out finalized
   while (( $(date +%s) < deadline )); do
-    if fin=$(run_cli_json "getstatus ${ctx}" getstatus 2>/dev/null | jq -er '.getstatus.finalized_slot' 2>/dev/null); then
-      (( fin >= target )) && { log "finalized slot $fin >= $target (${ctx})"; return 0; }
+    if out=$(run_cli_json "$ctx finality" getheight); then
+      finalized=$(printf '%s' "$out" | jq -er '.getheight.finalized | numbers') \
+        || die "$ctx: missing finalized height: $out"
+      [[ "$finalized" =~ ^[0-9]+$ ]] || die "$ctx: invalid finalized height: $out"
+      (( finalized < target )) || return 0
     fi
-    sleep 2
+    remaining=$(( deadline - $(date +%s) ))
+    (( remaining > 0 )) || break
+    pause="${RETRY_DELAY_SECS:-2}"
+    (( pause <= remaining )) || pause="$remaining"
+    sleep "$pause"
   done
-  log "wait_for_finalized_slot: finalized=$fin still < $target after ${timeout_secs}s (${ctx}); continuing"
-  return 0
+  die "$ctx: execution slot $target not finalized after ${timeout_secs}s"
 }
 
 # Resolve the send-block binary path (mirrors the TS e2e, which requires a
@@ -542,35 +589,44 @@ transfer_with_retry() {
 emit_slot_advancement_transfers() {
   local label="$1"
   log_section "Advancing slots: $label"
-  # Must be >= TN_RUNTIME_CTX_COMPRESSION_TIMEOUT (= STATE_HASH_DELAY +
-  # ACCEPTS_PROOF_BLOCK_SPAN = 384) so the per-account decompress cooldown
-  # clears for any compress that ran in the previous block. Compression-warmup
-  # callers only need >= STATE_HASH_DELAY (256) which 384 also satisfies.
-  local transfers=384
-  local half=$((transfers / 2))
-  local output
-  for ((i = 0; i < half; i++)); do
+  # Advance the execution clock, not a fixed transaction count: certificate
+  # posting can produce additional blocks between these confirmed transfers.
+  # 384 slots cover STATE_HASH_DELAY + ACCEPTS_PROOF_BLOCK_SPAN.
+  local current target i transfers=0 output
+  current=$(get_executed_slot) || die "Slot advancement: initial executed height lookup failed"
+  [[ -n "$current" ]] || die "Slot advancement: missing initial executed height"
+  target=$((current + 384))
+  for ((i = 0; i < 192 && current < target; i++)); do
     if ! output=$(transfer_with_retry acc_0 acc_1 "$ADVANCE_TRANSFERS_VALUE"); then
-      die "Slot advancement transfer acc_0->acc_1 failed on iteration $((i + 1))/$half"
+      die "Slot advancement transfer acc_0->acc_1 failed on iteration $((i + 1))/192"
     fi
     if ! output=$(transfer_with_retry acc_1 acc_0 "$ADVANCE_TRANSFERS_VALUE"); then
-      die "Slot advancement transfer acc_1->acc_0 failed on iteration $((i + 1))/$half"
+      die "Slot advancement transfer acc_1->acc_0 failed on iteration $((i + 1))/192"
     fi
+    transfers=$((transfers + 2))
+    current=$(get_executed_slot) || die "Slot advancement: executed height lookup failed after iteration $((i + 1))"
+    [[ -n "$current" ]] || die "Slot advancement: missing executed height after iteration $((i + 1))"
   done
-  log "Completed ${transfers} slot advancement transfers"
+  (( current >= target )) || die "Slot advancement stopped at $current before $target"
+  log "Completed ${transfers} slot advancement transfers; execution slot ${current} >= ${target}"
 }
 
 get_executed_slot() {
-  local payload
-  payload=$(run_cli_json "getheight (executed slot lookup)" getheight)
+  local payload slot
+  payload=$(run_cli_json "getheight (executed slot lookup)" getheight) \
+    || die "Executed height lookup failed"
   # The current-slot clock is locally_executed; finalized is a finality height
   # that can trail execution (UNTO-3383).
-  printf '%s' "$payload" | jq -er '.getheight.locally_executed'
+  slot=$(printf '%s' "$payload" | jq -er '.getheight.locally_executed | numbers') \
+    || die "Missing executed height: $payload"
+  [[ "$slot" =~ ^[0-9]+$ ]] || die "Invalid executed height: $payload"
+  printf '%s\n' "$slot"
 }
 
 ensure_slot_ready_for_compression() {
   local slot
-  slot=$(get_executed_slot)
+  slot=$(get_executed_slot) || die "Compression warm-up: executed height lookup failed"
+  [[ -n "$slot" ]] || die "Compression warm-up: missing executed height"
   if (( slot < 256 )); then
     emit_slot_advancement_transfers "Warm-up before compression (current slot=$slot)"
   else
@@ -831,7 +887,8 @@ scenario_accounts() {
   baseline=$(printf '%s' "$params_json" | jq -er '.feature_gates.entries[] | select(.name == "compress_baseline_units") | .current_value | tonumber')
   step=$(printf '%s' "$params_json" | jq -er '.feature_gates.entries[] | select(.name == "compress_halving_step_units") | .current_value | tonumber')
   (( step > 0 )) || die "Invalid compression halving-step chain parameter: $step"
-  slot=$(get_executed_slot)
+  slot=$(get_executed_slot) || die "Compression settled load: executed height lookup failed"
+  [[ -n "$slot" ]] || die "Compression settled load: missing executed height"
   metrics_json=$(run_cli_json_retry "compression settled load at slot $slot" getslotmetrics "$slot")
   activated=$(printf '%s' "$metrics_json" | jq -er '.getslotmetrics.global_activated_state_counter')
   deactivated=$(printf '%s' "$metrics_json" | jq -er '.getslotmetrics.global_deactivated_state_counter')
@@ -1517,17 +1574,48 @@ scenario_multisig() {
   ms_execute "$req" acc_2
   ms_wait "1000000" '.token_balance.amount' "treasury after mint-to" token balance "$treasury" --token-program "$token_program"
 
+  # Keep a plain-Transfer request open while the default checked request executes.
+  local plain_req
+  plain_req=$(via_propose "token transfer unchecked" token transfer "$treasury" "$acc_1_token" 50000 \
+    --unchecked --via-multisig "$ms" --fee-payer acc_0)
   req=$(via_propose "token transfer" token transfer "$treasury" "$acc_1_token" 250000 --via-multisig "$ms" --fee-payer acc_1)
+  out=$(ms_json "request show checked transfer" request show "$req")
+  assert_jq_eq "$out" '.multisig_request.action.decoded.type' 'token.transfer_checked'
+  assert_jq_eq "$out" '.multisig_request.action.decoded.amount' '250000'
+  assert_jq_eq "$out" '.multisig_request.action.decoded.ui_amount' '0.25'
+  assert_jq_eq "$out" '.multisig_request.action.decoded.ticker' 'MSIG'
+  assert_jq_eq "$out" '.multisig_request.action.decoded.decimals' '6'
+  assert_jq_eq "$out" '.multisig_request.action.decoded.mint' "$mint"
+  assert_jq_eq "$out" '.multisig_request.action.account_check' 'verified'
+  out=$(run_cli_raw "request show checked transfer text" multisig request show "$req" --program "$ms_program")
+  assert_contains "$out" "0.25"
+  assert_contains "$out" "MSIG"
   ms_approve "$req" acc_0
   ms_execute "$req" acc_1
   ms_wait "750000" '.token_balance.amount' "treasury after transfer" token balance "$treasury" --token-program "$token_program"
   ms_wait "250000" '.token_balance.amount' "acc_1 after transfer" token balance "$acc_1_token" --token-program "$token_program"
 
+  out=$(ms_json "request show open plain transfer" request show "$plain_req")
+  assert_jq_eq "$out" '.multisig_request.action.decoded.type' 'token.transfer'
+  assert_jq_eq "$out" '.multisig_request.action.decoded.amount' '50000'
+  assert_jq_eq "$out" '.multisig_request.action.account_check' 'verified'
+  ms_approve "$plain_req" acc_1
+  ms_execute "$plain_req" acc_2
+  ms_wait "700000" '.token_balance.amount' "treasury after plain transfer" token balance "$treasury" --token-program "$token_program"
+  ms_wait "300000" '.token_balance.amount' "acc_1 after plain transfer" token balance "$acc_1_token" --token-program "$token_program"
+
   # A transfer out of an account the multisig doesn't own would borrow its
   # owner's authority if the owner executed it.
-  out=$(run_cli_expect_fail_capture "token transfer from acc_1's account via multisig" token transfer "$acc_1_token" "$treasury" 1 \
-    --via-multisig "$ms" --fee-payer acc_0 "${via[@]}") || die "transfer from a non-multisig account was proposed"
-  assert_contains "$out" "not this multisig" || die "foreign-owner transfer refused for the wrong reason"
+  local transfer_mode
+  local -a unchecked_args
+  for transfer_mode in checked unchecked; do
+    unchecked_args=()
+    if [[ "$transfer_mode" == unchecked ]]; then unchecked_args=(--unchecked); fi
+    out=$(run_cli_expect_fail_capture "token transfer $transfer_mode from acc_1's account via multisig" \
+      token transfer "$acc_1_token" "$treasury" 1 "${unchecked_args[@]}" \
+      --via-multisig "$ms" --fee-payer acc_0 "${via[@]}") || die "transfer from a non-multisig account was proposed"
+    assert_contains "$out" "not this multisig" || die "foreign-owner transfer refused for the wrong reason"
+  done
 
   req=$(via_propose "token freeze-account" token freeze-account "$acc_1_token" "$mint" "$ms" --via-multisig "$ms" --fee-payer acc_2)
   ms_approve "$req" acc_0
@@ -1560,7 +1648,7 @@ scenario_multisig() {
   assert_jq_eq "$out" '.multisig_request.action.decoded.amount' '5' || die "generic invoke not decoded"
   ms_approve "$req" acc_1
   ms_execute "$req" acc_2
-  ms_wait "750005" '.token_balance.amount' "treasury after generic mint-to" token balance "$treasury" --token-program "$token_program"
+  ms_wait "700005" '.token_balance.amount' "treasury after generic mint-to" token balance "$treasury" --token-program "$token_program"
 
   # --- 5. replace-members leaves the pending request stale -------------------
   req=$(ms_propose "replace-members acc_2 -> acc_3" replace-members "$ms" --old acc_2 --new acc_3 --fee-payer acc_0)
@@ -1863,7 +1951,7 @@ scenario_claimfees() {
 
   # Producer = the node's own validator identity, so the injected block finalizes.
   local bp_hex
-  bp_hex="$(resolve_node_identity_seed)"
+  bp_hex="$(resolve_node_identity_seed)" || die "claimfees: producer identity lookup failed"
   [[ -n "$bp_hex" ]] || die "claimfees: no producer key. Set NODE_IDENTITY_KEY (or NODE_IDENTITY_KEY_FILE), or provision the node identity via 'dev.sh start' so $REPO_ROOT/contrib/docker-dev/data/nodekey.hex exists. The injected block must be produced by the node's own validator identity or it won't finalize."
   [[ ${#bp_hex} -eq 64 ]] || die "claimfees: node producer seed must be 64 hex chars, got ${#bp_hex}"
   local bp="cf-node"
@@ -1888,15 +1976,21 @@ scenario_claimfees() {
     run_cli_json "claimfees: exists $1" getaccountinfo "$1" 2>/dev/null \
       | jq -e '.account_info.pubkey' >/dev/null 2>&1
   }
-  # inject_two_tx_block <label> -> echoes the finalized slot of a block carrying
-  # two unrelated fee transfers (acc_1->acc_2, acc_3->acc_2), produced by bp.
+  # inject_two_tx_block <label> -> echoes the actual execution slot of a block
+  # carrying two unrelated fee transfers (acc_1->acc_2, acc_3->acc_2).
   inject_two_tx_block() {
     local label="$1" t1 t2
-    t1=$(run_cli_raw "claimfees: $label build tx1" transfer acc_1 acc_2 1 --fee 1 --build-only)
-    t2=$(run_cli_raw "claimfees: $label build tx2" transfer acc_3 acc_2 1 --fee 1 --build-only)
+    t1=$(run_cli_raw "claimfees: $label build tx1" transfer acc_1 acc_2 1 --fee 1 --build-only) \
+      || die "claimfees: $label could not build tx1"
+    [[ -n "$t1" ]] || die "claimfees: $label missing tx1"
+    t2=$(run_cli_raw "claimfees: $label build tx2" transfer acc_3 acc_2 1 --fee 1 --build-only) \
+      || die "claimfees: $label could not build tx2"
+    [[ -n "$t2" ]] || die "claimfees: $label missing tx2"
     local slot
     slot=$(run_cli_json "claimfees: $label height" getheight \
-      | jq '([.getheight.finalized, .getheight.locally_executed, .getheight.cluster_executed] | max) + 1')
+      | jq -er '.getheight | [.finalized, .locally_executed, .cluster_executed] | select(all(.[]; type == "number")) | max + 1') \
+      || die "claimfees: $label proposal height lookup failed"
+    [[ -n "$slot" ]] || die "claimfees: $label missing proposal height"
     local bf="$CLI_TMP_HOME/claimfees_${label}_blocks.json"
     jq -n --argjson slot "$slot" --arg a "$t1" --arg b "$t2" \
       '{blocks:[{slot:$slot, transactions:[$a,$b]}]}' > "$bf"
@@ -1907,8 +2001,18 @@ scenario_claimfees() {
     local accepted
     accepted=$(printf '%s\n' "$out" | sed -n 's/^slot=\([0-9][0-9]*\).*/\1/p' | head -1)
     [[ -n "$accepted" ]] || die "claimfees: $label could not parse accepted slot from send-block: $out"
-    wait_for_finalized_slot "$accepted" "claimfees $label finalize"
-    echo "$accepted"
+    local first_slot second_slot
+    first_slot=$(transaction_execution_slot "$t1" "claimfees $label tx1") \
+      || die "claimfees: $label tx1 execution lookup failed"
+    [[ -n "$first_slot" ]] || die "claimfees: $label tx1 missing execution slot"
+    second_slot=$(transaction_execution_slot "$t2" "claimfees $label tx2") \
+      || die "claimfees: $label tx2 execution lookup failed"
+    [[ -n "$second_slot" ]] || die "claimfees: $label tx2 missing execution slot"
+    [[ "$first_slot" == "$second_slot" ]] || die "claimfees: $label transfers executed in different blocks"
+    wait_for_finalized_slot "$first_slot" "claimfees $label" \
+      || die "claimfees: $label execution slot did not finalize"
+    log "claimfees: $label header slot $accepted executed at slot $first_slot"
+    echo "$first_slot"
   }
 
   # ---- Phase 1: BURN (reachable only when the producer EOA is absent) --------
@@ -1919,7 +2023,8 @@ scenario_claimfees() {
     local burn_before
     burn_before=$(account_balance "$burn_addr")
     local s1
-    s1=$(inject_two_tx_block burn)
+    s1=$(inject_two_tx_block burn) || die "claimfees: burn block injection failed"
+    [[ -n "$s1" ]] || die "claimfees: burn block missing execution slot"
     local m1 burned1 claimed1
     m1=$(run_cli_json_retry "claimfees: getslotmetrics $s1" getslotmetrics "$s1")
     burned1=$(printf '%s' "$m1" | jq -er '.getslotmetrics.absent_block_producer_fees')
@@ -1957,7 +2062,8 @@ scenario_claimfees() {
   bp_before=$(account_balance "$bp_addr")
   burn_before2=$(account_balance "$burn_addr")
   local s2 m2 burned2 claimed2
-  s2=$(inject_two_tx_block claim)
+  s2=$(inject_two_tx_block claim) || die "claimfees: claim block injection failed"
+  [[ -n "$s2" ]] || die "claimfees: claim block missing execution slot"
   m2=$(run_cli_json_retry "claimfees: getslotmetrics $s2" getslotmetrics "$s2")
   burned2=$(printf '%s' "$m2" | jq -er '.getslotmetrics.absent_block_producer_fees')
   claimed2=$(printf '%s' "$m2" | jq -er '.getslotmetrics.claimed_fees')
@@ -1989,8 +2095,8 @@ scenario_bond_part1() {
   should_run "bond" || return 0
   if [[ "$RUN_BOND_SECTION_B" != "1" ]]; then
     log "bond §B (attestor_payment → PayOutBlock bond debit) DISABLED — set RUN_BOND_SECTION_B=1 to run it."
-    log "  It needs node certificate posting enabled (tiles.cdrv.posting_certificate_frequency > 0)"
-    log "  so PostCertificate → PayOutBlock fires; see issues/bp-bond-payout-not-firing-analysis.md."
+    log "  It needs node certificate posting enabled with a funded, dedicated fee payer"
+    log "  (tiles.cdrv.posting_certificate_frequency > 0)."
     log "  (The native fee burn/claim distribution is covered by scenario_claimfees.)"
     BOND_B_RAN=0
     return 0
@@ -2007,7 +2113,7 @@ scenario_bond_part1() {
   #    /shared-keys/nodekey.hex), else the nodekey.hex that `dev.sh start`
   #    provisions on a fresh data dir.
   local bp_hex
-  bp_hex="$(resolve_node_identity_seed)"
+  bp_hex="$(resolve_node_identity_seed)" || die "§B: producer identity lookup failed"
   [[ -n "$bp_hex" ]] || die "§B: no producer key. Set NODE_IDENTITY_KEY (or NODE_IDENTITY_KEY_FILE), or provision the node identity via 'dev.sh clean && dev.sh start' so $REPO_ROOT/contrib/docker-dev/data/nodekey.hex exists. The block must be produced by the node's own validator identity or it won't be certified (no PayOutBlock)."
   [[ ${#bp_hex} -eq 64 ]] || die "§B: node producer seed must be 64 hex chars, got ${#bp_hex}"
 
@@ -2033,16 +2139,19 @@ scenario_bond_part1() {
   # getaccountinfo exits non-zero for a missing account, so tolerate failure
   # here (empty => no EOA => Mode 2) rather than tripping set -e.
   local node_pubkey=""
+  local create_json
   node_pubkey=$(run_cli_json "§B: node EOA?" getaccountinfo "$bp" 2>/dev/null | jq -r '.account_info.pubkey // empty' 2>/dev/null) || true
   if [[ -n "$node_pubkey" ]]; then
     log "§B: node EOA exists; creating bond self-pay (Mode 1)"
-    assert_jq_eq "$(run_cli_json "§B: bond create node (Mode 1)" bond create --signer "$bp")" \
-      '.bond_create.status' 'success'
+    create_json=$(run_cli_json "§B: bond create node (Mode 1)" bond create --signer "$bp") \
+      || die "§B: bond creation failed (Mode 1)"
   else
     log "§B: node has no EOA; creating bond third-party-pay (Mode 2, acc_0 creates the EOA)"
-    assert_jq_eq "$(run_cli_json "§B: bond create node (Mode 2)" bond create --signer "$bp" --fee-payer acc_0)" \
-      '.bond_create.status' 'success'
+    create_json=$(run_cli_json "§B: bond create node (Mode 2)" bond create --signer "$bp" --fee-payer acc_0) \
+      || die "§B: bond creation failed (Mode 2)"
   fi
+  [[ -n "$create_json" ]] || die "§B: missing bond creation result"
+  assert_jq_eq "$create_json" '.bond_create.status' 'success'
   # Fund the node identity so it can wrap THRU + pay its (zero) bond-op fees.
   run_cli_json "§B: fund node" transfer acc_0 "$bp_addr" 5000000 >/dev/null
 
@@ -2060,14 +2169,27 @@ scenario_bond_part1() {
   poll_wthru_amount "$src" "$A" "bp wrap"
   run_cli_json "§B: bond deposit bp" bond deposit "$bp" "$src" "$A" --fee-payer "$bp" >/dev/null
 
-  # UpdateBond (activate) is gated by the change window relative to the bond's
-  # last_change_slot, which `create` stamped to the current slot. Advance past
-  # the window before activating (the same gate applies to part2's active
-  # withdraw, which the part1->part2 bracket covers separately).
-  emit_slot_advancement_transfers "§B pre-activate change-window wait"
-  run_cli_json "§B: bond update bp activate" bond update "$bp" --active "$A" --unlock-slot 0 --fee-payer "$bp" >/dev/null
+  # Activation does not restart last_change_slot. Set a future unlock slot
+  # explicitly so the early-withdraw assertion exercises a real lock.
+  local unlock_slot current_slot
+  current_slot=$(get_executed_slot) || die "§B: activation executed height lookup failed"
+  [[ -n "$current_slot" ]] || die "§B: missing activation executed height"
+  unlock_slot=$((current_slot + 384))
+  run_cli_json "§B: bond update bp activate" bond update "$bp" --active "$A" --unlock-slot "$unlock_slot" --fee-payer "$bp" >/dev/null
   assert_bond_field "$bp" 'staged_amount' '0' '§B after activate'
   assert_bond_field "$bp" 'active_bond' "$A" '§B after activate'
+  assert_bond_field "$bp" 'unlock_slot' "$unlock_slot" '§B activation lock'
+
+  # The funded active bond must remain inaccessible until its explicit lock
+  # expires. Check it now: the waits below are bounded by time, not slots, and
+  # on a busy posting node they can outlast the 384-slot lock.
+  local before_withdraw
+  before_withdraw=$(get_executed_slot) || die "§B: early-withdraw executed height lookup failed"
+  [[ -n "$before_withdraw" ]] || die "§B: missing early-withdraw executed height"
+  (( before_withdraw < unlock_slot )) || die "§B: unlock slot elapsed before the early-withdraw check"
+  run_cli_expect_fail "§B: early active withdraw reverts" \
+    bond withdraw "$bp" "$src" "$A" --from active --fee-payer "$bp" \
+    || die "§B: active bond withdrew before its unlock slot"
 
   # 3. produce a block: a benign FEE_TX (acc_1->acc_2, non-bp payer) with an
   #    attestor_payment P (0 < P < A).  The block's native fee is distributed by
@@ -2079,11 +2201,16 @@ scenario_bond_part1() {
   bp_native_0=$(run_cli_json "§B: bp balance before block" getbalance "$bp_addr" | jq -er '.balance.balance')
 
   local fee_b64
-  fee_b64=$(run_cli_raw "§B: build FEE_TX" transfer acc_1 acc_2 1 --fee 1 --build-only)
+  fee_b64=$(run_cli_raw "§B: build FEE_TX" transfer acc_1 acc_2 1 --fee 1 --build-only) \
+    || die "§B: could not build fee transfer"
+  [[ -n "$fee_b64" ]] || die "§B: missing fee transfer"
 
   # same height definition send-block uses: max(finalized, locally, cluster)+1
   local slot
-  slot=$(run_cli_json "§B: height" getheight | jq '([.getheight.finalized, .getheight.locally_executed, .getheight.cluster_executed] | max) + 1')
+  slot=$(run_cli_json "§B: height" getheight \
+    | jq -er '.getheight | [.finalized, .locally_executed, .cluster_executed] | select(all(.[]; type == "number")) | max + 1') \
+    || die "§B: proposal height lookup failed"
+  [[ -n "$slot" ]] || die "§B: missing proposal height"
   local blocks_file="$CLI_TMP_HOME/bond_blocks.json"
   jq -n --argjson slot "$slot" --arg fee "$fee_b64" \
     '{blocks:[{slot:$slot, transactions:[$fee]}]}' > "$blocks_file"
@@ -2099,16 +2226,24 @@ scenario_bond_part1() {
   local accepted
   accepted=$(printf '%s\n' "$out" | sed -n 's/^slot=\([0-9][0-9]*\).*/\1/p' | head -1)
   [[ -n "$accepted" ]] || die "§B: could not parse accepted slot from send-block output: $out"
-  BOND_B_ACCEPTED="$accepted"
-  log "§B: block accepted at slot $accepted"
-
-  # The PayOutBlock debit + native fee claim only apply once the block finalizes.
-  wait_for_finalized_slot "$accepted" "§B post-block finalize"
+  log "§B: block accepted with header slot $accepted"
+  local execution_slot
+  execution_slot=$(transaction_execution_slot "$fee_b64" "§B fee transfer") \
+    || die "§B: fee transfer execution lookup failed"
+  [[ -n "$execution_slot" ]] || die "§B: missing fee transfer execution slot"
+  log "§B: fee transfer executed at slot $execution_slot (header slot $accepted)"
+  wait_for_finalized_slot "$execution_slot" "§B fee transfer" \
+    || die "§B: fee transfer execution slot did not finalize"
 
   # 4. (after finalize) assert the PayOutBlock debit + native fee claim.
   #    active -> A - min(P,A) = A - P (since 0 < P < A).
   local expected_active=$((A - P))
-  assert_bond_field "$bp" 'active_bond' "$expected_active" '§B after payout'
+  assert_bond_field "$bp" 'active_bond' "$expected_active" '§B after payout' \
+    "${BOND_FINALIZE_TIMEOUT_SECS:-120}" || die "§B: payout debit did not become visible"
+  # Payout must leave the activation lock in force on the remaining active bond.
+  # Only bond update can raise unlock_slot; the withdraw check above runs before
+  # the time-bounded waits, so this half is checked as state, not by timing.
+  assert_bond_field "$bp" 'unlock_slot' "$unlock_slot" '§B lock after payout'
 
   # Native fee distribution (UNTO-1293): the block's fee is claimed to the live
   # producer post-block (no in-block ClaimFees txn).  Assert claimed_fees > 0.
@@ -2117,19 +2252,15 @@ scenario_bond_part1() {
   # so the exact "received == claimed" accounting isn't deterministic — we
   # log the observed delta but only hard-assert claimed_fees > 0.
   local claimed
-  claimed=$(run_cli_json_retry "§B: getslotmetrics $accepted" getslotmetrics "$accepted" | jq -er '.getslotmetrics.claimed_fees')
-  (( claimed > 0 )) || die "§B: expected claimed_fees > 0 at slot $accepted, got $claimed"
+  claimed=$(run_cli_json_retry "§B: getslotmetrics $execution_slot" getslotmetrics "$execution_slot" | jq -er '.getslotmetrics.claimed_fees')
+  (( claimed > 0 )) || die "§B: expected claimed_fees > 0 at execution slot $execution_slot, got $claimed"
   local bp_native_1
   bp_native_1=$(run_cli_json "§B: node balance after block" getbalance "$bp_addr" | jq -er '.balance.balance')
   log "§B part1: payout debit + ClaimFees sweep verified (claimed=$claimed active=$expected_active; node native ${bp_native_0}->${bp_native_1})"
-
-  # An early active-withdraw must REVERT (unlock slot / change window not elapsed).
-  run_cli_expect_fail "§B: early active withdraw reverts" \
-    bond withdraw "$bp" "$src" "$expected_active" --from active --fee-payer "$bp"
 }
 
-# §B part 2: after the change window has elapsed (the slot-advancement run
-# between part1 and part2), withdraw the remaining active bond and delete.
+# §B part 2: after the unlock slot and change window have elapsed, withdraw the
+# remaining active bond and delete. The intervening run advances 384 real slots.
 scenario_bond_part2() {
   should_run "bond" || return 0
   [[ "$BOND_B_RAN" == "1" ]] || return 0
@@ -2286,13 +2417,14 @@ scenario_debug() {
 
   # --- Phase 2c: Inline trace in JSON output ---
   log "Phase 2c: Inline trace in JSON output (--inline-trace)"
-  local debug_inline_json inline_trace
+  local debug_inline_json
   debug_inline_json=$(run_cli_json "txn debug +inline trace" txn debug "$test_sig" --inline-trace)
-  inline_trace=$(printf '%s' "$debug_inline_json" | jq -er '.txn_debug.trace')
-  [[ -n "$inline_trace" ]] || die "Expected inline trace to be present with --inline-trace"
+  printf '%s' "$debug_inline_json" | jq -e '.txn_debug.trace | type == "string" and length > 0' >/dev/null \
+    || die "Expected inline trace to be present with --inline-trace"
   reported_bytes=$(printf '%s' "$debug_inline_json" | jq -er '.txn_debug.trace_bytes')
   local inline_trace_bytes
-  inline_trace_bytes=$(printf '%s' "$inline_trace" | wc -c | tr -d '[:space:]')
+  # Decode directly into the counter: command substitution strips trace newlines.
+  inline_trace_bytes=$(printf '%s' "$debug_inline_json" | jq -ej '.txn_debug.trace' | wc -c | tr -d '[:space:]')
   [[ "$inline_trace_bytes" == "$reported_bytes" ]] || die "Inline trace byte length ($inline_trace_bytes) != reported trace_bytes ($reported_bytes)"
 
   local inline_trace_file="$CLI_TMP_HOME/debug_trace_inline.bin"
@@ -2883,9 +3015,8 @@ main() {
   # ClaimFees native-sweep coverage (ungated, re-runnable). Skips itself when §B is
   # enabled (§B covers ClaimFees too and needs the node-identity bond absent).
   scenario_claimfees
-  # §B brackets a slot-advancement run (the change-window lockout wait) between
-  # its two halves; the bond state lives on-chain in between. §B always runs
-  # when the bond scenario is in scope (it drives send-block, never skips).
+  # Enabled §B brackets a slot-advancement run (the change-window lockout wait)
+  # between its two halves. RUN_BOND_SECTION_B=1 never silently skips either half.
   scenario_bond_part1
   if [[ "$BOND_B_RAN" == "1" ]]; then
     emit_slot_advancement_transfers "bond §B change-window lockout wait"
@@ -2898,5 +3029,7 @@ main() {
   log_section "All requested scenarios finished"
 }
 
-parse_args "$@"
-main
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  parse_args "$@"
+  main
+fi

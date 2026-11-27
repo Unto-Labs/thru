@@ -17,13 +17,13 @@ if [[ ! -x "$pull_if_missing" ]]; then
 fi
 
 images=(
-  "clickhouse/clickhouse-server@sha256:dcd74ae94f16bee4bb61a44ab0fc4ff973d5bb42180e52fc82c4fe68cfe70cf6"
+  "clickhouse/clickhouse-server:26.8.36.3-alpine@sha256:f5443f9ffa48f0154cdd50cab39fed732201762574a27f04f1f564bbba81832d"
 )
 
 case "$scope" in
   e2e)
     case "$suite" in
-      go|streaming|grpclogs)
+      go|streaming|grpclogs|vise-rebuild)
         images+=("ubuntu:24.04" "golang:1.26-bookworm")
         ;;
       cli)
@@ -33,7 +33,7 @@ case "$scope" in
         images+=("ubuntu:24.04" "golang:1.26-bookworm" "node:26.12.1-bookworm" "node:26.12.1-slim")
         ;;
       "")
-        echo "e2e image scope requires a suite: go, cli, ts, streaming, or grpclogs" >&2
+        echo "e2e image scope requires a suite: go, cli, ts, streaming, grpclogs, or vise-rebuild" >&2
         exit 2
         ;;
       *)

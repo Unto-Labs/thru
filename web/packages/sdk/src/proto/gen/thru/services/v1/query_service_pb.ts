@@ -2620,9 +2620,14 @@ export const QueryService: GenService<{
     output: typeof GetChainInfoResponseSchema;
   },
   /**
-   * Get account information. With version_context.slot, a slot above the
-   * durable cursor is rejected with FAILED_PRECONDITION instead of answered
-   * with an older version; retry once the slot is durable.
+   * Get account information. With version_context.slot, return the newest
+   * version at or before the slot only when the serving node's completed
+   * account history covers it. A pin above that history cursor returns
+   * FAILED_PRECONDITION; no committed history marker returns UNAVAILABLE.
+   * The error's "durable cursor" is this history frontier, not the live WAL
+   * frontier or finalized height. A covered but absent account is NOT_FOUND.
+   * version_context.slot_seq selects an exact (slot, seq) version under the
+   * same history coverage and error contract.
    *
    * @generated from rpc thru.services.v1.QueryService.GetAccount
    */
@@ -2632,7 +2637,9 @@ export const QueryService: GenService<{
     output: typeof AccountSchema;
   },
   /**
-   * Get account raw bytes.
+   * Get account raw bytes. version_context.slot and version_context.slot_seq
+   * use the same completed account history cursor and error contract as
+   * GetAccount, not the live WAL frontier or finalized height.
    *
    * @generated from rpc thru.services.v1.QueryService.GetRawAccount
    */
@@ -2642,8 +2649,13 @@ export const QueryService: GenService<{
     output: typeof RawAccountSchema;
   },
   /**
-   * Get raw bytes for many accounts in one call. Partial: addresses that do
-   * not exist are absent from the response map.
+   * Get raw bytes for many accounts in one call. Partial only for genuinely
+   * absent accounts at covered slots: those addresses are omitted from the map.
+   * Validate every effective slot selector against the serving node's completed
+   * account history, after applying item-level overrides. One pin above its
+   * history cursor fails the whole request with FAILED_PRECONDITION; no committed
+   * history marker returns UNAVAILABLE, even for slot zero. The error's "durable
+   * cursor" is the history frontier, not the live WAL frontier or finalized height.
    *
    * @generated from rpc thru.services.v1.QueryService.BatchGetRawAccounts
    */

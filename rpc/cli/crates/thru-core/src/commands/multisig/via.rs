@@ -177,29 +177,58 @@ pub async fn token_transfer(
     from: &str,
     to: &str,
     amount: u64,
+    unchecked: bool,
     token_program: Option<&str>,
     json: bool,
 ) -> Result<(), CliError> {
     let v = Via::new(config, via, fee_payer, json)?;
     let (from, to) = (v.ctx.resolve(from)?, v.ctx.resolve(to)?);
     let tp = v.token_program(token_program, &from).await?;
-    let summary = format!(
-        "token transfer {} from {} to {}",
-        amount,
-        addr(&from),
-        addr(&to)
-    );
+    let checked = if unchecked {
+        None
+    } else {
+        Some(
+            crate::commands::token::read_checked_transfer_inputs(&v.ctx.client, &from, &tp, json)
+                .await?,
+        )
+    };
+    let summary = match &checked {
+        Some(inputs) => format!(
+            "token transfer {} from {} to {} (mint: {}; ticker: \"{}\"; decimals: {})",
+            super::decode::format_token_amount(amount, inputs.decimals),
+            addr(&from),
+            addr(&to),
+            addr(&inputs.mint),
+            inputs.ticker.escape_ascii(),
+            inputs.decimals,
+        ),
+        None => format!(
+            "token transfer {} (raw units) from {} to {}",
+            amount,
+            addr(&from),
+            addr(&to),
+        ),
+    };
+    if !json {
+        println!("Proposing: {summary}");
+    }
     v.propose(ProposeSpec::invoke(
         summary,
         tp,
         vec![from, to],
-        vec![],
+        checked.as_ref().map(|inputs| vec![inputs.mint]).unwrap_or_default(),
         move |l, _| {
-            enc(tt::build_token_transfer_instruction(
-                ix(l, &from)?,
-                ix(l, &to)?,
-                amount,
-            ))
+            enc(match &checked {
+                Some(inputs) => tt::build_token_transfer_checked_instruction(
+                    ix(l, &from)?,
+                    ix(l, &to)?,
+                    ix(l, &inputs.mint)?,
+                    amount,
+                    inputs.decimals,
+                    &inputs.ticker,
+                ),
+                None => tt::build_token_transfer_instruction(ix(l, &from)?, ix(l, &to)?, amount),
+            })
         },
     ))
     .await
@@ -724,6 +753,40 @@ async fn program_upgrade_with_abi(
 
 /* ---------------- consensus validator manager ---------------- */
 
+/// The proposal for a CV manager instruction to `program`. When the
+/// instruction needs more than the execute default and `program` isn't a
+/// CV program this CLI knows, the executor's CLI won't know it either, so
+/// the execute command names it with `--consensus-program`.
+fn cv_manager_spec(
+    ctx: &Ctx<'_>,
+    label: &str,
+    program: TnPubkey,
+    attestor_table: TnPubkey,
+    program_meta: Option<TnPubkey>,
+    encode: impl Fn(u64, Option<u16>) -> Vec<u8> + Send + 'static,
+) -> ProposeSpec {
+    // The executor's CLI budgets the call only for a CV program it knows.
+    let name_program = tt::cv_manager_compute_units(&encode(0, None)).is_some()
+        && !super::decode::is_consensus_validator(ctx, &program);
+    let mut spec = ProposeSpec::invoke(
+        format!("consensus validator {}", label),
+        program,
+        vec![attestor_table],
+        program_meta.into_iter().collect(),
+        move |l, _| {
+            let meta_idx = match program_meta {
+                Some(meta) => Some(ix(l, &meta)?),
+                None => None,
+            };
+            Ok(encode(u64::from(ix(l, &attestor_table)?), meta_idx))
+        },
+    );
+    if name_program {
+        spec.execute_args = vec!["--consensus-program".to_string(), addr(&program)];
+    }
+    spec
+}
+
 /// A consensus validator manager instruction from a multisig: the manager,
 /// or for InitValidatorManager the program's application authority. The
 /// child writes the attestor table (and Init reads the program's metadata);
@@ -732,7 +795,11 @@ async fn program_upgrade_with_abi(
 /// needs one; it must be the multisig. The instruction runs when the
 /// request executes, as it would at the top level: ManagerActivate,
 /// ManagerDeactivate and ManagerSetWeight update the consensus state and
-/// emit their events then.
+/// emit their events then. `thru multisig execute` requests the compute
+/// budget the direct command would (`decode::cv_manager_hints`) for a CV
+/// program it knows; for another `--program`, the proposal's execute
+/// command (and its JSON `execute_args`) adds `--consensus-program`, and
+/// `request show` notes it for whoever executes.
 #[allow(clippy::too_many_arguments)]
 pub async fn cv_manager_instruction(
     config: &Config,
@@ -756,19 +823,47 @@ pub async fn cv_manager_instruction(
             )));
         }
     }
-    let summary = format!("consensus validator {}", label);
-    v.propose(ProposeSpec::invoke(
-        summary,
-        program,
-        vec![attestor_table],
-        program_meta.into_iter().collect(),
-        move |l, _| {
-            let meta_idx = match program_meta {
-                Some(meta) => Some(ix(l, &meta)?),
-                None => None,
-            };
-            Ok(encode(u64::from(ix(l, &attestor_table)?), meta_idx))
-        },
-    ))
-    .await
+    let spec = cv_manager_spec(&v.ctx, label, program, attestor_table, program_meta, encode);
+    let name_program = !spec.execute_args.is_empty();
+    v.propose(spec).await?;
+    if name_program && !json {
+        crate::output::print_info(&format!(
+            "whoever executes this request should pass --consensus-program {}: the CLI gives this call its compute budget only for a consensus validator program it knows",
+            addr(&program)
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use thru_base::bootstrap_addresses as programs;
+
+    /* A proposal to a CV program the proposer's CLI doesn't know names it
+       for the executor (the execute command and the --json execute_args)
+       when the instruction needs a budget.  The bootstrap program and the
+       header-only instructions need no flag. */
+    #[tokio::test]
+    async fn cv_manager_proposals_name_an_unknown_program_for_the_executor() {
+        let mut config = Config::default();
+        config.rpc_base_url = "http://127.0.0.1:1".to_string();
+        let ctx = Ctx::with_program(&config, None, true).expect("context");
+        let custom: TnPubkey = [0x5c; 32];
+        let table: TnPubkey = [0x33; 32];
+        let execute_args = |program: TnPubkey, d: Vec<u8>| {
+            cv_manager_spec(&ctx, "op", program, table, None, move |_, _| d.clone()).execute_args
+        };
+        let activate = tt::build_cv_manager_activate_instruction(2, [7; 32], [1; 96], [2; 192], [3; 32], 100);
+        let deactivate = tt::build_cv_manager_deactivate_instruction(2, [7; 32]);
+        let set_weight = tt::build_cv_manager_set_weight_instruction(2, [7; 32], 300);
+        let self_service = tt::build_cv_set_self_service_instruction(2, true);
+
+        let named = vec!["--consensus-program".to_string(), addr(&custom)];
+        for d in [activate.clone(), deactivate, set_weight] {
+            assert_eq!(execute_args(custom, d), named);
+        }
+        assert!(execute_args(custom, self_service).is_empty());
+        assert!(execute_args(programs::CONSENSUS_VALIDATOR_PROGRAM_BYTES, activate).is_empty());
+    }
 }

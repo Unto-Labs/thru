@@ -37,6 +37,7 @@ This guide covers the structure of the TS emitter (`rpc/abi/abi_gen/src/codegen/
 5. **Builders** (`builder.rs`)
    - Supports constant structs, FAM-bearing structs, tagged enums, and tail type-refs.
    - Generated builders expose fluent APIs (`Type.builder().field().set(...)`) and call `Type.validate` before returning buffers or views.
+   - For a struct consisting of an integer tag and the enum it selects, the selector builder requires constant-size variants. It writes the tag at its declared width and the payload at the enum field offset. A 64-bit tag uses a bigint literal.
    - Enum variant selectors rely on runtime helpers (`__tnCreateVariantSelector`) to enforce allowed tags/payload sizes.
 6. **Parameter cache** (`param_cache/extractor.rs`)
    - Generates `__tnComputeSequentialLayout` + `__tnExtractParams` to read dynamic fields exactly once per buffer.

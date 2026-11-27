@@ -1775,9 +1775,8 @@ pub enum TokenCommands {
         /// decimals and its ticker. Use this flag for a mint whose stored
         /// ticker is not canonical, or when the network's token program does
         /// not support TransferChecked yet (the transfer fails with
-        /// TokenError 2). Not accepted with --via-multisig: a multisig
-        /// proposal always carries the plain Transfer
-        #[arg(long, conflicts_with = "via_multisig")]
+        /// TokenError 2). Also applies to --via-multisig proposals
+        #[arg(long)]
         unchecked: bool,
 
         #[command(flatten)]
@@ -3449,6 +3448,22 @@ mod tests {
     }
 
     #[test]
+    fn multisig_execute_accepts_a_consensus_program() {
+        for (flag, expected) in [(None, None), (Some(["--consensus-program", "cv"]), Some("cv"))] {
+            let mut args = vec!["thru", "multisig", "execute", "req"];
+            args.extend(flag.into_iter().flatten());
+            let cli = Cli::try_parse_from(args).expect("multisig execute should parse");
+
+            match cli.command {
+                Commands::Multisig {
+                    subcommand: MultisigCommands::Execute { consensus_program, .. },
+                } => assert_eq!(consensus_program.as_deref(), expected),
+                _ => panic!("unexpected command"),
+            }
+        }
+    }
+
+    #[test]
     fn token_transfer_is_checked_unless_unchecked_is_passed() {
         for (flag, expected) in [(None, false), (Some("--unchecked"), true)] {
             let mut args = vec!["thru", "token", "transfer", "from", "to", "5"];
@@ -3464,28 +3479,21 @@ mod tests {
         }
     }
 
-    /* A multisig proposal always carries the plain Transfer, so the flag
-     * would have no effect there. */
     #[test]
-    fn token_transfer_rejects_unchecked_with_via_multisig() {
-        let args = ["thru", "token", "transfer", "from", "to", "5"];
-
-        let conflict = ["--unchecked", "--via-multisig", "ms"];
-        match Cli::try_parse_from(args.into_iter().chain(conflict)) {
-            Err(error) => assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict),
-            Ok(_) => panic!("--unchecked must not combine with --via-multisig"),
-        }
-
-        let cli = Cli::try_parse_from(args.into_iter().chain(["--via-multisig", "ms"]))
-            .expect("--via-multisig alone should parse");
-        match cli.command {
-            Commands::Token {
-                subcommand: TokenCommands::Transfer { unchecked, via, .. },
-            } => {
-                assert!(!unchecked);
-                assert_eq!(via.via_multisig.as_deref(), Some("ms"));
+    fn token_transfer_accepts_unchecked_with_via_multisig() {
+        for (flag, expected) in [(None, false), (Some("--unchecked"), true)] {
+            let mut args = vec!["thru", "token", "transfer", "from", "to", "5", "--via-multisig", "ms"];
+            args.extend(flag);
+            let cli = Cli::try_parse_from(args).expect("multisig transfer should parse");
+            match cli.command {
+                Commands::Token {
+                    subcommand: TokenCommands::Transfer { unchecked, via, .. },
+                } => {
+                    assert_eq!(unchecked, expected);
+                    assert_eq!(via.via_multisig.as_deref(), Some("ms"));
+                }
+                _ => panic!("unexpected command"),
             }
-            _ => panic!("unexpected command"),
         }
     }
 
@@ -5160,6 +5168,13 @@ pub enum MultisigCommands {
         /// State units for the execute transaction (default depends on the action)
         #[arg(long)]
         state_units: Option<u16>,
+
+        /// Consensus validator program the request calls, when it isn't the
+        /// configured one (proposed with `validator manager --program`): its
+        /// manager instructions then get the compute budget the direct command
+        /// requests. --compute-units still overrides it
+        #[arg(long)]
+        consensus_program: Option<String>,
 
         /// Skip the confirmation prompt
         #[arg(long, short = 'y')]

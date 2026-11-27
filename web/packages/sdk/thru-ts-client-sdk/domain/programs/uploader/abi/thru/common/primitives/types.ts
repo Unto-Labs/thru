@@ -1093,6 +1093,148 @@ function __tnNormalizeIrError(err: unknown): string {
   return "tn.ir.runtime_error";
 }
 
+/* ----- TYPE DEFINITION FOR Bool ----- */
+
+const __tn_ir_Bool = {
+  typeName: "Bool",
+  root: { op: "const", value: 1n }
+} as const;
+
+export class Bool {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): Bool {
+    if (!buffer || buffer.length === undefined) throw new Error("Bool.__tnCreateView requires a Uint8Array");
+    return new Bool(new Uint8Array(buffer));
+  }
+
+  static builder(): BoolBuilder {
+    return new BoolBuilder();
+  }
+
+  static fromBuilder(builder: BoolBuilder): Bool | null {
+    const buffer = builder.build();
+    return Bool.from_array(buffer);
+  }
+
+  get_value(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_value(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get value(): number {
+    return this.get_value();
+  }
+
+  set value(value: number) {
+    this.set_value(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_Bool.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_Bool, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for Bool');
+    }
+    return __tnBigIntToNumber(irResult, 'Bool::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 1) return { ok: false, code: "tn.buffer_too_small", consumed: 1 };
+    return { ok: true, consumed: 1 };
+  }
+
+  static new(value: number): Bool {
+    const buffer = new Uint8Array(1);
+    const view = new DataView(buffer.buffer);
+
+    let offset = 0;
+    view.setUint8(0, value); /* value */
+
+    return new Bool(buffer);
+  }
+
+  static from_array(buffer: Uint8Array): Bool | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new Bool(buffer);
+  }
+
+}
+
+export class BoolBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(1);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_value(value: number): this {
+    this.view.setUint8(0, value);
+    return this;
+  }
+
+  build(): Uint8Array {
+    const buffer = this.buffer.slice();
+    __tnBuilderValidateOrThrow("Bool", Bool.validate(buffer));
+    return buffer;
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    __tnBuilderValidateOrThrow("Bool", Bool.validate(this.buffer));
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): Bool {
+    const view = Bool.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build Bool");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("Bool", (params) => Bool.__tnInvokeFootprint(params));
+__tnRegisterValidate("Bool", (buffer, params) => Bool.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("Bool", (buffer) => { const result = Bool.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
 /* ----- TYPE DEFINITION FOR Date ----- */
 
 const __tn_ir_Date = {
@@ -2109,7 +2251,12 @@ export class InstructionDataBuilder {
     return this.__tnFamWriter_data!;
   }
 
+  private __tnSyncLengths(): void {
+    if (this.__tnFam_dataCount !== null) this.set_data_size(__tnToBigInt(this.__tnFam_dataCount));
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = InstructionData.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -2119,6 +2266,7 @@ export class InstructionDataBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = InstructionData.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("InstructionDataBuilder: target buffer too small");
@@ -2465,6 +2613,402 @@ export class SignatureBuilder {
 __tnRegisterFootprint("Signature", (params) => Signature.__tnInvokeFootprint(params));
 __tnRegisterValidate("Signature", (buffer, params) => Signature.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("Signature", (buffer) => { const result = Signature.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR Text ----- */
+
+const __tn_ir_Text = {
+  typeName: "Text",
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 2n } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "field", param: "bytes.len" }, right: { op: "const", value: 1n } } } } }
+} as const;
+
+export class Text {
+  private view: DataView;
+  private __tnFieldContext: Record<string, number | bigint> | null = null;
+  private __tnParams: Text.Params;
+
+  private constructor(private buffer: Uint8Array, params?: Text.Params, fieldContext?: Record<string, number | bigint>) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    this.__tnFieldContext = fieldContext ?? null;
+    if (params) {
+      this.__tnParams = params;
+    } else {
+      const derived = Text.__tnExtractParams(this.view, buffer);
+      if (!derived) {
+        throw new Error("Text: failed to derive dynamic parameters");
+      }
+      this.__tnParams = derived.params;
+    }
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { params?: Text.Params, fieldContext?: Record<string, number | bigint> }): Text {
+    if (!buffer || buffer.length === undefined) throw new Error("Text.__tnCreateView requires a Uint8Array");
+    let params = opts?.params ?? null;
+    if (!params) {
+      const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+      const derived = Text.__tnExtractParams(view, buffer);
+      if (!derived) throw new Error("Text.__tnCreateView: failed to derive params");
+      params = derived.params;
+    }
+    const instance = new Text(new Uint8Array(buffer), params, opts?.fieldContext);
+    return instance;
+  }
+
+  dynamicParams(): Text.Params {
+    return this.__tnParams;
+  }
+
+  withFieldContext(context: Record<string, number | bigint>): this {
+    this.__tnFieldContext = context;
+    return this;
+  }
+
+  private __tnResolveFieldRefRaw(path: string): number | bigint {
+    const getterName = `get_${path.replace(/[.]/g, '_')}`;
+    const getter = (this as any)[getterName];
+    if (typeof getter === "function") {
+      const value = getter.call(this);
+      return value;
+    }
+    if (this.__tnFieldContext && Object.prototype.hasOwnProperty.call(this.__tnFieldContext, path)) {
+      const contextValue = this.__tnFieldContext[path];
+      return contextValue;
+    }
+    throw new Error("Text: field reference '" + path + "' is not available; provide fieldContext when creating this view");
+  }
+
+  private __tnResolveFieldRef(path: string): number {
+    const value = this.__tnResolveFieldRefRaw(path);
+    return typeof value === "bigint" ? __tnBigIntToNumber(value, "Text::__tnResolveFieldRef") : value;
+  }
+
+  private __tnResolveFieldRefU64(path: string): bigint {
+    return __tnU64(__tnToBigInt(this.__tnResolveFieldRefRaw(path)));
+  }
+
+  private __tnResolveContextU64(path: string): bigint {
+    if (this.__tnFieldContext && Object.prototype.hasOwnProperty.call(this.__tnFieldContext, path)) return __tnU64(__tnToBigInt(this.__tnFieldContext[path]));
+    throw new Error("Text: enclosing field '" + path + "' is not available; provide fieldContext when creating this view");
+  }
+
+  static builder(): TextBuilder {
+    return new TextBuilder();
+  }
+
+  static fromBuilder(builder: TextBuilder): Text | null {
+    const buffer = builder.build();
+    const params = builder.dynamicParams();
+    return Text.from_array(buffer, { params });
+  }
+
+  static readonly flexibleArrayWriters = Object.freeze([
+    { field: "bytes", method: "bytes", sizeField: "len", paramKey: "len", elementSize: 1 },
+  ] as const);
+
+  private static __tnExtractParams(view: DataView, buffer: Uint8Array): { params: Text.Params; derived: Record<string, bigint> | null } | null {
+    if (buffer.length < 2) {
+      return null;
+    }
+    const __tnParam_bytes_len = __tnToBigInt(view.getUint16(0, true));
+    const __tnExtractedParams = Text.Params.fromValues({
+      bytes_len: __tnParam_bytes_len,
+    });
+    return { params: __tnExtractedParams, derived: null };
+  }
+
+  get_len(): number {
+    const offset = 0;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_len(value: number): void {
+    const offset = 0;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get len(): number {
+    return this.get_len();
+  }
+
+  set len(value: number) {
+    this.set_len(value);
+  }
+
+  get_bytes_length(): number {
+    return __tnCountNumber(this.__tnResolveFieldRefU64("len"));
+  }
+
+  get_bytes_at(index: number): number {
+    const offset = 2;
+    return this.view.getUint8(offset + index * 1);
+  }
+
+  get_bytes(): number[] {
+    const len = this.get_bytes_length();
+    const result: number[] = [];
+    for (let i = 0; i < len; i++) {
+      result.push(this.get_bytes_at(i));
+    }
+    return result;
+  }
+
+  set_bytes_at(index: number, value: number): void {
+    const offset = 2;
+    this.view.setUint8((offset + index * 1), value);
+  }
+
+  set_bytes(value: number[]): void {
+    const len = Math.min(this.get_bytes_length(), value.length);
+    for (let i = 0; i < len; i++) {
+      this.set_bytes_at(i, value[i]);
+    }
+  }
+
+  get bytes(): number[] {
+    return this.get_bytes();
+  }
+
+  set bytes(value: number[]) {
+    this.set_bytes(value);
+  }
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_Text.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_Text, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(bytes_len: number | bigint): bigint {
+    const params = Text.Params.fromValues({
+      bytes_len: bytes_len,
+    });
+    return this.footprintIrFromParams(params);
+  }
+
+  private static __tnPackParams(params: Text.Params): Record<string, bigint> {
+    const record: Record<string, bigint> = Object.create(null);
+    record["bytes.len"] = params.bytes_len;
+    return record;
+  }
+
+  static footprintIrFromParams(params: Text.Params): bigint {
+    const __tnParams = this.__tnPackParams(params);
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static footprintFromParams(params: Text.Params): number {
+    const irResult = this.footprintIrFromParams(params);
+    const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for Text');
+    return __tnBigIntToNumber(irResult, 'Text::footprintFromParams');
+  }
+
+  static footprintFromValues(input: { bytes_len: number | bigint }): number {
+    const params = Text.params(input);
+    return this.footprintFromParams(params);
+  }
+
+  static footprint(params: Text.Params): number {
+    return this.footprintFromParams(params);
+  }
+
+  static validate(buffer: Uint8Array, opts?: { params?: Text.Params }): { ok: boolean; code?: string; consumed?: number; params?: Text.Params } {
+    if (!buffer || buffer.length === undefined) {
+      return { ok: false, code: "tn.invalid_buffer" };
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    let params = opts?.params ?? null;
+    if (!params) {
+      const extracted = this.__tnExtractParams(view, buffer);
+      if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
+      params = extracted.params;
+    }
+    const __tnParamsRec = this.__tnPackParams(params);
+    const irResult = this.__tnValidateInternal(buffer, __tnParamsRec);
+    if (!irResult.ok) {
+      return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'Text::validate') : undefined, params };
+    }
+    const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'Text::validate') : undefined;
+    return { ok: true, consumed, params };
+  }
+
+  static from_array(buffer: Uint8Array, opts?: { params?: Text.Params }): Text | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    let params = opts?.params ?? null;
+    if (!params) {
+      const derived = this.__tnExtractParams(view, buffer);
+      if (!derived) return null;
+      params = derived.params;
+    }
+    const validation = this.validate(buffer, { params });
+    if (!validation.ok) {
+      return null;
+    }
+    const cached = validation.params ?? params;
+    const state = new Text(buffer, cached);
+    return state;
+  }
+
+
+}
+
+export namespace Text {
+  export type Params = {
+    /** ABI path: bytes.len */
+    readonly bytes_len: bigint;
+  };
+
+  export const ParamKeys = Object.freeze({
+    bytes_len: "bytes.len",
+  } as const);
+
+  export const Params = {
+    fromValues(input: { bytes_len: number | bigint }): Params {
+      return {
+        bytes_len: __tnToBigInt(input.bytes_len),
+      };
+    },
+    fromBuilder(source: { dynamicParams(): Params } | { params: Params } | Params): Params {
+      if ((source as { dynamicParams?: () => Params }).dynamicParams) {
+        return (source as { dynamicParams(): Params }).dynamicParams();
+      }
+      if ((source as { params?: Params }).params) {
+        return (source as { params: Params }).params;
+      }
+      return source as Params;
+    }
+  };
+
+  export function params(input: { bytes_len: number | bigint }): Params {
+    return Params.fromValues(input);
+  }
+}
+
+export class TextBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+  private __tnCachedParams: Text.Params | null = null;
+  private __tnLastBuffer: Uint8Array | null = null;
+  private __tnLastParams: Text.Params | null = null;
+  private __tnFam_bytes: Uint8Array | null = null;
+  private __tnFam_bytesCount: number | null = null;
+  private __tnFamWriter_bytes?: __TnFamWriterResult<TextBuilder>;
+
+  constructor() {
+    this.buffer = new Uint8Array(2);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  private __tnInvalidate(): void {
+    this.__tnCachedParams = null;
+    this.__tnLastBuffer = null;
+    this.__tnLastParams = null;
+  }
+
+  set_len(value: number): this {
+    this.view.setUint16(0, value, true);
+    this.__tnInvalidate();
+    return this;
+  }
+
+  bytes(): __TnFamWriterResult<TextBuilder> {
+    if (!this.__tnFamWriter_bytes) {
+      this.__tnFamWriter_bytes = __tnCreateFamWriter(this, "bytes", (payload) => {
+        const bytes = new Uint8Array(payload);
+        const elementCount = bytes.length;
+        if (elementCount > 65535) throw new Error("TextBuilder: bytes has more than 65535 elements");
+        this.__tnFam_bytes = bytes;
+        this.__tnFam_bytesCount = elementCount;
+        this.set_len(elementCount);
+        this.__tnInvalidate();
+      });
+    }
+    return this.__tnFamWriter_bytes!;
+  }
+
+  private __tnSyncLengths(): void {
+    if (this.__tnFam_bytesCount !== null) this.set_len(this.__tnFam_bytesCount);
+  }
+
+  build(): Uint8Array {
+    this.__tnSyncLengths();
+    const params = this.__tnComputeParams();
+    const size = Text.footprintFromParams(params);
+    const buffer = new Uint8Array(size);
+    this.__tnWriteInto(buffer);
+    this.__tnValidateOrThrow(buffer, params);
+    return buffer;
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
+    const params = this.__tnComputeParams();
+    const size = Text.footprintFromParams(params);
+    if (target.length - offset < size) throw new Error("TextBuilder: target buffer too small");
+    const slice = target.subarray(offset, offset + size);
+    this.__tnWriteInto(slice);
+    this.__tnValidateOrThrow(slice, params);
+    return target;
+  }
+
+  finish(): Text {
+    const buffer = this.build();
+    const params = this.__tnLastParams ?? this.__tnComputeParams();
+    const view = Text.from_array(buffer, { params });
+    if (!view) throw new Error("TextBuilder: failed to finalize view");
+    return view;
+  }
+
+  finishView(): Text {
+    return this.finish();
+  }
+
+  dynamicParams(): Text.Params {
+    return this.__tnComputeParams();
+  }
+
+  private __tnComputeParams(): Text.Params {
+    if (this.__tnCachedParams) return this.__tnCachedParams;
+    const params = Text.Params.fromValues({
+      bytes_len: (() => { if (this.__tnFam_bytesCount === null) throw new Error("TextBuilder: field 'bytes' must be written before computing params"); return __tnToBigInt(this.__tnFam_bytesCount); })(),
+    });
+    this.__tnCachedParams = params;
+    return params;
+  }
+
+  private __tnWriteInto(target: Uint8Array): void {
+    target.set(this.buffer, 0);
+    let cursor = this.buffer.length;
+    const __tnLocal_bytes_bytes = this.__tnFam_bytes;
+    if (!__tnLocal_bytes_bytes) throw new Error("TextBuilder: field 'bytes' must be written before build");
+    target.set(__tnLocal_bytes_bytes, cursor);
+    cursor += __tnLocal_bytes_bytes.length;
+  }
+
+  private __tnValidateOrThrow(buffer: Uint8Array, params: Text.Params): void {
+    const result = Text.validate(buffer, { params });
+    if (!result.ok) {
+      throw new Error(`${ Text }Builder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
+    }
+    this.__tnLastParams = result.params ?? params;
+    this.__tnLastBuffer = buffer;
+  }
+}
+
+__tnRegisterFootprint("Text", (params) => Text.__tnInvokeFootprint(params));
+__tnRegisterValidate("Text", (buffer, params) => Text.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("Text", (buffer) => { const result = Text.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR Timestamp ----- */
 

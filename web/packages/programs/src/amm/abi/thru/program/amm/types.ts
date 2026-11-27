@@ -1515,8 +1515,459 @@ const __tn_ir_AmmError = {
   root: { op: "const", value: 8n }
 } as const;
 
+export class AmmError_error_invalid_instruction_data_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_invalid_instruction_data_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_invalid_instruction_data_size_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_invalid_instruction_data_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_invalid_instruction_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_invalid_instruction_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_invalid_instruction_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_invalid_instruction_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_account_already_initialized_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_account_already_initialized_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_account_already_initialized_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_account_already_initialized_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_account_not_initialized_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_account_not_initialized_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_account_not_initialized_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_account_not_initialized_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_invalid_account_idx_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_invalid_account_idx_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_invalid_account_idx_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_invalid_account_idx_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_invalid_mint_ordering_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_invalid_mint_ordering_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_invalid_mint_ordering_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_invalid_mint_ordering_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_unauthorized_operation_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_unauthorized_operation_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_unauthorized_operation_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_unauthorized_operation_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_pool_create_failed_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_pool_create_failed_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_pool_create_failed_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_pool_create_failed_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_lp_mint_create_failed_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_lp_mint_create_failed_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_lp_mint_create_failed_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_lp_mint_create_failed_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_vault_one_create_failed_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_vault_one_create_failed_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_vault_one_create_failed_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_vault_one_create_failed_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_vault_two_create_failed_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_vault_two_create_failed_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_vault_two_create_failed_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_vault_two_create_failed_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_account_resize_failed_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_account_resize_failed_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_account_resize_failed_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_account_resize_failed_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_account_set_writable_failed_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_account_set_writable_failed_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_account_set_writable_failed_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_account_set_writable_failed_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_lp_mint_init_failed_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_lp_mint_init_failed_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_lp_mint_init_failed_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_lp_mint_init_failed_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_vault_one_init_failed_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_vault_one_init_failed_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_vault_one_init_failed_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_vault_one_init_failed_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_vault_two_init_failed_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_vault_two_init_failed_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_vault_two_init_failed_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_vault_two_init_failed_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_liquidity_bounds_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_liquidity_bounds_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_liquidity_bounds_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_liquidity_bounds_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_vault_mismatch_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_vault_mismatch_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_vault_mismatch_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_vault_mismatch_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_lp_mint_mismatch_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_lp_mint_mismatch_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_lp_mint_mismatch_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_lp_mint_mismatch_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_slippage_exceeded_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_slippage_exceeded_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_slippage_exceeded_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_slippage_exceeded_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_invalid_token_program_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_invalid_token_program_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("AmmError_error_invalid_token_program_Inner.__tnCreateView requires a Uint8Array");
+    return new AmmError_error_invalid_token_program_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class AmmError_error_Inner {
+  private view: DataView;
+  private __tnFieldContext: Record<string, number | bigint> | null = null;
+  private constructor(private buffer: Uint8Array, private descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    this.__tnFieldContext = fieldContext ?? null;
+  }
+
+  static __tnCreate(payload: Uint8Array, descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>): AmmError_error_Inner {
+    return new AmmError_error_Inner(new Uint8Array(payload), descriptor, fieldContext);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AmmError_error_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["code"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 1)) descriptor = { name: "invalid_instruction_data_size", tag: 1, payloadSize: 0 };
+      if (__tnTagEquals(tag, 2)) descriptor = { name: "invalid_instruction", tag: 2, payloadSize: 0 };
+      if (__tnTagEquals(tag, 3)) descriptor = { name: "account_already_initialized", tag: 3, payloadSize: 0 };
+      if (__tnTagEquals(tag, 4)) descriptor = { name: "account_not_initialized", tag: 4, payloadSize: 0 };
+      if (__tnTagEquals(tag, 5)) descriptor = { name: "invalid_account_idx", tag: 5, payloadSize: 0 };
+      if (__tnTagEquals(tag, 6)) descriptor = { name: "invalid_mint_ordering", tag: 6, payloadSize: 0 };
+      if (__tnTagEquals(tag, 7)) descriptor = { name: "unauthorized_operation", tag: 7, payloadSize: 0 };
+      if (__tnTagEquals(tag, 8)) descriptor = { name: "pool_create_failed", tag: 8, payloadSize: 0 };
+      if (__tnTagEquals(tag, 9)) descriptor = { name: "lp_mint_create_failed", tag: 9, payloadSize: 0 };
+      if (__tnTagEquals(tag, 10)) descriptor = { name: "vault_one_create_failed", tag: 10, payloadSize: 0 };
+      if (__tnTagEquals(tag, 11)) descriptor = { name: "vault_two_create_failed", tag: 11, payloadSize: 0 };
+      if (__tnTagEquals(tag, 12)) descriptor = { name: "account_resize_failed", tag: 12, payloadSize: 0 };
+      if (__tnTagEquals(tag, 13)) descriptor = { name: "account_set_writable_failed", tag: 13, payloadSize: 0 };
+      if (__tnTagEquals(tag, 14)) descriptor = { name: "lp_mint_init_failed", tag: 14, payloadSize: 0 };
+      if (__tnTagEquals(tag, 15)) descriptor = { name: "vault_one_init_failed", tag: 15, payloadSize: 0 };
+      if (__tnTagEquals(tag, 16)) descriptor = { name: "vault_two_init_failed", tag: 16, payloadSize: 0 };
+      if (__tnTagEquals(tag, 17)) descriptor = { name: "liquidity_bounds", tag: 17, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18)) descriptor = { name: "vault_mismatch", tag: 18, payloadSize: 0 };
+      if (__tnTagEquals(tag, 19)) descriptor = { name: "lp_mint_mismatch", tag: 19, payloadSize: 0 };
+      if (__tnTagEquals(tag, 20)) descriptor = { name: "slippage_exceeded", tag: 20, payloadSize: 0 };
+      if (__tnTagEquals(tag, 21)) descriptor = { name: "invalid_token_program", tag: 21, payloadSize: 0 };
+    }
+    return new AmmError_error_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
+  bytes(): Uint8Array {
+    return new Uint8Array(this.buffer);
+  }
+
+  variant(): __TnVariantDescriptor | null {
+    return this.descriptor;
+  }
+
+  asInvalidInstructionDataSize(): AmmError_error_invalid_instruction_data_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1)) return null;
+    return AmmError_error_invalid_instruction_data_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidInstruction(): AmmError_error_invalid_instruction_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2)) return null;
+    return AmmError_error_invalid_instruction_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAccountAlreadyInitialized(): AmmError_error_account_already_initialized_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 3)) return null;
+    return AmmError_error_account_already_initialized_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAccountNotInitialized(): AmmError_error_account_not_initialized_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4)) return null;
+    return AmmError_error_account_not_initialized_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidAccountIdx(): AmmError_error_invalid_account_idx_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 5)) return null;
+    return AmmError_error_invalid_account_idx_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidMintOrdering(): AmmError_error_invalid_mint_ordering_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 6)) return null;
+    return AmmError_error_invalid_mint_ordering_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asUnauthorizedOperation(): AmmError_error_unauthorized_operation_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 7)) return null;
+    return AmmError_error_unauthorized_operation_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asPoolCreateFailed(): AmmError_error_pool_create_failed_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 8)) return null;
+    return AmmError_error_pool_create_failed_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asLpMintCreateFailed(): AmmError_error_lp_mint_create_failed_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 9)) return null;
+    return AmmError_error_lp_mint_create_failed_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asVaultOneCreateFailed(): AmmError_error_vault_one_create_failed_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 10)) return null;
+    return AmmError_error_vault_one_create_failed_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asVaultTwoCreateFailed(): AmmError_error_vault_two_create_failed_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 11)) return null;
+    return AmmError_error_vault_two_create_failed_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAccountResizeFailed(): AmmError_error_account_resize_failed_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 12)) return null;
+    return AmmError_error_account_resize_failed_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAccountSetWritableFailed(): AmmError_error_account_set_writable_failed_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 13)) return null;
+    return AmmError_error_account_set_writable_failed_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asLpMintInitFailed(): AmmError_error_lp_mint_init_failed_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 14)) return null;
+    return AmmError_error_lp_mint_init_failed_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asVaultOneInitFailed(): AmmError_error_vault_one_init_failed_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 15)) return null;
+    return AmmError_error_vault_one_init_failed_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asVaultTwoInitFailed(): AmmError_error_vault_two_init_failed_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 16)) return null;
+    return AmmError_error_vault_two_init_failed_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asLiquidityBounds(): AmmError_error_liquidity_bounds_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 17)) return null;
+    return AmmError_error_liquidity_bounds_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asVaultMismatch(): AmmError_error_vault_mismatch_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18)) return null;
+    return AmmError_error_vault_mismatch_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asLpMintMismatch(): AmmError_error_lp_mint_mismatch_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 19)) return null;
+    return AmmError_error_lp_mint_mismatch_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSlippageExceeded(): AmmError_error_slippage_exceeded_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 20)) return null;
+    return AmmError_error_slippage_exceeded_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidTokenProgram(): AmmError_error_invalid_token_program_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 21)) return null;
+    return AmmError_error_invalid_token_program_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+}
+
 export class AmmError {
   private view: DataView;
+  private static readonly __tnFieldOffset_error = 8;
 
   private constructor(private buffer: Uint8Array) {
     this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
@@ -1536,6 +1987,156 @@ export class AmmError {
     return AmmError.from_array(buffer);
   }
 
+  static readonly errorVariantDescriptors = Object.freeze([
+    {
+      name: "invalid_instruction_data_size",
+      tag: 1,
+      payloadSize: 0,
+      payloadType: "AmmError::error::invalid_instruction_data_size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_instruction",
+      tag: 2,
+      payloadSize: 0,
+      payloadType: "AmmError::error::invalid_instruction",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "account_already_initialized",
+      tag: 3,
+      payloadSize: 0,
+      payloadType: "AmmError::error::account_already_initialized",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "account_not_initialized",
+      tag: 4,
+      payloadSize: 0,
+      payloadType: "AmmError::error::account_not_initialized",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_account_idx",
+      tag: 5,
+      payloadSize: 0,
+      payloadType: "AmmError::error::invalid_account_idx",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_mint_ordering",
+      tag: 6,
+      payloadSize: 0,
+      payloadType: "AmmError::error::invalid_mint_ordering",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "unauthorized_operation",
+      tag: 7,
+      payloadSize: 0,
+      payloadType: "AmmError::error::unauthorized_operation",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "pool_create_failed",
+      tag: 8,
+      payloadSize: 0,
+      payloadType: "AmmError::error::pool_create_failed",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "lp_mint_create_failed",
+      tag: 9,
+      payloadSize: 0,
+      payloadType: "AmmError::error::lp_mint_create_failed",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "vault_one_create_failed",
+      tag: 10,
+      payloadSize: 0,
+      payloadType: "AmmError::error::vault_one_create_failed",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "vault_two_create_failed",
+      tag: 11,
+      payloadSize: 0,
+      payloadType: "AmmError::error::vault_two_create_failed",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "account_resize_failed",
+      tag: 12,
+      payloadSize: 0,
+      payloadType: "AmmError::error::account_resize_failed",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "account_set_writable_failed",
+      tag: 13,
+      payloadSize: 0,
+      payloadType: "AmmError::error::account_set_writable_failed",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "lp_mint_init_failed",
+      tag: 14,
+      payloadSize: 0,
+      payloadType: "AmmError::error::lp_mint_init_failed",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "vault_one_init_failed",
+      tag: 15,
+      payloadSize: 0,
+      payloadType: "AmmError::error::vault_one_init_failed",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "vault_two_init_failed",
+      tag: 16,
+      payloadSize: 0,
+      payloadType: "AmmError::error::vault_two_init_failed",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "liquidity_bounds",
+      tag: 17,
+      payloadSize: 0,
+      payloadType: "AmmError::error::liquidity_bounds",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "vault_mismatch",
+      tag: 18,
+      payloadSize: 0,
+      payloadType: "AmmError::error::vault_mismatch",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "lp_mint_mismatch",
+      tag: 19,
+      payloadSize: 0,
+      payloadType: "AmmError::error::lp_mint_mismatch",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "slippage_exceeded",
+      tag: 20,
+      payloadSize: 0,
+      payloadType: "AmmError::error::slippage_exceeded",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_token_program",
+      tag: 21,
+      payloadSize: 0,
+      payloadType: "AmmError::error::invalid_token_program",
+      createPayloadBuilder: () => null,
+    },
+  ] as const);
+
   get_code(): bigint {
     const offset = 0;
     return this.view.getBigUint64(offset, true); /* little-endian */
@@ -1552,6 +2153,22 @@ export class AmmError {
 
   set code(value: bigint) {
     this.set_code(value);
+  }
+
+  errorVariant(): typeof AmmError.errorVariantDescriptors[number] | null {
+    const tag: number | bigint | null = this.get_code();
+    return AmmError.errorVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
+  }
+
+  error(): AmmError_error_Inner {
+    const descriptor = this.errorVariant();
+    if (!descriptor) throw new Error("AmmError: unknown error variant");
+    const offset = AmmError.__tnFieldOffset_error;
+    const remaining = this.buffer.length - offset;
+    const payloadLength = descriptor.payloadSize ?? remaining;
+    if (payloadLength < 0 || offset + payloadLength > this.buffer.length) throw new Error("AmmError: payload exceeds buffer bounds");
+    const slice = this.buffer.subarray(offset, offset + payloadLength);
+    return AmmError_error_Inner.__tnCreate(slice, descriptor, undefined);
   }
 
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
@@ -1585,17 +2202,43 @@ export class AmmError {
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
     if (buffer.length < 8) return { ok: false, code: "tn.buffer_too_small", consumed: 8 };
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed: 8 };
   }
 
-  static new(code: bigint): AmmError {
-    const buffer = new Uint8Array(8);
-    const view = new DataView(buffer.buffer);
-
-    let offset = 0;
-    view.setBigUint64(0, code, true); /* code (little-endian) */
-
-    return new AmmError(buffer);
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 8 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 1n: t3 = 0; break;
+  case 2n: t3 = 0; break;
+  case 3n: t3 = 0; break;
+  case 4n: t3 = 0; break;
+  case 5n: t3 = 0; break;
+  case 6n: t3 = 0; break;
+  case 7n: t3 = 0; break;
+  case 8n: t3 = 0; break;
+  case 9n: t3 = 0; break;
+  case 10n: t3 = 0; break;
+  case 11n: t3 = 0; break;
+  case 12n: t3 = 0; break;
+  case 13n: t3 = 0; break;
+  case 14n: t3 = 0; break;
+  case 15n: t3 = 0; break;
+  case 16n: t3 = 0; break;
+  case 17n: t3 = 0; break;
+  case 18n: t3 = 0; break;
+  case 19n: t3 = 0; break;
+  case 20n: t3 = 0; break;
+  case 21n: t3 = 0; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array): AmmError | null {
@@ -1613,35 +2256,197 @@ export class AmmError {
 }
 
 export class AmmErrorBuilder {
-  private buffer: Uint8Array;
-  private view: DataView;
+  private tag: bigint | null = null;
+  private payload: Uint8Array | null = null;
 
-  constructor() {
-    this.buffer = new Uint8Array(8);
-    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  constructor() {}
+
+  select_invalid_instruction_data_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_instruction_data_size expects 0 bytes");
+    this.tag = 1n;
+    this.payload = new Uint8Array(bytes);
+    return this;
   }
 
-  set_code(value: bigint): this {
-    const cast = __tnToBigInt(value);
-    this.view.setBigUint64(0, cast, true);
+  select_invalid_instruction(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_instruction expects 0 bytes");
+    this.tag = 2n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_account_already_initialized(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_account_already_initialized expects 0 bytes");
+    this.tag = 3n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_account_not_initialized(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_account_not_initialized expects 0 bytes");
+    this.tag = 4n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_account_idx(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_account_idx expects 0 bytes");
+    this.tag = 5n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_mint_ordering(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_mint_ordering expects 0 bytes");
+    this.tag = 6n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_unauthorized_operation(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_unauthorized_operation expects 0 bytes");
+    this.tag = 7n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_pool_create_failed(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_pool_create_failed expects 0 bytes");
+    this.tag = 8n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_lp_mint_create_failed(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_lp_mint_create_failed expects 0 bytes");
+    this.tag = 9n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_vault_one_create_failed(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_vault_one_create_failed expects 0 bytes");
+    this.tag = 10n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_vault_two_create_failed(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_vault_two_create_failed expects 0 bytes");
+    this.tag = 11n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_account_resize_failed(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_account_resize_failed expects 0 bytes");
+    this.tag = 12n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_account_set_writable_failed(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_account_set_writable_failed expects 0 bytes");
+    this.tag = 13n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_lp_mint_init_failed(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_lp_mint_init_failed expects 0 bytes");
+    this.tag = 14n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_vault_one_init_failed(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_vault_one_init_failed expects 0 bytes");
+    this.tag = 15n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_vault_two_init_failed(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_vault_two_init_failed expects 0 bytes");
+    this.tag = 16n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_liquidity_bounds(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_liquidity_bounds expects 0 bytes");
+    this.tag = 17n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_vault_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_vault_mismatch expects 0 bytes");
+    this.tag = 18n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_lp_mint_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_lp_mint_mismatch expects 0 bytes");
+    this.tag = 19n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_slippage_exceeded(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_slippage_exceeded expects 0 bytes");
+    this.tag = 20n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_token_program(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_token_program expects 0 bytes");
+    this.tag = 21n;
+    this.payload = new Uint8Array(bytes);
     return this;
   }
 
   build(): Uint8Array {
-    const buffer = this.buffer.slice();
+    if (this.tag === null || !this.payload) throw new Error("AmmError builder missing variant");
+    const buffer = new Uint8Array(8 + this.payload.length);
+    new DataView(buffer.buffer).setBigUint64(0, this.tag, true);
+    buffer.set(this.payload, 8);
     __tnBuilderValidateOrThrow("AmmError", AmmError.validate(buffer));
     return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
-    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
-    __tnBuilderValidateOrThrow("AmmError", AmmError.validate(this.buffer));
-    target.set(this.buffer, offset);
+    const bytes = this.build();
+    if (target.length - offset < bytes.length) throw new Error("target buffer too small");
+    target.set(bytes, offset);
     return target;
   }
 
   finish(): AmmError {
-    const view = AmmError.from_array(this.buffer.slice());
+    const view = AmmError.from_array(this.build());
     if (!view) throw new Error("failed to build AmmError");
     return view;
   }
@@ -3937,7 +4742,15 @@ export class AmmInitPoolInstructionBuilder {
     return this.__tnFamWriter_vault_two_proof!;
   }
 
+  private __tnSyncLengths(): void {
+    if (this.__tnFam_pool_proofCount !== null) this.set_pool_proof_size(__tnToBigInt(this.__tnFam_pool_proofCount));
+    if (this.__tnFam_lp_mint_proofCount !== null) this.set_lp_mint_proof_size(__tnToBigInt(this.__tnFam_lp_mint_proofCount));
+    if (this.__tnFam_vault_one_proofCount !== null) this.set_vault_one_proof_size(__tnToBigInt(this.__tnFam_vault_one_proofCount));
+    if (this.__tnFam_vault_two_proofCount !== null) this.set_vault_two_proof_size(__tnToBigInt(this.__tnFam_vault_two_proofCount));
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = AmmInitPoolInstruction.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -3947,6 +4760,7 @@ export class AmmInitPoolInstructionBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = AmmInitPoolInstruction.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("AmmInitPoolInstructionBuilder: target buffer too small");
@@ -5066,7 +5880,7 @@ export class AmmProgramAccountBuilder {
   build(): Uint8Array {
     if (this.tag === null || !this.payload) throw new Error("AmmProgramAccount builder missing variant");
     const buffer = new Uint8Array(1 + this.payload.length);
-    buffer[0] = this.tag;
+    new DataView(buffer.buffer).setUint8(0, this.tag);
     buffer.set(this.payload, 1);
     __tnBuilderValidateOrThrow("AmmProgramAccount", AmmProgramAccount.validate(buffer));
     return buffer;

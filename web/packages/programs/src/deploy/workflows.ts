@@ -59,6 +59,7 @@ import type {
 } from "./types";
 import {
   cleanupUpload,
+  prepareProgramUpload,
   prepareUpload,
   uploadArtifact,
   type PreparedUpload,
@@ -668,20 +669,8 @@ export async function deployProgram(
   await assertAbsent(context, absent);
   progress(context, "preflight", "succeeded");
 
-  const programUpload = await prepareUpload(
-    operation,
-    "program",
-    await temporarySeed(request.seed, "temporary"),
-    programBytes,
-  );
-  const abiUpload = abiBytes
-    ? await prepareUpload(
-        operation,
-        "abi",
-        await temporarySeed(request.seed, "abi_temp"),
-        abiBytes,
-      )
-    : undefined;
+  const programUpload = await prepareProgramUpload(request.seed, "program", programBytes);
+  const abiUpload = abiBytes ? await prepareProgramUpload(request.seed, "abi", abiBytes) : undefined;
   const uploads = abiUpload ? [programUpload, abiUpload] : [programUpload];
 
   const { value, warnings } = await withCleanup(context, uploads, async () => {

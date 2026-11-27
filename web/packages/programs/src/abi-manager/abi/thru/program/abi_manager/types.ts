@@ -2243,9 +2243,9 @@ export class AbiManagerErrorBuilder {
 
   build(): Uint8Array {
     if (this.tag === null || !this.payload) throw new Error("AbiManagerError builder missing variant");
-    const buffer = new Uint8Array(1 + this.payload.length);
-    buffer[0] = this.tag;
-    buffer.set(this.payload, 1);
+    const buffer = new Uint8Array(2 + this.payload.length);
+    new DataView(buffer.buffer).setUint16(0, this.tag, true);
+    buffer.set(this.payload, 2);
     __tnBuilderValidateOrThrow("AbiManagerError", AbiManagerError.validate(buffer));
     return buffer;
   }

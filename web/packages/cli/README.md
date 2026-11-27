@@ -119,3 +119,9 @@ npm.
 packages from the built binaries and pins them during the CLI publish
 workflow (`.github/workflows/cli-artifacts.yml`). Run `node --test` for the
 test suite and `node scripts/check-package.mjs` for the packaging invariants.
+
+Release verification retries a fresh npm installation and `thru --version`,
+not just a metadata lookup. Each attempt uses an isolated npm cache so a
+partially propagated platform package cannot leave a reused incomplete npx
+installation. Persistent failures fail the job and retain npm diagnostics
+in the workflow log.

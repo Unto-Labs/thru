@@ -1507,7 +1507,7 @@ return c; })(buffer);
 }
 
 export class CompressionErrorBuilder {
-  private tag: number | null = null;
+  private tag: bigint | null = null;
   private payload: Uint8Array | null = null;
 
   constructor() {}
@@ -1515,7 +1515,7 @@ export class CompressionErrorBuilder {
   select_invalid_instruction(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_instruction expects 0 bytes");
-    this.tag = 1;
+    this.tag = 1n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -1523,16 +1523,16 @@ export class CompressionErrorBuilder {
   select_invalid_instruction_data_size(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_instruction_data_size expects 0 bytes");
-    this.tag = 2;
+    this.tag = 2n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
 
   build(): Uint8Array {
     if (this.tag === null || !this.payload) throw new Error("CompressionError builder missing variant");
-    const buffer = new Uint8Array(1 + this.payload.length);
-    buffer[0] = this.tag;
-    buffer.set(this.payload, 1);
+    const buffer = new Uint8Array(8 + this.payload.length);
+    new DataView(buffer.buffer).setBigUint64(0, this.tag, true);
+    buffer.set(this.payload, 8);
     __tnBuilderValidateOrThrow("CompressionError", CompressionError.validate(buffer));
     return buffer;
   }
@@ -2185,7 +2185,11 @@ export class CompressArgsBuilder {
     return this;
   }
 
+  private __tnSyncLengths(): void {
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = CompressArgs.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -2195,6 +2199,7 @@ export class CompressArgsBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = CompressArgs.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("CompressArgsBuilder: target buffer too small");
@@ -2826,7 +2831,12 @@ export class DecompressArgsBuilder {
     return this;
   }
 
+  private __tnSyncLengths(): void {
+    if (this.__tnFam_account_dataCount !== null) this.set_account_data_sz(__tnToBigInt(this.__tnFam_account_dataCount));
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = DecompressArgs.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -2836,6 +2846,7 @@ export class DecompressArgsBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = DecompressArgs.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("DecompressArgsBuilder: target buffer too small");

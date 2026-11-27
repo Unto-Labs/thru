@@ -881,26 +881,39 @@ jobs:
 
       # End-to-end check of what consumers actually get: a fresh `npm exec`
       # must resolve thru@VERSION plus its linux-x64 platform package from
-      # the public registry and run the native binary. The retry loop covers
-      # registry propagation lag right after publish. Failures here cannot
-      # unpublish anything, but they turn a broken release red immediately.
+      # the public registry and run the native binary. Retry the whole install:
+      # metadata can be visible before a platform tarball is downloadable, and
+      # npm can silently omit that optional dependency. Never reuse an incomplete
+      # npx install; persistent install or execution failures still fail the job.
       - name: Verify published thru CLI
         env:
           RELEASE_VERSION: ${{ steps.meta.outputs.version }}
         run: |
           set -euo pipefail
 
+          verification_root=$(mktemp -d)
+          trap 'rm -rf "$verification_root"' EXIT
+
           for attempt in $(seq 1 10); do
-            if npm view "thru@${RELEASE_VERSION}" version >/dev/null 2>&1; then
-              break
+            attempt_dir="$verification_root/$attempt"
+            mkdir -p "$attempt_dir"
+            if (
+              cd "$attempt_dir"
+              npm exec --yes --prefer-online --loglevel verbose \
+                --cache "$attempt_dir/cache" \
+                --package "thru@${RELEASE_VERSION}" -- thru --version
+            ); then
+              exit 0
             fi
+            # Preserve npm's reason for dropping an optional dependency.
+            if [ -d "$attempt_dir/cache/_logs" ]; then
+              find "$attempt_dir/cache/_logs" -name '*-debug-0.log' -exec cat {} +
+            fi
+            rm -rf "$attempt_dir"
             if [ "$attempt" -eq 10 ]; then
-              echo "thru@${RELEASE_VERSION} is not visible on the registry." >&2
+              echo "Fresh install of thru@${RELEASE_VERSION} failed after $attempt attempts." >&2
               exit 1
             fi
-            echo "Waiting for thru@${RELEASE_VERSION} on the registry (attempt ${attempt}/10)"
+            echo "Retrying fresh install of thru@${RELEASE_VERSION} (attempt ${attempt}/10)"
             sleep 30
           done
-
-          cd "$(mktemp -d)"
-          npm exec --yes --package "thru@${RELEASE_VERSION}" -- thru --version

@@ -24,7 +24,6 @@ packages:
   - 'mcp'
   - 'wallet-app'
   - 'wallet'
-  - 'wallet/admin'
   - 'wallet/frontend/site'
   - 'wallet/frontend/mobile'
   - 'wallet/frontend/packages/*'

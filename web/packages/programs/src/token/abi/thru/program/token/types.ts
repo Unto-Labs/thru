@@ -2778,8 +2778,479 @@ const __tn_ir_TokenError = {
   root: { op: "const", value: 8n }
 } as const;
 
+export class TokenError_error_invalid_instruction_data_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_invalid_instruction_data_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_invalid_instruction_data_size_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_invalid_instruction_data_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_invalid_instruction_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_invalid_instruction_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_invalid_instruction_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_invalid_instruction_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_insufficient_funds_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_insufficient_funds_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_insufficient_funds_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_insufficient_funds_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_owner_mismatch_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_owner_mismatch_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_owner_mismatch_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_owner_mismatch_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_authority_mismatch_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_authority_mismatch_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_authority_mismatch_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_authority_mismatch_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_missing_required_signer_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_missing_required_signer_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_missing_required_signer_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_missing_required_signer_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_account_frozen_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_account_frozen_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_account_frozen_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_account_frozen_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_account_not_owned_by_program_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_account_not_owned_by_program_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_account_not_owned_by_program_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_account_not_owned_by_program_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_invalid_mint_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_invalid_mint_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_invalid_mint_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_invalid_mint_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_non_zero_balance_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_non_zero_balance_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_non_zero_balance_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_non_zero_balance_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_invalid_account_data_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_invalid_account_data_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_invalid_account_data_size_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_invalid_account_data_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_overflow_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_overflow_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_overflow_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_overflow_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_mint_mismatch_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_mint_mismatch_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_mint_mismatch_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_mint_mismatch_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_incorrect_program_id_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_incorrect_program_id_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_incorrect_program_id_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_incorrect_program_id_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_invalid_txn_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_invalid_txn_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_invalid_txn_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_invalid_txn_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_invalid_proof_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_invalid_proof_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_invalid_proof_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_invalid_proof_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_invalid_account_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_invalid_account_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_invalid_account_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_invalid_account_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_mint_cannot_freeze_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_mint_cannot_freeze_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_mint_cannot_freeze_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_mint_cannot_freeze_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_syscall_failed_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_syscall_failed_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_syscall_failed_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_syscall_failed_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_decimals_mismatch_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_decimals_mismatch_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_decimals_mismatch_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_decimals_mismatch_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_ticker_mismatch_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_ticker_mismatch_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_ticker_mismatch_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_ticker_mismatch_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_invalid_ticker_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_invalid_ticker_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("TokenError_error_invalid_ticker_Inner.__tnCreateView requires a Uint8Array");
+    return new TokenError_error_invalid_ticker_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class TokenError_error_Inner {
+  private view: DataView;
+  private __tnFieldContext: Record<string, number | bigint> | null = null;
+  private constructor(private buffer: Uint8Array, private descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    this.__tnFieldContext = fieldContext ?? null;
+  }
+
+  static __tnCreate(payload: Uint8Array, descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>): TokenError_error_Inner {
+    return new TokenError_error_Inner(new Uint8Array(payload), descriptor, fieldContext);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): TokenError_error_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["code"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 1)) descriptor = { name: "invalid_instruction_data_size", tag: 1, payloadSize: 0 };
+      if (__tnTagEquals(tag, 2)) descriptor = { name: "invalid_instruction", tag: 2, payloadSize: 0 };
+      if (__tnTagEquals(tag, 4)) descriptor = { name: "insufficient_funds", tag: 4, payloadSize: 0 };
+      if (__tnTagEquals(tag, 5)) descriptor = { name: "owner_mismatch", tag: 5, payloadSize: 0 };
+      if (__tnTagEquals(tag, 6)) descriptor = { name: "authority_mismatch", tag: 6, payloadSize: 0 };
+      if (__tnTagEquals(tag, 7)) descriptor = { name: "missing_required_signer", tag: 7, payloadSize: 0 };
+      if (__tnTagEquals(tag, 8)) descriptor = { name: "account_frozen", tag: 8, payloadSize: 0 };
+      if (__tnTagEquals(tag, 9)) descriptor = { name: "account_not_owned_by_program", tag: 9, payloadSize: 0 };
+      if (__tnTagEquals(tag, 10)) descriptor = { name: "invalid_mint", tag: 10, payloadSize: 0 };
+      if (__tnTagEquals(tag, 11)) descriptor = { name: "non_zero_balance", tag: 11, payloadSize: 0 };
+      if (__tnTagEquals(tag, 12)) descriptor = { name: "invalid_account_data_size", tag: 12, payloadSize: 0 };
+      if (__tnTagEquals(tag, 13)) descriptor = { name: "overflow", tag: 13, payloadSize: 0 };
+      if (__tnTagEquals(tag, 14)) descriptor = { name: "mint_mismatch", tag: 14, payloadSize: 0 };
+      if (__tnTagEquals(tag, 15)) descriptor = { name: "incorrect_program_id", tag: 15, payloadSize: 0 };
+      if (__tnTagEquals(tag, 16)) descriptor = { name: "invalid_txn", tag: 16, payloadSize: 0 };
+      if (__tnTagEquals(tag, 17)) descriptor = { name: "invalid_proof", tag: 17, payloadSize: 0 };
+      if (__tnTagEquals(tag, 18)) descriptor = { name: "invalid_account", tag: 18, payloadSize: 0 };
+      if (__tnTagEquals(tag, 19)) descriptor = { name: "mint_cannot_freeze", tag: 19, payloadSize: 0 };
+      if (__tnTagEquals(tag, 20)) descriptor = { name: "syscall_failed", tag: 20, payloadSize: 0 };
+      if (__tnTagEquals(tag, 21)) descriptor = { name: "decimals_mismatch", tag: 21, payloadSize: 0 };
+      if (__tnTagEquals(tag, 22)) descriptor = { name: "ticker_mismatch", tag: 22, payloadSize: 0 };
+      if (__tnTagEquals(tag, 23)) descriptor = { name: "invalid_ticker", tag: 23, payloadSize: 0 };
+    }
+    return new TokenError_error_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
+  bytes(): Uint8Array {
+    return new Uint8Array(this.buffer);
+  }
+
+  variant(): __TnVariantDescriptor | null {
+    return this.descriptor;
+  }
+
+  asInvalidInstructionDataSize(): TokenError_error_invalid_instruction_data_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1)) return null;
+    return TokenError_error_invalid_instruction_data_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidInstruction(): TokenError_error_invalid_instruction_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2)) return null;
+    return TokenError_error_invalid_instruction_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInsufficientFunds(): TokenError_error_insufficient_funds_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 4)) return null;
+    return TokenError_error_insufficient_funds_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asOwnerMismatch(): TokenError_error_owner_mismatch_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 5)) return null;
+    return TokenError_error_owner_mismatch_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAuthorityMismatch(): TokenError_error_authority_mismatch_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 6)) return null;
+    return TokenError_error_authority_mismatch_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMissingRequiredSigner(): TokenError_error_missing_required_signer_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 7)) return null;
+    return TokenError_error_missing_required_signer_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAccountFrozen(): TokenError_error_account_frozen_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 8)) return null;
+    return TokenError_error_account_frozen_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAccountNotOwnedByProgram(): TokenError_error_account_not_owned_by_program_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 9)) return null;
+    return TokenError_error_account_not_owned_by_program_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidMint(): TokenError_error_invalid_mint_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 10)) return null;
+    return TokenError_error_invalid_mint_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asNonZeroBalance(): TokenError_error_non_zero_balance_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 11)) return null;
+    return TokenError_error_non_zero_balance_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidAccountDataSize(): TokenError_error_invalid_account_data_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 12)) return null;
+    return TokenError_error_invalid_account_data_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asOverflow(): TokenError_error_overflow_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 13)) return null;
+    return TokenError_error_overflow_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMintMismatch(): TokenError_error_mint_mismatch_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 14)) return null;
+    return TokenError_error_mint_mismatch_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asIncorrectProgramId(): TokenError_error_incorrect_program_id_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 15)) return null;
+    return TokenError_error_incorrect_program_id_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidTxn(): TokenError_error_invalid_txn_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 16)) return null;
+    return TokenError_error_invalid_txn_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidProof(): TokenError_error_invalid_proof_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 17)) return null;
+    return TokenError_error_invalid_proof_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidAccount(): TokenError_error_invalid_account_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 18)) return null;
+    return TokenError_error_invalid_account_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMintCannotFreeze(): TokenError_error_mint_cannot_freeze_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 19)) return null;
+    return TokenError_error_mint_cannot_freeze_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSyscallFailed(): TokenError_error_syscall_failed_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 20)) return null;
+    return TokenError_error_syscall_failed_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asDecimalsMismatch(): TokenError_error_decimals_mismatch_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 21)) return null;
+    return TokenError_error_decimals_mismatch_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asTickerMismatch(): TokenError_error_ticker_mismatch_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 22)) return null;
+    return TokenError_error_ticker_mismatch_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidTicker(): TokenError_error_invalid_ticker_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 23)) return null;
+    return TokenError_error_invalid_ticker_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+}
+
 export class TokenError {
   private view: DataView;
+  private static readonly __tnFieldOffset_error = 8;
 
   private constructor(private buffer: Uint8Array) {
     this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
@@ -2799,6 +3270,163 @@ export class TokenError {
     return TokenError.from_array(buffer);
   }
 
+  static readonly errorVariantDescriptors = Object.freeze([
+    {
+      name: "invalid_instruction_data_size",
+      tag: 1,
+      payloadSize: 0,
+      payloadType: "TokenError::error::invalid_instruction_data_size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_instruction",
+      tag: 2,
+      payloadSize: 0,
+      payloadType: "TokenError::error::invalid_instruction",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "insufficient_funds",
+      tag: 4,
+      payloadSize: 0,
+      payloadType: "TokenError::error::insufficient_funds",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "owner_mismatch",
+      tag: 5,
+      payloadSize: 0,
+      payloadType: "TokenError::error::owner_mismatch",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "authority_mismatch",
+      tag: 6,
+      payloadSize: 0,
+      payloadType: "TokenError::error::authority_mismatch",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "missing_required_signer",
+      tag: 7,
+      payloadSize: 0,
+      payloadType: "TokenError::error::missing_required_signer",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "account_frozen",
+      tag: 8,
+      payloadSize: 0,
+      payloadType: "TokenError::error::account_frozen",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "account_not_owned_by_program",
+      tag: 9,
+      payloadSize: 0,
+      payloadType: "TokenError::error::account_not_owned_by_program",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_mint",
+      tag: 10,
+      payloadSize: 0,
+      payloadType: "TokenError::error::invalid_mint",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "non_zero_balance",
+      tag: 11,
+      payloadSize: 0,
+      payloadType: "TokenError::error::non_zero_balance",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_account_data_size",
+      tag: 12,
+      payloadSize: 0,
+      payloadType: "TokenError::error::invalid_account_data_size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "overflow",
+      tag: 13,
+      payloadSize: 0,
+      payloadType: "TokenError::error::overflow",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mint_mismatch",
+      tag: 14,
+      payloadSize: 0,
+      payloadType: "TokenError::error::mint_mismatch",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "incorrect_program_id",
+      tag: 15,
+      payloadSize: 0,
+      payloadType: "TokenError::error::incorrect_program_id",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_txn",
+      tag: 16,
+      payloadSize: 0,
+      payloadType: "TokenError::error::invalid_txn",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_proof",
+      tag: 17,
+      payloadSize: 0,
+      payloadType: "TokenError::error::invalid_proof",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_account",
+      tag: 18,
+      payloadSize: 0,
+      payloadType: "TokenError::error::invalid_account",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "mint_cannot_freeze",
+      tag: 19,
+      payloadSize: 0,
+      payloadType: "TokenError::error::mint_cannot_freeze",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "syscall_failed",
+      tag: 20,
+      payloadSize: 0,
+      payloadType: "TokenError::error::syscall_failed",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "decimals_mismatch",
+      tag: 21,
+      payloadSize: 0,
+      payloadType: "TokenError::error::decimals_mismatch",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "ticker_mismatch",
+      tag: 22,
+      payloadSize: 0,
+      payloadType: "TokenError::error::ticker_mismatch",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_ticker",
+      tag: 23,
+      payloadSize: 0,
+      payloadType: "TokenError::error::invalid_ticker",
+      createPayloadBuilder: () => null,
+    },
+  ] as const);
+
   get_code(): bigint {
     const offset = 0;
     return this.view.getBigUint64(offset, true); /* little-endian */
@@ -2815,6 +3443,22 @@ export class TokenError {
 
   set code(value: bigint) {
     this.set_code(value);
+  }
+
+  errorVariant(): typeof TokenError.errorVariantDescriptors[number] | null {
+    const tag: number | bigint | null = this.get_code();
+    return TokenError.errorVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
+  }
+
+  error(): TokenError_error_Inner {
+    const descriptor = this.errorVariant();
+    if (!descriptor) throw new Error("TokenError: unknown error variant");
+    const offset = TokenError.__tnFieldOffset_error;
+    const remaining = this.buffer.length - offset;
+    const payloadLength = descriptor.payloadSize ?? remaining;
+    if (payloadLength < 0 || offset + payloadLength > this.buffer.length) throw new Error("TokenError: payload exceeds buffer bounds");
+    const slice = this.buffer.subarray(offset, offset + payloadLength);
+    return TokenError_error_Inner.__tnCreate(slice, descriptor, undefined);
   }
 
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
@@ -2848,17 +3492,44 @@ export class TokenError {
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
     if (buffer.length < 8) return { ok: false, code: "tn.buffer_too_small", consumed: 8 };
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed: 8 };
   }
 
-  static new(code: bigint): TokenError {
-    const buffer = new Uint8Array(8);
-    const view = new DataView(buffer.buffer);
-
-    let offset = 0;
-    view.setBigUint64(0, code, true); /* code (little-endian) */
-
-    return new TokenError(buffer);
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 8 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 1n: t3 = 0; break;
+  case 2n: t3 = 0; break;
+  case 4n: t3 = 0; break;
+  case 5n: t3 = 0; break;
+  case 6n: t3 = 0; break;
+  case 7n: t3 = 0; break;
+  case 8n: t3 = 0; break;
+  case 9n: t3 = 0; break;
+  case 10n: t3 = 0; break;
+  case 11n: t3 = 0; break;
+  case 12n: t3 = 0; break;
+  case 13n: t3 = 0; break;
+  case 14n: t3 = 0; break;
+  case 15n: t3 = 0; break;
+  case 16n: t3 = 0; break;
+  case 17n: t3 = 0; break;
+  case 18n: t3 = 0; break;
+  case 19n: t3 = 0; break;
+  case 20n: t3 = 0; break;
+  case 21n: t3 = 0; break;
+  case 22n: t3 = 0; break;
+  case 23n: t3 = 0; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array): TokenError | null {
@@ -2876,35 +3547,205 @@ export class TokenError {
 }
 
 export class TokenErrorBuilder {
-  private buffer: Uint8Array;
-  private view: DataView;
+  private tag: bigint | null = null;
+  private payload: Uint8Array | null = null;
 
-  constructor() {
-    this.buffer = new Uint8Array(8);
-    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  constructor() {}
+
+  select_invalid_instruction_data_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_instruction_data_size expects 0 bytes");
+    this.tag = 1n;
+    this.payload = new Uint8Array(bytes);
+    return this;
   }
 
-  set_code(value: bigint): this {
-    const cast = __tnToBigInt(value);
-    this.view.setBigUint64(0, cast, true);
+  select_invalid_instruction(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_instruction expects 0 bytes");
+    this.tag = 2n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_insufficient_funds(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_insufficient_funds expects 0 bytes");
+    this.tag = 4n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_owner_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_owner_mismatch expects 0 bytes");
+    this.tag = 5n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_authority_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_authority_mismatch expects 0 bytes");
+    this.tag = 6n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_missing_required_signer(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_missing_required_signer expects 0 bytes");
+    this.tag = 7n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_account_frozen(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_account_frozen expects 0 bytes");
+    this.tag = 8n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_account_not_owned_by_program(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_account_not_owned_by_program expects 0 bytes");
+    this.tag = 9n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_mint(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_mint expects 0 bytes");
+    this.tag = 10n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_non_zero_balance(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_non_zero_balance expects 0 bytes");
+    this.tag = 11n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_account_data_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_account_data_size expects 0 bytes");
+    this.tag = 12n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_overflow(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_overflow expects 0 bytes");
+    this.tag = 13n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mint_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mint_mismatch expects 0 bytes");
+    this.tag = 14n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_incorrect_program_id(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_incorrect_program_id expects 0 bytes");
+    this.tag = 15n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_txn(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_txn expects 0 bytes");
+    this.tag = 16n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_proof(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_proof expects 0 bytes");
+    this.tag = 17n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_account(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_account expects 0 bytes");
+    this.tag = 18n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_mint_cannot_freeze(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_mint_cannot_freeze expects 0 bytes");
+    this.tag = 19n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_syscall_failed(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_syscall_failed expects 0 bytes");
+    this.tag = 20n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_decimals_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_decimals_mismatch expects 0 bytes");
+    this.tag = 21n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_ticker_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_ticker_mismatch expects 0 bytes");
+    this.tag = 22n;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_ticker(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_ticker expects 0 bytes");
+    this.tag = 23n;
+    this.payload = new Uint8Array(bytes);
     return this;
   }
 
   build(): Uint8Array {
-    const buffer = this.buffer.slice();
+    if (this.tag === null || !this.payload) throw new Error("TokenError builder missing variant");
+    const buffer = new Uint8Array(8 + this.payload.length);
+    new DataView(buffer.buffer).setBigUint64(0, this.tag, true);
+    buffer.set(this.payload, 8);
     __tnBuilderValidateOrThrow("TokenError", TokenError.validate(buffer));
     return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
-    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
-    __tnBuilderValidateOrThrow("TokenError", TokenError.validate(this.buffer));
-    target.set(this.buffer, offset);
+    const bytes = this.build();
+    if (target.length - offset < bytes.length) throw new Error("target buffer too small");
+    target.set(bytes, offset);
     return target;
   }
 
   finish(): TokenError {
-    const view = TokenError.from_array(this.buffer.slice());
+    const view = TokenError.from_array(this.build());
     if (!view) throw new Error("failed to build TokenError");
     return view;
   }
@@ -6630,7 +7471,11 @@ export class InitializeAccountInstructionBuilder {
     return this;
   }
 
+  private __tnSyncLengths(): void {
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = InitializeAccountInstruction.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -6640,6 +7485,7 @@ export class InitializeAccountInstructionBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = InitializeAccountInstruction.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("InitializeAccountInstructionBuilder: target buffer too small");
@@ -7289,7 +8135,11 @@ export class InitializeMintInstructionBuilder {
     return this;
   }
 
+  private __tnSyncLengths(): void {
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = InitializeMintInstruction.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -7299,6 +8149,7 @@ export class InitializeMintInstructionBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = InitializeMintInstruction.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("InitializeMintInstructionBuilder: target buffer too small");

@@ -2534,6 +2534,7 @@ export class ExchangeInitializeInstructionBuilder {
       this.__tnFamWriter_proof = __tnCreateFamWriter(this, "proof", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("ExchangeInitializeInstructionBuilder: proof has more than 4294967295 elements");
         this.__tnFam_proof = bytes;
         this.__tnFam_proofCount = elementCount;
         this.set_proof_sz(elementCount);
@@ -2543,7 +2544,12 @@ export class ExchangeInitializeInstructionBuilder {
     return this.__tnFamWriter_proof!;
   }
 
+  private __tnSyncLengths(): void {
+    if (this.__tnFam_proofCount !== null) this.set_proof_sz(this.__tnFam_proofCount);
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = ExchangeInitializeInstruction.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -2553,6 +2559,7 @@ export class ExchangeInitializeInstructionBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = ExchangeInitializeInstruction.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("ExchangeInitializeInstructionBuilder: target buffer too small");
@@ -4541,6 +4548,7 @@ export class MarginAccountCreateInstructionBuilder {
       this.__tnFamWriter_proof = __tnCreateFamWriter(this, "proof", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("MarginAccountCreateInstructionBuilder: proof has more than 4294967295 elements");
         this.__tnFam_proof = bytes;
         this.__tnFam_proofCount = elementCount;
         this.set_proof_sz(elementCount);
@@ -4550,7 +4558,12 @@ export class MarginAccountCreateInstructionBuilder {
     return this.__tnFamWriter_proof!;
   }
 
+  private __tnSyncLengths(): void {
+    if (this.__tnFam_proofCount !== null) this.set_proof_sz(this.__tnFam_proofCount);
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = MarginAccountCreateInstruction.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -4560,6 +4573,7 @@ export class MarginAccountCreateInstructionBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = MarginAccountCreateInstruction.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("MarginAccountCreateInstructionBuilder: target buffer too small");
@@ -7093,6 +7107,7 @@ export class MarketCreateInstructionBuilder {
       this.__tnFamWriter_proof_seat_arena = __tnCreateFamWriter(this, "proof_seat_arena", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("MarketCreateInstructionBuilder: proof_seat_arena has more than 4294967295 elements");
         this.__tnFam_proof_seat_arena = bytes;
         this.__tnFam_proof_seat_arenaCount = elementCount;
         this.set_proof_sz_seat_arena(elementCount);
@@ -7107,6 +7122,7 @@ export class MarketCreateInstructionBuilder {
       this.__tnFamWriter_proof_order_arena = __tnCreateFamWriter(this, "proof_order_arena", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("MarketCreateInstructionBuilder: proof_order_arena has more than 4294967295 elements");
         this.__tnFam_proof_order_arena = bytes;
         this.__tnFam_proof_order_arenaCount = elementCount;
         this.set_proof_sz_order_arena(elementCount);
@@ -7121,6 +7137,7 @@ export class MarketCreateInstructionBuilder {
       this.__tnFamWriter_proof_bids_cbook = __tnCreateFamWriter(this, "proof_bids_cbook", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("MarketCreateInstructionBuilder: proof_bids_cbook has more than 4294967295 elements");
         this.__tnFam_proof_bids_cbook = bytes;
         this.__tnFam_proof_bids_cbookCount = elementCount;
         this.set_proof_sz_bids_cbook(elementCount);
@@ -7135,6 +7152,7 @@ export class MarketCreateInstructionBuilder {
       this.__tnFamWriter_proof_asks_cbook = __tnCreateFamWriter(this, "proof_asks_cbook", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("MarketCreateInstructionBuilder: proof_asks_cbook has more than 4294967295 elements");
         this.__tnFam_proof_asks_cbook = bytes;
         this.__tnFam_proof_asks_cbookCount = elementCount;
         this.set_proof_sz_asks_cbook(elementCount);
@@ -7149,6 +7167,7 @@ export class MarketCreateInstructionBuilder {
       this.__tnFamWriter_proof_quote_vault = __tnCreateFamWriter(this, "proof_quote_vault", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("MarketCreateInstructionBuilder: proof_quote_vault has more than 4294967295 elements");
         this.__tnFam_proof_quote_vault = bytes;
         this.__tnFam_proof_quote_vaultCount = elementCount;
         this.set_proof_sz_quote_vault(elementCount);
@@ -7158,7 +7177,16 @@ export class MarketCreateInstructionBuilder {
     return this.__tnFamWriter_proof_quote_vault!;
   }
 
+  private __tnSyncLengths(): void {
+    if (this.__tnFam_proof_seat_arenaCount !== null) this.set_proof_sz_seat_arena(this.__tnFam_proof_seat_arenaCount);
+    if (this.__tnFam_proof_order_arenaCount !== null) this.set_proof_sz_order_arena(this.__tnFam_proof_order_arenaCount);
+    if (this.__tnFam_proof_bids_cbookCount !== null) this.set_proof_sz_bids_cbook(this.__tnFam_proof_bids_cbookCount);
+    if (this.__tnFam_proof_asks_cbookCount !== null) this.set_proof_sz_asks_cbook(this.__tnFam_proof_asks_cbookCount);
+    if (this.__tnFam_proof_quote_vaultCount !== null) this.set_proof_sz_quote_vault(this.__tnFam_proof_quote_vaultCount);
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = MarketCreateInstruction.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -7168,6 +7196,7 @@ export class MarketCreateInstructionBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = MarketCreateInstruction.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("MarketCreateInstructionBuilder: target buffer too small");
@@ -13602,7 +13631,7 @@ return c; })(buffer);
 }
 
 export class PerpErrorBuilder {
-  private tag: number | null = null;
+  private tag: bigint | null = null;
   private payload: Uint8Array | null = null;
 
   constructor() {}
@@ -13610,7 +13639,7 @@ export class PerpErrorBuilder {
   select_invalid_instr_size(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_instr_size expects 0 bytes");
-    this.tag = 18446744073709551515;
+    this.tag = 18446744073709551515n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13618,7 +13647,7 @@ export class PerpErrorBuilder {
   select_invalid_instr_type(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_instr_type expects 0 bytes");
-    this.tag = 18446744073709551514;
+    this.tag = 18446744073709551514n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13626,7 +13655,7 @@ export class PerpErrorBuilder {
   select_invalid_exchange_init_proof_size(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_exchange_init_proof_size expects 0 bytes");
-    this.tag = 18446744073709551513;
+    this.tag = 18446744073709551513n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13634,7 +13663,7 @@ export class PerpErrorBuilder {
   select_invalid_status_flags(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_status_flags expects 0 bytes");
-    this.tag = 18446744073709551512;
+    this.tag = 18446744073709551512n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13642,7 +13671,7 @@ export class PerpErrorBuilder {
   select_indivisible_price_ticks(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_indivisible_price_ticks expects 0 bytes");
-    this.tag = 18446744073709551415;
+    this.tag = 18446744073709551415n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13650,7 +13679,7 @@ export class PerpErrorBuilder {
   select_indivisible_qty_lots(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_indivisible_qty_lots expects 0 bytes");
-    this.tag = 18446744073709551414;
+    this.tag = 18446744073709551414n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13658,7 +13687,7 @@ export class PerpErrorBuilder {
   select_over_max_price(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_over_max_price expects 0 bytes");
-    this.tag = 18446744073709551413;
+    this.tag = 18446744073709551413n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13666,7 +13695,7 @@ export class PerpErrorBuilder {
   select_invalid_lot_or_tick_size(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_lot_or_tick_size expects 0 bytes");
-    this.tag = 18446744073709551412;
+    this.tag = 18446744073709551412n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13674,7 +13703,7 @@ export class PerpErrorBuilder {
   select_gtt_order_expired(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_gtt_order_expired expects 0 bytes");
-    this.tag = 18446744073709551315;
+    this.tag = 18446744073709551315n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13682,7 +13711,7 @@ export class PerpErrorBuilder {
   select_order_id_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_order_id_not_found expects 0 bytes");
-    this.tag = 18446744073709551314;
+    this.tag = 18446744073709551314n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13690,7 +13719,7 @@ export class PerpErrorBuilder {
   select_client_id_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_client_id_not_found expects 0 bytes");
-    this.tag = 18446744073709551313;
+    this.tag = 18446744073709551313n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13698,7 +13727,7 @@ export class PerpErrorBuilder {
   select_modify_increase_not_allowed(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_modify_increase_not_allowed expects 0 bytes");
-    this.tag = 18446744073709551312;
+    this.tag = 18446744073709551312n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13706,7 +13735,7 @@ export class PerpErrorBuilder {
   select_ask_bid_side_undef(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_ask_bid_side_undef expects 0 bytes");
-    this.tag = 18446744073709551311;
+    this.tag = 18446744073709551311n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13714,7 +13743,7 @@ export class PerpErrorBuilder {
   select_cbook_full(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_cbook_full expects 0 bytes");
-    this.tag = 18446744073709551310;
+    this.tag = 18446744073709551310n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13722,7 +13751,7 @@ export class PerpErrorBuilder {
   select_ob_side_state_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_ob_side_state_mismatch expects 0 bytes");
-    this.tag = 18446744073709551308;
+    this.tag = 18446744073709551308n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13730,7 +13759,7 @@ export class PerpErrorBuilder {
   select_insufficient_funds_quote(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_insufficient_funds_quote expects 0 bytes");
-    this.tag = 18446744073709551215;
+    this.tag = 18446744073709551215n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13738,7 +13767,7 @@ export class PerpErrorBuilder {
   select_market_deposits_frozen(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_market_deposits_frozen expects 0 bytes");
-    this.tag = 18446744073709551115;
+    this.tag = 18446744073709551115n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13746,7 +13775,7 @@ export class PerpErrorBuilder {
   select_market_withdrawals_frozen(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_market_withdrawals_frozen expects 0 bytes");
-    this.tag = 18446744073709551114;
+    this.tag = 18446744073709551114n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13754,7 +13783,7 @@ export class PerpErrorBuilder {
   select_market_paused(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_market_paused expects 0 bytes");
-    this.tag = 18446744073709551113;
+    this.tag = 18446744073709551113n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13762,7 +13791,7 @@ export class PerpErrorBuilder {
   select_market_postonly_mode(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_market_postonly_mode expects 0 bytes");
-    this.tag = 18446744073709551112;
+    this.tag = 18446744073709551112n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13770,7 +13799,7 @@ export class PerpErrorBuilder {
   select_seat_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_seat_not_found expects 0 bytes");
-    this.tag = 18446744073709551015;
+    this.tag = 18446744073709551015n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13778,7 +13807,7 @@ export class PerpErrorBuilder {
   select_seat_arena_data_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_seat_arena_data_not_found expects 0 bytes");
-    this.tag = 18446744073709551014;
+    this.tag = 18446744073709551014n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13786,7 +13815,7 @@ export class PerpErrorBuilder {
   select_seat_arena_full(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_seat_arena_full expects 0 bytes");
-    this.tag = 18446744073709551013;
+    this.tag = 18446744073709551013n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13794,7 +13823,7 @@ export class PerpErrorBuilder {
   select_entry_idx_out_of_bounds(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_entry_idx_out_of_bounds expects 0 bytes");
-    this.tag = 18446744073709551012;
+    this.tag = 18446744073709551012n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13802,7 +13831,7 @@ export class PerpErrorBuilder {
   select_reserved_seat_idx(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_reserved_seat_idx expects 0 bytes");
-    this.tag = 18446744073709551011;
+    this.tag = 18446744073709551011n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13810,7 +13839,7 @@ export class PerpErrorBuilder {
   select_arena_entry_not_active(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_arena_entry_not_active expects 0 bytes");
-    this.tag = 18446744073709551010;
+    this.tag = 18446744073709551010n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13818,7 +13847,7 @@ export class PerpErrorBuilder {
   select_arena_full(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_arena_full expects 0 bytes");
-    this.tag = 18446744073709551009;
+    this.tag = 18446744073709551009n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13826,7 +13855,7 @@ export class PerpErrorBuilder {
   select_invalid_account_type(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_account_type expects 0 bytes");
-    this.tag = 18446744073709550915;
+    this.tag = 18446744073709550915n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13834,7 +13863,7 @@ export class PerpErrorBuilder {
   select_invalid_account_idx(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_account_idx expects 0 bytes");
-    this.tag = 18446744073709550914;
+    this.tag = 18446744073709550914n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13842,7 +13871,7 @@ export class PerpErrorBuilder {
   select_invalid_vault_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_vault_pubkey expects 0 bytes");
-    this.tag = 18446744073709550913;
+    this.tag = 18446744073709550913n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13850,7 +13879,7 @@ export class PerpErrorBuilder {
   select_exchange_meta_invalid_idx(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_exchange_meta_invalid_idx expects 0 bytes");
-    this.tag = 18446744073709550912;
+    this.tag = 18446744073709550912n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13858,7 +13887,7 @@ export class PerpErrorBuilder {
   select_exchange_meta_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_exchange_meta_not_found expects 0 bytes");
-    this.tag = 18446744073709550911;
+    this.tag = 18446744073709550911n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13866,7 +13895,7 @@ export class PerpErrorBuilder {
   select_exchange_meta_wrong_owner(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_exchange_meta_wrong_owner expects 0 bytes");
-    this.tag = 18446744073709550910;
+    this.tag = 18446744073709550910n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13874,7 +13903,7 @@ export class PerpErrorBuilder {
   select_exchange_meta_invalid_size(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_exchange_meta_invalid_size expects 0 bytes");
-    this.tag = 18446744073709550909;
+    this.tag = 18446744073709550909n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13882,7 +13911,7 @@ export class PerpErrorBuilder {
   select_exchange_meta_invalid_account_type(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_exchange_meta_invalid_account_type expects 0 bytes");
-    this.tag = 18446744073709550908;
+    this.tag = 18446744073709550908n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13890,7 +13919,7 @@ export class PerpErrorBuilder {
   select_program_meta_invalid_idx(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_program_meta_invalid_idx expects 0 bytes");
-    this.tag = 18446744073709550906;
+    this.tag = 18446744073709550906n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13898,7 +13927,7 @@ export class PerpErrorBuilder {
   select_program_meta_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_program_meta_not_found expects 0 bytes");
-    this.tag = 18446744073709550905;
+    this.tag = 18446744073709550905n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13906,7 +13935,7 @@ export class PerpErrorBuilder {
   select_program_meta_wrong_owner(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_program_meta_wrong_owner expects 0 bytes");
-    this.tag = 18446744073709550904;
+    this.tag = 18446744073709550904n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13914,7 +13943,7 @@ export class PerpErrorBuilder {
   select_program_meta_invalid_size(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_program_meta_invalid_size expects 0 bytes");
-    this.tag = 18446744073709550903;
+    this.tag = 18446744073709550903n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13922,7 +13951,7 @@ export class PerpErrorBuilder {
   select_token_program_invalid_idx(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_token_program_invalid_idx expects 0 bytes");
-    this.tag = 18446744073709550902;
+    this.tag = 18446744073709550902n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13930,7 +13959,7 @@ export class PerpErrorBuilder {
   select_token_program_not_found(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_token_program_not_found expects 0 bytes");
-    this.tag = 18446744073709550901;
+    this.tag = 18446744073709550901n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13938,7 +13967,7 @@ export class PerpErrorBuilder {
   select_token_account_not_program(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_token_account_not_program expects 0 bytes");
-    this.tag = 18446744073709550900;
+    this.tag = 18446744073709550900n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13946,7 +13975,7 @@ export class PerpErrorBuilder {
   select_token_program_not_canonical(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_token_program_not_canonical expects 0 bytes");
-    this.tag = 18446744073709550899;
+    this.tag = 18446744073709550899n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13954,7 +13983,7 @@ export class PerpErrorBuilder {
   select_mismatch_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_mismatch_pubkey expects 0 bytes");
-    this.tag = 18446744073709550815;
+    this.tag = 18446744073709550815n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13962,7 +13991,7 @@ export class PerpErrorBuilder {
   select_mismatch_token_program_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_mismatch_token_program_pubkey expects 0 bytes");
-    this.tag = 18446744073709550814;
+    this.tag = 18446744073709550814n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13970,7 +13999,7 @@ export class PerpErrorBuilder {
   select_mismatch_seat_auth_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_mismatch_seat_auth_pubkey expects 0 bytes");
-    this.tag = 18446744073709550813;
+    this.tag = 18446744073709550813n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13978,7 +14007,7 @@ export class PerpErrorBuilder {
   select_mismatch_quote_vault_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_mismatch_quote_vault_pubkey expects 0 bytes");
-    this.tag = 18446744073709550811;
+    this.tag = 18446744073709550811n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13986,7 +14015,7 @@ export class PerpErrorBuilder {
   select_mismatch_market_auth_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_mismatch_market_auth_pubkey expects 0 bytes");
-    this.tag = 18446744073709550810;
+    this.tag = 18446744073709550810n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -13994,7 +14023,7 @@ export class PerpErrorBuilder {
   select_mismatch_order_arena_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_mismatch_order_arena_pubkey expects 0 bytes");
-    this.tag = 18446744073709550809;
+    this.tag = 18446744073709550809n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14002,7 +14031,7 @@ export class PerpErrorBuilder {
   select_mismatch_bids_cbook_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_mismatch_bids_cbook_pubkey expects 0 bytes");
-    this.tag = 18446744073709550808;
+    this.tag = 18446744073709550808n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14010,7 +14039,7 @@ export class PerpErrorBuilder {
   select_mismatch_asks_cbook_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_mismatch_asks_cbook_pubkey expects 0 bytes");
-    this.tag = 18446744073709550807;
+    this.tag = 18446744073709550807n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14018,7 +14047,7 @@ export class PerpErrorBuilder {
   select_mismatch_exchange_meta_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_mismatch_exchange_meta_pubkey expects 0 bytes");
-    this.tag = 18446744073709550806;
+    this.tag = 18446744073709550806n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14026,7 +14055,7 @@ export class PerpErrorBuilder {
   select_mismatch_program_pubkey(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_mismatch_program_pubkey expects 0 bytes");
-    this.tag = 18446744073709550805;
+    this.tag = 18446744073709550805n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14034,7 +14063,7 @@ export class PerpErrorBuilder {
   select_unauthorized_seat_auth(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_unauthorized_seat_auth expects 0 bytes");
-    this.tag = 18446744073709550715;
+    this.tag = 18446744073709550715n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14042,7 +14071,7 @@ export class PerpErrorBuilder {
   select_unauthorized_market_auth(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_unauthorized_market_auth expects 0 bytes");
-    this.tag = 18446744073709550714;
+    this.tag = 18446744073709550714n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14050,7 +14079,7 @@ export class PerpErrorBuilder {
   select_unauthorized_wallet_owner(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_unauthorized_wallet_owner expects 0 bytes");
-    this.tag = 18446744073709550713;
+    this.tag = 18446744073709550713n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14058,7 +14087,7 @@ export class PerpErrorBuilder {
   select_exchange_auth_invalid_idx(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_exchange_auth_invalid_idx expects 0 bytes");
-    this.tag = 18446744073709550712;
+    this.tag = 18446744073709550712n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14066,7 +14095,7 @@ export class PerpErrorBuilder {
   select_exchange_auth_not_signer(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_exchange_auth_not_signer expects 0 bytes");
-    this.tag = 18446744073709550711;
+    this.tag = 18446744073709550711n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14074,7 +14103,7 @@ export class PerpErrorBuilder {
   select_exchange_auth_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_exchange_auth_mismatch expects 0 bytes");
-    this.tag = 18446744073709550710;
+    this.tag = 18446744073709550710n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14082,7 +14111,7 @@ export class PerpErrorBuilder {
   select_exchange_admin_invalid_idx(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_exchange_admin_invalid_idx expects 0 bytes");
-    this.tag = 18446744073709550709;
+    this.tag = 18446744073709550709n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14090,7 +14119,7 @@ export class PerpErrorBuilder {
   select_exchange_admin_not_signer(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_exchange_admin_not_signer expects 0 bytes");
-    this.tag = 18446744073709550708;
+    this.tag = 18446744073709550708n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14098,7 +14127,7 @@ export class PerpErrorBuilder {
   select_exchange_admin_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_exchange_admin_mismatch expects 0 bytes");
-    this.tag = 18446744073709550707;
+    this.tag = 18446744073709550707n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14106,7 +14135,7 @@ export class PerpErrorBuilder {
   select_new_exchange_admin_invalid_idx(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_new_exchange_admin_invalid_idx expects 0 bytes");
-    this.tag = 18446744073709550706;
+    this.tag = 18446744073709550706n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14114,7 +14143,7 @@ export class PerpErrorBuilder {
   select_invalid_market_record_idx(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_market_record_idx expects 0 bytes");
-    this.tag = 18446744073709550615;
+    this.tag = 18446744073709550615n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14122,7 +14151,7 @@ export class PerpErrorBuilder {
   select_market_record_missing_seat_authority(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_market_record_missing_seat_authority expects 0 bytes");
-    this.tag = 18446744073709550614;
+    this.tag = 18446744073709550614n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14130,7 +14159,7 @@ export class PerpErrorBuilder {
   select_market_record_missing_seat_arena(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_market_record_missing_seat_arena expects 0 bytes");
-    this.tag = 18446744073709550613;
+    this.tag = 18446744073709550613n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14138,7 +14167,7 @@ export class PerpErrorBuilder {
   select_market_record_missing_market_auth(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_market_record_missing_market_auth expects 0 bytes");
-    this.tag = 18446744073709550612;
+    this.tag = 18446744073709550612n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14146,7 +14175,7 @@ export class PerpErrorBuilder {
   select_market_record_mismatch_seat_idx(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_market_record_mismatch_seat_idx expects 0 bytes");
-    this.tag = 18446744073709550610;
+    this.tag = 18446744073709550610n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14154,7 +14183,7 @@ export class PerpErrorBuilder {
   select_price_above_cap(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_price_above_cap expects 0 bytes");
-    this.tag = 18446744073709551411;
+    this.tag = 18446744073709551411n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14162,7 +14191,7 @@ export class PerpErrorBuilder {
   select_invalid_price_cap(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_price_cap expects 0 bytes");
-    this.tag = 18446744073709551410;
+    this.tag = 18446744073709551410n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14170,7 +14199,7 @@ export class PerpErrorBuilder {
   select_invalid_position_limit(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_position_limit expects 0 bytes");
-    this.tag = 18446744073709551409;
+    this.tag = 18446744073709551409n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14178,7 +14207,7 @@ export class PerpErrorBuilder {
   select_position_limit(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_position_limit expects 0 bytes");
-    this.tag = 18446744073709551408;
+    this.tag = 18446744073709551408n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14186,7 +14215,7 @@ export class PerpErrorBuilder {
   select_arith_overflow(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_arith_overflow expects 0 bytes");
-    this.tag = 18446744073709551407;
+    this.tag = 18446744073709551407n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14194,7 +14223,7 @@ export class PerpErrorBuilder {
   select_oracle_missing(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_oracle_missing expects 0 bytes");
-    this.tag = 18446744073709551406;
+    this.tag = 18446744073709551406n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14202,7 +14231,7 @@ export class PerpErrorBuilder {
   select_oracle_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_oracle_mismatch expects 0 bytes");
-    this.tag = 18446744073709551405;
+    this.tag = 18446744073709551405n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14210,7 +14239,7 @@ export class PerpErrorBuilder {
   select_oracle_invalid(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_oracle_invalid expects 0 bytes");
-    this.tag = 18446744073709551404;
+    this.tag = 18446744073709551404n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14218,7 +14247,7 @@ export class PerpErrorBuilder {
   select_oracle_stale(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_oracle_stale expects 0 bytes");
-    this.tag = 18446744073709551403;
+    this.tag = 18446744073709551403n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14226,7 +14255,7 @@ export class PerpErrorBuilder {
   select_invalid_margin_params(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_margin_params expects 0 bytes");
-    this.tag = 18446744073709551402;
+    this.tag = 18446744073709551402n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14234,7 +14263,7 @@ export class PerpErrorBuilder {
   select_not_liquidatable(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_not_liquidatable expects 0 bytes");
-    this.tag = 18446744073709551401;
+    this.tag = 18446744073709551401n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14242,7 +14271,7 @@ export class PerpErrorBuilder {
   select_self_liquidation(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_self_liquidation expects 0 bytes");
-    this.tag = 18446744073709551400;
+    this.tag = 18446744073709551400n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14250,7 +14279,7 @@ export class PerpErrorBuilder {
   select_funding_disabled(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_funding_disabled expects 0 bytes");
-    this.tag = 18446744073709551399;
+    this.tag = 18446744073709551399n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14258,7 +14287,7 @@ export class PerpErrorBuilder {
   select_invalid_funding_params(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_funding_params expects 0 bytes");
-    this.tag = 18446744073709551398;
+    this.tag = 18446744073709551398n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14266,7 +14295,7 @@ export class PerpErrorBuilder {
   select_funding_update_not_alone(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_funding_update_not_alone expects 0 bytes");
-    this.tag = 18446744073709551397;
+    this.tag = 18446744073709551397n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14274,7 +14303,7 @@ export class PerpErrorBuilder {
   select_margin_account_missing(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_margin_account_missing expects 0 bytes");
-    this.tag = 18446744073709551396;
+    this.tag = 18446744073709551396n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14282,7 +14311,7 @@ export class PerpErrorBuilder {
   select_margin_link_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_margin_link_mismatch expects 0 bytes");
-    this.tag = 18446744073709551395;
+    this.tag = 18446744073709551395n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14290,7 +14319,7 @@ export class PerpErrorBuilder {
   select_margin_link_limit(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_margin_link_limit expects 0 bytes");
-    this.tag = 18446744073709551394;
+    this.tag = 18446744073709551394n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14298,7 +14327,7 @@ export class PerpErrorBuilder {
   select_margin_already_linked(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_margin_already_linked expects 0 bytes");
-    this.tag = 18446744073709551393;
+    this.tag = 18446744073709551393n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14306,7 +14335,7 @@ export class PerpErrorBuilder {
   select_margin_vault_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_margin_vault_mismatch expects 0 bytes");
-    this.tag = 18446744073709551392;
+    this.tag = 18446744073709551392n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14314,7 +14343,7 @@ export class PerpErrorBuilder {
   select_margin_seat_not_flat(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_margin_seat_not_flat expects 0 bytes");
-    this.tag = 18446744073709551391;
+    this.tag = 18446744073709551391n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14322,7 +14351,7 @@ export class PerpErrorBuilder {
   select_margin_account_invalid(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_margin_account_invalid expects 0 bytes");
-    this.tag = 18446744073709551390;
+    this.tag = 18446744073709551390n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14330,7 +14359,7 @@ export class PerpErrorBuilder {
   select_margin_unauthorized(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_margin_unauthorized expects 0 bytes");
-    this.tag = 18446744073709551389;
+    this.tag = 18446744073709551389n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14338,7 +14367,7 @@ export class PerpErrorBuilder {
   select_invalid_cross_params(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_cross_params expects 0 bytes");
-    this.tag = 18446744073709551388;
+    this.tag = 18446744073709551388n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14346,7 +14375,7 @@ export class PerpErrorBuilder {
   select_nothing_resolved(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_nothing_resolved expects 0 bytes");
-    this.tag = 18446744073709551387;
+    this.tag = 18446744073709551387n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14354,7 +14383,7 @@ export class PerpErrorBuilder {
   select_risk_param_invalid(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_risk_param_invalid expects 0 bytes");
-    this.tag = 18446744073709551386;
+    this.tag = 18446744073709551386n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14362,7 +14391,7 @@ export class PerpErrorBuilder {
   select_fee_param_invalid(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_fee_param_invalid expects 0 bytes");
-    this.tag = 18446744073709551385;
+    this.tag = 18446744073709551385n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14370,7 +14399,7 @@ export class PerpErrorBuilder {
   select_fee_seat(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_fee_seat expects 0 bytes");
-    this.tag = 18446744073709551384;
+    this.tag = 18446744073709551384n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14378,7 +14407,7 @@ export class PerpErrorBuilder {
   select_builder_invalid(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_builder_invalid expects 0 bytes");
-    this.tag = 18446744073709551383;
+    this.tag = 18446744073709551383n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14386,7 +14415,7 @@ export class PerpErrorBuilder {
   select_fee_claim_blocked(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_fee_claim_blocked expects 0 bytes");
-    this.tag = 18446744073709551382;
+    this.tag = 18446744073709551382n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -14394,16 +14423,16 @@ export class PerpErrorBuilder {
   select_insufficient_collateral(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_insufficient_collateral expects 0 bytes");
-    this.tag = 18446744073709551213;
+    this.tag = 18446744073709551213n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
 
   build(): Uint8Array {
     if (this.tag === null || !this.payload) throw new Error("PerpError builder missing variant");
-    const buffer = new Uint8Array(1 + this.payload.length);
-    buffer[0] = this.tag;
-    buffer.set(this.payload, 1);
+    const buffer = new Uint8Array(8 + this.payload.length);
+    new DataView(buffer.buffer).setBigUint64(0, this.tag, true);
+    buffer.set(this.payload, 8);
     __tnBuilderValidateOrThrow("PerpError", PerpError.validate(buffer));
     return buffer;
   }

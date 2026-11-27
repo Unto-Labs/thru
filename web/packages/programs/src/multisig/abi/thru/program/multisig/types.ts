@@ -3114,7 +3114,7 @@ return c; })(buffer);
 }
 
 export class MultisigErrorBuilder {
-  private tag: number | null = null;
+  private tag: bigint | null = null;
   private payload: Uint8Array | null = null;
 
   constructor() {}
@@ -3122,7 +3122,7 @@ export class MultisigErrorBuilder {
   select_invalid_instruction(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_instruction expects 0 bytes");
-    this.tag = 1;
+    this.tag = 1n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3130,7 +3130,7 @@ export class MultisigErrorBuilder {
   select_invalid_account(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_account expects 0 bytes");
-    this.tag = 2;
+    this.tag = 2n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3138,7 +3138,7 @@ export class MultisigErrorBuilder {
   select_invalid_state(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_state expects 0 bytes");
-    this.tag = 3;
+    this.tag = 3n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3146,7 +3146,7 @@ export class MultisigErrorBuilder {
   select_unauthorized(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_unauthorized expects 0 bytes");
-    this.tag = 4;
+    this.tag = 4n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3154,7 +3154,7 @@ export class MultisigErrorBuilder {
   select_account_create_failed(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_account_create_failed expects 0 bytes");
-    this.tag = 5;
+    this.tag = 5n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3162,7 +3162,7 @@ export class MultisigErrorBuilder {
   select_account_resize_failed(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_account_resize_failed expects 0 bytes");
-    this.tag = 6;
+    this.tag = 6n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3170,7 +3170,7 @@ export class MultisigErrorBuilder {
   select_account_write_failed(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_account_write_failed expects 0 bytes");
-    this.tag = 7;
+    this.tag = 7n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3178,7 +3178,7 @@ export class MultisigErrorBuilder {
   select_invalid_member_count(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_member_count expects 0 bytes");
-    this.tag = 8;
+    this.tag = 8n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3186,7 +3186,7 @@ export class MultisigErrorBuilder {
   select_invalid_threshold(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_threshold expects 0 bytes");
-    this.tag = 9;
+    this.tag = 9n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3194,7 +3194,7 @@ export class MultisigErrorBuilder {
   select_duplicate_member(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_duplicate_member expects 0 bytes");
-    this.tag = 10;
+    this.tag = 10n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3202,7 +3202,7 @@ export class MultisigErrorBuilder {
   select_not_a_member(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_not_a_member expects 0 bytes");
-    this.tag = 11;
+    this.tag = 11n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3210,7 +3210,7 @@ export class MultisigErrorBuilder {
   select_duplicate_approval(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_duplicate_approval expects 0 bytes");
-    this.tag = 12;
+    this.tag = 12n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3218,7 +3218,7 @@ export class MultisigErrorBuilder {
   select_request_stale(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_request_stale expects 0 bytes");
-    this.tag = 13;
+    this.tag = 13n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3226,7 +3226,7 @@ export class MultisigErrorBuilder {
   select_request_not_open(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_request_not_open expects 0 bytes");
-    this.tag = 14;
+    this.tag = 14n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3234,7 +3234,7 @@ export class MultisigErrorBuilder {
   select_request_not_approved(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_request_not_approved expects 0 bytes");
-    this.tag = 15;
+    this.tag = 15n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3242,7 +3242,7 @@ export class MultisigErrorBuilder {
   select_invalid_request_kind(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_request_kind expects 0 bytes");
-    this.tag = 16;
+    this.tag = 16n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3250,7 +3250,7 @@ export class MultisigErrorBuilder {
   select_invalid_request_data(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_invalid_request_data expects 0 bytes");
-    this.tag = 17;
+    this.tag = 17n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3258,7 +3258,7 @@ export class MultisigErrorBuilder {
   select_request_too_large(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_request_too_large expects 0 bytes");
-    this.tag = 18;
+    this.tag = 18n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3266,7 +3266,7 @@ export class MultisigErrorBuilder {
   select_cpi_failed(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_cpi_failed expects 0 bytes");
-    this.tag = 19;
+    this.tag = 19n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3274,7 +3274,7 @@ export class MultisigErrorBuilder {
   select_request_not_deletable(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_request_not_deletable expects 0 bytes");
-    this.tag = 20;
+    this.tag = 20n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3282,7 +3282,7 @@ export class MultisigErrorBuilder {
   select_outstanding_requests(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_outstanding_requests expects 0 bytes");
-    this.tag = 21;
+    this.tag = 21n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3290,7 +3290,7 @@ export class MultisigErrorBuilder {
   select_too_many_requests(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_too_many_requests expects 0 bytes");
-    this.tag = 22;
+    this.tag = 22n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
@@ -3298,16 +3298,16 @@ export class MultisigErrorBuilder {
   select_request_mismatch(payload: Uint8Array | { build(): Uint8Array }): this {
     const bytes = payload instanceof Uint8Array ? payload : payload.build();
     if (bytes.length !== 0) throw new Error("select_request_mismatch expects 0 bytes");
-    this.tag = 23;
+    this.tag = 23n;
     this.payload = new Uint8Array(bytes);
     return this;
   }
 
   build(): Uint8Array {
     if (this.tag === null || !this.payload) throw new Error("MultisigError builder missing variant");
-    const buffer = new Uint8Array(1 + this.payload.length);
-    buffer[0] = this.tag;
-    buffer.set(this.payload, 1);
+    const buffer = new Uint8Array(8 + this.payload.length);
+    new DataView(buffer.buffer).setBigUint64(0, this.tag, true);
+    buffer.set(this.payload, 8);
     __tnBuilderValidateOrThrow("MultisigError", MultisigError.validate(buffer));
     return buffer;
   }

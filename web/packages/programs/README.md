@@ -100,6 +100,9 @@ version or ABI revision, artifact sizes, the final signature, warnings, and an
 addresses, SHA-256, resume status, all submission signatures, and cleanup
 status. Temporary-account cleanup is best effort; cleanup failures are returned
 as warnings and do not change a successful final transaction.
+Cleanup waits for its executed transaction to become indexed before verifying
+account absence. This visibility wait shares the transaction's 60-second
+deadline and retries only `NOT_FOUND` or a receipt without a nonzero slot.
 
 Failures throw `DeployError`. Its stable `code` is one of `INVALID_INPUT`,
 `SIGNER_MISMATCH`, `TARGET_EXISTS`, `TARGET_NOT_FOUND`, `TARGET_FINALIZED`,

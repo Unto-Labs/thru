@@ -957,6 +957,156 @@ console.log("dual arrays ok");
     println!("✓ TypeScript dual arrays dynamic offset test passed");
 }
 
+/* A struct that is a tag field plus the const-size enum it selects (every
+program error type: `code` + `error`) gets a builder that writes the tag at
+the field's full width. It used to write one byte, so a u64 or u16 tag built a
+buffer its own validate() rejected. */
+#[test]
+fn test_ts_tagged_enum_struct_builder_writes_full_width_tag() {
+    let test_dir = setup_test_dir("tagged_enum_struct_tag_width");
+    let abi_file = test_dir.join("tagged_enum_struct_tag_width.abi.yaml");
+    let tagged = |name: &str, tag: &str, variants: &str| {
+        format!(
+            r#"  - name: "{name}"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "code"
+            field-type:
+              primitive: {tag}
+          - name: "error"
+            field-type:
+              enum:
+                tag-ref:
+                  field-ref:
+                    path:
+                      - code
+                variants:
+{variants}"#
+        )
+    };
+    let variant = |name: &str, tag: i64| {
+        format!("                  - name: \"{name}\"\n                    tag-value: {tag}\n")
+    };
+    let abi = format!(
+        r#"abi:
+  package: "compliance.tagged_enum_struct_tag_width"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Tag field plus the enum it selects, at three tag widths"
+
+types:
+{}{}{}"#,
+        tagged(
+            "WideError",
+            "u64",
+            &(variant("first", 1) + &variant("negative", -101))
+        ),
+        tagged(
+            "NarrowError",
+            "u16",
+            &(variant("first", 1) + &variant("high", 4097))
+        ),
+        tagged("ByteError", "u8", &variant("first", 7)),
+    );
+    fs::write(&abi_file, abi).unwrap();
+
+    generate_ts_code(abi_file.to_str().unwrap(), &test_dir).expect("Code generation failed");
+    let ts_file = test_dir.join("compliance/tagged_enum_struct_tag_width/types.ts");
+    let content = fs::read_to_string(&ts_file).expect("Failed to read generated file");
+
+    assert!(
+        !content.contains("buffer[0] = this.tag"),
+        "tagged enum struct builders must not write a one-byte tag"
+    );
+    for (class, setter, offset) in [
+        ("WideError", "setBigUint64(0, this.tag, true)", 8),
+        ("NarrowError", "setUint16(0, this.tag, true)", 2),
+        ("ByteError", "setUint8(0, this.tag)", 1),
+    ] {
+        let start = content
+            .find(&format!("export class {}Builder", class))
+            .unwrap_or_else(|| panic!("{}Builder missing", class));
+        let builder = &content[start..];
+        let builder = &builder[..builder.find("\n}\n").expect("builder end")];
+        assert!(
+            builder.contains(setter),
+            "{}Builder should call {}",
+            class,
+            setter
+        );
+        assert!(
+            builder.contains(&format!("new Uint8Array({} + this.payload.length)", offset))
+                && builder.contains(&format!("buffer.set(this.payload, {})", offset)),
+            "{}Builder should place the payload after its {}-byte tag",
+            class,
+            offset
+        );
+    }
+    /* A negative tag keeps its exact u64 value as a bigint literal. */
+    assert!(content.contains("this.tag = 18446744073709551515n;"));
+    check_typescript_compilation(&ts_file).expect("TypeScript compilation failed");
+
+    if !ensure_tsc_available() {
+        return;
+    }
+    let ts_script = r#"
+import { WideError, NarrowError, ByteError } from "./compliance/tagged_enum_struct_tag_width/types.js";
+
+function check(label: string, view: { get_code(): number | bigint } | null, code: bigint): void {
+  if (!view) throw new Error(`${label}: from_array rejected the built bytes`);
+  if (BigInt(view.get_code()) !== code) throw new Error(`${label}: code ${view.get_code()} != ${code}`);
+}
+
+const none = new Uint8Array(0);
+let bytes = WideError.builder().select_first(none).build();
+check("wide first", WideError.from_array(bytes), 1n);
+bytes = WideError.builder().select_negative(none).build();
+check("wide negative", WideError.from_array(bytes), 18446744073709551515n);
+bytes = NarrowError.builder().select_high(none).build();
+if (bytes.length !== 2 || bytes[0] !== 0x01 || bytes[1] !== 0x10) throw new Error(`narrow bytes ${Array.from(bytes)}`);
+check("narrow high", NarrowError.from_array(bytes), 4097n);
+bytes = ByteError.builder().select_first(none).build();
+check("byte first", ByteError.from_array(bytes), 7n);
+if (BigInt(NarrowError.builder().select_first(none).finish().get_code()) !== 1n) throw new Error("finish() round trip");
+
+console.log("tagged enum struct builders ok");
+"#;
+    let script_path = test_dir.join("tagged_enum_struct_test.ts");
+    fs::write(&script_path, ts_script.trim()).expect("Failed to write test script");
+    let compile_status = Command::new(vendored_tsc())
+        .current_dir(&test_dir)
+        .args(&[
+            "--strict",
+            "--module",
+            "NodeNext",
+            "--moduleResolution",
+            "NodeNext",
+            "--target",
+            "ES2020",
+            "--esModuleInterop",
+            "--outDir",
+            "dist",
+            script_path.file_name().unwrap().to_str().unwrap(),
+        ])
+        .status()
+        .expect("Failed to run tsc");
+    assert!(
+        compile_status.success(),
+        "TypeScript compilation failed for tagged enum struct test"
+    );
+    let node_status = Command::new("node")
+        .current_dir(&test_dir)
+        .arg(PathBuf::from("dist").join("tagged_enum_struct_test.js"))
+        .status()
+        .expect("Failed to run node");
+    assert!(
+        node_status.success(),
+        "tagged enum struct builders failed to round-trip"
+    );
+}
+
 #[test]
 fn test_ts_enum_builder_supports_variant_selectors() {
     let test_dir = setup_test_dir("token_builder");

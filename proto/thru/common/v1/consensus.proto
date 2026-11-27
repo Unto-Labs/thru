@@ -66,12 +66,13 @@ message VersionContext {
     // Request the latest version, or historical on.
     CurrentOrHistoricalVersion currentOrHistorical = 2 [(google.api.field_behavior) = OPTIONAL];
 
-    // Request the version for a specific slot number.
-    // GetAccount, GetRawAccount and BatchGetRawAccounts reject a slot above
-    // the serving node's durable cursor with FAILED_PRECONDITION; retry once
-    // the slot is durable. The durable cursor is the highest slot the node
-    // has durably committed, and it can trail the finalized slot GetHeight
-    // reports. If no slot is durable yet, those reads return UNAVAILABLE.
+    // Request the newest account version at or before this slot.
+    // GetAccount, GetRawAccount and BatchGetRawAccounts require the serving
+    // node's completed account history to cover the slot. A pin above that
+    // history cursor returns FAILED_PRECONDITION; retry once history covers
+    // it. The error calls this frontier the "durable cursor"; it is not the
+    // live WAL frontier or finalized height and may trail both. Without a
+    // committed history marker, even slot zero returns UNAVAILABLE.
     uint64 slot = 3 [(google.api.field_behavior) = OPTIONAL];
 
     // Request the version nearest to the provided block timestamp.
@@ -79,7 +80,9 @@ message VersionContext {
         [(google.api.field_behavior) = OPTIONAL];
 
     // Request the account version written at an exact (slot, seq) point.
-    // Relevant only for GetAccount and GetRawAccount requests.
+    // Relevant only for GetAccount and GetRawAccount requests. They require
+    // completed history to cover slot_seq.slot, with the same history cursor
+    // and error contract as the slot selector.
     SlotSeq slot_seq = 5 [(google.api.field_behavior) = OPTIONAL];
   }
 }

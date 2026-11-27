@@ -464,17 +464,7 @@ pub async fn handle_token_command(
             unchecked,
             via,
         } => {
-            // A multisig proposal carries the plain Transfer: the proposal
-            // builder and decoder know only that instruction. `--unchecked`
-            // cannot be combined with `--via-multisig`, so `unchecked` is
-            // false here. The note goes to text output only: callers of the
-            // JSON output may read stderr together with stdout.
             if via.via_multisig.is_some() {
-                if !json_format {
-                    eprintln!(
-                        "Note: a --via-multisig proposal carries the plain Transfer instruction, not TransferChecked."
-                    );
-                }
                 return crate::commands::multisig::via::token_transfer(
                     config,
                     &via,
@@ -482,6 +472,7 @@ pub async fn handle_token_command(
                     &from,
                     &to,
                     amount,
+                    unchecked,
                     token_program.as_deref(),
                     json_format,
                 )
@@ -1089,12 +1080,12 @@ async fn initialize_account(
 /// amount: the mint of the source account and the decimals and ticker stored
 /// in that mint.
 #[derive(Debug, PartialEq, Eq)]
-struct CheckedTransferInputs {
-    mint: [u8; 32],
-    decimals: u8,
+pub(super) struct CheckedTransferInputs {
+    pub(super) mint: [u8; 32],
+    pub(super) decimals: u8,
     /// The stored ticker: the first `ticker_len` bytes of the mint's ticker
     /// field.
-    ticker: Vec<u8>,
+    pub(super) ticker: Vec<u8>,
 }
 
 impl CheckedTransferInputs {
@@ -1241,7 +1232,7 @@ fn mint_refusal_message(mint: &[u8; 32], why: &str) -> String {
 /// instruction that changes a mint's decimals or ticker after
 /// `InitializeMint`; if they did differ at execution, the program would
 /// reject the transfer.
-async fn read_checked_transfer_inputs(
+pub(super) async fn read_checked_transfer_inputs(
     client: &Client,
     source: &[u8; 32],
     token_program: &[u8; 32],

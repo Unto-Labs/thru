@@ -9,7 +9,7 @@ export {
 export { inspectProgramDeployment } from "./inspection";
 /** Low-level permissionless Uploader steps for governed flows that keep a
     reviewed source buffer alive across Multisig approval (UNTO-3561). */
-export { prepareUpload, uploadArtifact, cleanupUpload } from "./uploader";
+export { prepareProgramUpload, prepareUpload, uploadArtifact, cleanupUpload } from "./uploader";
 export type { PreparedUpload } from "./uploader";
 export { resolveSigner } from "./validation";
 export type { ResolvedSigner } from "./validation";

@@ -42,7 +42,7 @@ type __TnIrNode =
   | {
       readonly op: "switch";
       readonly tag: string;
-      readonly cases: readonly { readonly value: number; readonly node: __TnIrNode }[];
+      readonly cases: readonly { readonly value: number | bigint; readonly node: __TnIrNode }[];
       readonly default?: __TnIrNode;
     }
   | {
@@ -55,6 +55,7 @@ type __TnIrNode =
       readonly count: __TnIrNode;
       readonly elementTypeName: string;
       readonly fieldName: string;
+      readonly payloadParam?: string;
     };
 
 type __TnIrContext = {
@@ -81,7 +82,8 @@ type __TnStructFieldInput =
   | { bytes?: () => Uint8Array };
 type __TnVariantDescriptor = {
   readonly name: string;
-  readonly tag: number;
+  /* A bigint for tags past 2^53 - 1, which a number cannot hold exactly. */
+  readonly tag: number | bigint;
   readonly payloadSize: number | null;
   readonly payloadType?: string;
   readonly createPayloadBuilder?: () => unknown | null;
@@ -122,6 +124,20 @@ function __tnWarnOnce(message: string): void {
     __tnWarnings.add(message);
     __tnLogWarn(message);
   }
+}
+
+/* Builders never return bytes their type's `validate` rejects. */
+function __tnBuilderValidateOrThrow(typeName: string, result: { ok: boolean; code?: string }): void {
+  if (!result.ok) throw new Error(`${typeName}Builder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
+}
+
+/* Packed params as a measuring walk's context: `T.kind` becomes `kind`. */
+function __tnParamsContext(record: Record<string, bigint>, prefix: string): Record<string, bigint> {
+  const ctx: Record<string, bigint> = Object.create(null);
+  for (const key of Object.keys(record)) {
+    ctx[key.startsWith(prefix) ? key.slice(prefix.length) : key] = record[key];
+  }
+  return ctx;
 }
 
 function __tnResolveBuilderInput(
@@ -289,11 +305,19 @@ function __tnBigIntGreaterThan(lhs: bigint, rhs: bigint): boolean {
   return (lhs as unknown as number) > (rhs as unknown as number);
 }
 
+/* Set bits of a u64 (a bigint is read as its low 64 bits; a number as
+   its low 32, as before). */
 function __tnPopcount(value: number | bigint): number {
-  let v =
-    typeof value === "bigint"
-      ? Number(value & BigInt(0xffffffff))
-      : Number(value) >>> 0;
+  if (typeof value === "bigint") {
+    let v = BigInt.asUintN(64, value);
+    let count = 0;
+    while (v !== BigInt(0)) {
+      v &= v - BigInt(1);
+      count++;
+    }
+    return count;
+  }
+  let v = Number(value) >>> 0;
   v = v - ((v >>> 1) & 0x55555555);
   v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
   return (((v + (v >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24;
@@ -308,10 +332,10 @@ function __tnRaiseIrError(code: string, message: string): never {
 function __tnCheckedAdd(lhs: bigint, rhs: bigint): bigint {
   if (__tnHasNativeBigInt) {
     const result = (lhs as bigint) + (rhs as bigint);
-    if (result < BigInt(0)) {
+    if (result < BigInt(0) || result > __tnU64(-BigInt(1))) {
       __tnRaiseIrError(
         "tn.ir.overflow",
-        "IR runtime detected negative size via addition"
+        "IR runtime detected an addition outside u64"
       );
     }
     return result;
@@ -360,10 +384,10 @@ function __tnCheckedSub(lhs: bigint, rhs: bigint): bigint {
 function __tnCheckedMul(lhs: bigint, rhs: bigint): bigint {
   if (__tnHasNativeBigInt) {
     const result = (lhs as bigint) * (rhs as bigint);
-    if (result < BigInt(0)) {
+    if (result < BigInt(0) || result > __tnU64(-BigInt(1))) {
       __tnRaiseIrError(
         "tn.ir.overflow",
-        "IR runtime detected negative size via multiplication"
+        "IR runtime detected a multiplication outside u64"
       );
     }
     return result;
@@ -437,13 +461,23 @@ function __tnCheckedShift(
   rhs: bigint,
   direction: "left" | "right"
 ): bigint {
+  /* As C and Rust: shifting 0, or shifting right by 64 or more, is 0;
+     shifting a non-zero value left by 64 or more overflows. */
+  if (__tnBigIntEquals(lhs, __tnToBigInt(0))) return lhs;
+  if (direction === "right" && __tnBigIntGreaterThan(rhs, __tnToBigInt(63))) {
+    return __tnToBigInt(0);
+  }
   const amount = __tnBigIntToNumber(rhs, "IR shift amount");
   if (amount < 0 || amount >= 64 || !Number.isInteger(amount)) {
     __tnRaiseIrError("tn.ir.overflow", "IR runtime invalid shift amount");
   }
   if (__tnHasNativeBigInt) {
     const shift = BigInt(amount);
-    return direction === "left" ? (lhs as bigint) << shift : (lhs as bigint) >> shift;
+    const shifted = direction === "left" ? (lhs as bigint) << shift : (lhs as bigint) >> shift;
+    if (shifted > __tnU64(-BigInt(1))) {
+      __tnRaiseIrError("tn.ir.overflow", "IR runtime shift overflows u64");
+    }
+    return shifted;
   }
   const value = lhs as unknown as number;
   const result = direction === "left" ? value * 2 ** amount : Math.floor(value / 2 ** amount);
@@ -451,6 +485,100 @@ function __tnCheckedShift(
     __tnWarnOnce("[thru-net] Precision loss while polyfilling BigInt shift");
   }
   return (result as unknown) as bigint;
+}
+
+/* 2^64: no u64 value, so no enum tag and no buffer size. */
+const __tnMeasureLimit = __tnHasNativeBigInt
+  ? BigInt(1) << BigInt(64)
+  : ((2 ** 64) as unknown as bigint);
+
+/* Checked u64 arithmetic for size, enum tag and derived-parameter expressions over
+   buffer values, as C and Rust evaluate them: operands are read as u64, and a
+   result outside u64 (an overflowing add/mul/pow/shift, a negative sub, a
+   shift of 64 or more of a non-zero value, a division by zero) is `null`,
+   which propagates. No operation builds a value wider than 128 bits. */
+function __tnU64(value: bigint): bigint {
+  return BigInt.asUintN(64, value);
+}
+
+function __tnU64Op(op: string, lhs: bigint | null, rhs: bigint | null): bigint | null {
+  if (lhs === null || rhs === null) return null;
+  const a = __tnU64(lhs);
+  const b = __tnU64(rhs);
+  const zero = BigInt(0);
+  const one = BigInt(1);
+  const max = __tnU64(-one);
+  let result: bigint;
+  switch (op) {
+    case "add": result = a + b; break;
+    case "sub": result = a - b; break;
+    case "mul": result = a * b; break;
+    case "div": if (b === zero) return null; result = a / b; break;
+    case "mod": if (b === zero) return null; result = a % b; break;
+    case "and": result = a & b; break;
+    case "or": result = a | b; break;
+    case "xor": result = a ^ b; break;
+    case "shl":
+      if (a === zero) return zero;
+      if (b > BigInt(63)) return null;
+      result = a << b;
+      break;
+    case "shr": result = b > BigInt(63) ? zero : a >> b; break;
+    case "pow": {
+      if (b === zero) return one;
+      if (a === zero || a === one) return a;
+      if (b > BigInt(64)) return null;
+      result = one;
+      for (let i = zero; i < b; i++) {
+        result *= a;
+        if (result > max) return null;
+      }
+      break;
+    }
+    case "eq": return a === b ? one : zero;
+    case "ne": return a !== b ? one : zero;
+    case "lt": return a < b ? one : zero;
+    case "gt": return a > b ? one : zero;
+    case "le": return a <= b ? one : zero;
+    case "ge": return a >= b ? one : zero;
+    case "land": return a !== zero && b !== zero ? one : zero;
+    case "lor": return a !== zero || b !== zero ? one : zero;
+    case "lxor": return (a !== zero) !== (b !== zero) ? one : zero;
+    default: return null;
+  }
+  return result < zero || result > max ? null : result;
+}
+
+function __tnU64Unary(op: string, operand: bigint | null): bigint | null {
+  if (operand === null) return null;
+  const a = __tnU64(operand);
+  const zero = BigInt(0);
+  switch (op) {
+    case "bitnot": return __tnU64(~a);
+    case "neg": return a === zero ? zero : null;
+    case "not": return a === zero ? BigInt(1) : zero;
+    case "popcount": return BigInt(__tnPopcount(a));
+    default: return null;
+  }
+}
+
+/* A checked count as a number (views read validated bytes: an overflow
+   means they changed since). */
+function __tnCountNumber(count: bigint | null): number {
+  if (count === null) throw new Error("array count overflows u64");
+  return __tnBigIntToNumber(count, "array count");
+}
+
+/* Whether two enum tags are the same u64 (numbers and bigints compared
+   exactly; a null tag equals nothing). */
+function __tnTagEquals(lhs: number | bigint | null, rhs: number | bigint): boolean {
+  if (lhs === null) return false;
+  return __tnToBigInt(lhs) === __tnToBigInt(rhs);
+}
+
+/* A checked tag as a number; an overflow (`null`) selects no variant. */
+function __tnTagNumber(tag: bigint | null): number {
+  return tag === null || tag > BigInt(Number.MAX_SAFE_INTEGER) ? -1 : Number(tag);
 }
 
 function __tnAlign(value: bigint, alignment: number): bigint {
@@ -740,6 +868,17 @@ function __tnValidateIrTree(
   return { ok: true, consumed: required };
 }
 
+/* A parameter as the u64 C and Rust evaluate: a value read from a signed
+   field is its two's complement (i8 -1 is 2^64-1); a derived value past
+   u64 (an overflowed computed count or tag) is an overflow. */
+function __tnIrU64(value: bigint, name: string): bigint {
+  if (!__tnHasNativeBigInt) return value;
+  if (value > __tnU64(-BigInt(1))) {
+    __tnRaiseIrError("tn.ir.overflow", `IR parameter '${name}' overflows u64`);
+  }
+  return __tnU64(value);
+}
+
 function __tnEvalIrNode(
   node: __TnIrNode,
   ctx: __TnIrContext,
@@ -762,7 +901,7 @@ function __tnEvalIrNode(
           `${prefix}Missing IR parameter '${node.param}'`
         );
       }
-      return val;
+      return __tnIrU64(val, node.param);
     }
     case "add":
       {
@@ -779,11 +918,13 @@ function __tnEvalIrNode(
         __tnEvalIrNode(node.left, ctx, baseOffset),
         __tnEvalIrNode(node.right, ctx, baseOffset)
       );
-    case "mul":
-      return __tnCheckedMul(
-        __tnEvalIrNode(node.left, ctx, baseOffset),
-        __tnEvalIrNode(node.right, ctx, baseOffset)
-      );
+    case "mul": {
+      /* `count * element`: no elements select no variant (an unknown tag
+         with a zero count is valid), so a zero left side ends here. */
+      const left = __tnEvalIrNode(node.left, ctx, baseOffset);
+      if (__tnBigIntEquals(left, __tnToBigInt(0))) return left;
+      return __tnCheckedMul(left, __tnEvalIrNode(node.right, ctx, baseOffset));
+    }
     case "div":
       return __tnCheckedDiv(
         __tnEvalIrNode(node.left, ctx, baseOffset),
@@ -827,7 +968,8 @@ function __tnEvalIrNode(
     case "align":
       return __tnAlign(__tnEvalIrNode(node.node, ctx, baseOffset), node.alignment);
     case "switch": {
-      const tagVal = ctx.params[node.tag];
+      const rawTag = ctx.params[node.tag];
+      const tagVal = rawTag === undefined ? rawTag : __tnIrU64(rawTag, node.tag);
       if (tagVal === undefined) {
         const prefix = ctx.typeName ? `${ctx.typeName}: ` : "";
         __tnRaiseIrError(
@@ -835,16 +977,16 @@ function __tnEvalIrNode(
           `${prefix}Missing IR switch tag '${node.tag}'`
         );
       }
-      const tagNumber = Number(tagVal);
+      /* Case values past 2^53 - 1 are bigints: compare exact u64s. */
       for (const caseNode of node.cases) {
-        if (caseNode.value === tagNumber) {
+        if (__tnTagEquals(tagVal, caseNode.value)) {
           return __tnEvalIrNode(caseNode.node, ctx, baseOffset);
         }
       }
       if (node.default) return __tnEvalIrNode(node.default, ctx, baseOffset);
       __tnRaiseIrError(
         "tn.ir.invalid_tag",
-        `Unhandled IR switch value ${tagNumber} for '${node.tag}'`
+        `Unhandled IR switch value ${tagVal} for '${node.tag}'`
       );
     }
     case "call": {
@@ -885,6 +1027,11 @@ function __tnEvalIrNode(
       return __tnInvokeFootprint(node.typeName, nestedParams);
     }
     case "sumOverArray": {
+      if (!ctx.buffer && node.payloadParam !== undefined) {
+        /* Sizing from params: the array's byte total is a parameter. */
+        const total = ctx.params[node.payloadParam];
+        if (total !== undefined) return total;
+      }
       if (!ctx.buffer) {
         __tnRaiseIrError(
           "tn.ir.missing_buffer",
@@ -956,7 +1103,7 @@ __tnRegisterDynamicValidate("InstructionData", (buffer) => { const result = Inst
 
 const __tn_ir_MulticallArgs = {
   typeName: "MulticallArgs",
-  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 2, node: { op: "const", value: 2n } }, right: { op: "align", alignment: 1, node: { op: "sumOverArray", count: { op: "field", param: "calls.calls_count" }, elementTypeName: "InstructionData", fieldName: "calls" } } } }
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 2n } }, right: { op: "align", alignment: 1, node: { op: "sumOverArray", count: { op: "field", param: "calls.calls_count" }, elementTypeName: "InstructionData", fieldName: "calls", payloadParam: "calls.payload_size" } } } }
 } as const;
 
 export class MulticallArgs {
@@ -1000,18 +1147,32 @@ export class MulticallArgs {
     return this;
   }
 
-  private __tnResolveFieldRef(path: string): number {
+  private __tnResolveFieldRefRaw(path: string): number | bigint {
     const getterName = `get_${path.replace(/[.]/g, '_')}`;
     const getter = (this as any)[getterName];
     if (typeof getter === "function") {
       const value = getter.call(this);
-      return typeof value === "bigint" ? __tnBigIntToNumber(value, "MulticallArgs::__tnResolveFieldRef") : value;
+      return value;
     }
     if (this.__tnFieldContext && Object.prototype.hasOwnProperty.call(this.__tnFieldContext, path)) {
       const contextValue = this.__tnFieldContext[path];
-      return typeof contextValue === "bigint" ? __tnBigIntToNumber(contextValue, "MulticallArgs::__tnResolveFieldRef") : contextValue;
+      return contextValue;
     }
     throw new Error("MulticallArgs: field reference '" + path + "' is not available; provide fieldContext when creating this view");
+  }
+
+  private __tnResolveFieldRef(path: string): number {
+    const value = this.__tnResolveFieldRefRaw(path);
+    return typeof value === "bigint" ? __tnBigIntToNumber(value, "MulticallArgs::__tnResolveFieldRef") : value;
+  }
+
+  private __tnResolveFieldRefU64(path: string): bigint {
+    return __tnU64(__tnToBigInt(this.__tnResolveFieldRefRaw(path)));
+  }
+
+  private __tnResolveContextU64(path: string): bigint {
+    if (this.__tnFieldContext && Object.prototype.hasOwnProperty.call(this.__tnFieldContext, path)) return __tnU64(__tnToBigInt(this.__tnFieldContext[path]));
+    throw new Error("MulticallArgs: enclosing field '" + path + "' is not available; provide fieldContext when creating this view");
   }
 
   static builder(): MulticallArgsBuilder {
@@ -1024,13 +1185,56 @@ export class MulticallArgs {
     return MulticallArgs.from_array(buffer, { params });
   }
 
+  static __tnComputeSequentialLayout(view: DataView, buffer: Uint8Array): { params: Record<string, bigint> | null; offsets: Record<string, number> | null; derived: Record<string, bigint> | null } | null {
+    const __tnLength = buffer.length;
+    let __tnParamSeq_calls_payload_size: bigint | null = null;
+    let __tnFieldValue_calls_count: number | null = null;
+    let __tnCursorMutable = 0;
+    if (__tnCursorMutable + 2 > __tnLength) return null;
+    const __tnRead_calls_count = view.getUint16(__tnCursorMutable, true);
+    __tnFieldValue_calls_count = __tnRead_calls_count;
+    __tnCursorMutable += 2;
+    if (__tnFieldValue_calls_count === null) return null;
+    const __tnArrayCount_calls = __tnU64(__tnToBigInt(__tnFieldValue_calls_count as number | bigint));
+    if (__tnArrayCount_calls === null) return null;
+    let __tnArrayBytes_calls = 0;
+    {
+      const measure = ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 2 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+if (c + 8 > b.length) return null; const x3 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+const n4 = x3; if (n4 === null || n4 < 0n) return null;
+if (BigInt(c) + n4 * 1n > BigInt(b.length)) return null; c += Number(n4 * 1n);
+void s1;
+return c; });
+      for (let i = BigInt(0); i < __tnArrayCount_calls; i++) {
+        const size = measure(buffer.subarray(__tnCursorMutable + __tnArrayBytes_calls));
+        if (size === null) return null;
+        if (size === 0) break; /* zero-byte elements: one stands for all */
+        __tnArrayBytes_calls += size;
+      }
+    }
+    __tnParamSeq_calls_payload_size = __tnToBigInt(__tnArrayBytes_calls);
+    if (__tnCursorMutable + __tnArrayBytes_calls > __tnLength) return null;
+    __tnCursorMutable += __tnArrayBytes_calls;
+    const params: Record<string, bigint> = Object.create(null);
+    if (__tnParamSeq_calls_payload_size === null) return null;
+    params["calls_payload_size"] = __tnParamSeq_calls_payload_size as bigint;
+    return { params, offsets: null, derived: null };
+  }
+
   private static __tnExtractParams(view: DataView, buffer: Uint8Array): { params: MulticallArgs.Params; derived: Record<string, bigint> | null } | null {
     if (buffer.length < 2) {
       return null;
     }
     const __tnParam_calls_calls_count = __tnToBigInt(view.getUint16(0, true));
+    const __tnLayout = MulticallArgs.__tnComputeSequentialLayout(view, buffer);
+    if (!__tnLayout || !__tnLayout.params) return null;
+    const __tnSeqParams = __tnLayout.params;
+    const __tnParamSeq_calls_payload_size = __tnSeqParams["calls_payload_size"];
+    if (__tnParamSeq_calls_payload_size === undefined) return null;
     const __tnExtractedParams = MulticallArgs.Params.fromValues({
       calls_calls_count: __tnParam_calls_calls_count,
+      calls_payload_size: __tnParamSeq_calls_payload_size as bigint,
     });
     return { params: __tnExtractedParams, derived: null };
   }
@@ -1055,7 +1259,7 @@ export class MulticallArgs {
 
   /** Returns the number of elements in the jagged array. */
   get_calls_length(): number {
-    return this.__tnResolveFieldRef("calls_count");
+    return __tnCountNumber(this.__tnResolveFieldRefU64("calls_count"));
   }
 
   /** Returns the element at the given index, or null if out of bounds.
@@ -1151,9 +1355,10 @@ export class MulticallArgs {
     return this.__tnValidateInternal(buffer, __tnParams);
   }
 
-  static footprintIr(calls_calls_count: number | bigint): bigint {
+  static footprintIr(calls_calls_count: number | bigint, calls_payload_size: number | bigint): bigint {
     const params = MulticallArgs.Params.fromValues({
       calls_calls_count: calls_calls_count,
+      calls_payload_size: calls_payload_size,
     });
     return this.footprintIrFromParams(params);
   }
@@ -1161,6 +1366,7 @@ export class MulticallArgs {
   private static __tnPackParams(params: MulticallArgs.Params): Record<string, bigint> {
     const record: Record<string, bigint> = Object.create(null);
     record["calls.calls_count"] = params.calls_calls_count;
+    record["calls.payload_size"] = params.calls_payload_size;
     return record;
   }
 
@@ -1176,7 +1382,7 @@ export class MulticallArgs {
     return __tnBigIntToNumber(irResult, 'MulticallArgs::footprintFromParams');
   }
 
-  static footprintFromValues(input: { calls_calls_count: number | bigint }): number {
+  static footprintFromValues(input: { calls_calls_count: number | bigint, calls_payload_size: number | bigint }): number {
     const params = MulticallArgs.params(input);
     return this.footprintFromParams(params);
   }
@@ -1195,6 +1401,13 @@ export class MulticallArgs {
       const extracted = this.__tnExtractParams(view, buffer);
       if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
       params = extracted.params;
+    } else {
+      const extracted = this.__tnExtractParams(view, buffer);
+      if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
+      const supplied = params as unknown as Record<string, bigint>;
+      for (const [key, value] of Object.entries(extracted.params as unknown as Record<string, bigint>)) {
+        if (supplied[key] === undefined || __tnToBigInt(supplied[key]) !== __tnToBigInt(value)) return { ok: false, code: "tn.param_mismatch" };
+      }
     }
     const __tnParamsRec = this.__tnPackParams(params);
     const irResult = this.__tnValidateInternal(buffer, __tnParamsRec);
@@ -1232,16 +1445,20 @@ export namespace MulticallArgs {
   export type Params = {
     /** ABI path: calls.calls_count */
     readonly calls_calls_count: bigint;
+    /** Byte size of jagged array 'calls' (ABI path: calls.payload_size) */
+    readonly calls_payload_size: bigint;
   };
 
   export const ParamKeys = Object.freeze({
     calls_calls_count: "calls.calls_count",
+    calls_payload_size: "calls.payload_size",
   } as const);
 
   export const Params = {
-    fromValues(input: { calls_calls_count: number | bigint }): Params {
+    fromValues(input: { calls_calls_count: number | bigint, calls_payload_size: number | bigint }): Params {
       return {
         calls_calls_count: __tnToBigInt(input.calls_calls_count),
+        calls_payload_size: __tnToBigInt(input.calls_payload_size),
       };
     },
     fromBuilder(source: { dynamicParams(): Params } | { params: Params } | Params): Params {
@@ -1255,7 +1472,7 @@ export namespace MulticallArgs {
     }
   };
 
-  export function params(input: { calls_calls_count: number | bigint }): Params {
+  export function params(input: { calls_calls_count: number | bigint, calls_payload_size: number | bigint }): Params {
     return Params.fromValues(input);
   }
 }
@@ -1341,6 +1558,7 @@ export class MulticallArgsBuilder {
     if (this.__tnCachedParams) return this.__tnCachedParams;
     const params = MulticallArgs.Params.fromValues({
       calls_calls_count: (() => { const fragments = this.__tnJagged_calls; if (!fragments) throw new Error("MulticallArgsBuilder: field 'calls' must be written before computing params"); return __tnToBigInt(fragments.length); })(),
+      calls_payload_size: (() => { const fragments = this.__tnJagged_calls; if (!fragments) throw new Error("MulticallArgsBuilder: field 'calls' must be written before computing params"); return __tnToBigInt(fragments.reduce((total, fragment) => total + fragment.length, 0)); })(),
     });
     this.__tnCachedParams = params;
     return params;
@@ -1388,8 +1606,79 @@ const __tn_ir_MulticallError = {
   root: { op: "const", value: 8n }
 } as const;
 
+export class MulticallError_error_invalid_instruction_data_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MulticallError_error_invalid_instruction_data_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MulticallError_error_invalid_instruction_data_size_Inner.__tnCreateView requires a Uint8Array");
+    return new MulticallError_error_invalid_instruction_data_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MulticallError_error_invoke_failed_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MulticallError_error_invoke_failed_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("MulticallError_error_invoke_failed_Inner.__tnCreateView requires a Uint8Array");
+    return new MulticallError_error_invoke_failed_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class MulticallError_error_Inner {
+  private view: DataView;
+  private __tnFieldContext: Record<string, number | bigint> | null = null;
+  private constructor(private buffer: Uint8Array, private descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    this.__tnFieldContext = fieldContext ?? null;
+  }
+
+  static __tnCreate(payload: Uint8Array, descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>): MulticallError_error_Inner {
+    return new MulticallError_error_Inner(new Uint8Array(payload), descriptor, fieldContext);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MulticallError_error_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["code"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 1)) descriptor = { name: "invalid_instruction_data_size", tag: 1, payloadSize: 0 };
+      if (__tnTagEquals(tag, 2)) descriptor = { name: "invoke_failed", tag: 2, payloadSize: 0 };
+    }
+    return new MulticallError_error_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
+  bytes(): Uint8Array {
+    return new Uint8Array(this.buffer);
+  }
+
+  variant(): __TnVariantDescriptor | null {
+    return this.descriptor;
+  }
+
+  asInvalidInstructionDataSize(): MulticallError_error_invalid_instruction_data_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1)) return null;
+    return MulticallError_error_invalid_instruction_data_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvokeFailed(): MulticallError_error_invoke_failed_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2)) return null;
+    return MulticallError_error_invoke_failed_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+}
+
 export class MulticallError {
   private view: DataView;
+  private static readonly __tnFieldOffset_error = 8;
 
   private constructor(private buffer: Uint8Array) {
     this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
@@ -1409,6 +1698,23 @@ export class MulticallError {
     return MulticallError.from_array(buffer);
   }
 
+  static readonly errorVariantDescriptors = Object.freeze([
+    {
+      name: "invalid_instruction_data_size",
+      tag: 1,
+      payloadSize: 0,
+      payloadType: "MulticallError::error::invalid_instruction_data_size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invoke_failed",
+      tag: 2,
+      payloadSize: 0,
+      payloadType: "MulticallError::error::invoke_failed",
+      createPayloadBuilder: () => null,
+    },
+  ] as const);
+
   get_code(): bigint {
     const offset = 0;
     return this.view.getBigUint64(offset, true); /* little-endian */
@@ -1425,6 +1731,22 @@ export class MulticallError {
 
   set code(value: bigint) {
     this.set_code(value);
+  }
+
+  errorVariant(): typeof MulticallError.errorVariantDescriptors[number] | null {
+    const tag: number | bigint | null = this.get_code();
+    return MulticallError.errorVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
+  }
+
+  error(): MulticallError_error_Inner {
+    const descriptor = this.errorVariant();
+    if (!descriptor) throw new Error("MulticallError: unknown error variant");
+    const offset = MulticallError.__tnFieldOffset_error;
+    const remaining = this.buffer.length - offset;
+    const payloadLength = descriptor.payloadSize ?? remaining;
+    if (payloadLength < 0 || offset + payloadLength > this.buffer.length) throw new Error("MulticallError: payload exceeds buffer bounds");
+    const slice = this.buffer.subarray(offset, offset + payloadLength);
+    return MulticallError_error_Inner.__tnCreate(slice, descriptor, undefined);
   }
 
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
@@ -1458,17 +1780,24 @@ export class MulticallError {
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
     if (buffer.length < 8) return { ok: false, code: "tn.buffer_too_small", consumed: 8 };
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed: 8 };
   }
 
-  static new(code: bigint): MulticallError {
-    const buffer = new Uint8Array(8);
-    const view = new DataView(buffer.buffer);
-
-    let offset = 0;
-    view.setBigUint64(0, code, true); /* code (little-endian) */
-
-    return new MulticallError(buffer);
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 8 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getBigUint64(c, true))); c += 8;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 1n: t3 = 0; break;
+  case 2n: t3 = 0; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array): MulticallError | null {
@@ -1486,32 +1815,45 @@ export class MulticallError {
 }
 
 export class MulticallErrorBuilder {
-  private buffer: Uint8Array;
-  private view: DataView;
+  private tag: bigint | null = null;
+  private payload: Uint8Array | null = null;
 
-  constructor() {
-    this.buffer = new Uint8Array(8);
-    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  constructor() {}
+
+  select_invalid_instruction_data_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_instruction_data_size expects 0 bytes");
+    this.tag = 1n;
+    this.payload = new Uint8Array(bytes);
+    return this;
   }
 
-  set_code(value: bigint): this {
-    const cast = __tnToBigInt(value);
-    this.view.setBigUint64(0, cast, true);
+  select_invoke_failed(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invoke_failed expects 0 bytes");
+    this.tag = 2n;
+    this.payload = new Uint8Array(bytes);
     return this;
   }
 
   build(): Uint8Array {
-    return this.buffer.slice();
+    if (this.tag === null || !this.payload) throw new Error("MulticallError builder missing variant");
+    const buffer = new Uint8Array(8 + this.payload.length);
+    new DataView(buffer.buffer).setBigUint64(0, this.tag, true);
+    buffer.set(this.payload, 8);
+    __tnBuilderValidateOrThrow("MulticallError", MulticallError.validate(buffer));
+    return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
-    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
-    target.set(this.buffer, offset);
+    const bytes = this.build();
+    if (target.length - offset < bytes.length) throw new Error("target buffer too small");
+    target.set(bytes, offset);
     return target;
   }
 
   finish(): MulticallError {
-    const view = MulticallError.from_array(this.buffer.slice());
+    const view = MulticallError.from_array(this.build());
     if (!view) throw new Error("failed to build MulticallError");
     return view;
   }

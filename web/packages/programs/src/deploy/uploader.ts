@@ -1,4 +1,4 @@
-import type { Account } from "@thru/sdk";
+import { ConsensusStatus, type Account } from "@thru/sdk";
 import type { Thru } from "@thru/sdk/client";
 import {
   createDestroyUploadInstruction,
@@ -16,6 +16,7 @@ import {
 } from "./accounts";
 import {
   UPLOADER_PROGRAM_ADDRESS,
+  TRANSACTION_TIMEOUT_MS,
   UPLOADER_STATE_FINALIZED,
   UPLOADER_STATE_OPEN,
 } from "./constants";
@@ -27,6 +28,7 @@ import type {
   UploadArtifactResult,
   UploadCleanupResult,
 } from "./types";
+import { temporarySeed } from "./seeds";
 import type { ResolvedSigner } from "./validation";
 
 export interface PreparedUpload {
@@ -109,6 +111,16 @@ export async function prepareUpload(
       cleanup: { status: "not-needed" },
     },
   };
+}
+
+/** Buffers consumed by an ordinary initial program deployment. */
+export async function prepareProgramUpload(
+  programSeed: string,
+  artifact: "program" | "abi",
+  bytes: Uint8Array,
+): Promise<PreparedUpload> {
+  const suffix = artifact === "program" ? "temporary" : "abi_temp";
+  return prepareUpload("deployProgram", artifact, await temporarySeed(programSeed, suffix), bytes);
 }
 
 function assertUploaderOwner(account: Account, label: string): void {
@@ -485,6 +497,7 @@ export async function cleanupUpload(
   let cleanupSignature: string | undefined;
   let remainingAccountAddresses: string[] | undefined;
   try {
+    const visibilityDeadline = Date.now() + TRANSACTION_TIMEOUT_MS;
     if (!meta || !buffer)
       throw new Error("temporary upload is only partly present");
     const signature = await submitTransaction(
@@ -506,21 +519,36 @@ export async function cleanupUpload(
       },
     );
     cleanupSignature = signature;
-    let remaining = true;
-    for (let attempt = 0; attempt < 4 && remaining; attempt += 1) {
-      const [remainingMeta, remainingBuffer] = await Promise.all([
-        getOptionalAccount(client, metaAddress),
-        getOptionalAccount(client, bufferAddress),
-      ]);
-      remaining = !!remainingMeta || !!remainingBuffer;
-      remainingAccountAddresses = [
-        ...(remainingMeta ? [metaAddress] : []),
-        ...(remainingBuffer ? [bufferAddress] : []),
-      ];
-      if (remaining && attempt < 3) {
-        await new Promise((resolve) => setTimeout(resolve, 250));
+    /* Execution streams can lead committed account queries. Match reviewed
+       deployment's indexed-transaction barrier before checking deletion.
+       Look up at least once after submit returns, even when submit used the
+       whole shared deadline. */
+    for (;;) {
+      try {
+        const indexed = await client.transactions.get(signature, {
+          minConsensus: ConsensusStatus.INCLUDED,
+        });
+        if (indexed.slot !== undefined && indexed.slot > 0n) break;
+      } catch (error) {
+        if ((error as { code?: number } | null)?.code !== 5) throw error;
       }
+      const remainingMs = visibilityDeadline - Date.now();
+      if (remainingMs <= 0)
+        throw new Error("Cleanup transaction was not indexed within timeout");
+      /* The supported ES2020 Promise API requires the executor form. */
+      await new Promise<void>((resolve) =>
+        setTimeout(resolve, Math.min(500, remainingMs)),
+      );
     }
+    const [remainingMeta, remainingBuffer] = await Promise.all([
+      getOptionalAccount(client, metaAddress),
+      getOptionalAccount(client, bufferAddress),
+    ]);
+    const remaining = !!remainingMeta || !!remainingBuffer;
+    remainingAccountAddresses = [
+      ...(remainingMeta ? [metaAddress] : []),
+      ...(remainingBuffer ? [bufferAddress] : []),
+    ];
     if (remaining) {
       throw new Error("temporary upload accounts remain after cleanup");
     }

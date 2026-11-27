@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readU32le } from "../helpers/bytes";
 import {
   UPLOADER_PROGRAM_ADDRESS,
+  TRANSACTION_TIMEOUT_MS,
   UPLOADER_STATE_FINALIZED,
   UPLOADER_STATE_OPEN,
 } from "./constants";
@@ -17,7 +18,10 @@ import {
 import type { ResolvedSigner } from "./validation";
 import { cleanupGovernedUpload } from "./governance";
 
-const mocks = vi.hoisted(() => ({ submitTransaction: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  submitTransaction: vi.fn(),
+  indexedTransaction: vi.fn(),
+}));
 
 vi.mock("./chain", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./chain")>();
@@ -104,8 +108,11 @@ describe("resumable uploader", () => {
           async (address: string) => accounts.get(address) ?? missing(),
         ),
       },
+      transactions: { get: mocks.indexedTransaction },
     } as unknown as Thru;
     mocks.submitTransaction.mockReset();
+    mocks.indexedTransaction.mockReset();
+    mocks.indexedTransaction.mockResolvedValue({ slot: 1n });
     mocks.submitTransaction.mockImplementation(
       async (
         _client: Thru,
@@ -230,6 +237,78 @@ describe("resumable uploader", () => {
     // Only allocation grows state; writes, finalization and cleanup work at cap.
     expect(mocks.submitTransaction.mock.calls.map((call) => call[4].stateUnits))
       .toEqual([2, 0, 0, 0, 0]);
+  });
+
+  it("waits for committed deletion when execution leads indexed queries", async () => {
+    const upload = await makeUpload();
+    await uploadArtifact(client, signer, upload, 1_024);
+    const staleAccounts = new Map(accounts);
+    vi.useFakeTimers();
+    try {
+      const started = Date.now();
+      let indexed = false;
+      vi.mocked(client.accounts.get).mockImplementation(async (address) =>
+        (indexed ? accounts : staleAccounts).get(String(address)) ?? missing(),
+      );
+      mocks.indexedTransaction.mockImplementation(async () => {
+        if (Date.now() - started < 20_000) missing();
+        indexed = true;
+        return { slot: 1n };
+      });
+      const cleanup = cleanupUpload(client, signer, upload);
+      await vi.advanceTimersByTimeAsync(20_000);
+      await expect(cleanup).resolves.toEqual({
+        status: "succeeded",
+        transactionSignature: "sig-5",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retains the executed cleanup signature when indexing misses the deadline", async () => {
+    const upload = await makeUpload();
+    await uploadArtifact(client, signer, upload, 1_024);
+    mocks.indexedTransaction.mockImplementation(async () => missing());
+    vi.useFakeTimers();
+    try {
+      const cleanup = cleanupUpload(client, signer, upload);
+      await vi.advanceTimersByTimeAsync(TRANSACTION_TIMEOUT_MS);
+      await expect(cleanup).resolves.toMatchObject({
+        status: "failed",
+        transactionSignature: "sig-5",
+        error: "Cleanup transaction was not indexed within timeout",
+        remainingAccountAddresses: [
+          upload.result.metaAccountAddress,
+          upload.result.bufferAccountAddress,
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("checks indexing once even when submit used the whole deadline", async () => {
+    const upload = await makeUpload();
+    await uploadArtifact(client, signer, upload, 1_024);
+    const submit = mocks.submitTransaction.getMockImplementation()!;
+    mocks.submitTransaction.mockImplementation(async (...args) => {
+      const signature = await submit(...args);
+      vi.setSystemTime(Date.now() + TRANSACTION_TIMEOUT_MS);
+      return signature;
+    });
+    vi.useFakeTimers();
+    try {
+      const cleanup = cleanupUpload(client, signer, upload);
+      await vi.advanceTimersByTimeAsync(1_000);
+      await expect(cleanup).resolves.toEqual({
+        status: "succeeded",
+        transactionSignature: "sig-5",
+      });
+      expect(mocks.indexedTransaction).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("resumes matching chunks and writes only missing data", async () => {

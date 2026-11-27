@@ -1,5 +1,5 @@
 libprotoc 35.0
-proto/thru/common/v1/consensus.proto VPxzE3MbmPISgwDKV75D5iiX2ZHAbSFL+d+SdEk/K8k=
+proto/thru/common/v1/consensus.proto x9cyuFAl2AXrB+WESWQJN8BzuJVuXTbYxA4XuM0idjI=
 proto/thru/common/v1/filters.proto dBMFAvxqVI7+xMlCdV8Mr94HyKcDts+WNhPOK/xgEXg=
 proto/thru/common/v1/pagination.proto s1zvH0IqtSxHbTRfa2PgLqzmOXiqpB9W28UVTHJtkDw=
 proto/thru/common/v1/primitives.proto 7yHiC/ZU+OD48BI/hxM65nNYhy3otIBola4hhun5K9c=
@@ -9,7 +9,7 @@ proto/thru/core/v1/node.proto pBCRF3muhzHcwMgaqm90QxE0qiASOySD29U7RvVZl7U=
 proto/thru/core/v1/state.proto nLx8vqLsktCWRqDNLqzmj0nAMMy0V6VjQsi9A9PfVgs=
 proto/thru/core/v1/transaction.proto F/xC8bLbi2lnsmEPfoM5f80eg8mARYsBgQWpptn6+Q0=
 proto/thru/core/v1/types.proto JgjfD6WYMteMJ7Mch78NWx+wz3rchH1eGHUXsoiUGh4=
-proto/thru/services/v1/query_service.proto faQp2uvoozYFBngABH7CJTr1c2GKli7kHXulDGdS5Po=
+proto/thru/services/v1/query_service.proto vEAKWFnSqne8yN6bB5gu/cHyr/PCb+Ekd50r1+pGvgE=
 web/packages/proto-toolchain/package.json YzDLTH4AVsA+JhVcxDSHyK1euWy6ZEVNRu2yywY1P2Q=
 web/packages/sdk/buf.yaml SNRjMoMqNnzqEDMgSvyHDHxiAmkhAqb1hs2HzSbDNs8=
 web/packages/sdk/buf.gen.yaml PTN1wmrbpm9sJLB5JKB0tgryonAhTrgnKAp3SIa64SE=
@@ -17,4 +17,4 @@ web/packages/sdk/buf.lock TECtzQqbl8d7xq04z5zhEa4fappBQHsl9rwk9uKw/B0=
 scripts/gen-web-proto.sh uStLeLdYCslwPOW3vCqGB6XfOtCe50Pee0TxCORtzNg=
 scripts/sync-thru-sdk-protos.py MvTwq2hqRPPc4vB678N5nBdWxYs2JS+i/WLrU5ZtQa4=
 scripts/gen-pbdeps.py OE53a33Lyt5hZwdrIC7GWux9KPEwvZJVWcO5MQPQjoc=
-web/packages/sdk/thru-ts-client-sdk/proto/thru/services/v1/query_service_pb.ts iGSXJWTuTyJWdbdkBOo9ksxfwR4dCIla5ZRnNyzxVlE=
+web/packages/sdk/thru-ts-client-sdk/proto/thru/services/v1/query_service_pb.ts 4kcuXjLZT1H+DJFCqh3uRFHhITEGBbfcDNn3IeveMys=

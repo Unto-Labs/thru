@@ -21,7 +21,8 @@ use thru_base::txn_tools::{
     MANAGER_INSTRUCTION_FINALIZE, MANAGER_INSTRUCTION_SET_AUTHORITY, MANAGER_INSTRUCTION_SET_PAUSE,
     MANAGER_INSTRUCTION_UPGRADE, TOKEN_INSTRUCTION_BURN, TOKEN_INSTRUCTION_CLOSE_ACCOUNT,
     TOKEN_INSTRUCTION_FREEZE_ACCOUNT, TOKEN_INSTRUCTION_MINT_TO, TOKEN_INSTRUCTION_THAW_ACCOUNT,
-    TOKEN_INSTRUCTION_TRANSFER, account_state_units,
+    TOKEN_INSTRUCTION_TRANSFER, TOKEN_INSTRUCTION_TRANSFER_CHECKED, account_state_units,
+    cv_manager_compute_units,
 };
 
 /// Execute-time resource hints for actions that need more than the default.
@@ -74,7 +75,12 @@ pub(crate) async fn check_stored_authority(
     let d = &p.instr_data;
     let read =
         |k: TnPubkey| async move { ctx.account(&k).await.ok().flatten().map(|(_, data)| data) };
-    if is_token(ctx, &p.target_program) && d.first() == Some(&TOKEN_INSTRUCTION_TRANSFER) {
+    if is_token(ctx, &p.target_program)
+        && matches!(
+            d.first(),
+            Some(&TOKEN_INSTRUCTION_TRANSFER) | Some(&TOKEN_INSTRUCTION_TRANSFER_CHECKED)
+        )
+    {
         let src = key_at(u16_at(d, 1)?)?;
         let owner = read(src)
             .await
@@ -196,6 +202,9 @@ fn child_account_indices(
     if is_token(ctx, target) {
         return match *d.first()? {
             TOKEN_INSTRUCTION_TRANSFER if d.len() == 13 => Some(vec![at(1)?, at(3)?]),
+            TOKEN_INSTRUCTION_TRANSFER_CHECKED if d.len() == 25 => {
+                Some(vec![at(1)?, at(3)?, at(5)?])
+            }
             TOKEN_INSTRUCTION_MINT_TO | TOKEN_INSTRUCTION_BURN if d.len() == 15 => {
                 Some(vec![at(1)?, at(3)?, at(5)?])
             }
@@ -562,6 +571,7 @@ async fn describe_invoke(ctx: &Ctx<'_>, p: &InvokePayload, multisig: TnPubkey) -
     } else {
         None
     };
+    let builtin = decoded.is_some();
 
     let (mut text, json_action, hints) = match decoded {
         Some((title, fields, j, hints)) => {
@@ -592,6 +602,15 @@ async fn describe_invoke(ctx: &Ctx<'_>, p: &InvokePayload, multisig: TnPubkey) -
     };
     let mut json_action = json_action;
     let mut hints = hints;
+    let mut cv_note = None;
+    if is_consensus_validator(ctx, &p.target_program) {
+        hints = cv_manager_hints(hints, &p.instr_data);
+    } else if !builtin {
+        cv_note = consensus_program_note(ctx, &p.target_program, &p.instr_data);
+    }
+    if let Some((line, _)) = &cv_note {
+        text.push(line.clone());
+    }
     let mut code_hash = None;
     let action_type = json_action["type"].as_str().map(str::to_string);
     match action_type.as_deref() {
@@ -680,6 +699,9 @@ async fn describe_invoke(ctx: &Ctx<'_>, p: &InvokePayload, multisig: TnPubkey) -
         AccountCheck::ForeignAuthority(why) => json!({"foreign_authority": why}),
         AccountCheck::NoCall => json!("none"),
     };
+    if let Some((_, hint)) = cv_note {
+        j["consensus_program_hint"] = hint;
+    }
     Action {
         text,
         json: j,
@@ -729,6 +751,58 @@ fn is_abi_manager(ctx: &Ctx<'_>, k: &TnPubkey) -> bool {
         .ok()
         .and_then(|p| p.to_bytes().ok());
     cfg.as_ref() == Some(k) || *k == programs::ABI_MANAGER_PROGRAM_BYTES
+}
+
+/// Whether `k` is a consensus validator program: the configured or bootstrap
+/// address, or one the executor names (`multisig execute
+/// --consensus-program`, for a request proposed with `validator manager
+/// --program`). The request's own bytes never make a program count: the
+/// budget a CV program gets would otherwise go to any program a proposer
+/// chose.
+pub(crate) fn is_consensus_validator(ctx: &Ctx<'_>, k: &TnPubkey) -> bool {
+    let cfg = ctx
+        .config
+        .get_consensus_validator_program_pubkey()
+        .ok()
+        .and_then(|p| p.to_bytes().ok());
+    cfg.as_ref() == Some(k)
+        || *k == programs::CONSENSUS_VALIDATOR_PROGRAM_BYTES
+        || ctx.consensus_program.as_ref() == Some(k)
+}
+
+/// Hints for a call to the consensus validator program. A validator
+/// manager instruction gets the compute budget `thru validator manager`
+/// requests when it sends the instruction directly: the execute default
+/// is too small for ManagerActivate's proof-of-possession check and for
+/// the slot finalization ManagerDeactivate and ManagerSetWeight run. The
+/// proof itself is in the stored instruction. Other calls keep `hints`.
+fn cv_manager_hints(hints: ExecHints, d: &[u8]) -> ExecHints {
+    ExecHints {
+        compute_units: cv_manager_compute_units(d).or(hints.compute_units),
+        ..hints
+    }
+}
+
+/// For a call to a program the CLI doesn't know whose data carries a
+/// validator manager discriminant that needs more than the execute
+/// default: a note (text line and JSON) suggesting `--consensus-program`,
+/// for a request proposed with `validator manager --program`. It only
+/// informs. Bytes in a request never set the budget: the executor's CLI
+/// budgets a call only for a CV program it knows or the executor names
+/// (`is_consensus_validator`).
+fn consensus_program_note(ctx: &Ctx<'_>, target: &TnPubkey, d: &[u8]) -> Option<(String, Value)> {
+    let units = cv_manager_compute_units(d)?;
+    let line = format!(
+        "Note       if {} is a consensus validator program, this is a validator manager call that needs {} compute units; execute with --consensus-program {} (the CLI budgets only CV programs it knows)",
+        ctx.short(target),
+        units,
+        addr(target)
+    );
+    let hint = json!({
+        "execute_args": ["--consensus-program", addr(target)],
+        "compute_units": units,
+    });
+    Some((line, hint))
 }
 
 /// The ABI half of a program + ABI upgrade: hash the new ABI and size the
@@ -839,6 +913,20 @@ fn u64_at(d: &[u8], o: usize) -> Option<u64> {
     Some(u64::from_le_bytes(d.get(o..o + 8)?.try_into().ok()?))
 }
 
+/// Unlike hardware-wallet reviews, CLI requests can name all u8 decimal counts.
+pub(super) fn format_token_amount(amount: u64, decimals: u8) -> String {
+    use std::fmt::Write;
+
+    let decimals = usize::from(decimals);
+    let mut text = String::with_capacity(decimals.max(20) + 2);
+    write!(text, "{amount:0width$}", width = decimals + 1).unwrap();
+    if decimals != 0 {
+        text.insert(text.len() - decimals, '.');
+        text.truncate(text.trim_end_matches('0').trim_end_matches('.').len());
+    }
+    text
+}
+
 fn decode_token(
     d: &[u8],
     acct: &dyn Fn(u16) -> String,
@@ -858,6 +946,31 @@ fn decode_token(
                     f("amount", format!("{} (raw units)", amount)),
                 ],
                 json!({"type": "token.transfer", "from": acct_addr(from), "to": acct_addr(to), "amount": amount}),
+                none,
+            ))
+        }
+        TOKEN_INSTRUCTION_TRANSFER_CHECKED if d.len() == 25 => {
+            let (from, to, mint, amount) =
+                (u16_at(d, 1)?, u16_at(d, 3)?, u16_at(d, 5)?, u64_at(d, 7)?);
+            let decimals = d[15];
+            let ticker_len = usize::from(d[16]);
+            let ticker = d.get(17..17 + ticker_len)?;
+            if d[17 + ticker_len..].iter().any(|b| *b != 0) {
+                return None;
+            }
+            let ticker = ticker.escape_ascii().to_string();
+            let ui_amount = format_token_amount(amount, decimals);
+            Some((
+                "token transfer-checked".into(),
+                vec![
+                    f("from", acct(from)),
+                    f("to", acct(to)),
+                    f("mint", acct(mint)),
+                    f("amount", ui_amount.clone()),
+                    f("ticker", ticker.clone()),
+                    f("decimals", decimals.to_string()),
+                ],
+                json!({"type": "token.transfer_checked", "from": acct_addr(from), "to": acct_addr(to), "mint": acct_addr(mint), "amount": amount, "ui_amount": ui_amount, "decimals": decimals, "ticker": ticker}),
                 none,
             ))
         }
@@ -1292,6 +1405,85 @@ mod tests {
         assert!(decode_token(&[0xFF, 1, 2], &names, &addrs).is_none());
     }
 
+    #[test]
+    fn checked_token_transfer_decodes_signed_metadata() {
+        for (amount, decimals, ticker, expected) in [
+            (250_000, 6, b"MSIG".as_slice(), "0.25".to_string()),
+            (10, 0, b"INT".as_slice(), "10".to_string()),
+            (1_000_000, 6, b"WHOLE".as_slice(), "1".to_string()),
+            (123_456_789, 6, b"FRACT".as_slice(), "123.456789".to_string()),
+            (u64::MAX, 0, b"".as_slice(), u64::MAX.to_string()),
+            (u64::MAX, 19, b"MAX".as_slice(), "1.8446744073709551615".to_string()),
+            (10, 20, b"HIGH".as_slice(), "0.0000000000000000001".to_string()),
+            (u64::MAX, 20, b"MAX".as_slice(), "0.18446744073709551615".to_string()),
+            (1, 255, b"\x1b\n\xff".as_slice(), format!("0.{}1", "0".repeat(254))),
+            (0, 255, b"ZERO".as_slice(), "0".to_string()),
+        ] {
+            let d = tt::build_token_transfer_checked_instruction(5, 6, 7, amount, decimals, ticker)
+                .unwrap();
+            let (_, fields, j, _) = decode_token(&d, &names, &addrs).unwrap();
+            assert_eq!(j["type"], "token.transfer_checked");
+            assert_eq!(j["from"], 5);
+            assert_eq!(j["to"], 6);
+            assert_eq!(j["mint"], 7);
+            assert_eq!(j["amount"], amount);
+            assert_eq!(j["ui_amount"], expected);
+            assert_eq!(j["decimals"], decimals);
+            assert_eq!(j["ticker"], ticker.escape_ascii().to_string());
+            assert!(fields.contains(&("amount".into(), expected)));
+            assert!(fields.contains(&("ticker".into(), ticker.escape_ascii().to_string())));
+        }
+    }
+
+    #[test]
+    fn checked_token_transfer_rejects_malformed_metadata() {
+        let valid = tt::build_token_transfer_checked_instruction(5, 6, 7, 250_000, 6, b"MSIG")
+            .unwrap();
+        for len in 0..valid.len() {
+            assert!(decode_token(&valid[..len], &names, &addrs).is_none());
+        }
+        let mut trailing = valid.clone();
+        trailing.push(0);
+        assert!(decode_token(&trailing, &names, &addrs).is_none());
+        let mut long_ticker = valid.clone();
+        long_ticker[16] = 9;
+        assert!(decode_token(&long_ticker, &names, &addrs).is_none());
+        let mut padding = valid;
+        padding[24] = 1;
+        assert!(decode_token(&padding, &names, &addrs).is_none());
+    }
+
+    #[tokio::test]
+    async fn checked_token_transfer_checks_every_referenced_account() {
+        let mut config = crate::config::Config::default();
+        config.rpc_base_url = "http://127.0.0.1:1".into();
+        let ctx = Ctx::with_program(&config, None, true).unwrap();
+        let target = pk_bytes(&config.get_token_program_pubkey().unwrap()).unwrap();
+        let data = tt::build_token_transfer_checked_instruction(5, 6, 7, 250_000, 6, b"MSIG")
+            .unwrap();
+        let mut payload = InvokePayload {
+            target_program_idx: 8,
+            target_program: target,
+            refs: vec![(5, [5; 32]), (6, [6; 32]), (7, [7; 32])],
+            instr_data: data,
+        };
+        assert_eq!(check_invoke_accounts(&ctx, &payload), AccountCheck::Verified);
+        for missing in [5, 6, 7] {
+            let refs = payload.refs.clone();
+            payload.refs.retain(|(i, _)| *i != missing);
+            assert_eq!(
+                check_invoke_accounts(&ctx, &payload),
+                AccountCheck::Unlisted(vec![missing])
+            );
+            payload.refs = refs;
+        }
+        payload.instr_data[1..3].copy_from_slice(&0u16.to_le_bytes());
+        assert_eq!(
+            check_invoke_accounts(&ctx, &payload),
+            AccountCheck::Unlisted(vec![0])
+        );
+    }
+
     fn fg(disc: u32, rest: &[u8]) -> Vec<u8> {
         let mut d = disc.to_le_bytes().to_vec();
         d.extend_from_slice(&2u16.to_le_bytes());
@@ -1377,5 +1569,168 @@ mod tests {
         assert_eq!(super::managed_meta_key(&meta, 1), None);
         meta[0] = super::MANAGED_META_ACCOUNT_TYPE_V1;
         assert_eq!(super::managed_meta_key(&meta[..73], 1), None);
+    }
+
+    /* A ManagerActivate proposed with --via-multisig executes with the
+       budget the direct command requests: the request stores the whole
+       instruction, proof of possession included, and the decoder supplies
+       the budget. */
+    #[test]
+    fn stored_cv_manager_requests_carry_the_direct_budget() {
+        let activate =
+            tt::build_cv_manager_activate_instruction(2, [7; 32], [1; 96], [2; 192], [3; 32], 100);
+        let stored = RequestPayload::Invoke(InvokePayload {
+            target_program_idx: 3,
+            target_program: programs::CONSENSUS_VALIDATOR_PROGRAM_BYTES,
+            refs: vec![(2, [9; 32]), (4, [8; 32])],
+            instr_data: activate.clone(),
+        })
+        .encode();
+        let Ok(RequestPayload::Invoke(p)) =
+            RequestPayload::decode(thru_base::multisig::KIND_INVOKE, &stored)
+        else {
+            panic!("the stored invoke request decodes");
+        };
+        assert_eq!(p.instr_data, activate, "the proof of possession is stored");
+        let hints = cv_manager_hints(ExecHints::default(), &p.instr_data);
+        assert_eq!(hints.compute_units, Some(1_000_000_000));
+        assert!(hints.compute_units > Some(thru_base::multisig::EXECUTE_COMPUTE_UNITS));
+
+        for (d, want) in [
+            (tt::build_cv_manager_deactivate_instruction(2, [7; 32]), Some(500_000_000)),
+            (tt::build_cv_manager_set_weight_instruction(2, [7; 32], 300), Some(500_000_000)),
+            /* Header-only instructions keep the execute default. */
+            (tt::build_cv_set_self_service_instruction(2, false), None),
+            (tt::build_cv_set_validator_manager_instruction(2, [7; 32]), None),
+        ] {
+            assert_eq!(cv_manager_hints(ExecHints::default(), &d).compute_units, want);
+        }
+
+        /* Hints already set are kept where the call needs no CV budget. */
+        let set = ExecHints {
+            compute_units: Some(5),
+            state_units: Some(1),
+        };
+        let kept = cv_manager_hints(set, &tt::build_cv_set_self_service_instruction(2, true));
+        assert_eq!((kept.compute_units, kept.state_units), (Some(5), Some(1)));
+    }
+
+    /// The compute hint `describe_payload` gives an approved invoke request.
+    async fn described_budget(ctx: &Ctx<'_>, target: TnPubkey, instr_data: Vec<u8>) -> Option<u32> {
+        described(ctx, target, instr_data).await.hints.compute_units
+    }
+
+    /// What `describe_payload` shows for an approved invoke request.
+    async fn described(ctx: &Ctx<'_>, target: TnPubkey, instr_data: Vec<u8>) -> Action {
+        let r = RequestAccount {
+            account_type: thru_base::multisig::ACCOUNT_TYPE_REQUEST_V1,
+            kind: thru_base::multisig::KIND_INVOKE,
+            status: thru_base::multisig::REQUEST_STATUS_OPEN,
+            member_cnt_snapshot: 2,
+            required_approvals: 1,
+            request_id: 1,
+            config_epoch_snapshot: 0,
+            approval_bitmap: 1,
+            multisig: [0x11; 32],
+            proposer: [0x22; 32],
+            payload: RequestPayload::Invoke(InvokePayload {
+                target_program_idx: 3,
+                target_program: target,
+                refs: vec![(2, [0x33; 32])],
+                instr_data,
+            }),
+            raw_payload: Vec::new(),
+        };
+        describe_payload(ctx, &r, None).await
+    }
+
+    /* A request proposed with `validator manager --program <custom>`
+       targets a CV program the executor's config doesn't name.  Its manager
+       instructions get the CV budget once the executor names that program
+       (`multisig execute --consensus-program`).  The same bytes sent to any
+       other program keep the execute default, so a proposer can't choose
+       which program gets the budget. */
+    #[tokio::test]
+    async fn describe_payload_budgets_a_custom_cv_program_the_executor_names() {
+        let custom: TnPubkey = [0x5c; 32];
+        let other: TnPubkey = [0x5d; 32];
+        let mut config = crate::config::Config::default();
+        config.rpc_base_url = "http://127.0.0.1:1".to_string();
+        /* Without an ABI manager the on-chain ABI lookup stops before any
+           RPC and the call shows as hex; nothing else on this path reads an
+           account, so the test needs no node. */
+        config.abi_manager_program_public_key = String::new();
+        let mut ctx = Ctx::with_program(&config, None, true).expect("context");
+        let activate =
+            tt::build_cv_manager_activate_instruction(2, [7; 32], [1; 96], [2; 192], [3; 32], 100);
+        let deactivate = tt::build_cv_manager_deactivate_instruction(2, [7; 32]);
+        let set_weight = tt::build_cv_manager_set_weight_instruction(2, [7; 32], 300);
+        let self_service = tt::build_cv_set_self_service_instruction(2, true);
+
+        /* The bootstrap CV program needs no flag. */
+        let bootstrap = programs::CONSENSUS_VALIDATOR_PROGRAM_BYTES;
+        assert_eq!(
+            described_budget(&ctx, bootstrap, activate.clone()).await,
+            Some(1_000_000_000)
+        );
+        /* A custom one isn't known until the executor names it. */
+        assert_eq!(described_budget(&ctx, custom, activate.clone()).await, None);
+
+        ctx.consensus_program = Some(custom);
+        assert_eq!(described_budget(&ctx, custom, activate.clone()).await, Some(1_000_000_000));
+        assert_eq!(described_budget(&ctx, custom, deactivate.clone()).await, Some(500_000_000));
+        assert_eq!(described_budget(&ctx, custom, set_weight.clone()).await, Some(500_000_000));
+        assert_eq!(described_budget(&ctx, custom, self_service).await, None);
+
+        /* Another program with the same bytes gets no budget. */
+        for d in [activate, deactivate, set_weight] {
+            assert_eq!(described_budget(&ctx, other, d).await, None);
+        }
+    }
+
+    /* Whoever shows, approves or executes a request whose target their CLI
+       doesn't know sees a note suggesting --consensus-program when the call
+       carries a validator manager discriminant that needs a budget.  The
+       note only informs: the budget stays the default until the executor
+       names the program, and then the note goes. */
+    #[tokio::test]
+    async fn describe_payload_suggests_naming_an_unknown_cv_program() {
+        let custom: TnPubkey = [0x5c; 32];
+        let mut config = crate::config::Config::default();
+        config.rpc_base_url = "http://127.0.0.1:1".to_string();
+        config.abi_manager_program_public_key = String::new();
+        let mut ctx = Ctx::with_program(&config, None, true).expect("context");
+        let activate =
+            tt::build_cv_manager_activate_instruction(2, [7; 32], [1; 96], [2; 192], [3; 32], 100);
+        let set_weight = tt::build_cv_manager_set_weight_instruction(2, [7; 32], 300);
+        let flag = format!("--consensus-program {}", addr(&custom));
+        let noted = |a: &Action| a.text.iter().any(|l| l.starts_with("Note") && l.contains(&flag));
+
+        let a = described(&ctx, custom, activate.clone()).await;
+        assert!(noted(&a));
+        assert_eq!(a.hints.compute_units, None);
+        assert_eq!(
+            a.json["consensus_program_hint"],
+            json!({"execute_args": ["--consensus-program", addr(&custom)], "compute_units": 1_000_000_000})
+        );
+        let a = described(&ctx, custom, set_weight).await;
+        assert!(noted(&a));
+        assert_eq!(a.json["consensus_program_hint"]["compute_units"], json!(500_000_000));
+
+        /* A header-only instruction needs no budget, so no note. */
+        let a = described(&ctx, custom, tt::build_cv_set_self_service_instruction(2, true)).await;
+        assert!(!noted(&a));
+        assert!(a.json.get("consensus_program_hint").is_none());
+
+        /* A CV program the CLI knows gets the budget, not the note. */
+        let bootstrap = programs::CONSENSUS_VALIDATOR_PROGRAM_BYTES;
+        let a = described(&ctx, bootstrap, activate.clone()).await;
+        assert_eq!(a.hints.compute_units, Some(1_000_000_000));
+        assert!(a.json.get("consensus_program_hint").is_none());
+        ctx.consensus_program = Some(custom);
+        let a = described(&ctx, custom, activate).await;
+        assert!(!noted(&a));
+        assert_eq!(a.hints.compute_units, Some(1_000_000_000));
+        assert!(a.json.get("consensus_program_hint").is_none());
     }
 }

@@ -1281,8 +1281,499 @@ const __tn_ir_ManagerError = {
   root: { op: "const", value: 2n }
 } as const;
 
+export class ManagerError_error_discriminant_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_discriminant_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_discriminant_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_discriminant_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_size_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_size_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_size_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_size_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_size_instruction_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_size_instruction_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_size_instruction_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_size_instruction_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_value_instruction_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_value_instruction_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_value_instruction_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_value_instruction_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_size_srcbuf_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_size_srcbuf_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_size_srcbuf_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_size_srcbuf_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_value_srcbuf_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_value_srcbuf_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_value_srcbuf_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_value_srcbuf_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_index_srcbuf_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_index_srcbuf_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_index_srcbuf_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_index_srcbuf_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_na_srcbuf_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_na_srcbuf_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_na_srcbuf_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_na_srcbuf_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_state_srcbuf_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_state_srcbuf_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_state_srcbuf_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_state_srcbuf_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_invalid_program_srcbuf_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_invalid_program_srcbuf_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_invalid_program_srcbuf_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_invalid_program_srcbuf_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_size_meta_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_size_meta_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_size_meta_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_size_meta_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_authorization_meta_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_authorization_meta_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_authorization_meta_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_authorization_meta_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_index_meta_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_index_meta_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_index_meta_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_index_meta_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_na_meta_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_na_meta_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_na_meta_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_na_meta_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_relationship_meta_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_relationship_meta_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_relationship_meta_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_relationship_meta_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_state_meta_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_state_meta_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_state_meta_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_state_meta_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_not_writable_meta_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_not_writable_meta_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_not_writable_meta_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_not_writable_meta_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_index_program_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_index_program_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_index_program_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_index_program_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_na_program_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_na_program_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_na_program_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_na_program_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_relationship_program_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_relationship_program_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_relationship_program_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_relationship_program_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_not_writable_program_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_not_writable_program_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_not_writable_program_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_not_writable_program_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_authorization_authority_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_authorization_authority_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_authorization_authority_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_authorization_authority_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_authorization_authority_candidate_acc_Inner {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_authorization_authority_candidate_acc_Inner {
+    if (!buffer || buffer.length === undefined) throw new Error("ManagerError_error_authorization_authority_candidate_acc_Inner.__tnCreateView requires a Uint8Array");
+    return new ManagerError_error_authorization_authority_candidate_acc_Inner(new Uint8Array(buffer));
+  }
+
+}
+
+export class ManagerError_error_Inner {
+  private view: DataView;
+  private __tnFieldContext: Record<string, number | bigint> | null = null;
+  private constructor(private buffer: Uint8Array, private descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    this.__tnFieldContext = fieldContext ?? null;
+  }
+
+  static __tnCreate(payload: Uint8Array, descriptor: __TnVariantDescriptor | null, fieldContext?: Record<string, number | bigint>): ManagerError_error_Inner {
+    return new ManagerError_error_Inner(new Uint8Array(payload), descriptor, fieldContext);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ManagerError_error_Inner {
+    let descriptor: __TnVariantDescriptor | null = null;
+    const tag = opts?.fieldContext?.["code"];
+    if (tag !== undefined) {
+      if (__tnTagEquals(tag, 2)) descriptor = { name: "discriminant", tag: 2, payloadSize: 0 };
+      if (__tnTagEquals(tag, 256)) descriptor = { name: "size", tag: 256, payloadSize: 0 };
+      if (__tnTagEquals(tag, 257)) descriptor = { name: "size_instruction", tag: 257, payloadSize: 0 };
+      if (__tnTagEquals(tag, 513)) descriptor = { name: "value_instruction", tag: 513, payloadSize: 0 };
+      if (__tnTagEquals(tag, 259)) descriptor = { name: "size_srcbuf_acc", tag: 259, payloadSize: 0 };
+      if (__tnTagEquals(tag, 515)) descriptor = { name: "value_srcbuf_acc", tag: 515, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1027)) descriptor = { name: "index_srcbuf_acc", tag: 1027, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1283)) descriptor = { name: "na_srcbuf_acc", tag: 1283, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1795)) descriptor = { name: "state_srcbuf_acc", tag: 1795, payloadSize: 0 };
+      if (__tnTagEquals(tag, 2307)) descriptor = { name: "invalid_program_srcbuf_acc", tag: 2307, payloadSize: 0 };
+      if (__tnTagEquals(tag, 260)) descriptor = { name: "size_meta_acc", tag: 260, payloadSize: 0 };
+      if (__tnTagEquals(tag, 772)) descriptor = { name: "authorization_meta_acc", tag: 772, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1028)) descriptor = { name: "index_meta_acc", tag: 1028, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1284)) descriptor = { name: "na_meta_acc", tag: 1284, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1540)) descriptor = { name: "relationship_meta_acc", tag: 1540, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1796)) descriptor = { name: "state_meta_acc", tag: 1796, payloadSize: 0 };
+      if (__tnTagEquals(tag, 2052)) descriptor = { name: "not_writable_meta_acc", tag: 2052, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1029)) descriptor = { name: "index_program_acc", tag: 1029, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1285)) descriptor = { name: "na_program_acc", tag: 1285, payloadSize: 0 };
+      if (__tnTagEquals(tag, 1541)) descriptor = { name: "relationship_program_acc", tag: 1541, payloadSize: 0 };
+      if (__tnTagEquals(tag, 2053)) descriptor = { name: "not_writable_program_acc", tag: 2053, payloadSize: 0 };
+      if (__tnTagEquals(tag, 774)) descriptor = { name: "authorization_authority_acc", tag: 774, payloadSize: 0 };
+      if (__tnTagEquals(tag, 775)) descriptor = { name: "authorization_authority_candidate_acc", tag: 775, payloadSize: 0 };
+    }
+    return new ManagerError_error_Inner(new Uint8Array(buffer), descriptor, opts?.fieldContext);
+  }
+
+  bytes(): Uint8Array {
+    return new Uint8Array(this.buffer);
+  }
+
+  variant(): __TnVariantDescriptor | null {
+    return this.descriptor;
+  }
+
+  asDiscriminant(): ManagerError_error_discriminant_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2)) return null;
+    return ManagerError_error_discriminant_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSize(): ManagerError_error_size_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 256)) return null;
+    return ManagerError_error_size_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSizeInstruction(): ManagerError_error_size_instruction_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 257)) return null;
+    return ManagerError_error_size_instruction_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asValueInstruction(): ManagerError_error_value_instruction_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 513)) return null;
+    return ManagerError_error_value_instruction_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSizeSrcbufAcc(): ManagerError_error_size_srcbuf_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 259)) return null;
+    return ManagerError_error_size_srcbuf_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asValueSrcbufAcc(): ManagerError_error_value_srcbuf_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 515)) return null;
+    return ManagerError_error_value_srcbuf_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asIndexSrcbufAcc(): ManagerError_error_index_srcbuf_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1027)) return null;
+    return ManagerError_error_index_srcbuf_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asNaSrcbufAcc(): ManagerError_error_na_srcbuf_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1283)) return null;
+    return ManagerError_error_na_srcbuf_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asStateSrcbufAcc(): ManagerError_error_state_srcbuf_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1795)) return null;
+    return ManagerError_error_state_srcbuf_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInvalidProgramSrcbufAcc(): ManagerError_error_invalid_program_srcbuf_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2307)) return null;
+    return ManagerError_error_invalid_program_srcbuf_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSizeMetaAcc(): ManagerError_error_size_meta_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 260)) return null;
+    return ManagerError_error_size_meta_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAuthorizationMetaAcc(): ManagerError_error_authorization_meta_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 772)) return null;
+    return ManagerError_error_authorization_meta_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asIndexMetaAcc(): ManagerError_error_index_meta_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1028)) return null;
+    return ManagerError_error_index_meta_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asNaMetaAcc(): ManagerError_error_na_meta_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1284)) return null;
+    return ManagerError_error_na_meta_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asRelationshipMetaAcc(): ManagerError_error_relationship_meta_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1540)) return null;
+    return ManagerError_error_relationship_meta_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asStateMetaAcc(): ManagerError_error_state_meta_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1796)) return null;
+    return ManagerError_error_state_meta_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asNotWritableMetaAcc(): ManagerError_error_not_writable_meta_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2052)) return null;
+    return ManagerError_error_not_writable_meta_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asIndexProgramAcc(): ManagerError_error_index_program_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1029)) return null;
+    return ManagerError_error_index_program_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asNaProgramAcc(): ManagerError_error_na_program_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1285)) return null;
+    return ManagerError_error_na_program_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asRelationshipProgramAcc(): ManagerError_error_relationship_program_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 1541)) return null;
+    return ManagerError_error_relationship_program_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asNotWritableProgramAcc(): ManagerError_error_not_writable_program_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 2053)) return null;
+    return ManagerError_error_not_writable_program_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAuthorizationAuthorityAcc(): ManagerError_error_authorization_authority_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 774)) return null;
+    return ManagerError_error_authorization_authority_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asAuthorizationAuthorityCandidateAcc(): ManagerError_error_authorization_authority_candidate_acc_Inner | null {
+    if (!this.descriptor || !__tnTagEquals(this.descriptor.tag, 775)) return null;
+    return ManagerError_error_authorization_authority_candidate_acc_Inner.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+}
+
 export class ManagerError {
   private view: DataView;
+  private static readonly __tnFieldOffset_error = 2;
 
   private constructor(private buffer: Uint8Array) {
     this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
@@ -1302,6 +1793,170 @@ export class ManagerError {
     return ManagerError.from_array(buffer);
   }
 
+  static readonly errorVariantDescriptors = Object.freeze([
+    {
+      name: "discriminant",
+      tag: 2,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::discriminant",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "size",
+      tag: 256,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::size",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "size_instruction",
+      tag: 257,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::size_instruction",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "value_instruction",
+      tag: 513,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::value_instruction",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "size_srcbuf_acc",
+      tag: 259,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::size_srcbuf_acc",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "value_srcbuf_acc",
+      tag: 515,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::value_srcbuf_acc",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "index_srcbuf_acc",
+      tag: 1027,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::index_srcbuf_acc",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "na_srcbuf_acc",
+      tag: 1283,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::na_srcbuf_acc",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "state_srcbuf_acc",
+      tag: 1795,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::state_srcbuf_acc",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "invalid_program_srcbuf_acc",
+      tag: 2307,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::invalid_program_srcbuf_acc",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "size_meta_acc",
+      tag: 260,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::size_meta_acc",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "authorization_meta_acc",
+      tag: 772,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::authorization_meta_acc",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "index_meta_acc",
+      tag: 1028,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::index_meta_acc",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "na_meta_acc",
+      tag: 1284,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::na_meta_acc",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "relationship_meta_acc",
+      tag: 1540,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::relationship_meta_acc",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "state_meta_acc",
+      tag: 1796,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::state_meta_acc",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "not_writable_meta_acc",
+      tag: 2052,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::not_writable_meta_acc",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "index_program_acc",
+      tag: 1029,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::index_program_acc",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "na_program_acc",
+      tag: 1285,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::na_program_acc",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "relationship_program_acc",
+      tag: 1541,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::relationship_program_acc",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "not_writable_program_acc",
+      tag: 2053,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::not_writable_program_acc",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "authorization_authority_acc",
+      tag: 774,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::authorization_authority_acc",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "authorization_authority_candidate_acc",
+      tag: 775,
+      payloadSize: 0,
+      payloadType: "ManagerError::error::authorization_authority_candidate_acc",
+      createPayloadBuilder: () => null,
+    },
+  ] as const);
+
   get_code(): number {
     const offset = 0;
     return this.view.getUint16(offset, true); /* little-endian */
@@ -1318,6 +1973,22 @@ export class ManagerError {
 
   set code(value: number) {
     this.set_code(value);
+  }
+
+  errorVariant(): typeof ManagerError.errorVariantDescriptors[number] | null {
+    const tag: number | bigint | null = this.get_code();
+    return ManagerError.errorVariantDescriptors.find((variant) => __tnTagEquals(tag, variant.tag)) ?? null;
+  }
+
+  error(): ManagerError_error_Inner {
+    const descriptor = this.errorVariant();
+    if (!descriptor) throw new Error("ManagerError: unknown error variant");
+    const offset = ManagerError.__tnFieldOffset_error;
+    const remaining = this.buffer.length - offset;
+    const payloadLength = descriptor.payloadSize ?? remaining;
+    if (payloadLength < 0 || offset + payloadLength > this.buffer.length) throw new Error("ManagerError: payload exceeds buffer bounds");
+    const slice = this.buffer.subarray(offset, offset + payloadLength);
+    return ManagerError_error_Inner.__tnCreate(slice, descriptor, undefined);
   }
 
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
@@ -1351,17 +2022,45 @@ export class ManagerError {
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
     if (buffer.length < 2) return { ok: false, code: "tn.buffer_too_small", consumed: 2 };
+    if (this.__tnWalkTags(buffer) === null) return { ok: false, code: "tn.invalid_tag" };
     return { ok: true, consumed: 2 };
   }
 
-  static new(code: number): ManagerError {
-    const buffer = new Uint8Array(2);
-    const view = new DataView(buffer.buffer);
-
-    let offset = 0;
-    view.setUint16(0, code, true); /* code (little-endian) */
-
-    return new ManagerError(buffer);
+  /** Walks the value's bytes, checking every enum tag; its size, or null. */
+  private static __tnWalkTags(buffer: Uint8Array, ctx: Record<string, number | bigint> = {}): number | null {
+    void ctx;
+    return ((b: Uint8Array): number | null => { const v = new DataView(b.buffer, b.byteOffset, b.byteLength); let c = 0; void v; const s1 = c;
+if (c + 2 > b.length) return null; const x2 = __tnU64(__tnToBigInt(v.getUint16(c, true))); c += 2;
+let t3: number | null = null;
+switch ((x2) as bigint | null) {
+  case 2n: t3 = 0; break;
+  case 256n: t3 = 0; break;
+  case 257n: t3 = 0; break;
+  case 513n: t3 = 0; break;
+  case 259n: t3 = 0; break;
+  case 515n: t3 = 0; break;
+  case 1027n: t3 = 0; break;
+  case 1283n: t3 = 0; break;
+  case 1795n: t3 = 0; break;
+  case 2307n: t3 = 0; break;
+  case 260n: t3 = 0; break;
+  case 772n: t3 = 0; break;
+  case 1028n: t3 = 0; break;
+  case 1284n: t3 = 0; break;
+  case 1540n: t3 = 0; break;
+  case 1796n: t3 = 0; break;
+  case 2052n: t3 = 0; break;
+  case 1029n: t3 = 0; break;
+  case 1285n: t3 = 0; break;
+  case 1541n: t3 = 0; break;
+  case 2053n: t3 = 0; break;
+  case 774n: t3 = 0; break;
+  case 775n: t3 = 0; break;
+  default: return null;
+}
+if (t3 === null || c + t3 > b.length) return null; c += t3;
+void s1;
+return c; })(buffer);
   }
 
   static from_array(buffer: Uint8Array): ManagerError | null {
@@ -1379,34 +2078,213 @@ export class ManagerError {
 }
 
 export class ManagerErrorBuilder {
-  private buffer: Uint8Array;
-  private view: DataView;
+  private tag: number | null = null;
+  private payload: Uint8Array | null = null;
 
-  constructor() {
-    this.buffer = new Uint8Array(2);
-    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  constructor() {}
+
+  select_discriminant(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_discriminant expects 0 bytes");
+    this.tag = 2;
+    this.payload = new Uint8Array(bytes);
+    return this;
   }
 
-  set_code(value: number): this {
-    this.view.setUint16(0, value, true);
+  select_size(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_size expects 0 bytes");
+    this.tag = 256;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_size_instruction(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_size_instruction expects 0 bytes");
+    this.tag = 257;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_value_instruction(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_value_instruction expects 0 bytes");
+    this.tag = 513;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_size_srcbuf_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_size_srcbuf_acc expects 0 bytes");
+    this.tag = 259;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_value_srcbuf_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_value_srcbuf_acc expects 0 bytes");
+    this.tag = 515;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_index_srcbuf_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_index_srcbuf_acc expects 0 bytes");
+    this.tag = 1027;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_na_srcbuf_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_na_srcbuf_acc expects 0 bytes");
+    this.tag = 1283;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_state_srcbuf_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_state_srcbuf_acc expects 0 bytes");
+    this.tag = 1795;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_invalid_program_srcbuf_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_invalid_program_srcbuf_acc expects 0 bytes");
+    this.tag = 2307;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_size_meta_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_size_meta_acc expects 0 bytes");
+    this.tag = 260;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_authorization_meta_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_authorization_meta_acc expects 0 bytes");
+    this.tag = 772;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_index_meta_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_index_meta_acc expects 0 bytes");
+    this.tag = 1028;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_na_meta_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_na_meta_acc expects 0 bytes");
+    this.tag = 1284;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_relationship_meta_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_relationship_meta_acc expects 0 bytes");
+    this.tag = 1540;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_state_meta_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_state_meta_acc expects 0 bytes");
+    this.tag = 1796;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_not_writable_meta_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_not_writable_meta_acc expects 0 bytes");
+    this.tag = 2052;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_index_program_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_index_program_acc expects 0 bytes");
+    this.tag = 1029;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_na_program_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_na_program_acc expects 0 bytes");
+    this.tag = 1285;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_relationship_program_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_relationship_program_acc expects 0 bytes");
+    this.tag = 1541;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_not_writable_program_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_not_writable_program_acc expects 0 bytes");
+    this.tag = 2053;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_authorization_authority_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_authorization_authority_acc expects 0 bytes");
+    this.tag = 774;
+    this.payload = new Uint8Array(bytes);
+    return this;
+  }
+
+  select_authorization_authority_candidate_acc(payload: Uint8Array | { build(): Uint8Array }): this {
+    const bytes = payload instanceof Uint8Array ? payload : payload.build();
+    if (bytes.length !== 0) throw new Error("select_authorization_authority_candidate_acc expects 0 bytes");
+    this.tag = 775;
+    this.payload = new Uint8Array(bytes);
     return this;
   }
 
   build(): Uint8Array {
-    const buffer = this.buffer.slice();
+    if (this.tag === null || !this.payload) throw new Error("ManagerError builder missing variant");
+    const buffer = new Uint8Array(2 + this.payload.length);
+    new DataView(buffer.buffer).setUint16(0, this.tag, true);
+    buffer.set(this.payload, 2);
     __tnBuilderValidateOrThrow("ManagerError", ManagerError.validate(buffer));
     return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
-    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
-    __tnBuilderValidateOrThrow("ManagerError", ManagerError.validate(this.buffer));
-    target.set(this.buffer, offset);
+    const bytes = this.build();
+    if (target.length - offset < bytes.length) throw new Error("target buffer too small");
+    target.set(bytes, offset);
     return target;
   }
 
   finish(): ManagerError {
-    const view = ManagerError.from_array(this.buffer.slice());
+    const view = ManagerError.from_array(this.build());
     if (!view) throw new Error("failed to build ManagerError");
     return view;
   }
@@ -2524,6 +3402,7 @@ export class CreateEphemeralArgsBuilder {
       this.__tnFamWriter_seed = __tnCreateFamWriter(this, "seed", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("CreateEphemeralArgsBuilder: seed has more than 4294967295 elements");
         this.__tnFam_seed = bytes;
         this.__tnFam_seedCount = elementCount;
         this.set_seed_len(elementCount);
@@ -2533,7 +3412,12 @@ export class CreateEphemeralArgsBuilder {
     return this.__tnFamWriter_seed!;
   }
 
+  private __tnSyncLengths(): void {
+    if (this.__tnFam_seedCount !== null) this.set_seed_len(this.__tnFam_seedCount);
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = CreateEphemeralArgs.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -2543,6 +3427,7 @@ export class CreateEphemeralArgsBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = CreateEphemeralArgs.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("CreateEphemeralArgsBuilder: target buffer too small");
@@ -3580,6 +4465,7 @@ export class CreatePermanentArgsBuilder {
       this.__tnFamWriter_seed = __tnCreateFamWriter(this, "seed", (payload) => {
         const bytes = new Uint8Array(payload);
         const elementCount = bytes.length;
+        if (elementCount > 4294967295) throw new Error("CreatePermanentArgsBuilder: seed has more than 4294967295 elements");
         this.__tnFam_seed = bytes;
         this.__tnFam_seedCount = elementCount;
         this.set_seed_len(elementCount);
@@ -3611,7 +4497,12 @@ export class CreatePermanentArgsBuilder {
     return this;
   }
 
+  private __tnSyncLengths(): void {
+    if (this.__tnFam_seedCount !== null) this.set_seed_len(this.__tnFam_seedCount);
+  }
+
   build(): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = CreatePermanentArgs.footprintFromParams(params);
     const buffer = new Uint8Array(size);
@@ -3621,6 +4512,7 @@ export class CreatePermanentArgsBuilder {
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    this.__tnSyncLengths();
     const params = this.__tnComputeParams();
     const size = CreatePermanentArgs.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("CreatePermanentArgsBuilder: target buffer too small");
@@ -4542,7 +5434,7 @@ export class ManagerProgramAccountBuilder {
   build(): Uint8Array {
     if (this.tag === null || !this.payload) throw new Error("ManagerProgramAccount builder missing variant");
     const buffer = new Uint8Array(1 + this.payload.length);
-    buffer[0] = this.tag;
+    new DataView(buffer.buffer).setUint8(0, this.tag);
     buffer.set(this.payload, 1);
     __tnBuilderValidateOrThrow("ManagerProgramAccount", ManagerProgramAccount.validate(buffer));
     return buffer;
