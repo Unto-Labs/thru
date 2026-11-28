@@ -15,13 +15,12 @@ export function hexToBytes(hex: string): Uint8Array {
   if (normalized.length % 2 !== 0) {
     throw new Error("Hex input must contain an even number of characters");
   }
+  if (!/^[0-9a-fA-F]+$/.test(normalized)) {
+    throw new Error("Hex input contains non-hexadecimal characters");
+  }
   const bytes = new Uint8Array(normalized.length / 2);
   for (let i = 0; i < normalized.length; i += 2) {
-    const byte = Number.parseInt(normalized.slice(i, i + 2), 16);
-    if (Number.isNaN(byte)) {
-      throw new Error("Hex input contains non-hexadecimal characters");
-    }
-    bytes[i / 2] = byte;
+    bytes[i / 2] = Number.parseInt(normalized.slice(i, i + 2), 16);
   }
   return bytes;
 }
